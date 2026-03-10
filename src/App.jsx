@@ -1337,7 +1337,7 @@ export default function App() {
         </div>
       </div>
 
-      {/* ── SITE SIDE PANEL ── */}
+      
       {selectedSite && !selectedCompany && (
         <div className="side-panel slide-in">
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
