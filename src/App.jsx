@@ -27,7 +27,8 @@ const NAV_ITEMS = {
   capital: [
     { id: "dashboard", label: "Dashboard", icon: "⊞" },
     { id: "calendar", label: "Calendar", icon: "📅" },
-    { id: "jobs", label: "Active Jobs", icon: "🔨" },
+  { id: "jobs", label: "Active Jobs", icon: "🔨" },
+    { id: "gantt", label: "Gantt", icon: "📊" },
     { id: "sites", label: "Sites", icon: "📍" },
     { id: "pipeline", label: "Pipeline", icon: "◈" },
     { id: "budgeting", label: "Budgeting", icon: "💲" },
@@ -1209,7 +1210,21 @@ export default function App() {
               })}
             </div>
           )}
-
+{/* ── CAPEX GANTT ── */}
+          {activeNav === "gantt" && activeBU === "capital" && (
+            <div className="fade-in" style={{ display: "flex", flexDirection: "column", gap: 22 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div>
+                  <div style={{ fontSize: 22, fontWeight: 700, color: "#FFFFFF", letterSpacing: "-0.01em", textTransform: "uppercase" }}>Capital Improvements — Gantt</div>
+                  <div style={{ fontSize: 11, color: "#3A4560", marginTop: 3, letterSpacing: "0.06em" }}>DO WORK STAGE · {capexJobs.filter(j => j.stage === "do_work").length} ACTIVE</div>
+                </div>
+              </div>
+              <GanttSection
+                jobList={capexJobs.filter(j => j.stage === "do_work" && j.startDate && j.endDate).map(j => ({ ...j, client: companies.find(c => c.id === j.companyId)?.name || "", status: "On Schedule" }))}
+                showAddBtn={false}
+              />
+            </div>
+          )}
           {/* ── FM JOBS ── */}
           {activeNav === "jobs" && activeBU === "facility" && (
             <div className="fade-in" style={{ display: "flex", flexDirection: "column", gap: 22 }}>
@@ -1306,7 +1321,7 @@ export default function App() {
           )}
 
           {/* ── COMING SOON (other nav items) ── */}
-          {!["dashboard", "customers", "jobs", "pipeline", "budgeting", "finance", "sites", "projects"].includes(activeNav) && (
+          {!["dashboard", "customers", "jobs", "pipeline", "budgeting", "finance", "sites", "projects", "gantt"].includes(activeNav) && (
             <div className="fade-in">
               <div style={{ marginBottom: 28 }}>
                 <div style={{ fontSize: 22, fontWeight: 700, color: "#FFFFFF", textTransform: "uppercase" }}>{navItems.find(n => n.id === activeNav)?.label}</div>
