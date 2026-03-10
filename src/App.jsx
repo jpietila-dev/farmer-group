@@ -1334,8 +1334,8 @@ export default function App() {
             </div>
           )}
 
-        </div>{/* end content */}
-      </div>{/* end main */}
+        </div>
+      </div>
 
       {/* ── SITE SIDE PANEL ── */}
       {selectedSite && !selectedCompany && (
