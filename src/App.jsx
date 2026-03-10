@@ -770,7 +770,7 @@ export default function App() {
                   </label>
                   <button className="btn-ghost" onClick={() => { setEditContactId(null); setContactForm({ companyId: "", firstName: "", lastName: "", title: "", email: "", phone: "" }); setShowContactForm(true); }}>+ Contact</button>
                   <button className="btn-primary" onClick={() => { setEditCompanyId(null); setCompanyForm({ name: "", website: "", address: "", logo: "", notes: "" }); setShowCompanyForm(true); }}>+ Company</button>
-                </div>               </div>
+                </div> 
               </div>
 
               <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 12 }}>
