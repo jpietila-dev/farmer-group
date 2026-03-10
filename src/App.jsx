@@ -1154,11 +1154,8 @@ export default function App() {
                 })}
               </div>
 
-              {/* Gantt for Do Work jobs */}
-              {capexJobs.filter(j => j.stage === "do_work" && j.startDate && j.endDate).length > 0 && (
-                <div>
-                  <div style={{ fontSize: 11, letterSpacing: "0.1em", textTransform: "uppercase", color: "#3A4560", fontWeight: 600, marginBottom: 12 }}>Do Work — Gantt</div>
-                  <GanttSection jobList={capexJobs.filter(j => j.stage === "do_work" && j.startDate && j.endDate).map(j => ({ ...j, client: companies.find(c=>c.id===j.companyId)?.name || "", status: "On Schedule" }))} showAddBtn={false} />
+
+            
                 </div>
               )}
 
