@@ -27,8 +27,7 @@ const NAV_ITEMS = {
   capital: [
     { id: "dashboard", label: "Dashboard", icon: "⊞" },
     { id: "calendar", label: "Calendar", icon: "📅" },
-  { id: "jobs", label: "Active Jobs", icon: "🔨" },
-    { id: "gantt", label: "Gantt", icon: "📊" },
+    { id: "jobs", label: "Active Jobs", icon: "🔨" },
     { id: "sites", label: "Sites", icon: "📍" },
     { id: "pipeline", label: "Pipeline", icon: "◈" },
     { id: "budgeting", label: "Budgeting", icon: "💲" },
@@ -727,7 +726,8 @@ export default function App() {
                 </div>
               )}
 
-              {activeBU === "major" && <GanttSection jobList={majorJobs} showAddBtn={true} />}
+              {activeBU === "major"   && <GanttSection jobList={majorJobs} showAddBtn={true} />}
+              {activeBU === "capital" && <GanttSection jobList={capexJobs.filter(j => j.stage === "do_work" && j.startDate && j.endDate).map(j => ({ ...j, client: companies.find(c => c.id === j.companyId)?.name || "", status: "On Schedule" }))} showAddBtn={false} />}
 
               {/* Punch list */}
               <div>
@@ -893,8 +893,8 @@ export default function App() {
             </div>
           )}
 
-          {/* ── ACTIVE JOBS ── */}
-          {activeNav === "jobs" && (
+          {/* ── ACTIVE JOBS (MP only) ── */}
+          {activeNav === "jobs" && activeBU !== "capital" && activeBU !== "facility" && (
             <div className="fade-in" style={{ display: "flex", flexDirection: "column", gap: 22 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div>
@@ -905,10 +905,10 @@ export default function App() {
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 12 }}>
                 {[
-                  { label: "Total Contract Value", value: fmt(majorJobs.reduce((s, j) => s + j.contractValue, 0)),                                                           color: buColor.accent },
-                  { label: "On Schedule",          value: majorJobs.filter(j => j.status === "On Schedule").length,                                                           color: "#4ADE80" },
-                  { label: "Behind / At Risk",     value: majorJobs.filter(j => ["Behind Schedule", "At Risk"].includes(j.status)).length,                                   color: "#F87171" },
-                  { label: "Avg Completion",       value: (majorJobs.length ? Math.round(majorJobs.reduce((s, j) => s + j.pct, 0) / majorJobs.length) : 0) + "%",           color: "#FCD34D" },
+                  { label: "Total Contract Value", value: fmt(majorJobs.reduce((s, j) => s + j.contractValue, 0)), color: buColor.accent },
+                  { label: "On Schedule",          value: majorJobs.filter(j => j.status === "On Schedule").length, color: "#4ADE80" },
+                  { label: "Behind / At Risk",     value: majorJobs.filter(j => ["Behind Schedule", "At Risk"].includes(j.status)).length, color: "#F87171" },
+                  { label: "Avg Completion",       value: (majorJobs.length ? Math.round(majorJobs.reduce((s, j) => s + j.pct, 0) / majorJobs.length) : 0) + "%", color: "#FCD34D" },
                 ].map(s => (
                   <div key={s.label} className="stat-card" style={{ position: "relative", overflow: "hidden", padding: "14px 18px" }}>
                     <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: s.color }} />
@@ -918,33 +918,6 @@ export default function App() {
                 ))}
               </div>
               <GanttSection jobList={majorJobs} showAddBtn={false} />
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                {majorJobs.map(job => {
-                  const sc = STATUS_CONFIG[job.status] || STATUS_CONFIG["On Schedule"];
-                  const co = companies.find(c => c.id === job.companyId);
-                  return (
-                    <div key={job.id} className="opp-row" onClick={() => setSelectedJob(job)}>
-                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                          <div style={{ width: 7, height: 7, borderRadius: "50%", background: sc.color }} />
-                          <span style={{ fontSize: 14, color: "#E8ECF4", fontWeight: 600 }}>{job.name}</span>
-                          <span className="pill" style={{ background: sc.bg, color: sc.color }}>{job.status}</span>
-                        </div>
-                        <span style={{ fontSize: 16, fontWeight: 700, color: "#3B6FE8" }}>{fmt(job.contractValue)}</span>
-                      </div>
-                      <div style={{ display: "flex", gap: 20, marginBottom: 10 }}>
-                        {co && <span style={{ fontSize: 11, color: "#3B6FE8" }}>🏢 {co.name}</span>}
-                        <span style={{ fontSize: 11, color: "#3A4560" }}>👤 {job.pm}</span>
-                        <span style={{ fontSize: 11, color: "#3A4560" }}>📅 {job.startDate} → {job.endDate}</span>
-                      </div>
-                      <div style={{ background: "#0A0D16", borderRadius: 4, height: 6, overflow: "hidden" }}>
-                        <div style={{ height: "100%", width: job.pct + "%", background: sc.color, borderRadius: 4 }} />
-                      </div>
-                      <div style={{ fontSize: 10, color: "#3A4560", marginTop: 4, textAlign: "right" }}>{job.pct}% complete</div>
-                    </div>
-                  );
-                })}
-              </div>
             </div>
           )}
 
@@ -1130,18 +1103,18 @@ export default function App() {
             <div className="fade-in" style={{ display: "flex", flexDirection: "column", gap: 22 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div>
-                  <div style={{ fontSize: 22, fontWeight: 700, color: "#FFFFFF", letterSpacing: "-0.01em", textTransform: "uppercase" }}>Capital Improvements — Jobs</div>
-                  <div style={{ fontSize: 11, color: "#3A4560", marginTop: 3, letterSpacing: "0.06em" }}>{capexJobs.length} JOBS · {fmt(capexJobs.reduce((s,j) => s+j.contractValue,0))} TOTAL</div>
+                  <div style={{ fontSize: 22, fontWeight: 700, color: "#FFFFFF", letterSpacing: "-0.01em", textTransform: "uppercase" }}>Capital Improvements — Active Projects</div>
+                  <div style={{ fontSize: 11, color: "#3A4560", marginTop: 3, letterSpacing: "0.06em" }}>{capexJobs.filter(j => j.stage !== "estimating").length} PROJECTS · {fmt(capexJobs.reduce((s,j) => s+j.contractValue,0))} TOTAL</div>
                 </div>
                 <div style={{ display: "flex", gap: 8 }}>
                   <input className="fi" style={{ width: 180 }} placeholder="Search…" value={capexSearch} onChange={e => setCapexSearch(e.target.value)} />
-                  <button className="btn-primary" onClick={openAddCapex}>+ Add Job</button>
+                  <button className="btn-primary" onClick={openAddCapex}>+ Add Project</button>
                 </div>
               </div>
 
-              {/* Stage stats */}
+              {/* Stage stats — exclude estimating */}
               <div style={{ display: "flex", gap: 8, overflowX: "auto" }}>
-                {CAPEX_FM_STAGES.map(st => {
+                {CAPEX_FM_STAGES.filter(st => st.id !== "estimating").map(st => {
                   const cnt = capexJobs.filter(j => j.stage === st.id).length;
                   const val = capexJobs.filter(j => j.stage === st.id).reduce((s,j) => s+j.contractValue, 0);
                   return (
@@ -1155,13 +1128,8 @@ export default function App() {
                 })}
               </div>
 
-
-            
-                </div>
-              )}
-
-              {/* All jobs by stage */}
-              {CAPEX_FM_STAGES.filter(st => st.id !== "do_work").map(st => {
+              {/* List grouped by stage — all except estimating */}
+              {CAPEX_FM_STAGES.filter(st => st.id !== "estimating").map(st => {
                 const stageJobs = capexJobs.filter(j => j.stage === st.id && (j.name.toLowerCase().includes(capexSearch.toLowerCase()) || !capexSearch));
                 if (!stageJobs.length) return null;
                 const actionField = st.actionKey;
@@ -1210,21 +1178,7 @@ export default function App() {
               })}
             </div>
           )}
-{/* ── CAPEX GANTT ── */}
-          {activeNav === "gantt" && activeBU === "capital" && (
-            <div className="fade-in" style={{ display: "flex", flexDirection: "column", gap: 22 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <div>
-                  <div style={{ fontSize: 22, fontWeight: 700, color: "#FFFFFF", letterSpacing: "-0.01em", textTransform: "uppercase" }}>Capital Improvements — Gantt</div>
-                  <div style={{ fontSize: 11, color: "#3A4560", marginTop: 3, letterSpacing: "0.06em" }}>DO WORK STAGE · {capexJobs.filter(j => j.stage === "do_work").length} ACTIVE</div>
-                </div>
-              </div>
-              <GanttSection
-                jobList={capexJobs.filter(j => j.stage === "do_work" && j.startDate && j.endDate).map(j => ({ ...j, client: companies.find(c => c.id === j.companyId)?.name || "", status: "On Schedule" }))}
-                showAddBtn={false}
-              />
-            </div>
-          )}
+
           {/* ── FM JOBS ── */}
           {activeNav === "jobs" && activeBU === "facility" && (
             <div className="fade-in" style={{ display: "flex", flexDirection: "column", gap: 22 }}>
@@ -1239,9 +1193,9 @@ export default function App() {
                 </div>
               </div>
 
-              {/* Stage stats */}
+              {/* Stage stats — exclude estimating */}
               <div style={{ display: "flex", gap: 8, overflowX: "auto" }}>
-                {CAPEX_FM_STAGES.map(st => {
+                {CAPEX_FM_STAGES.filter(st => st.id !== "estimating").map(st => {
                   const cnt = fmJobs.filter(j => j.stage === st.id).length;
                   const val = fmJobs.filter(j => j.stage === st.id).reduce((s,j) => s+j.contractValue, 0);
                   return (
@@ -1255,8 +1209,8 @@ export default function App() {
                 })}
               </div>
 
-              {/* Full list grouped by stage */}
-              {CAPEX_FM_STAGES.map(st => {
+              {/* Full list grouped by stage — exclude estimating */}
+              {CAPEX_FM_STAGES.filter(st => st.id !== "estimating").map(st => {
                 const stageJobs = fmJobs.filter(j => j.stage === st.id && (j.name.toLowerCase().includes(fmSearch.toLowerCase()) || !fmSearch));
                 if (!stageJobs.length) return null;
                 const actionField = st.actionKey;
@@ -1321,7 +1275,7 @@ export default function App() {
           )}
 
           {/* ── COMING SOON (other nav items) ── */}
-          {!["dashboard", "customers", "jobs", "pipeline", "budgeting", "finance", "sites", "projects", "gantt"].includes(activeNav) && (
+          {!["dashboard", "customers", "jobs", "pipeline", "budgeting", "finance", "sites", "projects"].includes(activeNav) && (
             <div className="fade-in">
               <div style={{ marginBottom: 28 }}>
                 <div style={{ fontSize: 22, fontWeight: 700, color: "#FFFFFF", textTransform: "uppercase" }}>{navItems.find(n => n.id === activeNav)?.label}</div>
@@ -1334,8 +1288,10 @@ export default function App() {
             </div>
           )}
 
-      
-      </div>
+        </div>{/* end content */}
+      </div>{/* end main */}
+
+      {/* ── SITE SIDE PANEL ── */}
       {selectedSite && !selectedCompany && (
         <div className="side-panel slide-in">
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
