@@ -188,6 +188,26 @@ const INIT_SITES = [
 const NEXT_STEP_OPTIONS = ["Geotechnical", "Engage Engineer", "Underwriting", "LOI", "Under Contract"];
 const SITES_BUS = ["capital", "facility", "lawn", "snow"];
 
+const CAPEX_FM_STAGES = [
+  { id: "estimating",      label: "Estimating",      actionLabel: "Bid Due Date",      actionKey: "bidDueDate",      color: "#818CF8" },
+  { id: "owner_approval",  label: "Owner Approval",  actionLabel: "Follow-up Date",    actionKey: "followUpDate",    color: "#60A5FA" },
+  { id: "buyout",          label: "Buyout",           actionLabel: "Buyout Date",       actionKey: "buyoutDate",      color: "#FCD34D" },
+  { id: "do_work",         label: "Do Work",          actionLabel: "Target End Date",   actionKey: "endDate",         color: "#4ADE80" },
+  { id: "bill",            label: "Bill",             actionLabel: "Invoice Date",      actionKey: "invoiceDate",     color: "#F97316" },
+];
+
+const INIT_CAPEX_JOBS = [
+  { id: "cx1", name: "Harbor HVAC Upgrade",    companyId: "c3", siteId: "s2", contractValue: 85000,  stage: "do_work",      startDate: "2026-02-15", endDate: "2026-05-30", pm: "Sarah Lee",   pct: 40, bidDueDate: "", followUpDate: "", buyoutDate: "", invoiceDate: "", notes: "Phase 1 underway" },
+  { id: "cx2", name: "Elmwood Roof Repair",     companyId: "c2", siteId: "s1", contractValue: 42000,  stage: "estimating",   startDate: "",           endDate: "",           pm: "John Smith",  pct: 0,  bidDueDate: "2026-03-20", followUpDate: "", buyoutDate: "", invoiceDate: "", notes: "Awaiting site visit" },
+  { id: "cx3", name: "Parking Lot Restriping",  companyId: "c3", siteId: "s2", contractValue: 18000,  stage: "owner_approval",startDate: "",           endDate: "",           pm: "Mike Torres", pct: 0,  bidDueDate: "", followUpDate: "2026-03-18", buyoutDate: "", invoiceDate: "", notes: "Sent proposal" },
+];
+
+const INIT_FM_JOBS = [
+  { id: "fm1", name: "Door Lock Replacement",  companyId: "c2", siteId: "s1", contractValue: 3200,   stage: "do_work",      startDate: "2026-03-10", endDate: "2026-03-14", pm: "John Smith",  pct: 75, bidDueDate: "", followUpDate: "", buyoutDate: "", invoiceDate: "", notes: "Parts on order" },
+  { id: "fm2", name: "Ceiling Tile Repair",    companyId: "c3", siteId: "s2", contractValue: 1800,   stage: "bill",         startDate: "2026-03-05", endDate: "2026-03-06", pm: "Sarah Lee",   pct: 100,bidDueDate: "", followUpDate: "", buyoutDate: "", invoiceDate: "2026-03-15", notes: "Work complete" },
+  { id: "fm3", name: "Plumbing Leak Repair",   companyId: "c2", siteId: "s1", contractValue: 4500,   stage: "estimating",   startDate: "",           endDate: "",           pm: "Mike Torres", pct: 0,  bidDueDate: "2026-03-19", followUpDate: "", buyoutDate: "", invoiceDate: "", notes: "Awaiting scope" },
+];
+
 export default function App() {
   const [activeBU,  setActiveBU]  = useState("all");
   const [activeNav, setActiveNav] = useState("dashboard");
@@ -222,12 +242,28 @@ export default function App() {
   const [selectedOpp,  setSelectedOpp]  = useState(null);
   const [newNextStep,  setNewNextStep]  = useState({ step: "", dueDate: "" });
 
-  // Jobs
+  // Jobs (Major Projects)
   const [jobs,        setJobs]        = useState(INIT_JOBS);
   const [showJobForm, setShowJobForm] = useState(false);
   const [editJobId,   setEditJobId]   = useState(null);
   const [jobForm,     setJobForm]     = useState({ name: "", companyId: "", client: "", contractValue: "", startDate: "", endDate: "", pm: "", pct: 0, status: "On Schedule", notes: "", bu: "major" });
   const [selectedJob, setSelectedJob] = useState(null);
+
+  // CapEx Jobs
+  const [capexJobs,        setCapexJobs]        = useState(INIT_CAPEX_JOBS);
+  const [showCapexForm,    setShowCapexForm]    = useState(false);
+  const [editCapexId,      setEditCapexId]      = useState(null);
+  const [capexForm,        setCapexForm]        = useState({ name: "", companyId: "", siteId: "", contractValue: "", stage: "estimating", startDate: "", endDate: "", pm: "", pct: 0, bidDueDate: "", followUpDate: "", buyoutDate: "", invoiceDate: "", notes: "" });
+  const [selectedCapexJob, setSelectedCapexJob] = useState(null);
+  const [capexSearch,      setCapexSearch]      = useState("");
+
+  // FM Jobs
+  const [fmJobs,        setFmJobs]        = useState(INIT_FM_JOBS);
+  const [showFmForm,    setShowFmForm]    = useState(false);
+  const [editFmId,      setEditFmId]      = useState(null);
+  const [fmForm,        setFmForm]        = useState({ name: "", companyId: "", siteId: "", contractValue: "", stage: "estimating", startDate: "", endDate: "", pm: "", pct: 0, bidDueDate: "", followUpDate: "", buyoutDate: "", invoiceDate: "", notes: "" });
+  const [selectedFmJob, setSelectedFmJob] = useState(null);
+  const [fmSearch,      setFmSearch]      = useState("");
 
   // Sites
   const [sites,        setSites]        = useState(INIT_SITES);
@@ -295,6 +331,31 @@ export default function App() {
     const ids = siteForm.contactIds || [];
     setSiteForm(f => ({ ...f, contactIds: ids.includes(contactId) ? ids.filter(i => i !== contactId) : [...ids, contactId] }));
   };
+
+  // CapEx job helpers
+  const openAddCapex = () => { setEditCapexId(null); setCapexForm({ name: "", companyId: "", siteId: "", contractValue: "", stage: "estimating", startDate: "", endDate: "", pm: "", pct: 0, bidDueDate: "", followUpDate: "", buyoutDate: "", invoiceDate: "", notes: "" }); setShowCapexForm(true); };
+  const openEditCapex = (j) => { setEditCapexId(j.id); setCapexForm({ ...j, contractValue: String(j.contractValue) }); setShowCapexForm(true); };
+  const saveCapex = () => {
+    if (!capexForm.name.trim()) return;
+    const entry = { ...capexForm, contractValue: Number(capexForm.contractValue), pct: Number(capexForm.pct || 0) };
+    if (editCapexId) setCapexJobs(capexJobs.map(j => j.id === editCapexId ? { ...entry, id: editCapexId } : j));
+    else setCapexJobs([...capexJobs, { ...entry, id: "cx" + Date.now() }]);
+    setShowCapexForm(false);
+  };
+  const deleteCapex = (id) => { setCapexJobs(capexJobs.filter(j => j.id !== id)); setSelectedCapexJob(null); };
+  const moveCapexStage = (id, dir) => setCapexJobs(capexJobs.map(j => { if (j.id !== id) return j; const idx = CAPEX_FM_STAGES.findIndex(s => s.id === j.stage); return { ...j, stage: CAPEX_FM_STAGES[Math.max(0, Math.min(CAPEX_FM_STAGES.length - 1, idx + dir))].id }; }));
+
+  // FM job helpers
+  const openAddFm = () => { setEditFmId(null); setFmForm({ name: "", companyId: "", siteId: "", contractValue: "", stage: "estimating", startDate: "", endDate: "", pm: "", pct: 0, bidDueDate: "", followUpDate: "", buyoutDate: "", invoiceDate: "", notes: "" }); setShowFmForm(true); };
+  const openEditFm = (j) => { setEditFmId(j.id); setFmForm({ ...j, contractValue: String(j.contractValue) }); setShowFmForm(true); };
+  const saveFm = () => {
+    if (!fmForm.name.trim()) return;
+    const entry = { ...fmForm, contractValue: Number(fmForm.contractValue), pct: Number(fmForm.pct || 0) };
+    if (editFmId) setFmJobs(fmJobs.map(j => j.id === editFmId ? { ...entry, id: editFmId } : j));
+    else setFmJobs([...fmJobs, { ...entry, id: "fm" + Date.now() }]);
+    setShowFmForm(false);
+  };
+  const deleteFm = (id) => { setFmJobs(fmJobs.filter(j => j.id !== id)); setSelectedFmJob(null); };
 
   const saveCompany = () => {
     if (!companyForm.name.trim()) return;
@@ -583,7 +644,7 @@ export default function App() {
     .contact-chip{background:#0A0D16;border:1px solid #1E2640;border-radius:6px;padding:8px 12px;display:flex;align-items:center;justify-content:space-between}
   `;
 
-  const panelOpen = selectedJob || selectedOpp || selectedCompany || selectedSite;
+  const panelOpen = selectedJob || selectedOpp || selectedCompany || selectedSite || selectedCapexJob || selectedFmJob;
 
   return (
     <div style={{ display: "flex", minHeight: "100vh", background: "#0F1117", color: "#E8ECF4", fontFamily: "'Inter','Segoe UI',sans-serif" }}>
@@ -720,46 +781,6 @@ export default function App() {
                 </div>
                 <div style={{ display: "flex", gap: 8 }}>
                   <input className="fi" style={{ width: 200 }} placeholder="Search companies…" value={crmSearch} onChange={e => setCrmSearch(e.target.value)} />
-                  <label className="btn-ghost" style={{ cursor: "pointer", display: "inline-flex", alignItems: "center", padding: "5px 10px", borderRadius: 5, border: "1px solid #1E2640", color: "#4A5270", fontSize: 11, fontFamily: "inherit" }}>
-                    ↑ Import CSV
-                    <input type="file" accept=".csv" style={{ display: "none" }} onChange={e => {
-                      const file = e.target.files[0];
-                      if (!file) return;
-                      const reader = new FileReader();
-                      reader.onload = (evt) => {
-                        const lines = evt.target.result.split("\n").map(l => l.trim()).filter(Boolean);
-                        if (lines.length < 2) return;
-                        const headers = lines[0].split(",").map(h => h.trim().toLowerCase().replace(/[^a-z]/g, ""));
-                        const col = (name) => headers.indexOf(name);
-                        const newCompanies = [];
-                        const newContacts  = [];
-                        const companyMap   = {};
-                        companies.forEach(c => { companyMap[c.name.toLowerCase()] = c.id; });
-                        lines.slice(1).forEach(line => {
-                          const cells = line.split(",").map(c => c.trim().replace(/^"|"$/g, ""));
-                          const companyName = col("company")   >= 0 ? cells[col("company")]   : "";
-                          const firstName   = col("firstname") >= 0 ? cells[col("firstname")] : "";
-                          const lastName    = col("lastname")  >= 0 ? cells[col("lastname")]  : "";
-                          const email       = col("email")     >= 0 ? cells[col("email")]     : "";
-                          const phone       = col("phone")     >= 0 ? cells[col("phone")]     : "";
-                          const title       = col("title")     >= 0 ? cells[col("title")]     : "";
-                          if (!firstName && !email) return;
-                          let companyId = companyMap[companyName.toLowerCase()];
-                          if (!companyId && companyName) {
-                            companyId = "c" + Date.now() + Math.random().toString(36).slice(2, 6);
-                            newCompanies.push({ id: companyId, name: companyName, website: "", address: "", logo: "", notes: "" });
-                            companyMap[companyName.toLowerCase()] = companyId;
-                          }
-                          newContacts.push({ id: "p" + Date.now() + Math.random().toString(36).slice(2, 6), companyId: companyId || "", firstName, lastName, title, email, phone });
-                        });
-                        if (newCompanies.length) setCompanies(prev => [...prev, ...newCompanies]);
-                        if (newContacts.length)  setContacts(prev  => [...prev, ...newContacts]);
-                        alert("Imported " + newCompanies.length + " companies and " + newContacts.length + " contacts!");
-                        e.target.value = "";
-                      };
-                      reader.readAsText(file);
-                    }} />
-                  </label>
                   <button className="btn-ghost" onClick={() => { setEditContactId(null); setContactForm({ companyId: "", firstName: "", lastName: "", title: "", email: "", phone: "" }); setShowContactForm(true); }}>+ Contact</button>
                   <button className="btn-primary" onClick={() => { setEditCompanyId(null); setCompanyForm({ name: "", website: "", address: "", logo: "", notes: "" }); setShowCompanyForm(true); }}>+ Company</button>
                 </div>
@@ -1103,6 +1124,176 @@ export default function App() {
             </div>
           )}
 
+          {/* ── CAPEX JOBS ── */}
+          {activeNav === "jobs" && activeBU === "capital" && (
+            <div className="fade-in" style={{ display: "flex", flexDirection: "column", gap: 22 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div>
+                  <div style={{ fontSize: 22, fontWeight: 700, color: "#FFFFFF", letterSpacing: "-0.01em", textTransform: "uppercase" }}>Capital Improvements — Jobs</div>
+                  <div style={{ fontSize: 11, color: "#3A4560", marginTop: 3, letterSpacing: "0.06em" }}>{capexJobs.length} JOBS · {fmt(capexJobs.reduce((s,j) => s+j.contractValue,0))} TOTAL</div>
+                </div>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <input className="fi" style={{ width: 180 }} placeholder="Search…" value={capexSearch} onChange={e => setCapexSearch(e.target.value)} />
+                  <button className="btn-primary" onClick={openAddCapex}>+ Add Job</button>
+                </div>
+              </div>
+
+              {/* Stage stats */}
+              <div style={{ display: "flex", gap: 8, overflowX: "auto" }}>
+                {CAPEX_FM_STAGES.map(st => {
+                  const cnt = capexJobs.filter(j => j.stage === st.id).length;
+                  const val = capexJobs.filter(j => j.stage === st.id).reduce((s,j) => s+j.contractValue, 0);
+                  return (
+                    <div key={st.id} style={{ flex: "0 0 160px", background: "#161B28", border: "1px solid " + st.color + "30", borderRadius: 8, padding: "12px 14px", position: "relative", overflow: "hidden" }}>
+                      <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: st.color }} />
+                      <div style={{ fontSize: 10, color: st.color, textTransform: "uppercase", letterSpacing: "0.07em", fontWeight: 600, marginBottom: 4 }}>{st.label}</div>
+                      <div style={{ fontSize: 18, fontWeight: 700, color: "#FFFFFF" }}>{cnt}</div>
+                      <div style={{ fontSize: 11, color: "#3A4560" }}>{fmt(val)}</div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Gantt for Do Work jobs */}
+              {capexJobs.filter(j => j.stage === "do_work" && j.startDate && j.endDate).length > 0 && (
+                <div>
+                  <div style={{ fontSize: 11, letterSpacing: "0.1em", textTransform: "uppercase", color: "#3A4560", fontWeight: 600, marginBottom: 12 }}>Do Work — Gantt</div>
+                  <GanttSection jobList={capexJobs.filter(j => j.stage === "do_work" && j.startDate && j.endDate).map(j => ({ ...j, client: companies.find(c=>c.id===j.companyId)?.name || "", status: "On Schedule" }))} showAddBtn={false} />
+                </div>
+              )}
+
+              {/* All jobs by stage */}
+              {CAPEX_FM_STAGES.filter(st => st.id !== "do_work").map(st => {
+                const stageJobs = capexJobs.filter(j => j.stage === st.id && (j.name.toLowerCase().includes(capexSearch.toLowerCase()) || !capexSearch));
+                if (!stageJobs.length) return null;
+                const actionField = st.actionKey;
+                return (
+                  <div key={st.id}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+                      <div style={{ width: 8, height: 8, borderRadius: "50%", background: st.color }} />
+                      <span style={{ fontSize: 11, letterSpacing: "0.08em", textTransform: "uppercase", color: st.color, fontWeight: 600 }}>{st.label}</span>
+                      <span style={{ fontSize: 10, color: "#3A4560" }}>({stageJobs.length})</span>
+                    </div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                      {stageJobs.map(job => {
+                        const co   = companies.find(c => c.id === job.companyId);
+                        const site = sites.find(s => s.id === job.siteId);
+                        const actionDate = job[actionField];
+                        const overdue = actionDate && new Date(actionDate) < new Date();
+                        const soon    = actionDate && new Date(actionDate) <= new Date(Date.now() + 7*86400000);
+                        return (
+                          <div key={job.id} className="opp-row" onClick={() => setSelectedCapexJob(job)}>
+                            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ fontSize: 13, color: "#E8ECF4", fontWeight: 600, marginBottom: 4 }}>{job.name}</div>
+                                <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
+                                  {co   && <span style={{ fontSize: 11, color: "#3B6FE8" }}>🏢 {co.name}</span>}
+                                  {site && <span style={{ fontSize: 11, color: "#4A5270" }}>📍 Store #{site.storeNumber}</span>}
+                                  {job.pm && <span style={{ fontSize: 11, color: "#4A5270" }}>👤 {job.pm}</span>}
+                                  {actionDate && <span style={{ fontSize: 11, color: overdue ? "#F87171" : soon ? "#FCD34D" : "#3A4560" }}>📅 {st.actionLabel}: {actionDate}{overdue ? " ⚠" : ""}</span>}
+                                </div>
+                              </div>
+                              <div style={{ display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>
+                                <span style={{ fontSize: 15, fontWeight: 700, color: st.color }}>{fmt(job.contractValue)}</span>
+                                <div style={{ display: "flex", gap: 5 }} onClick={e => e.stopPropagation()}>
+                                  <button className="btn-ghost" style={{ fontSize: 11 }} onClick={() => moveCapexStage(job.id, -1)}>←</button>
+                                  <button className="btn-ghost" style={{ fontSize: 11 }} onClick={() => moveCapexStage(job.id,  1)}>→</button>
+                                  <button className="btn-ghost" style={{ fontSize: 11 }} onClick={() => openEditCapex(job)}>✎</button>
+                                  <button className="btn-ghost" style={{ fontSize: 11, color: "#F87171", borderColor: "#F8717120" }} onClick={() => deleteCapex(job.id)}>✕</button>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* ── FM JOBS ── */}
+          {activeNav === "jobs" && activeBU === "facility" && (
+            <div className="fade-in" style={{ display: "flex", flexDirection: "column", gap: 22 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div>
+                  <div style={{ fontSize: 22, fontWeight: 700, color: "#FFFFFF", letterSpacing: "-0.01em", textTransform: "uppercase" }}>Facility Maintenance — Jobs</div>
+                  <div style={{ fontSize: 11, color: "#3A4560", marginTop: 3, letterSpacing: "0.06em" }}>{fmJobs.length} JOBS · {fmt(fmJobs.reduce((s,j) => s+j.contractValue,0))} TOTAL</div>
+                </div>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <input className="fi" style={{ width: 180 }} placeholder="Search…" value={fmSearch} onChange={e => setFmSearch(e.target.value)} />
+                  <button className="btn-primary" onClick={openAddFm}>+ Add Job</button>
+                </div>
+              </div>
+
+              {/* Stage stats */}
+              <div style={{ display: "flex", gap: 8, overflowX: "auto" }}>
+                {CAPEX_FM_STAGES.map(st => {
+                  const cnt = fmJobs.filter(j => j.stage === st.id).length;
+                  const val = fmJobs.filter(j => j.stage === st.id).reduce((s,j) => s+j.contractValue, 0);
+                  return (
+                    <div key={st.id} style={{ flex: "0 0 150px", background: "#161B28", border: "1px solid " + st.color + "30", borderRadius: 8, padding: "12px 14px", position: "relative", overflow: "hidden" }}>
+                      <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: st.color }} />
+                      <div style={{ fontSize: 10, color: st.color, textTransform: "uppercase", letterSpacing: "0.07em", fontWeight: 600, marginBottom: 4 }}>{st.label}</div>
+                      <div style={{ fontSize: 18, fontWeight: 700, color: "#FFFFFF" }}>{cnt}</div>
+                      <div style={{ fontSize: 11, color: "#3A4560" }}>{fmt(val)}</div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Full list grouped by stage */}
+              {CAPEX_FM_STAGES.map(st => {
+                const stageJobs = fmJobs.filter(j => j.stage === st.id && (j.name.toLowerCase().includes(fmSearch.toLowerCase()) || !fmSearch));
+                if (!stageJobs.length) return null;
+                const actionField = st.actionKey;
+                return (
+                  <div key={st.id}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+                      <div style={{ width: 8, height: 8, borderRadius: "50%", background: st.color }} />
+                      <span style={{ fontSize: 11, letterSpacing: "0.08em", textTransform: "uppercase", color: st.color, fontWeight: 600 }}>{st.label}</span>
+                      <span style={{ fontSize: 10, color: "#3A4560" }}>({stageJobs.length})</span>
+                    </div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                      {stageJobs.map(job => {
+                        const co   = companies.find(c => c.id === job.companyId);
+                        const site = sites.find(s => s.id === job.siteId);
+                        const actionDate = job[actionField];
+                        const overdue = actionDate && new Date(actionDate) < new Date();
+                        const soon    = actionDate && new Date(actionDate) <= new Date(Date.now() + 7*86400000);
+                        return (
+                          <div key={job.id} className="opp-row" onClick={() => setSelectedFmJob(job)}>
+                            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ fontSize: 13, color: "#E8ECF4", fontWeight: 600, marginBottom: 4 }}>{job.name}</div>
+                                <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
+                                  {co   && <span style={{ fontSize: 11, color: "#3B6FE8" }}>🏢 {co.name}</span>}
+                                  {site && <span style={{ fontSize: 11, color: "#4A5270" }}>📍 Store #{site.storeNumber}</span>}
+                                  {job.pm && <span style={{ fontSize: 11, color: "#4A5270" }}>👤 {job.pm}</span>}
+                                  {actionDate && <span style={{ fontSize: 11, color: overdue ? "#F87171" : soon ? "#FCD34D" : "#3A4560" }}>📅 {st.actionLabel}: {actionDate}{overdue ? " ⚠" : ""}</span>}
+                                </div>
+                              </div>
+                              <div style={{ display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>
+                                <span style={{ fontSize: 15, fontWeight: 700, color: st.color }}>{fmt(job.contractValue)}</span>
+                                <div style={{ display: "flex", gap: 5 }} onClick={e => e.stopPropagation()}>
+                                  <button className="btn-ghost" style={{ fontSize: 11 }} onClick={() => { setFmJobs(fmJobs.map(j => { if (j.id !== job.id) return j; const idx = CAPEX_FM_STAGES.findIndex(s => s.id === j.stage); return { ...j, stage: CAPEX_FM_STAGES[Math.max(0, idx-1)].id }; })); }}>←</button>
+                                  <button className="btn-ghost" style={{ fontSize: 11 }} onClick={() => { setFmJobs(fmJobs.map(j => { if (j.id !== job.id) return j; const idx = CAPEX_FM_STAGES.findIndex(s => s.id === j.stage); return { ...j, stage: CAPEX_FM_STAGES[Math.min(CAPEX_FM_STAGES.length-1, idx+1)].id }; })); }}>→</button>
+                                  <button className="btn-ghost" style={{ fontSize: 11 }} onClick={() => openEditFm(job)}>✎</button>
+                                  <button className="btn-ghost" style={{ fontSize: 11, color: "#F87171", borderColor: "#F8717120" }} onClick={() => deleteFm(job.id)}>✕</button>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
           {/* ── FINANCE ── */}
           {activeNav === "finance" && (
             <div className="fade-in">
@@ -1118,7 +1309,7 @@ export default function App() {
           )}
 
           {/* ── COMING SOON (other nav items) ── */}
-          {!["dashboard", "customers", "jobs", "pipeline", "budgeting", "finance", "sites"].includes(activeNav) && (
+          {!["dashboard", "customers", "jobs", "pipeline", "budgeting", "finance", "sites", "projects"].includes(activeNav) && (
             <div className="fade-in">
               <div style={{ marginBottom: 28 }}>
                 <div style={{ fontSize: 22, fontWeight: 700, color: "#FFFFFF", textTransform: "uppercase" }}>{navItems.find(n => n.id === activeNav)?.label}</div>
@@ -1618,6 +1809,210 @@ export default function App() {
               <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
                 <button className="btn-ghost"   style={{ padding: "8px 16px" }} onClick={() => setShowSiteForm(false)}>Cancel</button>
                 <button className="btn-primary" onClick={saveSite}>{editSiteId ? "Save Changes" : "Add Site"}</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── CAPEX JOB SIDE PANEL ── */}
+      {selectedCapexJob && (
+        <div className="side-panel slide-in">
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: "#FFFFFF", textTransform: "uppercase", letterSpacing: "0.06em" }}>Capital Improvement</div>
+            <button className="btn-ghost" onClick={() => setSelectedCapexJob(null)}>✕</button>
+          </div>
+          {(() => {
+            const st   = CAPEX_FM_STAGES.find(s => s.id === selectedCapexJob.stage) || CAPEX_FM_STAGES[0];
+            const co   = companies.find(c => c.id === selectedCapexJob.companyId);
+            const site = sites.find(s => s.id === selectedCapexJob.siteId);
+            const actionDate = selectedCapexJob[st.actionKey];
+            const overdue = actionDate && new Date(actionDate) < new Date();
+            return (
+              <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                <div>
+                  <div style={{ fontSize: 15, color: "#E8ECF4", fontWeight: 600, marginBottom: 6 }}>{selectedCapexJob.name}</div>
+                  {co && <div style={{ fontSize: 12, color: "#3B6FE8", marginBottom: 2, cursor: "pointer" }} onClick={() => { setSelectedCapexJob(null); setSelectedCompany(co); }}>🏢 {co.name}</div>}
+                  {site && <div style={{ fontSize: 11, color: "#4A5270", marginBottom: 8 }}>📍 Store #{site.storeNumber} — {site.address}</div>}
+                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                    <span className="pill" style={{ background: st.color + "20", color: st.color }}>{st.label}</span>
+                    <span style={{ fontSize: 20, fontWeight: 700, color: "#FFFFFF" }}>{fmt(selectedCapexJob.contractValue)}</span>
+                  </div>
+                </div>
+                <div style={{ background: "#0A0D16", borderRadius: 8, padding: "14px", border: "1px solid #1E2640", display: "flex", flexDirection: "column", gap: 10 }}>
+                  {[
+                    { label: "PM",              value: selectedCapexJob.pm        || "—" },
+                    { label: "Start Date",      value: selectedCapexJob.startDate || "—" },
+                    { label: "End Date",        value: selectedCapexJob.endDate   || "—" },
+                    { label: st.actionLabel,    value: actionDate || "—", highlight: overdue },
+                  ].map(r => (
+                    <div key={r.label} style={{ display: "flex", justifyContent: "space-between" }}>
+                      <span style={{ fontSize: 11, color: "#3A4560" }}>{r.label}</span>
+                      <span style={{ fontSize: 11, color: r.highlight ? "#F87171" : "#B8C4E0", fontWeight: r.highlight ? 600 : 400 }}>{r.value}{r.highlight ? " ⚠" : ""}</span>
+                    </div>
+                  ))}
+                </div>
+                {selectedCapexJob.stage === "do_work" && (
+                  <div>
+                    <div style={{ fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "#3A4560", marginBottom: 8 }}>Completion — {selectedCapexJob.pct}%</div>
+                    <div style={{ background: "#0A0D16", borderRadius: 4, height: 8, overflow: "hidden" }}>
+                      <div style={{ height: "100%", width: (selectedCapexJob.pct || 0) + "%", background: st.color, borderRadius: 4 }} />
+                    </div>
+                  </div>
+                )}
+                {selectedCapexJob.notes && <div style={{ fontSize: 12, color: "#6B7694", lineHeight: 1.6, background: "#0A0D16", padding: "10px 12px", borderRadius: 6, border: "1px solid #1E2640" }}>{selectedCapexJob.notes}</div>}
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button className="btn-ghost" style={{ flex: 1 }} onClick={() => { openEditCapex(selectedCapexJob); setSelectedCapexJob(null); }}>✎ Edit</button>
+                  <button className="btn-ghost" style={{ color: "#F87171", borderColor: "#F8717120" }} onClick={() => deleteCapex(selectedCapexJob.id)}>✕</button>
+                </div>
+              </div>
+            );
+          })()}
+        </div>
+      )}
+
+      {/* ── FM JOB SIDE PANEL ── */}
+      {selectedFmJob && (
+        <div className="side-panel slide-in">
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: "#FFFFFF", textTransform: "uppercase", letterSpacing: "0.06em" }}>Facility Maintenance</div>
+            <button className="btn-ghost" onClick={() => setSelectedFmJob(null)}>✕</button>
+          </div>
+          {(() => {
+            const st   = CAPEX_FM_STAGES.find(s => s.id === selectedFmJob.stage) || CAPEX_FM_STAGES[0];
+            const co   = companies.find(c => c.id === selectedFmJob.companyId);
+            const site = sites.find(s => s.id === selectedFmJob.siteId);
+            const actionDate = selectedFmJob[st.actionKey];
+            const overdue = actionDate && new Date(actionDate) < new Date();
+            return (
+              <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                <div>
+                  <div style={{ fontSize: 15, color: "#E8ECF4", fontWeight: 600, marginBottom: 6 }}>{selectedFmJob.name}</div>
+                  {co && <div style={{ fontSize: 12, color: "#3B6FE8", marginBottom: 2, cursor: "pointer" }} onClick={() => { setSelectedFmJob(null); setSelectedCompany(co); }}>🏢 {co.name}</div>}
+                  {site && <div style={{ fontSize: 11, color: "#4A5270", marginBottom: 8 }}>📍 Store #{site.storeNumber} — {site.address}</div>}
+                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                    <span className="pill" style={{ background: st.color + "20", color: st.color }}>{st.label}</span>
+                    <span style={{ fontSize: 20, fontWeight: 700, color: "#FFFFFF" }}>{fmt(selectedFmJob.contractValue)}</span>
+                  </div>
+                </div>
+                <div style={{ background: "#0A0D16", borderRadius: 8, padding: "14px", border: "1px solid #1E2640", display: "flex", flexDirection: "column", gap: 10 }}>
+                  {[
+                    { label: "PM",           value: selectedFmJob.pm        || "—" },
+                    { label: "Start Date",   value: selectedFmJob.startDate || "—" },
+                    { label: "End Date",     value: selectedFmJob.endDate   || "—" },
+                    { label: st.actionLabel, value: actionDate || "—", highlight: overdue },
+                  ].map(r => (
+                    <div key={r.label} style={{ display: "flex", justifyContent: "space-between" }}>
+                      <span style={{ fontSize: 11, color: "#3A4560" }}>{r.label}</span>
+                      <span style={{ fontSize: 11, color: r.highlight ? "#F87171" : "#B8C4E0", fontWeight: r.highlight ? 600 : 400 }}>{r.value}{r.highlight ? " ⚠" : ""}</span>
+                    </div>
+                  ))}
+                </div>
+                {selectedFmJob.notes && <div style={{ fontSize: 12, color: "#6B7694", lineHeight: 1.6, background: "#0A0D16", padding: "10px 12px", borderRadius: 6, border: "1px solid #1E2640" }}>{selectedFmJob.notes}</div>}
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button className="btn-ghost" style={{ flex: 1 }} onClick={() => { openEditFm(selectedFmJob); setSelectedFmJob(null); }}>✎ Edit</button>
+                  <button className="btn-ghost" style={{ color: "#F87171", borderColor: "#F8717120" }} onClick={() => deleteFm(selectedFmJob.id)}>✕</button>
+                </div>
+              </div>
+            );
+          })()}
+        </div>
+      )}
+
+      {/* ── CAPEX JOB FORM ── */}
+      {showCapexForm && (
+        <div className="modal-bg" onClick={e => e.target === e.currentTarget && setShowCapexForm(false)}>
+          <div className="modal fade-in">
+            <div style={{ fontSize: 16, fontWeight: 700, color: "#FFFFFF", marginBottom: 22, textTransform: "uppercase" }}>{editCapexId ? "Edit CapEx Job" : "Add CapEx Job"}</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              <div><label className="lbl">Job Name *</label><input className="fi" value={capexForm.name} onChange={e => setCapexForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. HVAC Upgrade" /></div>
+              <div className="g2">
+                <div><label className="lbl">Company</label>
+                  <select className="fi" value={capexForm.companyId} onChange={e => setCapexForm(f => ({ ...f, companyId: e.target.value, siteId: "" }))}>
+                    <option value="">Select company…</option>
+                    {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
+                </div>
+                <div><label className="lbl">Site</label>
+                  <select className="fi" value={capexForm.siteId} onChange={e => setCapexForm(f => ({ ...f, siteId: e.target.value }))}>
+                    <option value="">Select site…</option>
+                    {sites.filter(s => !capexForm.companyId || s.companyId === capexForm.companyId).map(s => <option key={s.id} value={s.id}>Store #{s.storeNumber} — {s.address}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div className="g2">
+                <div><label className="lbl">Contract Value</label><input className="fi" type="number" value={capexForm.contractValue} onChange={e => setCapexForm(f => ({ ...f, contractValue: e.target.value }))} /></div>
+                <div><label className="lbl">Project Manager</label><input className="fi" value={capexForm.pm} onChange={e => setCapexForm(f => ({ ...f, pm: e.target.value }))} /></div>
+              </div>
+              <div><label className="lbl">Stage</label>
+                <select className="fi" value={capexForm.stage} onChange={e => setCapexForm(f => ({ ...f, stage: e.target.value }))}>
+                  {CAPEX_FM_STAGES.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
+                </select>
+              </div>
+              {/* Stage-specific action date */}
+              {(() => { const st = CAPEX_FM_STAGES.find(s => s.id === capexForm.stage); return st ? (
+                <div><label className="lbl">{st.actionLabel}</label><input className="fi" type="date" value={capexForm[st.actionKey] || ""} onChange={e => setCapexForm(f => ({ ...f, [st.actionKey]: e.target.value }))} /></div>
+              ) : null; })()}
+              {capexForm.stage === "do_work" && (
+                <>
+                  <div className="g2">
+                    <div><label className="lbl">Start Date</label><input className="fi" type="date" value={capexForm.startDate} onChange={e => setCapexForm(f => ({ ...f, startDate: e.target.value }))} /></div>
+                    <div><label className="lbl">End Date</label>  <input className="fi" type="date" value={capexForm.endDate}   onChange={e => setCapexForm(f => ({ ...f, endDate:   e.target.value }))} /></div>
+                  </div>
+                  <div><label className="lbl">% Complete — {capexForm.pct || 0}%</label><input type="range" min="0" max="100" value={capexForm.pct || 0} onChange={e => setCapexForm(f => ({ ...f, pct: e.target.value }))} /></div>
+                </>
+              )}
+              <div><label className="lbl">Notes</label><textarea className="fi" rows={3} value={capexForm.notes} onChange={e => setCapexForm(f => ({ ...f, notes: e.target.value }))} style={{ resize: "vertical" }} /></div>
+              <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+                <button className="btn-ghost"   style={{ padding: "8px 16px" }} onClick={() => setShowCapexForm(false)}>Cancel</button>
+                <button className="btn-primary" onClick={saveCapex}>{editCapexId ? "Save Changes" : "Add Job"}</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── FM JOB FORM ── */}
+      {showFmForm && (
+        <div className="modal-bg" onClick={e => e.target === e.currentTarget && setShowFmForm(false)}>
+          <div className="modal fade-in">
+            <div style={{ fontSize: 16, fontWeight: 700, color: "#FFFFFF", marginBottom: 22, textTransform: "uppercase" }}>{editFmId ? "Edit FM Job" : "Add FM Job"}</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              <div><label className="lbl">Job Name *</label><input className="fi" value={fmForm.name} onChange={e => setFmForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Door Lock Replacement" /></div>
+              <div className="g2">
+                <div><label className="lbl">Company</label>
+                  <select className="fi" value={fmForm.companyId} onChange={e => setFmForm(f => ({ ...f, companyId: e.target.value, siteId: "" }))}>
+                    <option value="">Select company…</option>
+                    {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
+                </div>
+                <div><label className="lbl">Site</label>
+                  <select className="fi" value={fmForm.siteId} onChange={e => setFmForm(f => ({ ...f, siteId: e.target.value }))}>
+                    <option value="">Select site…</option>
+                    {sites.filter(s => !fmForm.companyId || s.companyId === fmForm.companyId).map(s => <option key={s.id} value={s.id}>Store #{s.storeNumber} — {s.address}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div className="g2">
+                <div><label className="lbl">Contract Value</label><input className="fi" type="number" value={fmForm.contractValue} onChange={e => setFmForm(f => ({ ...f, contractValue: e.target.value }))} /></div>
+                <div><label className="lbl">Project Manager</label><input className="fi" value={fmForm.pm} onChange={e => setFmForm(f => ({ ...f, pm: e.target.value }))} /></div>
+              </div>
+              <div><label className="lbl">Stage</label>
+                <select className="fi" value={fmForm.stage} onChange={e => setFmForm(f => ({ ...f, stage: e.target.value }))}>
+                  {CAPEX_FM_STAGES.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
+                </select>
+              </div>
+              {(() => { const st = CAPEX_FM_STAGES.find(s => s.id === fmForm.stage); return st ? (
+                <div><label className="lbl">{st.actionLabel}</label><input className="fi" type="date" value={fmForm[st.actionKey] || ""} onChange={e => setFmForm(f => ({ ...f, [st.actionKey]: e.target.value }))} /></div>
+              ) : null; })()}
+              <div className="g2">
+                <div><label className="lbl">Start Date</label><input className="fi" type="date" value={fmForm.startDate} onChange={e => setFmForm(f => ({ ...f, startDate: e.target.value }))} /></div>
+                <div><label className="lbl">End Date</label>  <input className="fi" type="date" value={fmForm.endDate}   onChange={e => setFmForm(f => ({ ...f, endDate:   e.target.value }))} /></div>
+              </div>
+              <div><label className="lbl">Notes</label><textarea className="fi" rows={3} value={fmForm.notes} onChange={e => setFmForm(f => ({ ...f, notes: e.target.value }))} style={{ resize: "vertical" }} /></div>
+              <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+                <button className="btn-ghost"   style={{ padding: "8px 16px" }} onClick={() => setShowFmForm(false)}>Cancel</button>
+                <button className="btn-primary" onClick={saveFm}>{editFmId ? "Save Changes" : "Add Job"}</button>
               </div>
             </div>
           </div>
