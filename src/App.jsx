@@ -657,8 +657,76 @@ export default function App() {
           )}
 
           {/* OTHER SECTIONS */}
-          {!["dashboard","jobs","pipeline"].includes(activeNav) && (
-            <div className="fade-in">
+          {/* BUDGETING */}
+          {activeNav === "budgeting" && activeBU === "major" && (
+            <div className="fade-in" style={{ display: "flex", flexDirection: "column", gap: 22 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div>
+                  <div style={{ fontSize: 22, fontWeight: 700, color: "#FFFFFF", letterSpacing: "-0.01em", textTransform: "uppercase" }}>Budgeting</div>
+                  <div style={{ fontSize: 11, color: "#3A4560", marginTop: 3, letterSpacing: "0.06em" }}>
+                    MAJOR PROJECTS · PRE-LEAD SCOPING · {pipeline.filter(o => o.bu === "major" && o.stage === "Budgeting").length} PROJECTS
+                  </div>
+                </div>
+                <button className="btn-primary" onClick={() => {
+                  setEditId(null);
+                  setForm({ name: "", contact: "", value: "", stage: "Budgeting", closeDate: "", notes: "", bu: "major" });
+                  setShowForm(true);
+                }}>+ Add Project</button>
+              </div>
+
+              {/* Stats */}
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
+                {[
+                  { label: "Projects in Budgeting", value: pipeline.filter(o => o.bu === "major" && o.stage === "Budgeting").length, color: "#3B6FE8" },
+                  { label: "Total Estimated Value", value: fmt(pipeline.filter(o => o.bu === "major" && o.stage === "Budgeting").reduce((s, o) => s + o.value, 0)), color: "#FCD34D" },
+                  { label: "Avg Estimate", value: fmt(pipeline.filter(o => o.bu === "major" && o.stage === "Budgeting").length ? pipeline.filter(o => o.bu === "major" && o.stage === "Budgeting").reduce((s, o) => s + o.value, 0) / pipeline.filter(o => o.bu === "major" && o.stage === "Budgeting").length : 0), color: "#A78BFA" },
+                ].map(s => (
+                  <div key={s.label} className="stat-card" style={{ position: "relative", overflow: "hidden", padding: "14px 18px" }}>
+                    <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: s.color }} />
+                    <div style={{ fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "#3A4560", marginBottom: 6 }}>{s.label}</div>
+                    <div style={{ fontSize: 22, fontWeight: 700, color: s.color }}>{s.value}</div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Projects list */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {pipeline.filter(o => o.bu === "major" && o.stage === "Budgeting").map(o => (
+                  <div key={o.id} className="opp-row" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }} onClick={() => setSelectedOpp(o)}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 14, color: "#E8ECF4", fontWeight: 600, marginBottom: 4 }}>{o.name}</div>
+                      <div style={{ display: "flex", gap: 16 }}>
+                        <span style={{ fontSize: 11, color: "#3A4560" }}>👤 {o.contact || "No contact"}</span>
+                        {o.closeDate && <span style={{ fontSize: 11, color: "#3A4560" }}>📅 Target: {o.closeDate}</span>}
+                        {o.notes && <span style={{ fontSize: 11, color: "#3A4560", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>📝 {o.notes}</span>}
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>
+                      <div style={{ textAlign: "right" }}>
+                        <div style={{ fontSize: 16, fontWeight: 700, color: "#FCD34D" }}>{fmt(o.value)}</div>
+                        <div style={{ fontSize: 10, color: "#3A4560" }}>estimated value</div>
+                      </div>
+                      <button className="btn-primary" style={{ fontSize: 11, padding: "6px 12px", background: "#4ADE8020", color: "#4ADE80", border: "1px solid #4ADE8040" }}
+                        onClick={e => { e.stopPropagation(); setPipeline(pipeline.map(p => p.id === o.id ? { ...p, stage: "Lead" } : p)); }}>
+                        → Promote to Lead
+                      </button>
+                      <div style={{ display: "flex", gap: 5 }} onClick={e => e.stopPropagation()}>
+                        <button className="btn-ghost" onClick={() => openEdit(o)}>✎</button>
+                        <button className="btn-ghost" style={{ color: "#F87171", borderColor: "#F8717120" }} onClick={() => deleteOpp(o.id)}>✕</button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                {pipeline.filter(o => o.bu === "major" && o.stage === "Budgeting").length === 0 && (
+                  <div style={{ textAlign: "center", padding: "48px", color: "#2A3560", fontSize: 12, background: "#161B28", borderRadius: 10, border: "1px solid #1E2640" }}>
+                    No projects in budgeting yet — add one to start scoping
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+{!["dashboard","jobs","pipeline","budgeting"].includes(activeNav) && (
+  <div className="fade-in">
               <div style={{ marginBottom: 28 }}>
                 <div style={{ fontSize: 22, fontWeight: 700, color: "#FFFFFF", letterSpacing: "-0.01em", textTransform: "uppercase" }}>{navItems.find(n => n.id === activeNav)?.label}</div>
                 <div style={{ fontSize: 11, color: "#3A4560", marginTop: 4, letterSpacing: "0.06em" }}>{BUSINESS_UNITS.find(b => b.id === activeBU)?.label.toUpperCase()}</div>
