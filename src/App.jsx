@@ -1334,7 +1334,7 @@ export default function App() {
             </div>
           )}
 
-        </div>
+      
       </div>
       {selectedSite && !selectedCompany && (
         <div className="side-panel slide-in">
