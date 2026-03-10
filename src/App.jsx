@@ -476,7 +476,7 @@ export default function App() {
                 </div>
               </div>
 
-              {activeBU !== "all" && activeBU !== "major" && (
+              {activeBU !== "all" && (
                 <div>
                   <div style={{ fontSize: 11, letterSpacing: "0.1em", textTransform: "uppercase", color: "#3A4560", fontWeight: 600, marginBottom: 14 }}>Quick Access</div>
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10 }}>
