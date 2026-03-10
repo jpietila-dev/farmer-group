@@ -62,7 +62,7 @@ const NAV_ITEMS = {
 
 const PIPELINE_STAGES = {
   all:      ["Lead", "Initial Meeting", "Proposal / Bid", "Negotiation", "Won", "Lost"],
-  major:    ["Lead", "Proposal / Bid", "Negotiation", "Won", "Lost"],
+major:    ["Budgeting", "Lead", "Proposal / Bid", "Negotiation", "Won", "Lost"],
   capital:  ["Lead", "Initial Meeting", "Proposal / Bid", "Negotiation", "Won", "Lost"],
   facility: ["Lead", "Bid Submitted", "Negotiation", "Won", "Lost"],
   lawn:     ["Lead", "Proposal / Bid", "Negotiation", "Won", "Lost"],
