@@ -720,6 +720,46 @@ export default function App() {
                 </div>
                 <div style={{ display: "flex", gap: 8 }}>
                   <input className="fi" style={{ width: 200 }} placeholder="Search companies…" value={crmSearch} onChange={e => setCrmSearch(e.target.value)} />
+                  <label className="btn-ghost" style={{ cursor: "pointer", display: "inline-flex", alignItems: "center", padding: "5px 10px", borderRadius: 5, border: "1px solid #1E2640", color: "#4A5270", fontSize: 11, fontFamily: "inherit" }}>
+                    ↑ Import CSV
+                    <input type="file" accept=".csv" style={{ display: "none" }} onChange={e => {
+                      const file = e.target.files[0];
+                      if (!file) return;
+                      const reader = new FileReader();
+                      reader.onload = (evt) => {
+                        const lines = evt.target.result.split("\n").map(l => l.trim()).filter(Boolean);
+                        if (lines.length < 2) return;
+                        const headers = lines[0].split(",").map(h => h.trim().toLowerCase().replace(/[^a-z]/g, ""));
+                        const col = (name) => headers.indexOf(name);
+                        const newCompanies = [];
+                        const newContacts  = [];
+                        const companyMap   = {};
+                        companies.forEach(c => { companyMap[c.name.toLowerCase()] = c.id; });
+                        lines.slice(1).forEach(line => {
+                          const cells = line.split(",").map(c => c.trim().replace(/^"|"$/g, ""));
+                          const companyName = col("company")   >= 0 ? cells[col("company")]   : "";
+                          const firstName   = col("firstname") >= 0 ? cells[col("firstname")] : "";
+                          const lastName    = col("lastname")  >= 0 ? cells[col("lastname")]  : "";
+                          const email       = col("email")     >= 0 ? cells[col("email")]     : "";
+                          const phone       = col("phone")     >= 0 ? cells[col("phone")]     : "";
+                          const title       = col("title")     >= 0 ? cells[col("title")]     : "";
+                          if (!firstName && !email) return;
+                          let companyId = companyMap[companyName.toLowerCase()];
+                          if (!companyId && companyName) {
+                            companyId = "c" + Date.now() + Math.random().toString(36).slice(2, 6);
+                            newCompanies.push({ id: companyId, name: companyName, website: "", address: "", logo: "", notes: "" });
+                            companyMap[companyName.toLowerCase()] = companyId;
+                          }
+                          newContacts.push({ id: "p" + Date.now() + Math.random().toString(36).slice(2, 6), companyId: companyId || "", firstName, lastName, title, email, phone });
+                        });
+                        if (newCompanies.length) setCompanies(prev => [...prev, ...newCompanies]);
+                        if (newContacts.length)  setContacts(prev  => [...prev, ...newContacts]);
+                        alert("Imported " + newCompanies.length + " companies and " + newContacts.length + " contacts!");
+                        e.target.value = "";
+                      };
+                      reader.readAsText(file);
+                    }} />
+                  </label>
                   <button className="btn-ghost" onClick={() => { setEditContactId(null); setContactForm({ companyId: "", firstName: "", lastName: "", title: "", email: "", phone: "" }); setShowContactForm(true); }}>+ Contact</button>
                   <button className="btn-primary" onClick={() => { setEditCompanyId(null); setCompanyForm({ name: "", website: "", address: "", logo: "", notes: "" }); setShowCompanyForm(true); }}>+ Company</button>
                 </div>
