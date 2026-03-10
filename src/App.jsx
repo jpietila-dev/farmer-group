@@ -28,6 +28,7 @@ const NAV_ITEMS = {
     { id: "dashboard", label: "Dashboard", icon: "⊞" },
     { id: "calendar", label: "Calendar", icon: "📅" },
     { id: "jobs", label: "Active Jobs", icon: "🔨" },
+    { id: "sites", label: "Sites", icon: "📍" },
     { id: "pipeline", label: "Pipeline", icon: "◈" },
     { id: "budgeting", label: "Budgeting", icon: "💲" },
     { id: "team", label: "Team", icon: "👥" },
@@ -37,6 +38,7 @@ const NAV_ITEMS = {
     { id: "dashboard", label: "Dashboard", icon: "⊞" },
     { id: "calendar", label: "Calendar", icon: "📅" },
     { id: "jobs", label: "Active Jobs", icon: "🔨" },
+    { id: "sites", label: "Sites", icon: "📍" },
     { id: "bids", label: "Bids", icon: "📋" },
     { id: "pipeline", label: "Pipeline", icon: "◈" },
     { id: "budgeting", label: "Budgeting", icon: "💲" },
@@ -46,7 +48,7 @@ const NAV_ITEMS = {
   lawn: [
     { id: "dashboard", label: "Dashboard", icon: "⊞" },
     { id: "calendar", label: "Calendar", icon: "📅" },
-    { id: "sites", label: "Active Sites", icon: "📍" },
+    { id: "sites", label: "Sites", icon: "📍" },
     { id: "budgeting", label: "Budgeting", icon: "💲" },
     { id: "team", label: "Team", icon: "👥" },
     { id: "customers", label: "Customers", icon: "🤝" },
@@ -54,7 +56,7 @@ const NAV_ITEMS = {
   snow: [
     { id: "dashboard", label: "Dashboard", icon: "⊞" },
     { id: "calendar", label: "Calendar", icon: "📅" },
-    { id: "sites", label: "Active Sites", icon: "📍" },
+    { id: "sites", label: "Sites", icon: "📍" },
     { id: "budgeting", label: "Budgeting", icon: "💲" },
     { id: "team", label: "Team", icon: "👥" },
     { id: "customers", label: "Customers", icon: "🤝" },
@@ -178,7 +180,13 @@ const INIT_JOBS = [
   { id: 3, name: "Harbor View Expansion",      companyId: "c3", client: "Harbor View LLC",         contractValue: 620000, startDate: "2026-01-10", endDate: "2026-09-30", pm: "Mike Torres", pct: 52, status: "Behind Schedule", notes: "Weather delays",      bu: "major" },
 ];
 
+const INIT_SITES = [
+  { id: "s1", companyId: "c2", contactIds: ["p3"], storeNumber: "001", address: "200 School Ave, Elmwood, NJ", phone: "732-555-0210", accessCode: "1234", notes: "" },
+  { id: "s2", companyId: "c3", contactIds: ["p4"], storeNumber: "002", address: "300 Harbor Blvd, Newark, NJ", phone: "201-555-0310", accessCode: "5678", notes: "" },
+];
+
 const NEXT_STEP_OPTIONS = ["Geotechnical", "Engage Engineer", "Underwriting", "LOI", "Under Contract"];
+const SITES_BUS = ["capital", "facility", "lawn", "snow"];
 
 export default function App() {
   const [activeBU,  setActiveBU]  = useState("all");
@@ -220,6 +228,14 @@ export default function App() {
   const [editJobId,   setEditJobId]   = useState(null);
   const [jobForm,     setJobForm]     = useState({ name: "", companyId: "", client: "", contractValue: "", startDate: "", endDate: "", pm: "", pct: 0, status: "On Schedule", notes: "", bu: "major" });
   const [selectedJob, setSelectedJob] = useState(null);
+
+  // Sites
+  const [sites,        setSites]        = useState(INIT_SITES);
+  const [showSiteForm, setShowSiteForm] = useState(false);
+  const [editSiteId,   setEditSiteId]   = useState(null);
+  const [siteForm,     setSiteForm]     = useState({ companyId: "", contactIds: [], storeNumber: "", address: "", phone: "", accessCode: "", notes: "" });
+  const [selectedSite, setSelectedSite] = useState(null);
+  const [siteSearch,   setSiteSearch]   = useState("");
 
   const navItems = NAV_ITEMS[activeBU] || NAV_ITEMS.all;
   const buColor  = BU_COLORS[activeBU];
@@ -263,6 +279,22 @@ export default function App() {
   const getCompanyJobs      = (cid) => jobs.filter(j => j.companyId === cid);
   const getCompanyPipeline  = (cid) => pipeline.filter(o => o.companyId === cid);
   const getCompanyTotalValue = (cid) => jobs.filter(j => j.companyId === cid).reduce((s, j) => s + j.contractValue, 0);
+  const getCompanySites     = (cid) => sites.filter(s => s.companyId === cid);
+
+  // Site helpers
+  const openAddSite = () => { setEditSiteId(null); setSiteForm({ companyId: "", contactIds: [], storeNumber: "", address: "", phone: "", accessCode: "", notes: "" }); setShowSiteForm(true); };
+  const openEditSite = (s) => { setEditSiteId(s.id); setSiteForm({ ...s }); setShowSiteForm(true); };
+  const saveSite = () => {
+    if (!siteForm.storeNumber.trim() && !siteForm.address.trim()) return;
+    if (editSiteId) setSites(sites.map(s => s.id === editSiteId ? { ...siteForm, id: editSiteId } : s));
+    else setSites([...sites, { ...siteForm, id: "s" + Date.now() }]);
+    setShowSiteForm(false);
+  };
+  const deleteSite = (id) => { setSites(sites.filter(s => s.id !== id)); setSelectedSite(null); };
+  const toggleSiteContact = (contactId) => {
+    const ids = siteForm.contactIds || [];
+    setSiteForm(f => ({ ...f, contactIds: ids.includes(contactId) ? ids.filter(i => i !== contactId) : [...ids, contactId] }));
+  };
 
   const saveCompany = () => {
     if (!companyForm.name.trim()) return;
@@ -551,7 +583,7 @@ export default function App() {
     .contact-chip{background:#0A0D16;border:1px solid #1E2640;border-radius:6px;padding:8px 12px;display:flex;align-items:center;justify-content:space-between}
   `;
 
-  const panelOpen = selectedJob || selectedOpp || selectedCompany;
+  const panelOpen = selectedJob || selectedOpp || selectedCompany || selectedSite;
 
   return (
     <div style={{ display: "flex", minHeight: "100vh", background: "#0F1117", color: "#E8ECF4", fontFamily: "'Inter','Segoe UI',sans-serif" }}>
@@ -688,89 +720,9 @@ export default function App() {
                 </div>
                 <div style={{ display: "flex", gap: 8 }}>
                   <input className="fi" style={{ width: 200 }} placeholder="Search companies…" value={crmSearch} onChange={e => setCrmSearch(e.target.value)} />
-<label className="btn-ghost" style={{ cursor: "pointer", display: "inline-flex", alignItems: "center", padding: "5px 10px", borderRadius: 5, border: "1px solid #1E2640", color: "#4A5270", fontSize: 11, fontFamily: "inherit" }}>
-                    ↑ Import CSV
-                    <input type="file" accept=".csv" style={{ display: "none" }} onChange={e => {
-                      const file = e.target.files[0];
-                      if (!file) return;
-                      const reader = new FileReader();
-                      reader.onload = (evt) => {
-                        const lines = evt.target.result.split("\n").map(l => l.trim()).filter(Boolean);
-                        if (lines.length < 2) return;
-                        const headers = lines[0].split(",").map(h => h.trim().toLowerCase().replace(/[^a-z]/g, ""));
-                        const col = (name) => headers.indexOf(name);
-                        const newCompanies = [];
-                        const newContacts  = [];
-                        const companyMap   = {};
-                        companies.forEach(c => { companyMap[c.name.toLowerCase()] = c.id; });
-                        lines.slice(1).forEach(line => {
-                          const cells = line.split(",").map(c => c.trim().replace(/^"|"$/g, ""));
-                          const companyName = col("company") >= 0 ? cells[col("company")] : "";
-                          const firstName   = col("firstname") >= 0 ? cells[col("firstname")] : "";
-                          const lastName    = col("lastname")  >= 0 ? cells[col("lastname")]  : "";
-                          const email       = col("email")     >= 0 ? cells[col("email")]     : "";
-                          const phone       = col("phone")     >= 0 ? cells[col("phone")]     : "";
-                          const title       = col("title")     >= 0 ? cells[col("title")]     : "";
-                          if (!firstName && !email) return;
-                          let companyId = companyMap[companyName.toLowerCase()];
-                          if (!companyId && companyName) {
-                            companyId = "c" + Date.now() + Math.random().toString(36).slice(2, 6);
-                            newCompanies.push({ id: companyId, name: companyName, website: "", address: "", logo: "", notes: "" });
-                            companyMap[companyName.toLowerCase()] = companyId;
-                          }
-                          newContacts.push({ id: "p" + Date.now() + Math.random().toString(36).slice(2, 6), companyId: companyId || "", firstName, lastName, title, email, phone });
-                        });
-                        if (newCompanies.length) setCompanies(prev => [...prev, ...newCompanies]);
-                        if (newContacts.length)  setContacts(prev  => [...prev, ...newContacts]);
-                        alert("Imported " + newCompanies.length + " companies and " + newContacts.length + " contacts!");
-                        e.target.value = "";
-                      };
-                      reader.readAsText(file);
-                    }} />
-                  </label>
-<label className="btn-ghost" style={{ cursor: "pointer", display: "inline-flex", alignItems: "center", padding: "5px 10px", borderRadius: 5, border: "1px solid #1E2640", color: "#4A5270", fontSize: 11, fontFamily: "inherit" }}>
-                    ↑ Import CSV
-                    <input type="file" accept=".csv" style={{ display: "none" }} onChange={e => {
-                      const file = e.target.files[0];
-                      if (!file) return;
-                      const reader = new FileReader();
-                      reader.onload = (evt) => {
-                        const lines = evt.target.result.split("\n").map(l => l.trim()).filter(Boolean);
-                        if (lines.length < 2) return;
-                        const headers = lines[0].split(",").map(h => h.trim().toLowerCase().replace(/[^a-z]/g, ""));
-                        const col = (name) => headers.indexOf(name);
-                        const newCompanies = [];
-                        const newContacts  = [];
-                        const companyMap   = {};
-                        companies.forEach(c => { companyMap[c.name.toLowerCase()] = c.id; });
-                        lines.slice(1).forEach(line => {
-                          const cells = line.split(",").map(c => c.trim().replace(/^"|"$/g, ""));
-                          const companyName = col("company")   >= 0 ? cells[col("company")]   : "";
-                          const firstName   = col("firstname") >= 0 ? cells[col("firstname")] : "";
-                          const lastName    = col("lastname")  >= 0 ? cells[col("lastname")]  : "";
-                          const email       = col("email")     >= 0 ? cells[col("email")]     : "";
-                          const phone       = col("phone")     >= 0 ? cells[col("phone")]     : "";
-                          const title       = col("title")     >= 0 ? cells[col("title")]     : "";
-                          if (!firstName && !email) return;
-                          let companyId = companyMap[companyName.toLowerCase()];
-                          if (!companyId && companyName) {
-                            companyId = "c" + Date.now() + Math.random().toString(36).slice(2, 6);
-                            newCompanies.push({ id: companyId, name: companyName, website: "", address: "", logo: "", notes: "" });
-                            companyMap[companyName.toLowerCase()] = companyId;
-                          }
-                          newContacts.push({ id: "p" + Date.now() + Math.random().toString(36).slice(2, 6), companyId: companyId || "", firstName, lastName, title, email, phone });
-                        });
-                        if (newCompanies.length) setCompanies(prev => [...prev, ...newCompanies]);
-                        if (newContacts.length)  setContacts(prev  => [...prev, ...newContacts]);
-                        alert("Imported " + newCompanies.length + " companies and " + newContacts.length + " contacts!");
-                        e.target.value = "";
-                      };
-                      reader.readAsText(file);
-                    }} />
-                  </label>
                   <button className="btn-ghost" onClick={() => { setEditContactId(null); setContactForm({ companyId: "", firstName: "", lastName: "", title: "", email: "", phone: "" }); setShowContactForm(true); }}>+ Contact</button>
                   <button className="btn-primary" onClick={() => { setEditCompanyId(null); setCompanyForm({ name: "", website: "", address: "", logo: "", notes: "" }); setShowCompanyForm(true); }}>+ Company</button>
-                </div> 
+                </div>
               </div>
 
               <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 12 }}>
@@ -1041,6 +993,76 @@ export default function App() {
             </div>
           )}
 
+          {/* ── SITES ── */}
+          {activeNav === "sites" && SITES_BUS.includes(activeBU) && (
+            <div className="fade-in" style={{ display: "flex", flexDirection: "column", gap: 22 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div>
+                  <div style={{ fontSize: 22, fontWeight: 700, color: "#FFFFFF", letterSpacing: "-0.01em", textTransform: "uppercase" }}>Sites</div>
+                  <div style={{ fontSize: 11, color: "#3A4560", marginTop: 3, letterSpacing: "0.06em" }}>
+                    {BUSINESS_UNITS.find(b => b.id === activeBU)?.label.toUpperCase()} · {sites.filter(s => activeBU === "all" || s.companyId).length} SITES
+                  </div>
+                </div>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <input className="fi" style={{ width: 200 }} placeholder="Search sites…" value={siteSearch} onChange={e => setSiteSearch(e.target.value)} />
+                  <button className="btn-primary" onClick={openAddSite}>+ Add Site</button>
+                </div>
+              </div>
+
+              {/* Stats */}
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 12 }}>
+                {[
+                  { label: "Total Sites",    value: sites.length,                                                        color: buColor.accent },
+                  { label: "Companies",      value: [...new Set(sites.map(s => s.companyId))].length,                    color: "#A78BFA" },
+                  { label: "Total Contacts", value: [...new Set(sites.flatMap(s => s.contactIds || []))].length,         color: "#4ADE80" },
+                ].map(s => (
+                  <div key={s.label} className="stat-card" style={{ position: "relative", overflow: "hidden", padding: "14px 18px" }}>
+                    <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: s.color }} />
+                    <div style={{ fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "#3A4560", marginBottom: 6 }}>{s.label}</div>
+                    <div style={{ fontSize: 22, fontWeight: 700, color: s.color }}>{s.value}</div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Sites grid */}
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 12 }}>
+                {sites.filter(site => {
+                  const co = companies.find(c => c.id === site.companyId);
+                  const q  = siteSearch.toLowerCase();
+                  return !q || (site.storeNumber || "").toLowerCase().includes(q) || (site.address || "").toLowerCase().includes(q) || (co?.name || "").toLowerCase().includes(q);
+                }).map(site => {
+                  const co           = companies.find(c => c.id === site.companyId);
+                  const siteContacts = contacts.filter(p => (site.contactIds || []).includes(p.id));
+                  return (
+                    <div key={site.id} className="company-card" onClick={() => setSelectedSite(site)}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+                        <div style={{ width: 36, height: 36, borderRadius: 8, background: buColor.light, border: "1px solid " + buColor.accent + "40", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, flexShrink: 0 }}>📍</div>
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ fontSize: 13, color: "#E8ECF4", fontWeight: 600 }}>Store #{site.storeNumber || "—"}</div>
+                          {co && <div style={{ fontSize: 11, color: "#3B6FE8" }}>{co.name}</div>}
+                        </div>
+                      </div>
+                      {site.address && <div style={{ fontSize: 11, color: "#3A4560", marginBottom: 8 }}>📍 {site.address}</div>}
+                      {site.phone   && <div style={{ fontSize: 11, color: "#3A4560", marginBottom: 4 }}>📞 {site.phone}</div>}
+                      <div style={{ display: "flex", justifyContent: "space-between", paddingTop: 10, borderTop: "1px solid #1E2640" }}>
+                        <div><div style={{ fontSize: 13, fontWeight: 600, color: "#B8C4E0" }}>{siteContacts.length}</div><div style={{ fontSize: 10, color: "#3A4560" }}>Contacts</div></div>
+                        <div style={{ display: "flex", gap: 6 }} onClick={e => e.stopPropagation()}>
+                          <button className="btn-ghost" style={{ fontSize: 11 }} onClick={() => openEditSite(site)}>✎</button>
+                          <button className="btn-ghost" style={{ fontSize: 11, color: "#F87171", borderColor: "#F8717120" }} onClick={() => deleteSite(site.id)}>✕</button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+                {sites.length === 0 && (
+                  <div style={{ gridColumn: "1/-1", textAlign: "center", padding: "48px", color: "#2A3560", fontSize: 12, background: "#161B28", borderRadius: 10, border: "1px solid #1E2640" }}>
+                    No sites yet — add your first one
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* ── FINANCE ── */}
           {activeNav === "finance" && (
             <div className="fade-in">
@@ -1056,7 +1078,7 @@ export default function App() {
           )}
 
           {/* ── COMING SOON (other nav items) ── */}
-          {!["dashboard", "customers", "jobs", "pipeline", "budgeting", "finance"].includes(activeNav) && (
+          {!["dashboard", "customers", "jobs", "pipeline", "budgeting", "finance", "sites"].includes(activeNav) && (
             <div className="fade-in">
               <div style={{ marginBottom: 28 }}>
                 <div style={{ fontSize: 22, fontWeight: 700, color: "#FFFFFF", textTransform: "uppercase" }}>{navItems.find(n => n.id === activeNav)?.label}</div>
@@ -1071,6 +1093,68 @@ export default function App() {
 
         </div>{/* end content */}
       </div>{/* end main */}
+
+      {/* ── SITE SIDE PANEL ── */}
+      {selectedSite && !selectedCompany && (
+        <div className="side-panel slide-in">
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: "#FFFFFF", textTransform: "uppercase", letterSpacing: "0.06em" }}>Site Detail</div>
+            <button className="btn-ghost" onClick={() => setSelectedSite(null)}>✕</button>
+          </div>
+          {(() => {
+            const co           = companies.find(c => c.id === selectedSite.companyId);
+            const siteContacts = contacts.filter(p => (selectedSite.contactIds || []).includes(p.id));
+            return (
+              <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <div style={{ width: 44, height: 44, borderRadius: 10, background: buColor.light, border: "1px solid " + buColor.accent + "40", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20 }}>📍</div>
+                  <div>
+                    <div style={{ fontSize: 16, color: "#E8ECF4", fontWeight: 600 }}>Store #{selectedSite.storeNumber || "—"}</div>
+                    {co && <div style={{ fontSize: 12, color: "#3B6FE8", cursor: "pointer" }} onClick={() => { setSelectedSite(null); setSelectedCompany(co); }}>🏢 {co.name}</div>}
+                  </div>
+                </div>
+
+                <div style={{ background: "#0A0D16", borderRadius: 8, padding: "14px", border: "1px solid #1E2640", display: "flex", flexDirection: "column", gap: 10 }}>
+                  {[
+                    { label: "Address",     value: selectedSite.address     || "—" },
+                    { label: "Phone",       value: selectedSite.phone        || "—" },
+                    { label: "Access Code", value: selectedSite.accessCode   || "—" },
+                  ].map(r => (
+                    <div key={r.label} style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+                      <span style={{ fontSize: 11, color: "#3A4560", flexShrink: 0 }}>{r.label}</span>
+                      <span style={{ fontSize: 11, color: r.label === "Access Code" ? "#FCD34D" : "#B8C4E0", textAlign: "right", fontWeight: r.label === "Access Code" ? 600 : 400 }}>{r.value}</span>
+                    </div>
+                  ))}
+                </div>
+
+                {siteContacts.length > 0 && (
+                  <div>
+                    <div style={{ fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "#3A4560", marginBottom: 10, fontWeight: 600 }}>Contacts</div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                      {siteContacts.map(p => (
+                        <div key={p.id} className="contact-chip">
+                          <div>
+                            <div style={{ fontSize: 12, color: "#E8ECF4", fontWeight: 500 }}>{p.firstName} {p.lastName}</div>
+                            <div style={{ fontSize: 10, color: "#3A4560" }}>{p.title} · {p.email}</div>
+                            {p.phone && <div style={{ fontSize: 10, color: "#3A4560" }}>{p.phone}</div>}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {selectedSite.notes && <div style={{ fontSize: 12, color: "#6B7694", lineHeight: 1.6, background: "#0A0D16", padding: "10px 12px", borderRadius: 6, border: "1px solid #1E2640" }}>{selectedSite.notes}</div>}
+
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button className="btn-ghost" style={{ flex: 1 }} onClick={() => { openEditSite(selectedSite); setSelectedSite(null); }}>✎ Edit</button>
+                  <button className="btn-ghost" style={{ color: "#F87171", borderColor: "#F8717120" }} onClick={() => deleteSite(selectedSite.id)}>✕</button>
+                </div>
+              </div>
+            );
+          })()}
+        </div>
+      )}
 
       {/* ── COMPANY SIDE PANEL ── */}
       {selectedCompany && (
@@ -1103,7 +1187,7 @@ export default function App() {
                 { label: "Total Contract Value", value: fmt(getCompanyTotalValue(selectedCompany.id)), color: "#3B6FE8" },
                 { label: "Active Jobs",          value: getCompanyJobs(selectedCompany.id).length,     color: "#4ADE80" },
                 { label: "Pipeline Opps",        value: getCompanyPipeline(selectedCompany.id).length, color: "#FCD34D" },
-                { label: "Contacts",             value: getCompanyContacts(selectedCompany.id).length, color: "#A78BFA" },
+                { label: "Sites",                value: getCompanySites(selectedCompany.id).length,    color: "#A78BFA" },
               ].map(s => (
                 <div key={s.label} style={{ background: "#0A0D16", border: "1px solid #1E2640", borderRadius: 8, padding: "10px 12px" }}>
                   <div style={{ fontSize: 9, letterSpacing: "0.1em", textTransform: "uppercase", color: "#3A4560", marginBottom: 4 }}>{s.label}</div>
@@ -1444,6 +1528,56 @@ export default function App() {
               <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
                 <button className="btn-ghost"   style={{ padding: "8px 16px" }} onClick={() => setShowContactForm(false)}>Cancel</button>
                 <button className="btn-primary" onClick={saveContact}>{editContactId ? "Save Changes" : "Add Contact"}</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── SITE FORM ── */}
+      {showSiteForm && (
+        <div className="modal-bg" onClick={e => e.target === e.currentTarget && setShowSiteForm(false)}>
+          <div className="modal fade-in">
+            <div style={{ fontSize: 16, fontWeight: 700, color: "#FFFFFF", marginBottom: 22, textTransform: "uppercase" }}>{editSiteId ? "Edit Site" : "Add Site"}</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              <div><label className="lbl">Company</label>
+                <select className="fi" value={siteForm.companyId} onChange={e => setSiteForm(f => ({ ...f, companyId: e.target.value, contactIds: [] }))}>
+                  <option value="">Select company…</option>
+                  {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              </div>
+              <div className="g2">
+                <div><label className="lbl">Store Number</label><input className="fi" value={siteForm.storeNumber} onChange={e => setSiteForm(f => ({ ...f, storeNumber: e.target.value }))} placeholder="e.g. 001" /></div>
+                <div><label className="lbl">Phone</label>       <input className="fi" value={siteForm.phone}       onChange={e => setSiteForm(f => ({ ...f, phone:       e.target.value }))} placeholder="555-555-0100" /></div>
+              </div>
+              <div><label className="lbl">Address</label><input className="fi" value={siteForm.address} onChange={e => setSiteForm(f => ({ ...f, address: e.target.value }))} placeholder="123 Main St, City, State" /></div>
+              <div><label className="lbl">Access Code</label><input className="fi" value={siteForm.accessCode} onChange={e => setSiteForm(f => ({ ...f, accessCode: e.target.value }))} placeholder="e.g. 1234" /></div>
+              {siteForm.companyId && (
+                <div>
+                  <label className="lbl">Assigned Contacts</label>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 160, overflowY: "auto" }}>
+                    {contacts.filter(p => p.companyId === siteForm.companyId).map(p => (
+                      <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", background: (siteForm.contactIds || []).includes(p.id) ? "#1A2340" : "#0A0D16", border: "1px solid " + ((siteForm.contactIds || []).includes(p.id) ? "#3B6FE8" : "#1E2640"), borderRadius: 6, cursor: "pointer" }}
+                        onClick={() => toggleSiteContact(p.id)}>
+                        <div style={{ width: 14, height: 14, borderRadius: 3, background: (siteForm.contactIds || []).includes(p.id) ? "#3B6FE8" : "transparent", border: "1px solid " + ((siteForm.contactIds || []).includes(p.id) ? "#3B6FE8" : "#3A4560"), display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                          {(siteForm.contactIds || []).includes(p.id) && <span style={{ fontSize: 9, color: "#fff" }}>✓</span>}
+                        </div>
+                        <div>
+                          <div style={{ fontSize: 12, color: "#E8ECF4" }}>{p.firstName} {p.lastName}</div>
+                          <div style={{ fontSize: 10, color: "#3A4560" }}>{p.title}</div>
+                        </div>
+                      </div>
+                    ))}
+                    {contacts.filter(p => p.companyId === siteForm.companyId).length === 0 && (
+                      <div style={{ fontSize: 11, color: "#2A3560", padding: "8px 12px" }}>No contacts for this company yet</div>
+                    )}
+                  </div>
+                </div>
+              )}
+              <div><label className="lbl">Notes</label><textarea className="fi" rows={2} value={siteForm.notes} onChange={e => setSiteForm(f => ({ ...f, notes: e.target.value }))} style={{ resize: "vertical" }} /></div>
+              <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+                <button className="btn-ghost"   style={{ padding: "8px 16px" }} onClick={() => setShowSiteForm(false)}>Cancel</button>
+                <button className="btn-primary" onClick={saveSite}>{editSiteId ? "Save Changes" : "Add Site"}</button>
               </div>
             </div>
           </div>
