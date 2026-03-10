@@ -728,8 +728,7 @@ export default function App() {
                       reader.readAsText(file);
                     }} />
                   </label>
-                  <button className="btn-ghost" onClick={() => { setEditContactId(null); setContactForm                  <button className="btn-primary" onClick={() => { setEditCompanyId(null); setCompanyForm({ name: "", website: "", address: "", logo: "", notes: "" }); setShowCompanyForm(true); }}>+ Company</button>
-                </div>
+<button className="btn-ghost" onClick={() => { setEditContactId(null); setContactForm({ companyId: "", firstName: "", lastName: "", title: "", email: "", phone: "" }); setShowContactForm(true); }}>+ Contact</button>                </div>
               </div>
 
               <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 12 }}>
