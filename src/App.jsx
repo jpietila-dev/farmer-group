@@ -102,12 +102,10 @@ const SAMPLE_STATS = {
   snow:     { jobs: 9,  pipeline: "$65K", budget: "$58K",  label: "Snow" },
 };
 
-const PUNCH_LIST = [
-  { id: 1, text: "Follow up with Riverside project bid", bu: "major", priority: "high" },
-  { id: 2, text: "Schedule crew for Elm St. maintenance", bu: "facility", priority: "medium" },
-  { id: 3, text: "Review Q1 lawn budget variance", bu: "lawn", priority: "medium" },
-  { id: 4, text: "Confirm snow routes for weekend", bu: "snow", priority: "high" },
-  { id: 5, text: "Capital improvement proposal due Friday", bu: "capital", priority: "high" },
+const PUNCH_LIST_STATIC = [
+  { id: "s1", text: "Schedule crew for Elm St. maintenance", bu: "facility", priority: "medium", dueDate: null },
+  { id: "s2", text: "Review Q1 lawn budget variance", bu: "lawn", priority: "medium", dueDate: null },
+  { id: "s3", text: "Confirm snow routes for weekend", bu: "snow", priority: "high", dueDate: null },
 ];
 
 const SAMPLE_JOBS = [
@@ -172,33 +170,82 @@ export default function App() {
   const [activeBU, setActiveBU] = useState("all");
   const [activeNav, setActiveNav] = useState("dashboard");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [pipeline, setPipeline] = useState(SAMPLE_PIPELINE);
-  const [jobs, setJobs] = useState(SAMPLE_JOBS);
+  const [pipeline, setPipeline] = useState([
+    { id: 1, name: "Riverside Community Center", contact: "mike@riverside.com", value: 450000, stage: "Negotiation", closeDate: "2026-04-15", notes: "Final contract review", bu: "major", budgetDueDate: "", bidDueDate: "", nextSteps: [] },
+    { id: 2, name: "Elmwood School Renovation", contact: "sara@elmwood.edu", value: 280000, stage: "Proposal / Bid", closeDate: "2026-03-28", notes: "Submitted last Tuesday", bu: "major", budgetDueDate: "", bidDueDate: "2026-03-28", nextSteps: [] },
+    { id: 3, name: "Oak Street Parking Lot", contact: "tom@cityworks.gov", value: 95000, stage: "Lead", closeDate: "2026-05-01", notes: "Initial inquiry", bu: "capital", budgetDueDate: "", bidDueDate: "", nextSteps: [] },
+    { id: 4, name: "Westfield HVAC Upgrade", contact: "jen@westfield.com", value: 180000, stage: "Initial Meeting", closeDate: "2026-04-10", notes: "Site visit scheduled", bu: "capital", budgetDueDate: "", bidDueDate: "", nextSteps: [] },
+    { id: 5, name: "Harbor View Maintenance", contact: "bob@harborview.com", value: 42000, stage: "Bid Submitted", closeDate: "2026-03-20", notes: "Competitive bid", bu: "facility", budgetDueDate: "", bidDueDate: "2026-03-20", nextSteps: [] },
+    { id: 6, name: "Eastside Budget Scope", contact: "dev@eastside.com", value: 320000, stage: "Budgeting", closeDate: "", notes: "Early scoping phase", bu: "major", budgetDueDate: "2026-03-17", bidDueDate: "", nextSteps: [] },
+    { id: 7, name: "Central Park Redevelopment", contact: "lisa@central.org", value: 580000, stage: "Lead", closeDate: "2026-06-01", notes: "Referral", bu: "major", budgetDueDate: "", bidDueDate: "", nextSteps: [{ step: "Geotechnical", dueDate: "2026-03-14" }, { step: "Engage Engineer", dueDate: "2026-03-21" }] },
+  ]);
+  const [jobs, setJobs] = useState([
+    { id: 1, name: "Riverside Community Center", client: "Riverside City", contractValue: 450000, startDate: "2026-02-01", endDate: "2026-06-30", pm: "John Smith", pct: 35, status: "On Schedule", notes: "Foundation complete, framing in progress", bu: "major" },
+    { id: 2, name: "Elmwood School Renovation", client: "Elmwood School District", contractValue: 280000, startDate: "2026-03-15", endDate: "2026-08-15", pm: "Sarah Lee", pct: 10, status: "On Schedule", notes: "Permits approved, mobilizing crew", bu: "major" },
+    { id: 3, name: "Harbor View Expansion", client: "Harbor View LLC", contractValue: 620000, startDate: "2026-01-10", endDate: "2026-09-30", pm: "Mike Torres", pct: 52, status: "Behind Schedule", notes: "Weather delays in January", bu: "major" },
+  ]);
   const [showJobForm, setShowJobForm] = useState(false);
   const [editJobId, setEditJobId] = useState(null);
-  const [jobForm, setJobForm] = useState(EMPTY_JOB);
+  const [jobForm, setJobForm] = useState({ name: "", client: "", contractValue: "", startDate: "", endDate: "", pm: "", pct: 0, status: "On Schedule", notes: "", bu: "major" });
   const [selectedJob, setSelectedJob] = useState(null);
   const [showForm, setShowForm] = useState(false);
   const [editId, setEditId] = useState(null);
-  const [form, setForm] = useState({ name: "", contact: "", value: "", stage: "Lead", closeDate: "", notes: "", bu: "major" });
+  const [form, setForm] = useState({ name: "", contact: "", value: "", stage: "Budgeting", closeDate: "", notes: "", bu: "major", budgetDueDate: "", bidDueDate: "", nextSteps: [] });
   const [pipelineView, setPipelineView] = useState("kanban");
   const [filterBU, setFilterBU] = useState("all");
   const [search, setSearch] = useState("");
   const [selectedOpp, setSelectedOpp] = useState(null);
+  const [newNextStep, setNewNextStep] = useState({ step: "", dueDate: "" });
 
   const navItems = NAV_ITEMS[activeBU] || NAV_ITEMS.all;
   const buColor = BU_COLORS[activeBU];
   const handleBUChange = (id) => { setActiveBU(id); setActiveNav("dashboard"); };
 
-  const majorJobs = jobs.filter(j => j.bu === "major");
-  const ganttMonths = getGanttMonths(majorJobs);
-  const today = new Date();
-  const totalGanttStart = ganttMonths.length ? new Date(ganttMonths[0].year, ganttMonths[0].month, 1) : today;
-  const totalGanttEnd = ganttMonths.length ? new Date(ganttMonths[ganttMonths.length-1].year, ganttMonths[ganttMonths.length-1].month + 1, 1) : today;
-  const totalGanttMs = totalGanttEnd - totalGanttStart;
-  const todayPct = totalGanttMs > 0 ? Math.max(0, Math.min(100, ((today - totalGanttStart) / totalGanttMs) * 100)) : 0;
+  const NEXT_STEP_OPTIONS = ["Geotechnical", "Engage Engineer", "Underwriting", "LOI", "Under Contract"];
 
-  const openAddJob = () => { setEditJobId(null); setJobForm({ ...EMPTY_JOB, bu: activeBU === "all" ? "major" : activeBU }); setShowJobForm(true); };
+  // Dynamic punch list from pipeline dates
+  const dynamicPunchList = useMemo(() => {
+    const items = [...PUNCH_LIST_STATIC];
+    const today = new Date();
+    const soon = new Date(); soon.setDate(soon.getDate() + 7);
+
+    pipeline.forEach(o => {
+      // Budget due dates
+      if (o.budgetDueDate) {
+        const d = new Date(o.budgetDueDate);
+        if (d >= today && d <= soon) {
+          items.push({ id: `budget-${o.id}`, text: `Budget due: ${o.name}`, bu: o.bu, priority: d <= new Date(today.getTime() + 2*86400000) ? "high" : "medium", dueDate: o.budgetDueDate, tag: "BUDGET DUE" });
+        }
+      }
+      // Bid due dates
+      if (o.bidDueDate) {
+        const d = new Date(o.bidDueDate);
+        if (d >= today && d <= soon) {
+          items.push({ id: `bid-${o.id}`, text: `Bid due: ${o.name}`, bu: o.bu, priority: d <= new Date(today.getTime() + 2*86400000) ? "high" : "medium", dueDate: o.bidDueDate, tag: "BID DUE" });
+        }
+      }
+      // Next step due dates
+      (o.nextSteps || []).forEach((ns, i) => {
+        if (ns.dueDate) {
+          const d = new Date(ns.dueDate);
+          if (d >= today && d <= soon) {
+            items.push({ id: `ns-${o.id}-${i}`, text: `${ns.step}: ${o.name}`, bu: o.bu, priority: d <= new Date(today.getTime() + 2*86400000) ? "high" : "medium", dueDate: ns.dueDate, tag: ns.step.toUpperCase() });
+          }
+        }
+      });
+    });
+
+    return items.sort((a, b) => {
+      if (!a.dueDate && !b.dueDate) return 0;
+      if (!a.dueDate) return 1;
+      if (!b.dueDate) return -1;
+      return new Date(a.dueDate) - new Date(b.dueDate);
+    });
+  }, [pipeline]);
+
+  const majorJobs = jobs.filter(j => j.bu === "major");
+
+  const openAddJob = () => { setEditJobId(null); setJobForm({ name: "", client: "", contractValue: "", startDate: "", endDate: "", pm: "", pct: 0, status: "On Schedule", notes: "", bu: activeBU === "all" ? "major" : activeBU }); setShowJobForm(true); };
   const openEditJob = (j) => { setEditJobId(j.id); setJobForm({ ...j, contractValue: String(j.contractValue) }); setShowJobForm(true); };
   const saveJob = () => {
     if (!jobForm.name.trim()) return;
@@ -209,13 +256,19 @@ export default function App() {
   };
   const deleteJob = (id) => { setJobs(jobs.filter(j => j.id !== id)); setSelectedJob(null); };
 
-  const openAdd = () => { setEditId(null); setForm({ name: "", contact: "", value: "", stage: PIPELINE_STAGES[activeBU === "all" ? "major" : activeBU]?.[0] || "Lead", closeDate: "", notes: "", bu: activeBU === "all" ? "major" : activeBU }); setShowForm(true); };
-  const openEdit = (o) => { setEditId(o.id); setForm({ ...o, value: String(o.value) }); setShowForm(true); };
+  const openAdd = (defaultStage = "Budgeting") => {
+    setEditId(null);
+    setForm({ name: "", contact: "", value: "", stage: defaultStage, closeDate: "", notes: "", bu: activeBU === "all" ? "major" : activeBU, budgetDueDate: "", bidDueDate: "", nextSteps: [] });
+    setShowForm(true);
+  };
+  const openEdit = (o) => { setEditId(o.id); setForm({ ...o, value: String(o.value), nextSteps: o.nextSteps || [], budgetDueDate: o.budgetDueDate || "", bidDueDate: o.bidDueDate || "" }); setShowForm(true); };
   const saveOpp = () => {
     if (!form.name.trim() || !form.value) return;
     const entry = { ...form, value: Number(form.value) };
-    if (editId !== null) setPipeline(pipeline.map(o => o.id === editId ? { ...entry, id: editId } : o));
-    else setPipeline([...pipeline, { ...entry, id: Date.now() }]);
+    if (editId !== null) {
+      setPipeline(pipeline.map(o => o.id === editId ? { ...entry, id: editId } : o));
+      if (selectedOpp?.id === editId) setSelectedOpp({ ...entry, id: editId });
+    } else setPipeline([...pipeline, { ...entry, id: Date.now() }]);
     setShowForm(false);
   };
   const deleteOpp = (id) => { setPipeline(pipeline.filter(o => o.id !== id)); setSelectedOpp(null); };
@@ -227,6 +280,13 @@ export default function App() {
       return { ...o, stage: stages[Math.max(0, Math.min(stages.length - 1, idx + dir))] };
     }));
   };
+
+  const addNextStep = () => {
+    if (!newNextStep.step) return;
+    setForm({ ...form, nextSteps: [...(form.nextSteps || []), { ...newNextStep }] });
+    setNewNextStep({ step: "", dueDate: "" });
+  };
+  const removeNextStep = (i) => setForm({ ...form, nextSteps: form.nextSteps.filter((_, idx) => idx !== i) });
 
   const fj = (k) => (e) => setJobForm({ ...jobForm, [k]: e.target.value });
   const fp = (k) => (e) => setForm({ ...form, [k]: e.target.value });
@@ -242,11 +302,10 @@ export default function App() {
 
   const GanttSection = ({ jobList, showAddBtn = false }) => {
     const months = getGanttMonths(jobList);
-    const tStart = months.length ? new Date(months[0].year, months[0].month, 1) : today;
-    const tEnd = months.length ? new Date(months[months.length-1].year, months[months.length-1].month + 1, 1) : today;
+    const tStart = months.length ? new Date(months[0].year, months[0].month, 1) : new Date();
+    const tEnd = months.length ? new Date(months[months.length-1].year, months[months.length-1].month + 1, 1) : new Date();
     const tMs = tEnd - tStart;
-    const tPct = tMs > 0 ? Math.max(0, Math.min(100, ((today - tStart) / tMs) * 100)) : 0;
-
+    const tPct = tMs > 0 ? Math.max(0, Math.min(100, ((new Date() - tStart) / tMs) * 100)) : 0;
     return (
       <div>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
@@ -256,33 +315,28 @@ export default function App() {
           </div>
           {showAddBtn && <button className="btn-primary" onClick={openAddJob}>+ Add Job</button>}
         </div>
-
         {jobList.length === 0 ? (
           <div style={{ textAlign: "center", padding: "32px", color: "#2A3560", fontSize: 12, background: "#161B28", borderRadius: 10, border: "1px solid #1E2640" }}>No active jobs — add your first one</div>
         ) : (
           <div style={{ background: "#0B0E18", border: "1px solid #1E2640", borderRadius: 10, overflow: "hidden" }}>
-            {/* Month headers */}
             <div style={{ display: "flex", borderBottom: "1px solid #1E2640" }}>
               <div style={{ width: 280, flexShrink: 0, padding: "8px 16px", fontSize: 10, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.08em", borderRight: "1px solid #1E2640" }}>JOB</div>
-              <div style={{ flex: 1, display: "grid", gridTemplateColumns: `repeat(${months.length}, 1fr)`, position: "relative" }}>
+              <div style={{ flex: 1, display: "grid", gridTemplateColumns: `repeat(${months.length}, 1fr)` }}>
                 {months.map((m, i) => (
-                  <div key={i} style={{ padding: "8px 6px", fontSize: 10, color: "#4A5270", textTransform: "uppercase", letterSpacing: "0.08em", textAlign: "center", borderRight: i < months.length - 1 ? "1px solid #1A2035" : "none", fontWeight: m.month === today.getMonth() && m.year === today.getFullYear() ? 700 : 400, color: m.month === today.getMonth() && m.year === today.getFullYear() ? "#3B6FE8" : "#4A5270" }}>
-                    {MONTHS[m.month]} {m.year !== today.getFullYear() ? m.year : ""}
+                  <div key={i} style={{ padding: "8px 6px", fontSize: 10, textTransform: "uppercase", letterSpacing: "0.08em", textAlign: "center", borderRight: i < months.length - 1 ? "1px solid #1A2035" : "none", fontWeight: m.month === new Date().getMonth() && m.year === new Date().getFullYear() ? 700 : 400, color: m.month === new Date().getMonth() && m.year === new Date().getFullYear() ? "#3B6FE8" : "#4A5270" }}>
+                    {MONTHS[m.month]} {m.year !== new Date().getFullYear() ? m.year : ""}
                   </div>
                 ))}
               </div>
             </div>
-
-            {/* Job rows */}
             {jobList.map((job, idx) => {
               const bar = getBarStyle(job, months);
               const sc = STATUS_CONFIG[job.status] || STATUS_CONFIG["On Schedule"];
               return (
-                <div key={job.id} style={{ display: "flex", borderBottom: idx < jobList.length - 1 ? "1px solid #1A2035" : "none", cursor: "pointer", transition: "background 0.15s" }}
+                <div key={job.id} style={{ display: "flex", borderBottom: idx < jobList.length - 1 ? "1px solid #1A2035" : "none", cursor: "pointer" }}
                   onMouseEnter={e => e.currentTarget.style.background = "#111520"}
                   onMouseLeave={e => e.currentTarget.style.background = "transparent"}
                   onClick={() => setSelectedJob(job)}>
-                  {/* Job info */}
                   <div style={{ width: 280, flexShrink: 0, padding: "12px 16px", borderRight: "1px solid #1E2640" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
                       <div style={{ width: 6, height: 6, borderRadius: "50%", background: sc.color, flexShrink: 0 }} />
@@ -291,24 +345,14 @@ export default function App() {
                     <div style={{ fontSize: 11, color: "#3A4560", marginBottom: 4, paddingLeft: 14 }}>{job.client}</div>
                     <div style={{ display: "flex", alignItems: "center", gap: 8, paddingLeft: 14 }}>
                       <span style={{ fontSize: 12, color: "#3B6FE8", fontWeight: 600 }}>{fmt(job.contractValue)}</span>
-                      <span style={{ fontSize: 10, color: "#3A4560" }}>·</span>
-                      <span style={{ fontSize: 10, color: "#3A4560" }}>{job.pm}</span>
+                      <span style={{ fontSize: 10, color: "#3A4560" }}>· {job.pm}</span>
                     </div>
                   </div>
-
-                  {/* Gantt bar area */}
                   <div style={{ flex: 1, position: "relative", padding: "12px 0", minHeight: 56 }}>
-                    {/* Today line */}
                     <div style={{ position: "absolute", left: `${tPct}%`, top: 0, bottom: 0, width: 1, background: "#3B6FE840", zIndex: 1 }} />
-                    {/* Month grid lines */}
-                    {months.map((m, i) => i > 0 && (
-                      <div key={i} style={{ position: "absolute", left: `${(i / months.length) * 100}%`, top: 0, bottom: 0, width: 1, background: "#1A2035" }} />
-                    ))}
-                    {/* Bar */}
+                    {months.map((m, i) => i > 0 && <div key={i} style={{ position: "absolute", left: `${(i / months.length) * 100}%`, top: 0, bottom: 0, width: 1, background: "#1A2035" }} />)}
                     <div style={{ position: "absolute", top: "50%", transform: "translateY(-50%)", left: bar.left, width: bar.width, height: 28, borderRadius: 6, background: sc.bg, border: `1px solid ${sc.color}50`, overflow: "hidden" }}>
-                      {/* Progress fill */}
-                      <div style={{ height: "100%", width: `${job.pct}%`, background: sc.color + "40", borderRadius: "5px 0 0 5px", transition: "width 0.5s ease" }} />
-                      {/* Label */}
+                      <div style={{ height: "100%", width: `${job.pct}%`, background: sc.color + "40", borderRadius: "5px 0 0 5px" }} />
                       <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", paddingLeft: 8, gap: 6 }}>
                         <span style={{ fontSize: 10, color: sc.color, fontWeight: 600, whiteSpace: "nowrap" }}>{job.pct}%</span>
                         <span style={{ fontSize: 10, color: sc.color, opacity: 0.7, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{job.name}</span>
@@ -318,8 +362,6 @@ export default function App() {
                 </div>
               );
             })}
-
-            {/* Today marker label */}
             <div style={{ position: "relative", height: 20, borderTop: "1px solid #1A2035" }}>
               <div style={{ position: "absolute", left: `calc(280px + ${tPct}% * (100% - 280px) / 100)`, transform: "translateX(-50%)", fontSize: 9, color: "#3B6FE8", letterSpacing: "0.06em", top: 4 }}>TODAY</div>
             </div>
@@ -360,10 +402,9 @@ export default function App() {
         .opp-row{background:#161B28;border:1px solid #1E2640;border-radius:8px;padding:14px 16px;transition:all 0.15s;cursor:pointer}
         .opp-row:hover{border-color:#2A3560;background:#1A1F30}
         .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,0.8);display:flex;align-items:center;justify-content:center;z-index:100;backdrop-filter:blur(4px)}
-        .modal{background:#0F1117;border:1px solid #2A3560;border-radius:12px;padding:28px;width:520px;max-height:90vh;overflow-y:auto}
+        .modal{background:#0F1117;border:1px solid #2A3560;border-radius:12px;padding:28px;width:540px;max-height:90vh;overflow-y:auto}
         .g2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
-        .g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px}
-        .side-panel{position:fixed;right:0;top:52px;bottom:0;width:360px;background:#0B0E18;border-left:1px solid #1E2640;padding:24px;overflow-y:auto;z-index:40}
+        .side-panel{position:fixed;right:0;top:52px;bottom:0;width:380px;background:#0B0E18;border-left:1px solid #1E2640;padding:24px;overflow-y:auto;z-index:40}
         @keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
         .fade-in{animation:fadeIn 0.2s ease both}
         @keyframes slideIn{from{transform:translateX(100%)}to{transform:translateX(0)}}
@@ -374,6 +415,7 @@ export default function App() {
         .view-toggle:first-child{border-radius:6px 0 0 6px}
         .view-toggle:last-child{border-radius:0 6px 6px 0}
         input[type=range]{width:100%;accent-color:#3B6FE8}
+        .ns-row{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:#0A0D16;border:1px solid #1E2640;border-radius:6px}
       `}</style>
 
       {/* Sidebar */}
@@ -403,15 +445,13 @@ export default function App() {
       <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
         <div style={{ borderBottom: "1px solid #161B28", padding: "0 28px", height: 52, display: "flex", alignItems: "center", justifyContent: "space-between", background: "#0B0E18", position: "sticky", top: 0, zIndex: 40 }}>
           <div style={{ display: "flex", gap: 4 }}>
-            {BUSINESS_UNITS.map(bu => (
-              <button key={bu.id} className={`bu-tab ${activeBU === bu.id ? "active" : ""}`} onClick={() => handleBUChange(bu.id)}>{bu.short}</button>
-            ))}
+            {BUSINESS_UNITS.map(bu => <button key={bu.id} className={`bu-tab ${activeBU === bu.id ? "active" : ""}`} onClick={() => handleBUChange(bu.id)}>{bu.short}</button>)}
           </div>
           <div style={{ fontSize: 11, color: "#2A3560", letterSpacing: "0.1em", textTransform: "uppercase" }}>{BUSINESS_UNITS.find(b => b.id === activeBU)?.label}</div>
           <div style={{ background: "#1A2340", border: "1px solid #3B6FE8", color: "#3B6FE8", fontSize: 11, fontWeight: 600, padding: "4px 14px", borderRadius: 4, letterSpacing: "0.08em" }}>OWNER</div>
         </div>
 
-        <div style={{ flex: 1, padding: "28px 32px", overflowY: "auto", paddingRight: (selectedJob || selectedOpp) ? "calc(32px + 360px)" : "32px", transition: "padding-right 0.2s" }}>
+        <div style={{ flex: 1, padding: "28px 32px", overflowY: "auto", paddingRight: (selectedJob || selectedOpp) ? "calc(32px + 400px)" : "32px", transition: "padding-right 0.2s" }}>
 
           {/* DASHBOARD */}
           {activeNav === "dashboard" && (
@@ -420,7 +460,6 @@ export default function App() {
                 <div style={{ fontSize: 28, fontWeight: 700, color: "#FFFFFF", letterSpacing: "-0.02em" }}>GOOD MORNING, FARMER GROUP</div>
                 <div style={{ fontSize: 12, color: "#3A4560", marginTop: 4, letterSpacing: "0.06em" }}>{dayName().toUpperCase()}</div>
               </div>
-
               {activeBU === "all" ? (
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 12 }}>
                   {Object.entries(SAMPLE_STATS).map(([key, s]) => (
@@ -451,27 +490,26 @@ export default function App() {
                   ))}
                 </div>
               )}
+              {activeBU === "major" && <GanttSection jobList={majorJobs} showAddBtn={true} />}
 
-              {/* Gantt on MP dashboard */}
-              {activeBU === "major" && (
-                <GanttSection jobList={majorJobs} showAddBtn={true} />
-              )}
-
+              {/* Punch List */}
               <div>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
                   <div style={{ fontSize: 11, letterSpacing: "0.1em", textTransform: "uppercase", color: "#3A4560", fontWeight: 600 }}>Today's Punch List</div>
                   <div style={{ fontSize: 11, color: "#3A4560" }}>{new Date().toLocaleDateString("en-US", { month: "short", day: "numeric" })}</div>
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  {PUNCH_LIST.filter(p => activeBU === "all" || p.bu === activeBU).map(item => (
+                  {dynamicPunchList.filter(p => activeBU === "all" || p.bu === activeBU).map(item => (
                     <div key={item.id} className="punch-item">
                       <div className="priority-dot" style={{ background: item.priority === "high" ? "#F87171" : "#FCD34D" }} />
                       <span style={{ fontSize: 13, color: "#B8C4E0", flex: 1 }}>{item.text}</span>
+                      {item.tag && <span style={{ fontSize: 10, color: "#3B6FE8", background: "#3B6FE820", padding: "2px 8px", borderRadius: 10, letterSpacing: "0.06em", textTransform: "uppercase" }}>{item.tag}</span>}
+                      {item.dueDate && <span style={{ fontSize: 10, color: "#3A4560" }}>{item.dueDate}</span>}
                       <span style={{ fontSize: 10, color: "#3A4560", background: "#1E2640", padding: "2px 8px", borderRadius: 10, textTransform: "uppercase", letterSpacing: "0.06em" }}>{BUSINESS_UNITS.find(b => b.id === item.bu)?.short}</span>
                     </div>
                   ))}
-                  {PUNCH_LIST.filter(p => activeBU === "all" || p.bu === activeBU).length === 0 && (
-                    <div style={{ textAlign: "center", padding: "24px", color: "#2A3560", fontSize: 12 }}>No reminders scheduled for today.</div>
+                  {dynamicPunchList.filter(p => activeBU === "all" || p.bu === activeBU).length === 0 && (
+                    <div style={{ textAlign: "center", padding: "24px", color: "#2A3560", fontSize: 12 }}>No reminders in the next 7 days.</div>
                   )}
                 </div>
               </div>
@@ -495,6 +533,67 @@ export default function App() {
             </div>
           )}
 
+          {/* BUDGETING */}
+          {activeNav === "budgeting" && activeBU === "major" && (
+            <div className="fade-in" style={{ display: "flex", flexDirection: "column", gap: 22 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div>
+                  <div style={{ fontSize: 22, fontWeight: 700, color: "#FFFFFF", letterSpacing: "-0.01em", textTransform: "uppercase" }}>Budgeting</div>
+                  <div style={{ fontSize: 11, color: "#3A4560", marginTop: 3, letterSpacing: "0.06em" }}>MAJOR PROJECTS · PRE-LEAD SCOPING · {pipeline.filter(o => o.bu === "major" && o.stage === "Budgeting").length} PROJECTS</div>
+                </div>
+                <button className="btn-primary" onClick={() => openAdd("Budgeting")}>+ Add Project</button>
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
+                {[
+                  { label: "Projects in Budgeting", value: pipeline.filter(o => o.bu === "major" && o.stage === "Budgeting").length, color: "#3B6FE8" },
+                  { label: "Total Estimated Value", value: fmt(pipeline.filter(o => o.bu === "major" && o.stage === "Budgeting").reduce((s, o) => s + o.value, 0)), color: "#FCD34D" },
+                  { label: "Due This Week", value: pipeline.filter(o => o.bu === "major" && o.stage === "Budgeting" && o.budgetDueDate && new Date(o.budgetDueDate) <= new Date(Date.now() + 7*86400000)).length, color: "#F87171" },
+                ].map(s => (
+                  <div key={s.label} className="stat-card" style={{ position: "relative", overflow: "hidden", padding: "14px 18px" }}>
+                    <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: s.color }} />
+                    <div style={{ fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "#3A4560", marginBottom: 6 }}>{s.label}</div>
+                    <div style={{ fontSize: 22, fontWeight: 700, color: s.color }}>{s.value}</div>
+                  </div>
+                ))}
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {pipeline.filter(o => o.bu === "major" && o.stage === "Budgeting").map(o => {
+                  const overdue = o.budgetDueDate && new Date(o.budgetDueDate) < new Date();
+                  const soon = o.budgetDueDate && new Date(o.budgetDueDate) <= new Date(Date.now() + 7*86400000);
+                  return (
+                    <div key={o.id} className="opp-row" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }} onClick={() => setSelectedOpp(o)}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 14, color: "#E8ECF4", fontWeight: 600, marginBottom: 4 }}>{o.name}</div>
+                        <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+                          <span style={{ fontSize: 11, color: "#3A4560" }}>👤 {o.contact || "No contact"}</span>
+                          {o.budgetDueDate && <span style={{ fontSize: 11, color: overdue ? "#F87171" : soon ? "#FCD34D" : "#3A4560" }}>📅 Budget due: {o.budgetDueDate}{overdue ? " ⚠ OVERDUE" : ""}</span>}
+                          {o.notes && <span style={{ fontSize: 11, color: "#3A4560" }}>📝 {o.notes}</span>}
+                        </div>
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>
+                        <div style={{ textAlign: "right" }}>
+                          <div style={{ fontSize: 16, fontWeight: 700, color: "#FCD34D" }}>{fmt(o.value)}</div>
+                          <div style={{ fontSize: 10, color: "#3A4560" }}>estimated</div>
+                        </div>
+                        <button className="btn-primary" style={{ fontSize: 11, padding: "6px 12px", background: "#4ADE8020", color: "#4ADE80", border: "1px solid #4ADE8040" }}
+                          onClick={e => { e.stopPropagation(); setPipeline(pipeline.map(p => p.id === o.id ? { ...p, stage: "Lead" } : p)); }}>
+                          → Promote to Lead
+                        </button>
+                        <div style={{ display: "flex", gap: 5 }} onClick={e => e.stopPropagation()}>
+                          <button className="btn-ghost" onClick={() => openEdit(o)}>✎</button>
+                          <button className="btn-ghost" style={{ color: "#F87171", borderColor: "#F8717120" }} onClick={() => deleteOpp(o.id)}>✕</button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+                {pipeline.filter(o => o.bu === "major" && o.stage === "Budgeting").length === 0 && (
+                  <div style={{ textAlign: "center", padding: "48px", color: "#2A3560", fontSize: 12, background: "#161B28", borderRadius: 10, border: "1px solid #1E2640" }}>No projects in budgeting yet</div>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* ACTIVE JOBS */}
           {activeNav === "jobs" && (
             <div className="fade-in" style={{ display: "flex", flexDirection: "column", gap: 22 }}>
@@ -505,8 +604,6 @@ export default function App() {
                 </div>
                 <button className="btn-primary" onClick={openAddJob}>+ Add Job</button>
               </div>
-
-              {/* Stats */}
               <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 }}>
                 {[
                   { label: "Total Contract Value", value: fmt(majorJobs.reduce((s,j) => s+j.contractValue,0)), color: buColor.accent },
@@ -521,10 +618,7 @@ export default function App() {
                   </div>
                 ))}
               </div>
-
               <GanttSection jobList={majorJobs} showAddBtn={false} />
-
-              {/* Job cards */}
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                 {majorJobs.map(job => {
                   const sc = STATUS_CONFIG[job.status] || STATUS_CONFIG["On Schedule"];
@@ -544,13 +638,12 @@ export default function App() {
                         <span style={{ fontSize: 11, color: "#3A4560" }}>📅 {job.startDate} → {job.endDate}</span>
                       </div>
                       <div style={{ background: "#0A0D16", borderRadius: 4, height: 6, overflow: "hidden" }}>
-                        <div style={{ height: "100%", width: `${job.pct}%`, background: sc.color, borderRadius: 4, transition: "width 0.5s" }} />
+                        <div style={{ height: "100%", width: `${job.pct}%`, background: sc.color, borderRadius: 4 }} />
                       </div>
                       <div style={{ fontSize: 10, color: "#3A4560", marginTop: 4, textAlign: "right" }}>{job.pct}% complete</div>
                     </div>
                   );
                 })}
-                {majorJobs.length === 0 && <div style={{ textAlign: "center", padding: "48px", color: "#2A3560", fontSize: 12 }}>No active jobs yet</div>}
               </div>
             </div>
           )}
@@ -575,7 +668,7 @@ export default function App() {
                     <button className={`view-toggle ${pipelineView === "kanban" ? "on" : ""}`} onClick={() => setPipelineView("kanban")}>Kanban</button>
                     <button className={`view-toggle ${pipelineView === "list" ? "on" : ""}`} onClick={() => setPipelineView("list")}>List</button>
                   </div>
-                  <button className="btn-primary" onClick={openAdd}>+ Add</button>
+                  <button className="btn-primary" onClick={() => openAdd("Lead")}>+ Add</button>
                 </div>
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
@@ -609,10 +702,10 @@ export default function App() {
                           {stageOpps.map(o => (
                             <div key={o.id} style={{ background: "#161B28", border: `1px solid ${sc.color}25`, borderRadius: 8, padding: 12, cursor: "pointer" }} onClick={() => setSelectedOpp(o)}>
                               <div style={{ fontSize: 12, color: "#E8ECF4", fontWeight: 500, lineHeight: 1.35, marginBottom: 5 }}>{o.name}</div>
-                              <div style={{ fontSize: 10, color: "#3A4560", marginBottom: 8 }}>{o.contact}</div>
+                              <div style={{ fontSize: 10, color: "#3A4560", marginBottom: 6 }}>{o.contact}</div>
+                              {o.bidDueDate && <div style={{ fontSize: 10, color: "#FCD34D", marginBottom: 6 }}>📋 Bid due: {o.bidDueDate}</div>}
                               <div style={{ fontSize: 15, fontWeight: 700, color: sc.color, marginBottom: 8 }}>{fmt(o.value)}</div>
-                              {o.closeDate && <div style={{ fontSize: 10, color: "#3A4560" }}>Close: {o.closeDate}</div>}
-                              <div style={{ display: "flex", gap: 5, marginTop: 8 }} onClick={e => e.stopPropagation()}>
+                              <div style={{ display: "flex", gap: 5 }} onClick={e => e.stopPropagation()}>
                                 <button className="btn-ghost" style={{ flex: 1, fontSize: 11 }} onClick={() => moveStage(o.id, -1)}>←</button>
                                 <button className="btn-ghost" style={{ flex: 1, fontSize: 11 }} onClick={() => moveStage(o.id, 1)}>→</button>
                                 <button className="btn-ghost" style={{ fontSize: 11 }} onClick={() => openEdit(o)}>✎</button>
@@ -637,6 +730,7 @@ export default function App() {
                       <div key={o.id} className="opp-row" style={{ display: "grid", gridTemplateColumns: "2fr 1.5fr 1fr 1fr 1fr auto", gap: 12, alignItems: "center" }} onClick={() => setSelectedOpp(o)}>
                         <div>
                           <div style={{ fontSize: 13, color: "#E8ECF4", fontWeight: 500 }}>{o.name}</div>
+                          {o.bidDueDate && <div style={{ fontSize: 10, color: "#FCD34D", marginTop: 2 }}>📋 Bid due: {o.bidDueDate}</div>}
                           {o.notes && <div style={{ fontSize: 10, color: "#3A4560", marginTop: 2 }}>{o.notes}</div>}
                         </div>
                         <div style={{ fontSize: 11, color: "#3A4560" }}>{o.contact}</div>
@@ -650,91 +744,21 @@ export default function App() {
                       </div>
                     );
                   })}
-                  {visiblePipeline.length === 0 && <div style={{ textAlign: "center", padding: "48px", color: "#2A3560", fontSize: 12 }}>No opportunities found</div>}
                 </div>
               )}
             </div>
           )}
 
-          {/* OTHER SECTIONS */}
-          {/* BUDGETING */}
-          {activeNav === "budgeting" && activeBU === "major" && (
-            <div className="fade-in" style={{ display: "flex", flexDirection: "column", gap: 22 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <div>
-                  <div style={{ fontSize: 22, fontWeight: 700, color: "#FFFFFF", letterSpacing: "-0.01em", textTransform: "uppercase" }}>Budgeting</div>
-                  <div style={{ fontSize: 11, color: "#3A4560", marginTop: 3, letterSpacing: "0.06em" }}>
-                    MAJOR PROJECTS · PRE-LEAD SCOPING · {pipeline.filter(o => o.bu === "major" && o.stage === "Budgeting").length} PROJECTS
-                  </div>
-                </div>
-                <button className="btn-primary" onClick={() => {
-                  setEditId(null);
-                  setForm({ name: "", contact: "", value: "", stage: "Budgeting", closeDate: "", notes: "", bu: "major" });
-                  setShowForm(true);
-                }}>+ Add Project</button>
-              </div>
-
-              {/* Stats */}
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12 }}>
-                {[
-                  { label: "Projects in Budgeting", value: pipeline.filter(o => o.bu === "major" && o.stage === "Budgeting").length, color: "#3B6FE8" },
-                  { label: "Total Estimated Value", value: fmt(pipeline.filter(o => o.bu === "major" && o.stage === "Budgeting").reduce((s, o) => s + o.value, 0)), color: "#FCD34D" },
-                  { label: "Avg Estimate", value: fmt(pipeline.filter(o => o.bu === "major" && o.stage === "Budgeting").length ? pipeline.filter(o => o.bu === "major" && o.stage === "Budgeting").reduce((s, o) => s + o.value, 0) / pipeline.filter(o => o.bu === "major" && o.stage === "Budgeting").length : 0), color: "#A78BFA" },
-                ].map(s => (
-                  <div key={s.label} className="stat-card" style={{ position: "relative", overflow: "hidden", padding: "14px 18px" }}>
-                    <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: s.color }} />
-                    <div style={{ fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "#3A4560", marginBottom: 6 }}>{s.label}</div>
-                    <div style={{ fontSize: 22, fontWeight: 700, color: s.color }}>{s.value}</div>
-                  </div>
-                ))}
-              </div>
-
-              {/* Projects list */}
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                {pipeline.filter(o => o.bu === "major" && o.stage === "Budgeting").map(o => (
-                  <div key={o.id} className="opp-row" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }} onClick={() => setSelectedOpp(o)}>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 14, color: "#E8ECF4", fontWeight: 600, marginBottom: 4 }}>{o.name}</div>
-                      <div style={{ display: "flex", gap: 16 }}>
-                        <span style={{ fontSize: 11, color: "#3A4560" }}>👤 {o.contact || "No contact"}</span>
-                        {o.closeDate && <span style={{ fontSize: 11, color: "#3A4560" }}>📅 Target: {o.closeDate}</span>}
-                        {o.notes && <span style={{ fontSize: 11, color: "#3A4560", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>📝 {o.notes}</span>}
-                      </div>
-                    </div>
-                    <div style={{ display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>
-                      <div style={{ textAlign: "right" }}>
-                        <div style={{ fontSize: 16, fontWeight: 700, color: "#FCD34D" }}>{fmt(o.value)}</div>
-                        <div style={{ fontSize: 10, color: "#3A4560" }}>estimated value</div>
-                      </div>
-                      <button className="btn-primary" style={{ fontSize: 11, padding: "6px 12px", background: "#4ADE8020", color: "#4ADE80", border: "1px solid #4ADE8040" }}
-                        onClick={e => { e.stopPropagation(); setPipeline(pipeline.map(p => p.id === o.id ? { ...p, stage: "Lead" } : p)); }}>
-                        → Promote to Lead
-                      </button>
-                      <div style={{ display: "flex", gap: 5 }} onClick={e => e.stopPropagation()}>
-                        <button className="btn-ghost" onClick={() => openEdit(o)}>✎</button>
-                        <button className="btn-ghost" style={{ color: "#F87171", borderColor: "#F8717120" }} onClick={() => deleteOpp(o.id)}>✕</button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-                {pipeline.filter(o => o.bu === "major" && o.stage === "Budgeting").length === 0 && (
-                  <div style={{ textAlign: "center", padding: "48px", color: "#2A3560", fontSize: 12, background: "#161B28", borderRadius: 10, border: "1px solid #1E2640" }}>
-                    No projects in budgeting yet — add one to start scoping
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-{!["dashboard","jobs","pipeline","budgeting"].includes(activeNav) && (
-  <div className="fade-in">
+          {/* OTHER */}
+          {!["dashboard","jobs","pipeline","budgeting"].includes(activeNav) && (
+            <div className="fade-in">
               <div style={{ marginBottom: 28 }}>
-                <div style={{ fontSize: 22, fontWeight: 700, color: "#FFFFFF", letterSpacing: "-0.01em", textTransform: "uppercase" }}>{navItems.find(n => n.id === activeNav)?.label}</div>
-                <div style={{ fontSize: 11, color: "#3A4560", marginTop: 4, letterSpacing: "0.06em" }}>{BUSINESS_UNITS.find(b => b.id === activeBU)?.label.toUpperCase()}</div>
+                <div style={{ fontSize: 22, fontWeight: 700, color: "#FFFFFF", textTransform: "uppercase" }}>{navItems.find(n => n.id === activeNav)?.label}</div>
+                <div style={{ fontSize: 11, color: "#3A4560", marginTop: 4 }}>{BUSINESS_UNITS.find(b => b.id === activeBU)?.label.toUpperCase()}</div>
               </div>
               <div className="coming-soon">
                 <div style={{ width: 48, height: 48, borderRadius: 12, background: buColor.light, border: `1px solid ${buColor.accent}33`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22 }}>{navItems.find(n => n.id === activeNav)?.icon}</div>
                 <div style={{ fontSize: 14, color: "#3A4560", fontWeight: 500 }}>{navItems.find(n => n.id === activeNav)?.label} — Coming Soon</div>
-                <div style={{ fontSize: 12, color: "#2A3050" }}>This section is ready to be built out</div>
               </div>
             </div>
           )}
@@ -742,7 +766,7 @@ export default function App() {
       </div>
 
       {/* JOB SIDE PANEL */}
-      {selectedJob && (
+      {selectedJob && !selectedOpp && (
         <div className="side-panel slide-in">
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
             <div style={{ fontSize: 13, fontWeight: 600, color: "#FFFFFF", textTransform: "uppercase", letterSpacing: "0.06em" }}>Job Detail</div>
@@ -761,11 +785,7 @@ export default function App() {
                   </div>
                 </div>
                 <div style={{ background: "#0A0D16", borderRadius: 8, padding: "14px", border: "1px solid #1E2640", display: "flex", flexDirection: "column", gap: 10 }}>
-                  {[
-                    { label: "Project Manager", value: selectedJob.pm },
-                    { label: "Start Date", value: selectedJob.startDate },
-                    { label: "End Date", value: selectedJob.endDate },
-                  ].map(r => (
+                  {[{ label: "Project Manager", value: selectedJob.pm }, { label: "Start Date", value: selectedJob.startDate }, { label: "End Date", value: selectedJob.endDate }].map(r => (
                     <div key={r.label} style={{ display: "flex", justifyContent: "space-between" }}>
                       <span style={{ fontSize: 11, color: "#3A4560" }}>{r.label}</span>
                       <span style={{ fontSize: 11, color: "#B8C4E0" }}>{r.value}</span>
@@ -793,76 +813,100 @@ export default function App() {
       {selectedOpp && (
         <div className="side-panel slide-in">
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-            <div style={{ fontSize: 13, fontWeight: 600, color: "#FFFFFF", textTransform: "uppercase", letterSpacing: "0.06em" }}>Opportunity Detail</div>
+            <div style={{ fontSize: 13, fontWeight: 600, color: "#FFFFFF", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+              {selectedOpp.stage === "Budgeting" ? "Budget Detail" : selectedOpp.stage === "Lead" ? "Lead Detail" : "Opportunity Detail"}
+            </div>
             <button className="btn-ghost" onClick={() => setSelectedOpp(null)}>✕</button>
           </div>
-          <div style={{ marginBottom: 20 }}>
-            <div style={{ fontSize: 15, color: "#E8ECF4", fontWeight: 600, marginBottom: 6 }}>{selectedOpp.name}</div>
-            <div style={{ fontSize: 12, color: "#3A4560", marginBottom: 12 }}>{selectedOpp.contact}</div>
-            <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 12 }}>
-              <span className="pill" style={{ background: STAGE_COLORS[selectedOpp.stage]?.bg, color: STAGE_COLORS[selectedOpp.stage]?.color }}>{selectedOpp.stage}</span>
-              <span style={{ fontSize: 20, fontWeight: 700, color: "#FFFFFF" }}>{fmt(selectedOpp.value)}</span>
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            <div>
+              <div style={{ fontSize: 15, color: "#E8ECF4", fontWeight: 600, marginBottom: 4 }}>{selectedOpp.name}</div>
+              <div style={{ fontSize: 12, color: "#3A4560", marginBottom: 10 }}>{selectedOpp.contact}</div>
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <span className="pill" style={{ background: STAGE_COLORS[selectedOpp.stage]?.bg || "#60A5FA15", color: STAGE_COLORS[selectedOpp.stage]?.color || "#60A5FA" }}>{selectedOpp.stage}</span>
+                <span style={{ fontSize: 20, fontWeight: 700, color: "#FFFFFF" }}>{fmt(selectedOpp.value)}</span>
+              </div>
             </div>
-            {selectedOpp.closeDate && <div style={{ fontSize: 11, color: "#3A4560", marginBottom: 8 }}><span style={{ color: "#4A5270" }}>Expected Close: </span>{selectedOpp.closeDate}</div>}
-            {selectedOpp.notes && <div style={{ fontSize: 12, color: "#6B7694", lineHeight: 1.6, background: "#0A0D16", padding: "10px 12px", borderRadius: 6, border: "1px solid #1E2640", marginTop: 10 }}>{selectedOpp.notes}</div>}
-          </div>
-          <div style={{ display: "flex", gap: 8 }}>
-            <button className="btn-ghost" style={{ flex: 1 }} onClick={() => { openEdit(selectedOpp); setSelectedOpp(null); }}>✎ Edit</button>
-            <button className="btn-ghost" style={{ color: "#F87171", borderColor: "#F8717120" }} onClick={() => deleteOpp(selectedOpp.id)}>✕</button>
+
+            {/* Budget due date */}
+            {selectedOpp.stage === "Budgeting" && (
+              <div style={{ background: "#0A0D16", borderRadius: 8, padding: "12px", border: "1px solid #1E2640" }}>
+                <div style={{ fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "#3A4560", marginBottom: 6 }}>Budget Due Date</div>
+                <div style={{ fontSize: 14, color: selectedOpp.budgetDueDate ? "#FCD34D" : "#3A4560", fontWeight: 500 }}>{selectedOpp.budgetDueDate || "Not set"}</div>
+              </div>
+            )}
+
+            {/* Bid due date */}
+            {["Proposal / Bid", "Bid Submitted"].includes(selectedOpp.stage) && (
+              <div style={{ background: "#0A0D16", borderRadius: 8, padding: "12px", border: "1px solid #FCD34D30" }}>
+                <div style={{ fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "#3A4560", marginBottom: 6 }}>Bid Due Date</div>
+                <div style={{ fontSize: 14, color: selectedOpp.bidDueDate ? "#FCD34D" : "#3A4560", fontWeight: 500 }}>{selectedOpp.bidDueDate || "Not set"}</div>
+              </div>
+            )}
+
+            {/* Next Steps — only on Lead */}
+            {selectedOpp.stage === "Lead" && (
+              <div>
+                <div style={{ fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "#3A4560", marginBottom: 10, fontWeight: 600 }}>Next Steps</div>
+                {(selectedOpp.nextSteps || []).length === 0 && (
+                  <div style={{ fontSize: 11, color: "#2A3560", textAlign: "center", padding: "12px", background: "#0A0D16", borderRadius: 6, border: "1px solid #1E2640" }}>No next steps set — edit to add</div>
+                )}
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  {(selectedOpp.nextSteps || []).map((ns, i) => {
+                    const nsOverdue = ns.dueDate && new Date(ns.dueDate) < new Date();
+                    return (
+                      <div key={i} className="ns-row">
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <div style={{ width: 6, height: 6, borderRadius: "50%", background: nsOverdue ? "#F87171" : "#3B6FE8", flexShrink: 0 }} />
+                          <span style={{ fontSize: 12, color: "#E8ECF4", fontWeight: 500 }}>{ns.step}</span>
+                        </div>
+                        <span style={{ fontSize: 11, color: nsOverdue ? "#F87171" : "#3A4560" }}>{ns.dueDate || "No date"}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {selectedOpp.closeDate && (
+              <div style={{ fontSize: 11, color: "#3A4560" }}><span style={{ color: "#4A5270" }}>Expected Close: </span>{selectedOpp.closeDate}</div>
+            )}
+            {selectedOpp.notes && (
+              <div style={{ fontSize: 12, color: "#6B7694", lineHeight: 1.6, background: "#0A0D16", padding: "10px 12px", borderRadius: 6, border: "1px solid #1E2640" }}>{selectedOpp.notes}</div>
+            )}
+            <div style={{ display: "flex", gap: 8 }}>
+              <button className="btn-ghost" style={{ flex: 1 }} onClick={() => { openEdit(selectedOpp); setSelectedOpp(null); }}>✎ Edit</button>
+              <button className="btn-ghost" style={{ color: "#F87171", borderColor: "#F8717120" }} onClick={() => deleteOpp(selectedOpp.id)}>✕</button>
+            </div>
           </div>
         </div>
       )}
 
-      {/* JOB FORM MODAL */}
+      {/* JOB FORM */}
       {showJobForm && (
         <div className="modal-bg" onClick={e => e.target === e.currentTarget && setShowJobForm(false)}>
           <div className="modal fade-in">
             <div style={{ fontSize: 16, fontWeight: 700, color: "#FFFFFF", marginBottom: 22, textTransform: "uppercase", letterSpacing: "0.04em" }}>{editJobId !== null ? "Edit Job" : "Add Active Job"}</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-              <div>
-                <label className="lbl">Job Name *</label>
-                <input className="fi" value={jobForm.name} onChange={fj("name")} placeholder="e.g. Riverside Community Center" />
+              <div><label className="lbl">Job Name *</label><input className="fi" value={jobForm.name} onChange={fj("name")} placeholder="e.g. Riverside Community Center" /></div>
+              <div className="g2">
+                <div><label className="lbl">Client</label><input className="fi" value={jobForm.client} onChange={fj("client")} placeholder="Client name" /></div>
+                <div><label className="lbl">Contract Value</label><input className="fi" type="number" value={jobForm.contractValue} onChange={fj("contractValue")} placeholder="0" /></div>
               </div>
               <div className="g2">
-                <div>
-                  <label className="lbl">Client</label>
-                  <input className="fi" value={jobForm.client} onChange={fj("client")} placeholder="Client name" />
-                </div>
-                <div>
-                  <label className="lbl">Contract Value</label>
-                  <input className="fi" type="number" value={jobForm.contractValue} onChange={fj("contractValue")} placeholder="0" />
-                </div>
+                <div><label className="lbl">Start Date</label><input className="fi" type="date" value={jobForm.startDate} onChange={fj("startDate")} /></div>
+                <div><label className="lbl">End Date</label><input className="fi" type="date" value={jobForm.endDate} onChange={fj("endDate")} /></div>
               </div>
               <div className="g2">
-                <div>
-                  <label className="lbl">Start Date</label>
-                  <input className="fi" type="date" value={jobForm.startDate} onChange={fj("startDate")} />
-                </div>
-                <div>
-                  <label className="lbl">End Date</label>
-                  <input className="fi" type="date" value={jobForm.endDate} onChange={fj("endDate")} />
-                </div>
-              </div>
-              <div className="g2">
-                <div>
-                  <label className="lbl">Project Manager</label>
-                  <input className="fi" value={jobForm.pm} onChange={fj("pm")} placeholder="Name" />
-                </div>
-                <div>
-                  <label className="lbl">Status</label>
+                <div><label className="lbl">Project Manager</label><input className="fi" value={jobForm.pm} onChange={fj("pm")} placeholder="Name" /></div>
+                <div><label className="lbl">Status</label>
                   <select className="fi" value={jobForm.status} onChange={fj("status")}>
                     {["On Schedule","Behind Schedule","At Risk"].map(s => <option key={s}>{s}</option>)}
                   </select>
                 </div>
               </div>
-              <div>
-                <label className="lbl">% Complete — {jobForm.pct}%</label>
-                <input type="range" min="0" max="100" value={jobForm.pct} onChange={fj("pct")} />
-              </div>
-              <div>
-                <label className="lbl">Notes</label>
-                <textarea className="fi" rows={3} value={jobForm.notes} onChange={fj("notes")} placeholder="Key updates or context…" style={{ resize: "vertical" }} />
-              </div>
+              <div><label className="lbl">% Complete — {jobForm.pct}%</label><input type="range" min="0" max="100" value={jobForm.pct} onChange={fj("pct")} /></div>
+              <div><label className="lbl">Notes</label><textarea className="fi" rows={3} value={jobForm.notes} onChange={fj("notes")} placeholder="Key updates…" style={{ resize: "vertical" }} /></div>
               <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 6 }}>
                 <button className="btn-ghost" style={{ padding: "8px 16px" }} onClick={() => setShowJobForm(false)}>Cancel</button>
                 <button className="btn-primary" onClick={saveJob}>{editJobId !== null ? "Save Changes" : "Add Job"}</button>
@@ -872,51 +916,71 @@ export default function App() {
         </div>
       )}
 
-      {/* OPP FORM MODAL */}
+      {/* OPP FORM */}
       {showForm && (
         <div className="modal-bg" onClick={e => e.target === e.currentTarget && setShowForm(false)}>
           <div className="modal fade-in">
-            <div style={{ fontSize: 16, fontWeight: 700, color: "#FFFFFF", marginBottom: 22, textTransform: "uppercase", letterSpacing: "0.04em" }}>{editId !== null ? "Edit Opportunity" : "Add Opportunity"}</div>
+            <div style={{ fontSize: 16, fontWeight: 700, color: "#FFFFFF", marginBottom: 22, textTransform: "uppercase", letterSpacing: "0.04em" }}>{editId !== null ? "Edit" : "Add"} — {form.stage}</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-              <div>
-                <label className="lbl">Opportunity Name *</label>
-                <input className="fi" value={form.name} onChange={fp("name")} placeholder="e.g. Riverside Community Center" />
+              <div><label className="lbl">Name *</label><input className="fi" value={form.name} onChange={fp("name")} placeholder="e.g. Riverside Community Center" /></div>
+              <div className="g2">
+                <div><label className="lbl">Client / Contact</label><input className="fi" value={form.contact} onChange={fp("contact")} placeholder="name@company.com" /></div>
+                <div><label className="lbl">Estimated Value *</label><input className="fi" type="number" value={form.value} onChange={fp("value")} placeholder="0" /></div>
               </div>
               <div className="g2">
-                <div>
-                  <label className="lbl">Client / Contact</label>
-                  <input className="fi" value={form.contact} onChange={fp("contact")} placeholder="name@company.com" />
-                </div>
-                <div>
-                  <label className="lbl">Estimated Value *</label>
-                  <input className="fi" type="number" value={form.value} onChange={fp("value")} placeholder="0" />
-                </div>
-              </div>
-              <div className="g2">
-                <div>
-                  <label className="lbl">Business Unit</label>
-                  <select className="fi" value={form.bu} onChange={e => setForm({ ...form, bu: e.target.value, stage: PIPELINE_STAGES[e.target.value]?.[0] || "Lead" })}>
+                <div><label className="lbl">Business Unit</label>
+                  <select className="fi" value={form.bu} onChange={e => setForm({ ...form, bu: e.target.value, stage: PIPELINE_STAGES[e.target.value]?.[0] || "Budgeting" })}>
                     {BUSINESS_UNITS.filter(b => b.id !== "all").map(b => <option key={b.id} value={b.id}>{b.label}</option>)}
                   </select>
                 </div>
-                <div>
-                  <label className="lbl">Stage</label>
+                <div><label className="lbl">Stage</label>
                   <select className="fi" value={form.stage} onChange={fp("stage")}>
                     {(PIPELINE_STAGES[form.bu] || PIPELINE_STAGES.all).map(s => <option key={s}>{s}</option>)}
                   </select>
                 </div>
               </div>
-              <div>
-                <label className="lbl">Expected Close Date</label>
-                <input className="fi" type="date" value={form.closeDate} onChange={fp("closeDate")} />
-              </div>
-              <div>
-                <label className="lbl">Notes</label>
-                <textarea className="fi" rows={3} value={form.notes} onChange={fp("notes")} placeholder="Key details…" style={{ resize: "vertical" }} />
-              </div>
+
+              {/* Budget due date — show when Budgeting */}
+              {form.stage === "Budgeting" && (
+                <div><label className="lbl">Budget Due Date</label><input className="fi" type="date" value={form.budgetDueDate} onChange={fp("budgetDueDate")} /></div>
+              )}
+
+              {/* Bid due date — show when Proposal / Bid */}
+              {["Proposal / Bid","Bid Submitted"].includes(form.stage) && (
+                <div><label className="lbl">Bid Due Date</label><input className="fi" type="date" value={form.bidDueDate} onChange={fp("bidDueDate")} /></div>
+              )}
+
+              {/* Next Steps — show when Lead */}
+              {form.stage === "Lead" && (
+                <div>
+                  <label className="lbl">Next Steps</label>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 8 }}>
+                    {(form.nextSteps || []).map((ns, i) => (
+                      <div key={i} className="ns-row">
+                        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                          <span style={{ fontSize: 12, color: "#E8ECF4" }}>{ns.step}</span>
+                          <span style={{ fontSize: 11, color: "#3A4560" }}>{ns.dueDate}</span>
+                        </div>
+                        <button className="btn-ghost" style={{ color: "#F87171", padding: "2px 6px" }} onClick={() => removeNextStep(i)}>✕</button>
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <select className="fi" value={newNextStep.step} onChange={e => setNewNextStep({ ...newNextStep, step: e.target.value })} style={{ flex: 2 }}>
+                      <option value="">Select next step…</option>
+                      {NEXT_STEP_OPTIONS.map(s => <option key={s}>{s}</option>)}
+                    </select>
+                    <input className="fi" type="date" value={newNextStep.dueDate} onChange={e => setNewNextStep({ ...newNextStep, dueDate: e.target.value })} style={{ flex: 1 }} />
+                    <button className="btn-ghost" onClick={addNextStep} style={{ whiteSpace: "nowrap", color: "#3B6FE8", borderColor: "#3B6FE840" }}>+ Add</button>
+                  </div>
+                </div>
+              )}
+
+              <div><label className="lbl">Expected Close Date</label><input className="fi" type="date" value={form.closeDate} onChange={fp("closeDate")} /></div>
+              <div><label className="lbl">Notes</label><textarea className="fi" rows={3} value={form.notes} onChange={fp("notes")} placeholder="Key details…" style={{ resize: "vertical" }} /></div>
               <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 6 }}>
                 <button className="btn-ghost" style={{ padding: "8px 16px" }} onClick={() => setShowForm(false)}>Cancel</button>
-                <button className="btn-primary" onClick={saveOpp}>{editId !== null ? "Save Changes" : "Add Opportunity"}</button>
+                <button className="btn-primary" onClick={saveOpp}>{editId !== null ? "Save Changes" : "Add"}</button>
               </div>
             </div>
           </div>
