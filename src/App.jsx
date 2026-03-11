@@ -186,7 +186,14 @@ const INIT_SITES = [
   { id: "s2", companyId: "c3", contactIds: ["p4"], storeNumber: "002", address: "300 Harbor Blvd, Newark, NJ", phone: "201-555-0310", accessCode: "5678", notes: "" },
 ];
 
-const NEXT_STEP_OPTIONS = ["Geotechnical", "Engage Engineer", "Underwriting", "LOI", "Under Contract"];
+const NEXT_STEP_OPTIONS = {
+  major:    ["Geotechnical", "Engage Engineer", "Underwriting", "LOI", "Under Contract", "Submit Bid", "Follow Up"],
+  capital:  ["Site Visit", "Engage Engineer", "Submit Proposal", "Follow Up", "Under Contract"],
+  facility: ["Estimating", "Waiting on Quotes", "Owner Approval"],
+  lawn:     ["Site Visit", "Submit Proposal", "Follow Up"],
+  snow:     ["Site Visit", "Submit Proposal", "Follow Up"],
+  all:      ["Geotechnical", "Engage Engineer", "Underwriting", "LOI", "Under Contract", "Submit Bid", "Follow Up"],
+};
 const SITES_BUS = ["capital", "facility", "lawn", "snow"];
 const LAWN_SNOW_SITES_BUS = ["lawn", "snow"];
 
@@ -298,7 +305,7 @@ export default function App() {
   const [showInboxForm, setShowInboxForm] = useState(false);
   const [inboxParseText,setInboxParseText]= useState("");
   const [inboxParsing,  setInboxParsing]  = useState(false);
-  const [inboxForm,     setInboxForm]     = useState({ name: "", companyName: "", storeCode: "", address: "", scopeOfWork: "", ownersProjectNo: "", bidDueDate: "", notes: "", source: "manual" });
+  const [inboxForm,     setInboxForm]     = useState({ name: "", companyName: "", storeCode: "", address: "", scopeOfWork: "", ownersProjectNo: "", bidDueDate: "", authorizedAmount: "", contactName: "", contactPhone: "", notes: "", source: "manual" });
 
   // Sites
   const [sites,        setSites]        = useState(INIT_SITES);
@@ -445,18 +452,23 @@ export default function App() {
         body: JSON.stringify({
           model: "claude-sonnet-4-20250514",
           max_tokens: 1000,
-          system: `You extract FM (Facility Maintenance) lead info from emails. Return ONLY valid JSON, no markdown, no extra text:
+          system: `You extract FM (Facility Maintenance) work order and lead info from any format — emails, work order systems (like RAMP, ServiceChannel, Corrigo, etc.), structured text, or plain emails. Be aggressive about finding data even in dense formatted text.
+
+Return ONLY valid JSON, no markdown, no extra text:
 {
-  "name": "short job title e.g. Roof Leak Repair",
-  "companyName": "client company name",
-  "storeCode": "store number or code if mentioned",
-  "address": "site address if mentioned",
-  "scopeOfWork": "description of the work needed",
-  "ownersProjectNo": "WO number or project reference if mentioned",
-  "bidDueDate": "YYYY-MM-DD if a bid/quote deadline is mentioned, else empty string",
-  "notes": "any other relevant details"
+  "name": "concise job title based on the subject/trade/issue e.g. 'Backflow Testing', 'HVAC Repair', 'Roof Leak'",
+  "companyName": "the CLIENT company name (property owner or manager, NOT the vendor). Look for 'District Manager', location name, or the company that issued the WO",
+  "storeCode": "store/location ID — look for store numbers, location codes, building IDs, or the number in the location name e.g. '26945' from '3Detroit - Kimball-26945'",
+  "address": "full site address where work is to be performed",
+  "scopeOfWork": "full description of work — combine Subject, Description, and 'Describe the issue' fields",
+  "ownersProjectNo": "WO number — look for 'Reference Number', 'Work Order', 'WO-', 'IVR ID' fields",
+  "bidDueDate": "YYYY-MM-DD format if any deadline, due date, or requested completion date is mentioned, else empty string",
+  "authorizedAmount": "dollar amount if an authorized/not-to-exceed amount is mentioned, else empty string",
+  "contactName": "site contact name if mentioned",
+  "contactPhone": "site contact phone if mentioned",
+  "notes": "priority level, any other relevant details like IVR check-in info, combination codes, district manager contact"
 }`,
-          messages: [{ role: "user", content: "Extract lead info from this email:\n\n" + inboxParseText }]
+          messages: [{ role: "user", content: "Extract all lead info from this work order / email:\n\n" + inboxParseText }]
         })
       });
       const data = await res.json();
@@ -473,7 +485,7 @@ export default function App() {
   const saveInboxLead = () => {
     if (!inboxForm.name.trim()) return;
     setFmInbox(prev => [...prev, { ...inboxForm, id: "inbox" + Date.now(), createdAt: new Date().toISOString() }]);
-    setInboxForm({ name: "", companyName: "", storeCode: "", address: "", scopeOfWork: "", ownersProjectNo: "", bidDueDate: "", notes: "", source: "manual" });
+    setInboxForm({ name: "", companyName: "", storeCode: "", address: "", scopeOfWork: "", ownersProjectNo: "", bidDueDate: "", authorizedAmount: "", contactName: "", contactPhone: "", notes: "", source: "manual" });
     setShowInboxForm(false);
   };
 
@@ -2579,7 +2591,7 @@ export default function App() {
                   <div style={{ display: "flex", gap: 8 }}>
                     <select className="fi" value={newNextStep.step} onChange={e => setNewNextStep(n => ({ ...n, step: e.target.value }))} style={{ flex: 2 }}>
                       <option value="">Select next step…</option>
-                      {NEXT_STEP_OPTIONS.map(s => <option key={s}>{s}</option>)}
+                      {(NEXT_STEP_OPTIONS[form.bu] || NEXT_STEP_OPTIONS.all).map(s => <option key={s}>{s}</option>)}
                     </select>
                     <input className="fi" type="date" value={newNextStep.dueDate} onChange={e => setNewNextStep(n => ({ ...n, dueDate: e.target.value }))} style={{ flex: 1 }} />
                     <button className="btn-ghost" onClick={addNextStep} style={{ whiteSpace: "nowrap", color: "#3B6FE8", borderColor: "#3B6FE840" }}>+ Add</button>
