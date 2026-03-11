@@ -117,6 +117,10 @@ const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov
 const fmt = (v) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(v || 0);
 const dayName = () => new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" });
 
+// FM margin rules: GP = max($125, NTE × 30%). Vendor NTE = NTE − GP.
+const fmGrossProfit = (nte) => { const n = Number(nte||0); return n ? Math.max(125, Math.round(n * 0.30)) : 125; };
+const fmVendorNTE   = (nte) => { const n = Number(nte||0); return Math.max(0, n - fmGrossProfit(n)); };
+
 function getGanttMonths(jobs) {
   if (!jobs.length) {
     const now = new Date();
@@ -515,9 +519,13 @@ Return ONLY valid JSON, no markdown, no extra text:
   const assignInboxLead = (lead, coordinator) => {
     const co = companies.find(c => c.id === lead.companyId) || companies.find(c => c.name.toLowerCase() === (lead.companyName||"").toLowerCase());
     const companyId = co?.id || "";
+    const nte = Number(lead.authorizedAmount || 0);
+    const gp  = fmGrossProfit(nte);
+    const vendorNTE = fmVendorNTE(nte);
     setFmJobs(prev => [...prev, {
-      id: "fm" + Date.now(), name: lead.name, companyId, siteId: lead.storeId || "", contractValue: 0, grossProfit: 0,
-      stage: "estimating", startDate: "", endDate: "", pm: "", pct: 0, nte: lead.authorizedAmount || "",
+      id: "fm" + Date.now(), name: lead.name, companyId, siteId: lead.storeId || "",
+      contractValue: nte, grossProfit: gp, nte: String(nte), vendorNTE: String(vendorNTE),
+      stage: "estimating", startDate: "", endDate: "", pm: "", pct: 0,
       bidDueDate: lead.bidDueDate || "", quoteDueDate: "", proposalDate: "", followUpDate: "", buyoutDate: "", invoiceDate: "",
       notes: lead.notes || "", storeCode: lead.storeCode || "", projectNo: "", ownersProjectNo: lead.ownersProjectNo || "",
       vendorInvoiceAmount: 0, vendorInvoiceNumber: "", subcontractorId: "", vendorNextStep: "",
@@ -1275,6 +1283,32 @@ Include: professional greeting, clear scope description, pricing, terms (net 30)
                           <div className="g2">
                             <div><label className="lbl">Owner's Project / WO #</label><input className="fi" value={inboxForm.ownersProjectNo} onChange={e => setInboxForm(f => ({ ...f, ownersProjectNo: e.target.value }))} /></div>
                             <div><label className="lbl">Bid Due Date</label><input className="fi" type="date" value={inboxForm.bidDueDate} onChange={e => setInboxForm(f => ({ ...f, bidDueDate: e.target.value }))} /></div>
+                          </div>
+                          <div>
+                            <label className="lbl">Authorized Amount (NTE)</label>
+                            <input className="fi" type="number" placeholder="e.g. 400" value={inboxForm.authorizedAmount} onChange={e => setInboxForm(f => ({ ...f, authorizedAmount: e.target.value }))} />
+                            {inboxForm.authorizedAmount && Number(inboxForm.authorizedAmount) > 0 && (() => {
+                              const nte = Number(inboxForm.authorizedAmount);
+                              const gp  = fmGrossProfit(nte);
+                              const vnte = fmVendorNTE(nte);
+                              return (
+                                <div style={{ marginTop: 8, background: "#0A0D16", border: "1px solid #1E2640", borderRadius: 6, padding: "10px 14px", display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
+                                  <div>
+                                    <div style={{ fontSize: 9, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 3 }}>Gross Value</div>
+                                    <div style={{ fontSize: 14, fontWeight: 700, color: "#E8ECF4" }}>{fmt(nte)}</div>
+                                  </div>
+                                  <div>
+                                    <div style={{ fontSize: 9, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 3 }}>Our GP</div>
+                                    <div style={{ fontSize: 14, fontWeight: 700, color: "#4ADE80" }}>{fmt(gp)}</div>
+                                    <div style={{ fontSize: 9, color: "#3A4560" }}>{Math.round((gp/nte)*100)}% · {gp === 125 ? "min $125" : "30%"}</div>
+                                  </div>
+                                  <div>
+                                    <div style={{ fontSize: 9, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 3 }}>Vendor NTE</div>
+                                    <div style={{ fontSize: 14, fontWeight: 700, color: "#FCD34D" }}>{fmt(vnte)}</div>
+                                  </div>
+                                </div>
+                              );
+                            })()}
                           </div>
                           <div><label className="lbl">Notes</label><textarea className="fi" rows={2} value={inboxForm.notes} onChange={e => setInboxForm(f => ({ ...f, notes: e.target.value }))} style={{ resize: "vertical" }} /></div>
                           <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", paddingTop: 4 }}>
@@ -2996,76 +3030,121 @@ Include: professional greeting, clear scope description, pricing, terms (net 30)
                 </div>
 
                 {/* ── ESTIMATING stage panel ── */}
-                {job.stage === "estimating" && (
-                  <div style={{ background: "#0A0D16", border: "1px solid #818CF840", borderRadius: 8, padding: "14px" }}>
-                    <div style={{ fontSize: 10, color: "#818CF8", textTransform: "uppercase", letterSpacing: "0.07em", fontWeight: 700, marginBottom: 12 }}>📋 Estimating</div>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                      <div>
-                        <div style={{ fontSize: 10, color: "#3A4560", marginBottom: 4 }}>Not to Exceed (NTE)</div>
-                        <input className="fi" type="number" placeholder="e.g. 500"
-                          value={job.nte || ""}
-                          onChange={e => update({ nte: e.target.value })} />
-                        {job.nte && <div style={{ fontSize: 10, color: "#818CF8", marginTop: 3 }}>NTE: {fmt(Number(job.nte))}</div>}
-                      </div>
-                      <div>
-                        <div style={{ fontSize: 10, color: "#3A4560", marginBottom: 4 }}>Assign Subcontractor to Quote</div>
-                        <select className="fi" value={job.subcontractorId || ""} onChange={e => update({ subcontractorId: e.target.value })}>
-                          <option value="">Select sub…</option>
-                          {subcontractors.map(s => <option key={s.id} value={s.id}>{s.name}{s.trade ? " — " + s.trade : ""}</option>)}
-                        </select>
-                      </div>
-                      {job.subcontractorId && (
-                        <button
-                          onClick={() => update({ subSentAt: new Date().toISOString(), stage: "waiting_quote" })}
-                          style={{ width: "100%", padding: "10px", borderRadius: 6, border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 12, fontWeight: 700,
-                            background: job.subSentAt ? "#4ADE8020" : "#818CF8", color: job.subSentAt ? "#4ADE80" : "#FFFFFF", transition: "all 0.2s" }}>
-                          {job.subSentAt ? "✓ Sent to Sub — " + new Date(job.subSentAt).toLocaleDateString() : "📤 Send to Sub for Quote"}
-                        </button>
-                      )}
-                      {!job.subcontractorId && <div style={{ fontSize: 10, color: "#2A3560", fontStyle: "italic" }}>Assign a sub above to send for quote</div>}
-                    </div>
-                  </div>
-                )}
+                {job.stage === "estimating" && (() => {
+                  const nte      = Number(job.contractValue || job.nte || 0);
+                  const gp       = job.grossProfit > 0 ? job.grossProfit : fmGrossProfit(nte);
+                  const vendorNTE = job.vendorNTE ? Number(job.vendorNTE) : fmVendorNTE(nte);
+                  return (
+                    <div style={{ background: "#0A0D16", border: "1px solid #818CF840", borderRadius: 8, padding: "14px" }}>
+                      <div style={{ fontSize: 10, color: "#818CF8", textTransform: "uppercase", letterSpacing: "0.07em", fontWeight: 700, marginBottom: 12 }}>📋 Estimating</div>
 
-                {/* ── WAITING FOR QUOTE panel ── */}
-                {job.stage === "waiting_quote" && (
-                  <div style={{ background: "#0A0D16", border: "1px solid #A78BFA40", borderRadius: 8, padding: "14px" }}>
-                    <div style={{ fontSize: 10, color: "#A78BFA", textTransform: "uppercase", letterSpacing: "0.07em", fontWeight: 700, marginBottom: 12 }}>⏳ Waiting for Quote</div>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                      {job.subSentAt && <div style={{ fontSize: 11, color: "#4A5270" }}>Sent to sub: {new Date(job.subSentAt).toLocaleDateString()}</div>}
-                      <div>
-                        <div style={{ fontSize: 10, color: "#3A4560", marginBottom: 4 }}>NTE: {job.nte ? fmt(Number(job.nte)) : "Not set"}</div>
-                      </div>
-                      <div>
-                        <div style={{ fontSize: 10, color: "#3A4560", marginBottom: 4 }}>Quote Received — Price</div>
-                        <input className="fi" type="number" placeholder="Sub's quoted price"
-                          value={job.vendorQuotePrice || ""}
-                          onChange={e => update({ vendorQuotePrice: e.target.value })} />
-                      </div>
-                      <div>
-                        <div style={{ fontSize: 10, color: "#3A4560", marginBottom: 4 }}>Quote Scope</div>
-                        <textarea className="fi" rows={2} placeholder="What the sub quoted…"
-                          value={job.vendorQuoteScope || ""}
-                          onChange={e => update({ vendorQuoteScope: e.target.value })}
-                          style={{ resize: "vertical" }} />
-                      </div>
-                      {job.vendorQuotePrice && (
-                        <div style={{ background: Number(job.vendorQuotePrice) <= Number(job.nte||99999999) ? "#4ADE8015" : "#F8717115", border: "1px solid " + (Number(job.vendorQuotePrice) <= Number(job.nte||99999999) ? "#4ADE8030" : "#F8717130"), borderRadius: 6, padding: "8px 12px", display: "flex", justifyContent: "space-between" }}>
-                          <span style={{ fontSize: 11, fontWeight: 600, color: "#E8ECF4" }}>Quote: {fmt(Number(job.vendorQuotePrice))}</span>
-                          <span style={{ fontSize: 10, color: Number(job.vendorQuotePrice) <= Number(job.nte||99999999) ? "#4ADE80" : "#F87171" }}>
-                            {Number(job.vendorQuotePrice) <= Number(job.nte||99999999) ? "✓ Within NTE" : "⚠ Exceeds NTE"}
-                          </span>
+                      {/* Margin breakdown */}
+                      {nte > 0 && (
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 12, background: "#161B28", borderRadius: 6, padding: "10px 12px" }}>
+                          <div>
+                            <div style={{ fontSize: 9, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 2 }}>Gross Value</div>
+                            <div style={{ fontSize: 15, fontWeight: 700, color: "#E8ECF4" }}>{fmt(nte)}</div>
+                          </div>
+                          <div>
+                            <div style={{ fontSize: 9, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 2 }}>Our GP</div>
+                            <div style={{ fontSize: 15, fontWeight: 700, color: "#4ADE80" }}>{fmt(gp)}</div>
+                            <div style={{ fontSize: 9, color: "#3A4560" }}>{Math.round((gp/nte)*100)}% · {gp <= 125 && gp === fmGrossProfit(nte) ? "min $125" : "30%"}</div>
+                          </div>
+                          <div>
+                            <div style={{ fontSize: 9, color: "#FCD34D", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 2 }}>Vendor NTE</div>
+                            <div style={{ fontSize: 15, fontWeight: 700, color: "#FCD34D" }}>{fmt(vendorNTE)}</div>
+                          </div>
                         </div>
                       )}
-                      {job.vendorQuotePrice && (
-                        <button onClick={() => update({ stage: "generate_proposal", pmPingedAt: new Date().toISOString() })}
-                          style={{ width: "100%", padding: "10px", borderRadius: 6, border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 12, fontWeight: 700, background: "#C084FC", color: "#FFFFFF" }}>
-                          ✓ Quote Received → Generate Proposal
-                        </button>
-                      )}
+
+                      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                        {!nte && (
+                          <div>
+                            <div style={{ fontSize: 10, color: "#3A4560", marginBottom: 4 }}>Authorized Amount (NTE / Gross Value)</div>
+                            <input className="fi" type="number" placeholder="From the work order ticket"
+                              value={job.contractValue || job.nte || ""}
+                              onChange={e => {
+                                const n = Number(e.target.value||0);
+                                const gp = fmGrossProfit(n);
+                                update({ contractValue: n, grossProfit: gp, nte: String(n), vendorNTE: String(fmVendorNTE(n)) });
+                              }} />
+                          </div>
+                        )}
+                        <div>
+                          <div style={{ fontSize: 10, color: "#3A4560", marginBottom: 4 }}>Assign Subcontractor to Quote</div>
+                          <select className="fi" value={job.subcontractorId || ""} onChange={e => update({ subcontractorId: e.target.value })}>
+                            <option value="">Select sub…</option>
+                            {subcontractors.map(s => <option key={s.id} value={s.id}>{s.name}{s.trade ? " — " + s.trade : ""}</option>)}
+                          </select>
+                        </div>
+                        {job.subcontractorId && (
+                          <button
+                            onClick={() => update({ subSentAt: new Date().toISOString(), stage: "waiting_quote" })}
+                            style={{ width: "100%", padding: "10px", borderRadius: 6, border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 12, fontWeight: 700,
+                              background: job.subSentAt ? "#4ADE8020" : "#818CF8", color: job.subSentAt ? "#4ADE80" : "#FFFFFF" }}>
+                            {job.subSentAt ? "✓ Sent — " + new Date(job.subSentAt).toLocaleDateString() : "📤 Send to Sub for Quote"}
+                          </button>
+                        )}
+                        {!job.subcontractorId && <div style={{ fontSize: 10, color: "#2A3560", fontStyle: "italic" }}>Assign a sub above to send for quote</div>}
+                      </div>
                     </div>
-                  </div>
-                )}
+                  );
+                })()}
+
+                {/* ── WAITING FOR QUOTE panel ── */}
+                {job.stage === "waiting_quote" && (() => {
+                  const nte = Number(job.contractValue || 0);
+                  const vendorNTE = job.vendorNTE ? Number(job.vendorNTE) : fmVendorNTE(nte);
+                  const quotePrice = Number(job.vendorQuotePrice || 0);
+                  const withinNTE = quotePrice > 0 && quotePrice <= vendorNTE;
+                  return (
+                    <div style={{ background: "#0A0D16", border: "1px solid #A78BFA40", borderRadius: 8, padding: "14px" }}>
+                      <div style={{ fontSize: 10, color: "#A78BFA", textTransform: "uppercase", letterSpacing: "0.07em", fontWeight: 700, marginBottom: 12 }}>⏳ Waiting for Quote</div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                        {/* Vendor NTE prominently displayed */}
+                        <div style={{ background: "#FCD34D10", border: "1px solid #FCD34D30", borderRadius: 6, padding: "10px 12px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                          <div>
+                            <div style={{ fontSize: 9, color: "#FCD34D", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 2 }}>Vendor Approved For</div>
+                            <div style={{ fontSize: 20, fontWeight: 700, color: "#FCD34D" }}>{fmt(vendorNTE)}</div>
+                          </div>
+                          <div style={{ textAlign: "right" }}>
+                            <div style={{ fontSize: 9, color: "#3A4560", marginBottom: 2 }}>Our Gross Value</div>
+                            <div style={{ fontSize: 13, fontWeight: 600, color: "#E8ECF4" }}>{fmt(nte)}</div>
+                            <div style={{ fontSize: 9, color: "#4ADE80" }}>GP: {fmt(fmGrossProfit(nte))}</div>
+                          </div>
+                        </div>
+                        {job.subSentAt && <div style={{ fontSize: 10, color: "#4A5270" }}>📤 Sent: {new Date(job.subSentAt).toLocaleDateString()}</div>}
+                        <div>
+                          <div style={{ fontSize: 10, color: "#3A4560", marginBottom: 4 }}>Quote Received — Price</div>
+                          <input className="fi" type="number" placeholder="Sub's quoted price"
+                            value={job.vendorQuotePrice || ""}
+                            onChange={e => update({ vendorQuotePrice: e.target.value })} />
+                        </div>
+                        <div>
+                          <div style={{ fontSize: 10, color: "#3A4560", marginBottom: 4 }}>Quote Scope</div>
+                          <textarea className="fi" rows={2} placeholder="What the sub quoted…"
+                            value={job.vendorQuoteScope || ""}
+                            onChange={e => update({ vendorQuoteScope: e.target.value })}
+                            style={{ resize: "vertical" }} />
+                        </div>
+                        {quotePrice > 0 && (
+                          <div style={{ background: withinNTE ? "#4ADE8015" : "#F8717115", border: "1px solid " + (withinNTE ? "#4ADE8030" : "#F8717130"), borderRadius: 6, padding: "8px 12px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                            <span style={{ fontSize: 12, fontWeight: 700, color: "#E8ECF4" }}>Quote: {fmt(quotePrice)}</span>
+                            <span style={{ fontSize: 11, color: withinNTE ? "#4ADE80" : "#F87171", fontWeight: 600 }}>
+                              {withinNTE ? "✓ Within vendor NTE" : "⚠ Exceeds vendor NTE by " + fmt(quotePrice - vendorNTE)}
+                            </span>
+                          </div>
+                        )}
+                        {quotePrice > 0 && (
+                          <button onClick={() => update({ stage: "generate_proposal", pmPingedAt: new Date().toISOString() })}
+                            style={{ width: "100%", padding: "10px", borderRadius: 6, border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 12, fontWeight: 700, background: "#C084FC", color: "#FFFFFF" }}>
+                            ✓ Quote Received → Generate Proposal
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 {/* ── GENERATE PROPOSAL panel ── */}
                 {job.stage === "generate_proposal" && (
