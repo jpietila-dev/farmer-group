@@ -201,13 +201,28 @@ const INIT_SNOW_SITES = [
   { id: "sn2", companyId: "c3", storeNumber: "S002", address: "Pittsburgh, PA",   phone: "", accessCode: "", notes: "", lat: 40.4406, lng: -79.9959 },
 ];
 
-const CAPEX_FM_STAGES = [
-  { id: "estimating",      label: "Estimating",      actionLabel: "Bid Due Date",      actionKey: "bidDueDate",      color: "#818CF8" },
-  { id: "owner_approval",  label: "Owner Approval",  actionLabel: "Follow-up Date",    actionKey: "followUpDate",    color: "#60A5FA" },
-  { id: "buyout",          label: "Buyout",           actionLabel: "Buyout Date",       actionKey: "buyoutDate",      color: "#FCD34D" },
-  { id: "do_work",         label: "Do Work",          actionLabel: "Target End Date",   actionKey: "endDate",         color: "#4ADE80" },
-  { id: "bill",            label: "Bill",             actionLabel: "Invoice Date",      actionKey: "invoiceDate",     color: "#F97316" },
+const CAPEX_STAGES = [
+  { id: "estimating",      label: "Estimating",        actionLabel: "Bid Due Date",    actionKey: "bidDueDate",    color: "#818CF8" },
+  { id: "owner_approval",  label: "Owner Approval",    actionLabel: "Follow-up Date",  actionKey: "followUpDate",  color: "#60A5FA" },
+  { id: "buyout",          label: "Buyout",             actionLabel: "Buyout Date",     actionKey: "buyoutDate",    color: "#FCD34D" },
+  { id: "do_work",         label: "Do Work",            actionLabel: "Target End Date", actionKey: "endDate",       color: "#4ADE80" },
+  { id: "bill",            label: "Bill",               actionLabel: "Invoice Date",    actionKey: "invoiceDate",   color: "#F97316" },
 ];
+
+const FM_STAGES = [
+  { id: "estimating",       label: "Estimating",        actionLabel: "Bid Due Date",    actionKey: "bidDueDate",    color: "#818CF8", phase: "pipeline" },
+  { id: "waiting_quote",    label: "Waiting for Quote", actionLabel: "Quote Due",       actionKey: "quoteDueDate",  color: "#A78BFA", phase: "pipeline" },
+  { id: "owner_approval",   label: "Owner Approval",    actionLabel: "Follow-up Date",  actionKey: "followUpDate",  color: "#60A5FA", phase: "pipeline" },
+  { id: "buyout",           label: "Buyout",             actionLabel: "Buyout Date",     actionKey: "buyoutDate",    color: "#FCD34D", phase: "active"   },
+  { id: "do_work",          label: "Do Work",            actionLabel: "Target End Date", actionKey: "endDate",       color: "#4ADE80", phase: "active"   },
+  { id: "bill",             label: "Bill",               actionLabel: "Invoice Date",    actionKey: "invoiceDate",   color: "#F97316", phase: "active"   },
+];
+
+const FM_PIPELINE_STAGES = FM_STAGES.filter(s => s.phase === "pipeline");
+const FM_ACTIVE_STAGES   = FM_STAGES.filter(s => s.phase === "active");
+
+// Keep CAPEX_FM_STAGES as alias for CapEx (uses same 5-stage system)
+const CAPEX_FM_STAGES = CAPEX_STAGES;
 
 const INIT_CAPEX_JOBS = [
   { id: "cx1", name: "Harbor HVAC Upgrade",    companyId: "c3", siteId: "s2", contractValue: 85000,  stage: "do_work",      startDate: "2026-02-15", endDate: "2026-05-30", pm: "Sarah Lee",   pct: 40, bidDueDate: "", followUpDate: "", buyoutDate: "", invoiceDate: "", notes: "Phase 1 underway" },
@@ -216,9 +231,9 @@ const INIT_CAPEX_JOBS = [
 ];
 
 const INIT_FM_JOBS = [
-  { id: "fm1", name: "Door Lock Replacement", companyId: "c2", siteId: "s1", contractValue: 3200,  grossProfit: 800,  stage: "do_work",    startDate: "2026-03-10", endDate: "2026-03-14", pm: "John Smith",  pct: 75,  bidDueDate: "", followUpDate: "", buyoutDate: "", invoiceDate: "", notes: "Parts on order",  storeCode: "001", projectNo: "260001", ownersProjectNo: "WO-001-0001", vendorInvoiceAmount: 2400, vendorInvoiceNumber: "", subcontractorId: "", nextStep: "do_work", vendorNextStep: "", scopeOfWork: "Replace door lock hardware on main entrance", coordinator: "" },
-  { id: "fm2", name: "Ceiling Tile Repair",   companyId: "c3", siteId: "s2", contractValue: 1800,  grossProfit: 600,  stage: "bill",       startDate: "2026-03-05", endDate: "2026-03-06", pm: "Sarah Lee",   pct: 100, bidDueDate: "", followUpDate: "", buyoutDate: "", invoiceDate: "2026-03-15", notes: "Work complete", storeCode: "002", projectNo: "260002", ownersProjectNo: "WO-002-0002", vendorInvoiceAmount: 1200, vendorInvoiceNumber: "INV-2024", subcontractorId: "", nextStep: "bill",    vendorNextStep: "", scopeOfWork: "Replace damaged ceiling tiles in units 4 and 7", coordinator: "" },
-  { id: "fm3", name: "Plumbing Leak Repair",  companyId: "c2", siteId: "s1", contractValue: 4500,  grossProfit: 1200, stage: "estimating", startDate: "",           endDate: "",           pm: "Mike Torres", pct: 0,   bidDueDate: "2026-03-19", followUpDate: "", buyoutDate: "", invoiceDate: "", notes: "Awaiting scope", storeCode: "001", projectNo: "260003", ownersProjectNo: "",            vendorInvoiceAmount: 0,    vendorInvoiceNumber: "", subcontractorId: "", nextStep: "estimating", vendorNextStep: "", scopeOfWork: "S207 pipe is leaking near unit 3B", coordinator: "" },
+  { id: "fm1", name: "Door Lock Replacement", companyId: "c2", siteId: "s1", contractValue: 3200,  grossProfit: 800,  stage: "do_work",    startDate: "2026-03-10", endDate: "2026-03-14", pm: "John Smith",  pct: 75,  bidDueDate: "", quoteDueDate: "", followUpDate: "", buyoutDate: "", invoiceDate: "", notes: "Parts on order",  storeCode: "001", projectNo: "260001", ownersProjectNo: "WO-001-0001", vendorInvoiceAmount: 2400, vendorInvoiceNumber: "", subcontractorId: "", vendorNextStep: "", scopeOfWork: "Replace door lock hardware on main entrance", coordinator: "" },
+  { id: "fm2", name: "Ceiling Tile Repair",   companyId: "c3", siteId: "s2", contractValue: 1800,  grossProfit: 600,  stage: "bill",       startDate: "2026-03-05", endDate: "2026-03-06", pm: "Sarah Lee",   pct: 100, bidDueDate: "", quoteDueDate: "", followUpDate: "", buyoutDate: "", invoiceDate: "2026-03-15", notes: "Work complete", storeCode: "002", projectNo: "260002", ownersProjectNo: "WO-002-0002", vendorInvoiceAmount: 1200, vendorInvoiceNumber: "INV-2024", subcontractorId: "", vendorNextStep: "", scopeOfWork: "Replace damaged ceiling tiles in units 4 and 7", coordinator: "" },
+  { id: "fm3", name: "Plumbing Leak Repair",  companyId: "c2", siteId: "s1", contractValue: 4500,  grossProfit: 1200, stage: "estimating", startDate: "",           endDate: "",           pm: "Mike Torres", pct: 0,   bidDueDate: "2026-03-19", quoteDueDate: "", followUpDate: "", buyoutDate: "", invoiceDate: "", notes: "Awaiting scope", storeCode: "001", projectNo: "260003", ownersProjectNo: "", vendorInvoiceAmount: 0, vendorInvoiceNumber: "", subcontractorId: "", vendorNextStep: "", scopeOfWork: "S207 pipe is leaking near unit 3B", coordinator: "" },
 ];
 
 export default function App() {
@@ -274,10 +289,11 @@ export default function App() {
   const [fmJobs,        setFmJobs]        = useState(INIT_FM_JOBS);
   const [showFmForm,    setShowFmForm]    = useState(false);
   const [editFmId,      setEditFmId]      = useState(null);
-  const [fmForm,        setFmForm]        = useState({ name: "", companyId: "", siteId: "", contractValue: "", grossProfit: "", stage: "estimating", startDate: "", endDate: "", pm: "", pct: 0, bidDueDate: "", followUpDate: "", buyoutDate: "", invoiceDate: "", notes: "", storeCode: "", projectNo: "", ownersProjectNo: "", vendorInvoiceAmount: "", vendorInvoiceNumber: "", subcontractorId: "", nextStep: "estimating", vendorNextStep: "", scopeOfWork: "", coordinator: "" });
+  const [fmForm,        setFmForm]        = useState({ name: "", companyId: "", siteId: "", contractValue: "", grossProfit: "", stage: "estimating", startDate: "", endDate: "", pm: "", pct: 0, bidDueDate: "", quoteDueDate: "", followUpDate: "", buyoutDate: "", invoiceDate: "", notes: "", storeCode: "", projectNo: "", ownersProjectNo: "", vendorInvoiceAmount: "", vendorInvoiceNumber: "", subcontractorId: "", vendorNextStep: "", scopeOfWork: "", coordinator: "" });
   const [selectedFmJob, setSelectedFmJob] = useState(null);
   const [fmSearch,      setFmSearch]      = useState("");
   const [fmCoordFilter, setFmCoordFilter] = useState("all");
+  const [selectedCoord, setSelectedCoord] = useState(null); // coordinator report
 
   // Sites
   const [sites,        setSites]        = useState(INIT_SITES);
@@ -312,7 +328,7 @@ export default function App() {
   const navItems = NAV_ITEMS[activeBU] || NAV_ITEMS.all;
   const buColor  = BU_COLORS[activeBU];
 
-  const handleBUChange = (id) => { setActiveBU(id); setActiveNav("dashboard"); };
+  const handleBUChange = (id) => { setActiveBU(id); setActiveNav("dashboard"); setSelectedCoord(null); };
 
   // Punch list
   const dynamicPunchList = useMemo(() => {
@@ -403,7 +419,7 @@ export default function App() {
   const moveCapexStage = (id, dir) => setCapexJobs(capexJobs.map(j => { if (j.id !== id) return j; const idx = CAPEX_FM_STAGES.findIndex(s => s.id === j.stage); return { ...j, stage: CAPEX_FM_STAGES[Math.max(0, Math.min(CAPEX_FM_STAGES.length - 1, idx + dir))].id }; }));
 
   // FM job helpers
-  const openAddFm = () => { setEditFmId(null); setFmForm({ name: "", companyId: "", siteId: "", contractValue: "", grossProfit: "", stage: "estimating", startDate: "", endDate: "", pm: "", pct: 0, bidDueDate: "", followUpDate: "", buyoutDate: "", invoiceDate: "", notes: "", storeCode: "", projectNo: "", ownersProjectNo: "", vendorInvoiceAmount: "", vendorInvoiceNumber: "", subcontractorId: "", nextStep: "estimating", vendorNextStep: "", scopeOfWork: "", coordinator: "" }); setShowFmForm(true); };
+  const openAddFm = () => { setEditFmId(null); setFmForm({ name: "", companyId: "", siteId: "", contractValue: "", grossProfit: "", stage: "estimating", startDate: "", endDate: "", pm: "", pct: 0, bidDueDate: "", quoteDueDate: "", followUpDate: "", buyoutDate: "", invoiceDate: "", notes: "", storeCode: "", projectNo: "", ownersProjectNo: "", vendorInvoiceAmount: "", vendorInvoiceNumber: "", subcontractorId: "", vendorNextStep: "", scopeOfWork: "", coordinator: "" }); setShowFmForm(true); };
   const openEditFm = (j) => { setEditFmId(j.id); setFmForm({ ...j, contractValue: String(j.contractValue) }); setShowFmForm(true); };
   const saveFm = () => {
     if (!fmForm.name.trim()) return;
@@ -715,7 +731,7 @@ export default function App() {
         </div>
         <div style={{ flex: 1, padding: "12px 8px", overflowY: "auto" }}>
           {navItems.map(item => (
-            <button key={item.id} className={"nav-item" + (activeNav === item.id ? " active" : "")} onClick={() => setActiveNav(item.id)}
+            <button key={item.id} className={"nav-item" + (activeNav === item.id ? " active" : "")} onClick={() => { setActiveNav(item.id); setSelectedCoord(null); }}
               style={activeNav === item.id ? { borderLeft: "3px solid " + buColor.accent, paddingLeft: 13 } : { borderLeft: "3px solid transparent" }}>
               <span style={{ fontSize: 14, flexShrink: 0 }}>{item.icon}</span>
               {!sidebarCollapsed && <span style={{ textTransform: "uppercase", fontSize: 11, letterSpacing: "0.07em" }}>{item.label}</span>}
@@ -1466,9 +1482,10 @@ export default function App() {
           {activeNav === "jobs" && activeBU === "facility" && (() => {
             const coords = ["all", ...Array.from(new Set(fmTeam.map(m => m.name)))];
             const filtered = fmJobs.filter(j => {
-              const matchCoord = fmCoordFilter === "all" || j.coordinator === fmCoordFilter;
+              const isActive    = FM_ACTIVE_STAGES.some(s => s.id === j.stage);
+              const matchCoord  = fmCoordFilter === "all" || j.coordinator === fmCoordFilter;
               const matchSearch = !fmSearch || j.name.toLowerCase().includes(fmSearch.toLowerCase()) || (j.storeCode||"").toLowerCase().includes(fmSearch.toLowerCase()) || (j.projectNo||"").toLowerCase().includes(fmSearch.toLowerCase());
-              return matchCoord && matchSearch;
+              return isActive && matchCoord && matchSearch;
             });
             const totalGross  = filtered.reduce((s,j) => s + (j.contractValue||0), 0);
             const totalProfit = filtered.reduce((s,j) => s + (j.grossProfit||0), 0);
@@ -1501,9 +1518,9 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* Stage stats */}
+                {/* Stage stats — active phase only */}
                 <div style={{ display: "flex", gap: 8, overflowX: "auto" }}>
-                  {CAPEX_FM_STAGES.filter(st => st.id !== "estimating").map(st => {
+                  {FM_ACTIVE_STAGES.map(st => {
                     const cnt = filtered.filter(j => j.stage === st.id).length;
                     const val = filtered.filter(j => j.stage === st.id).reduce((s,j) => s+j.contractValue,0);
                     return (
@@ -1550,7 +1567,7 @@ export default function App() {
                         <tr><td colSpan={FM_COLS.length + 2} style={{ textAlign: "center", padding: "48px", color: "#2A3560", fontSize: 12 }}>No jobs found</td></tr>
                       )}
                       {filtered.map((job, idx) => {
-                        const st   = CAPEX_FM_STAGES.find(s => s.id === job.stage) || CAPEX_FM_STAGES[0];
+                        const st   = FM_STAGES.find(s => s.id === job.stage) || FM_STAGES[0];
                         const site = sites.find(s => s.id === job.siteId);
                         const sub  = subcontractors.find(s => s.id === job.subcontractorId);
                         const rowBg = idx % 2 === 0 ? "#0D1020" : "#111624";
@@ -1642,50 +1659,61 @@ export default function App() {
           )}
 
           {/* ── TEAM ── */}
-          {activeNav === "team" && (
+          {activeNav === "team" && !selectedCoord && (
             <div className="fade-in" style={{ display: "flex", flexDirection: "column", gap: 22 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div>
                   <div style={{ fontSize: 22, fontWeight: 700, color: "#FFFFFF", letterSpacing: "-0.01em", textTransform: "uppercase" }}>Team</div>
-                  <div style={{ fontSize: 11, color: "#3A4560", marginTop: 3, letterSpacing: "0.06em" }}>{BUSINESS_UNITS.find(b => b.id === activeBU)?.label.toUpperCase()} · {fmTeam.length} MEMBERS</div>
+                  <div style={{ fontSize: 11, color: "#3A4560", marginTop: 3, letterSpacing: "0.06em" }}>{BUSINESS_UNITS.find(b => b.id === activeBU)?.label.toUpperCase()} · {fmTeam.length} MEMBERS · CLICK A NAME TO SEE THEIR DAILY REPORT</div>
                 </div>
                 <button className="btn-primary" onClick={() => { setEditTeamId(null); setTeamForm({ name: "", phone: "", email: "" }); setShowTeamForm(true); }}>+ Add Member</button>
-              </div>
-
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 12 }}>
-                <div className="stat-card" style={{ position: "relative", overflow: "hidden", padding: "14px 18px" }}>
-                  <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: buColor.accent }} />
-                  <div style={{ fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "#3A4560", marginBottom: 6 }}>Total Members</div>
-                  <div style={{ fontSize: 22, fontWeight: 700, color: buColor.accent }}>{fmTeam.length}</div>
-                </div>
               </div>
 
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                 {fmTeam.length === 0 && (
                   <div style={{ textAlign: "center", padding: "48px", color: "#2A3560", fontSize: 12, background: "#161B28", borderRadius: 10, border: "1px solid #1E2640" }}>No team members yet — add your first one</div>
                 )}
-                {fmTeam.map(m => (
-                  <div key={m.id} className="opp-row">
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                        <div style={{ width: 40, height: 40, borderRadius: "50%", background: buColor.light, border: "1px solid " + buColor.accent + "40", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 700, color: buColor.accent, flexShrink: 0 }}>
-                          {m.name.charAt(0).toUpperCase()}
+                {fmTeam.map(m => {
+                  const myJobs   = fmJobs.filter(j => j.coordinator === m.name);
+                  const active   = myJobs.filter(j => FM_ACTIVE_STAGES.some(s => s.id === j.stage));
+                  const pipeline = myJobs.filter(j => FM_PIPELINE_STAGES.some(s => s.id === j.stage));
+                  const urgentCount = myJobs.filter(j => {
+                    const st = FM_STAGES.find(s => s.id === j.stage);
+                    if (!st) return false;
+                    const d = j[st.actionKey];
+                    return d && new Date(d) <= new Date(Date.now() + 3*86400000);
+                  }).length;
+                  return (
+                    <div key={m.id} className="opp-row" style={{ cursor: "pointer" }} onClick={() => setSelectedCoord(m.name)}>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                          <div style={{ width: 44, height: 44, borderRadius: "50%", background: buColor.light, border: "1px solid " + buColor.accent + "40", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 17, fontWeight: 700, color: buColor.accent, flexShrink: 0 }}>
+                            {m.name.charAt(0).toUpperCase()}
+                          </div>
+                          <div>
+                            <div style={{ fontSize: 14, color: buColor.accent, fontWeight: 600, textDecoration: "underline", textDecorationColor: buColor.accent + "60" }}>{m.name}</div>
+                            <div style={{ display: "flex", gap: 14, marginTop: 3, flexWrap: "wrap" }}>
+                              {m.phone && <span style={{ fontSize: 11, color: "#3A4560" }}>📞 {m.phone}</span>}
+                              {m.email && <span style={{ fontSize: 11, color: "#3A4560" }}>✉ {m.email}</span>}
+                            </div>
+                          </div>
                         </div>
-                        <div>
-                          <div style={{ fontSize: 14, color: "#E8ECF4", fontWeight: 600 }}>{m.name}</div>
-                          <div style={{ display: "flex", gap: 16, marginTop: 3 }}>
-                            {m.phone && <span style={{ fontSize: 11, color: "#3A4560" }}>📞 {m.phone}</span>}
-                            {m.email && <span style={{ fontSize: 11, color: "#3A4560" }}>✉ {m.email}</span>}
+                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                          {/* Job count pills */}
+                          <div style={{ display: "flex", gap: 6 }}>
+                            <span style={{ fontSize: 10, background: "#4ADE8020", color: "#4ADE80", border: "1px solid #4ADE8040", padding: "3px 9px", borderRadius: 12, fontWeight: 600 }}>{active.length} active</span>
+                            <span style={{ fontSize: 10, background: "#818CF820", color: "#818CF8", border: "1px solid #818CF840", padding: "3px 9px", borderRadius: 12, fontWeight: 600 }}>{pipeline.length} pipeline</span>
+                            {urgentCount > 0 && <span style={{ fontSize: 10, background: "#F8717120", color: "#F87171", border: "1px solid #F8717140", padding: "3px 9px", borderRadius: 12, fontWeight: 600 }}>⚠ {urgentCount} urgent</span>}
+                          </div>
+                          <div style={{ display: "flex", gap: 5 }} onClick={e => e.stopPropagation()}>
+                            <button className="btn-ghost" style={{ fontSize: 11 }} onClick={() => { setEditTeamId(m.id); setTeamForm({ name: m.name, phone: m.phone, email: m.email }); setShowTeamForm(true); }}>✎</button>
+                            <button className="btn-ghost" style={{ fontSize: 11, color: "#F87171", borderColor: "#F8717120" }} onClick={() => setFmTeam(fmTeam.filter(x => x.id !== m.id))}>✕</button>
                           </div>
                         </div>
                       </div>
-                      <div style={{ display: "flex", gap: 5 }}>
-                        <button className="btn-ghost" style={{ fontSize: 11 }} onClick={() => { setEditTeamId(m.id); setTeamForm({ name: m.name, phone: m.phone, email: m.email }); setShowTeamForm(true); }}>✎</button>
-                        <button className="btn-ghost" style={{ fontSize: 11, color: "#F87171", borderColor: "#F8717120" }} onClick={() => setFmTeam(fmTeam.filter(x => x.id !== m.id))}>✕</button>
-                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
 
               {showTeamForm && (
@@ -1714,6 +1742,169 @@ export default function App() {
               )}
             </div>
           )}
+
+          {/* ── COORDINATOR DAILY REPORT ── */}
+          {activeNav === "team" && selectedCoord && (() => {
+            const today      = new Date();
+            const myJobs     = fmJobs.filter(j => j.coordinator === selectedCoord);
+            const totalGross  = myJobs.reduce((s,j) => s + (j.contractValue||0), 0);
+            const totalProfit = myJobs.reduce((s,j) => s + (j.grossProfit||0), 0);
+
+            // Priority score: lower = more urgent. Based on days in stage (age) and date proximity
+            const getPriority = (job) => {
+              const st = FM_STAGES.find(s => s.id === job.stage);
+              if (!st) return 999;
+              const actionDate = job[st.actionKey];
+              if (actionDate) {
+                const daysUntil = (new Date(actionDate) - today) / 86400000;
+                if (daysUntil < 0)  return 0;   // overdue
+                if (daysUntil < 3)  return 1;   // due very soon
+                if (daysUntil < 7)  return 2;   // due this week
+                return 3;
+              }
+              return 4; // no date set
+            };
+
+            const getUrgencyLabel = (job) => {
+              const st = FM_STAGES.find(s => s.id === job.stage);
+              if (!st) return null;
+              const d = job[st.actionKey];
+              if (!d) return null;
+              const days = Math.round((new Date(d) - today) / 86400000);
+              if (days < 0)  return { text: `${Math.abs(days)}d overdue`, color: "#F87171", bg: "#F8717115" };
+              if (days === 0) return { text: "Due today",               color: "#F87171", bg: "#F8717115" };
+              if (days <= 3)  return { text: `Due in ${days}d`,          color: "#FCD34D", bg: "#FCD34D15" };
+              if (days <= 7)  return { text: `Due in ${days}d`,          color: "#60A5FA", bg: "#60A5FA15" };
+              return null;
+            };
+
+            const JobRow = ({ job }) => {
+              const st      = FM_STAGES.find(s => s.id === job.stage);
+              const urgency = getUrgencyLabel(job);
+              const site    = sites.find(s => s.id === job.siteId);
+              const sub     = subcontractors.find(s => s.id === job.subcontractorId);
+              const actionDate = st ? job[st.actionKey] : null;
+              return (
+                <div style={{ background: "#0D1020", border: "1px solid #1E2640", borderRadius: 8, padding: "14px 16px", display: "flex", flexDirection: "column", gap: 8 }}>
+                  <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10 }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 4 }}>
+                        <span style={{ fontSize: 13, color: "#E8ECF4", fontWeight: 600 }}>{job.name}</span>
+                        {job.storeCode  && <span style={{ fontSize: 10, color: "#3A4560", background: "#1A2035", padding: "2px 7px", borderRadius: 4 }}>#{job.storeCode}</span>}
+                        {job.projectNo  && <span style={{ fontSize: 10, color: "#3A4560", background: "#1A2035", padding: "2px 7px", borderRadius: 4 }}>{job.projectNo}</span>}
+                        {urgency && <span style={{ fontSize: 10, fontWeight: 700, color: urgency.color, background: urgency.bg, padding: "2px 8px", borderRadius: 4 }}>{urgency.text}</span>}
+                      </div>
+                      <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
+                        {site && <span style={{ fontSize: 11, color: "#4A5270" }}>📍 {site.address}</span>}
+                        {sub  && <span style={{ fontSize: 11, color: "#4A5270" }}>🔧 {sub.name}</span>}
+                      </div>
+                    </div>
+                    <div style={{ textAlign: "right", flexShrink: 0 }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: "#E8ECF4" }}>{fmt(job.contractValue)}</div>
+                      <div style={{ fontSize: 11, color: "#4ADE80" }}>{fmt(job.grossProfit)} GP</div>
+                    </div>
+                  </div>
+                  {/* Key dates row */}
+                  <div style={{ display: "flex", gap: 10, flexWrap: "wrap", paddingTop: 8, borderTop: "1px solid #1A2035" }}>
+                    {st && actionDate && (
+                      <span style={{ fontSize: 11, color: urgency ? urgency.color : "#4A5270" }}>
+                        📅 {st.actionLabel}: <strong>{actionDate}</strong>
+                      </span>
+                    )}
+                    {job.startDate && <span style={{ fontSize: 11, color: "#4A5270" }}>▶ Start: {job.startDate}</span>}
+                    {job.vendorNextStep && <span style={{ fontSize: 11, color: "#B8C4E0" }}>↪ Vendor: {job.vendorNextStep}</span>}
+                    {job.ownersProjectNo && <span style={{ fontSize: 11, color: "#3A4560" }}>WO: {job.ownersProjectNo}</span>}
+                  </div>
+                  {job.notes && (
+                    <div style={{ fontSize: 11, color: "#4A5270", fontStyle: "italic", paddingTop: 4, borderTop: "1px solid #1A2035" }}>
+                      {job.notes}
+                    </div>
+                  )}
+                </div>
+              );
+            };
+
+            return (
+              <div className="fade-in" style={{ display: "flex", flexDirection: "column", gap: 22 }}>
+                {/* Header */}
+                <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                  <button className="btn-ghost" style={{ fontSize: 12 }} onClick={() => setSelectedCoord(null)}>← Back</button>
+                  <div style={{ width: 48, height: 48, borderRadius: "50%", background: buColor.light, border: "2px solid " + buColor.accent + "60", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, fontWeight: 700, color: buColor.accent, flexShrink: 0 }}>
+                    {selectedCoord.charAt(0).toUpperCase()}
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 22, fontWeight: 700, color: "#FFFFFF", letterSpacing: "-0.01em" }}>{selectedCoord}</div>
+                    <div style={{ fontSize: 11, color: "#3A4560", marginTop: 2, letterSpacing: "0.06em" }}>
+                      {new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" }).toUpperCase()} · DAILY REPORT
+                    </div>
+                  </div>
+                </div>
+
+                {/* Summary KPIs */}
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 10 }}>
+                  {[
+                    { label: "Total Jobs",    value: myJobs.length,                                                                             color: buColor.accent },
+                    { label: "Active Jobs",   value: myJobs.filter(j => FM_ACTIVE_STAGES.some(s => s.id === j.stage)).length,                   color: "#4ADE80" },
+                    { label: "In Pipeline",   value: myJobs.filter(j => FM_PIPELINE_STAGES.some(s => s.id === j.stage)).length,                 color: "#818CF8" },
+                    { label: "Urgent",        value: myJobs.filter(j => getPriority(j) <= 1).length,                                            color: "#F87171" },
+                  ].map(k => (
+                    <div key={k.label} style={{ background: "#161B28", border: "1px solid " + k.color + "25", borderRadius: 8, padding: "12px 16px", position: "relative", overflow: "hidden" }}>
+                      <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: k.color }} />
+                      <div style={{ fontSize: 10, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 4 }}>{k.label}</div>
+                      <div style={{ fontSize: 22, fontWeight: 700, color: k.color }}>{k.value}</div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Financial summary */}
+                <div style={{ background: "#161B28", border: "1px solid #1E2640", borderRadius: 8, padding: "14px 20px", display: "flex", gap: 32 }}>
+                  <div>
+                    <div style={{ fontSize: 10, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 4 }}>Total Gross Value</div>
+                    <div style={{ fontSize: 20, fontWeight: 700, color: "#E8ECF4" }}>{fmt(totalGross)}</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 10, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 4 }}>Total Gross Profit</div>
+                    <div style={{ fontSize: 20, fontWeight: 700, color: "#4ADE80" }}>{fmt(totalProfit)}</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 10, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 4 }}>GP Margin</div>
+                    <div style={{ fontSize: 20, fontWeight: 700, color: totalGross ? (totalProfit/totalGross > 0.2 ? "#4ADE80" : "#FCD34D") : "#3A4560" }}>
+                      {totalGross ? Math.round((totalProfit/totalGross)*100) + "%" : "—"}
+                    </div>
+                  </div>
+                </div>
+
+                {myJobs.length === 0 && (
+                  <div style={{ textAlign: "center", padding: "48px", color: "#2A3560", fontSize: 12, background: "#161B28", borderRadius: 10, border: "1px solid #1E2640" }}>
+                    No jobs assigned to {selectedCoord} yet
+                  </div>
+                )}
+
+                {/* Jobs grouped by stage in FM_STAGES order, sorted by priority within each group */}
+                {FM_STAGES.map(st => {
+                  const stageJobs = myJobs
+                    .filter(j => j.stage === st.id)
+                    .sort((a, b) => getPriority(a) - getPriority(b));
+                  if (!stageJobs.length) return null;
+                  const phaseLabel = st.phase === "pipeline" ? "PIPELINE" : "ACTIVE";
+                  return (
+                    <div key={st.id}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
+                        <div style={{ width: 10, height: 10, borderRadius: "50%", background: st.color, flexShrink: 0 }} />
+                        <span style={{ fontSize: 12, letterSpacing: "0.07em", textTransform: "uppercase", color: st.color, fontWeight: 700 }}>{st.label}</span>
+                        <span style={{ fontSize: 10, color: "#2A3560", background: "#1A2035", padding: "1px 7px", borderRadius: 4 }}>{phaseLabel}</span>
+                        <span style={{ fontSize: 10, color: "#3A4560" }}>{stageJobs.length} job{stageJobs.length !== 1 ? "s" : ""}</span>
+                        <span style={{ fontSize: 10, color: "#3A4560" }}>· {fmt(stageJobs.reduce((s,j) => s+(j.contractValue||0),0))}</span>
+                      </div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 8, paddingLeft: 4 }}>
+                        {stageJobs.map(j => <JobRow key={j.id} job={j} />)}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()}
 
           {/* ── SUBCONTRACTORS (FM only) ── */}
           {activeNav === "subcontractors" && activeBU === "facility" && (
@@ -2546,10 +2737,15 @@ export default function App() {
               </div>
               <div><label className="lbl">Stage</label>
                 <select className="fi" value={fmForm.stage} onChange={e => setFmForm(f => ({ ...f, stage: e.target.value }))}>
-                  {CAPEX_FM_STAGES.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
+                  <optgroup label="Pipeline">
+                    {FM_PIPELINE_STAGES.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
+                  </optgroup>
+                  <optgroup label="Active Jobs">
+                    {FM_ACTIVE_STAGES.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
+                  </optgroup>
                 </select>
               </div>
-              {(() => { const st = CAPEX_FM_STAGES.find(s => s.id === fmForm.stage); return st ? (
+              {(() => { const st = FM_STAGES.find(s => s.id === fmForm.stage); return st ? (
                 <div><label className="lbl">{st.actionLabel}</label><input className="fi" type="date" value={fmForm[st.actionKey] || ""} onChange={e => setFmForm(f => ({ ...f, [st.actionKey]: e.target.value }))} /></div>
               ) : null; })()}
               <div className="g2">
