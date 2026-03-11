@@ -533,9 +533,9 @@ export default function App() {
   const [inboxForm,     setInboxForm]     = useState({ name: "", companyId: "", storeId: "", address: "", scopeOfWork: "", ownersProjectNo: "", bidDueDate: "", authorizedAmount: "", contactName: "", contactPhone: "", notes: "", source: "manual" });
   const [showProposal,  setShowProposal]  = useState(false);
   const [proposalJob,   setProposalJob]   = useState(null);
-  const [proposalText,  setProposalText]  = useState("");
   const [proposalNum,   setProposalNum]   = useState("");
-  const [generatingProp,setGeneratingProp]= useState(false);
+  const [proposalSections, setProposalSections] = useState([]); // [{id, name, items:[{id,desc,unit,qty,unitPrice,labor,material,sub,misc}]}]
+  const [proposalExtras, setProposalExtras] = useState({ laborBurden: 0, salesTax: 0, generalLiability: 0, permitCost: 0 });
 
   // Sites
   const [sites,        setSites]        = useState(INIT_SITES);
@@ -748,41 +748,30 @@ Return ONLY valid JSON, no markdown, no extra text:
 
   const deleteInboxLead = (id) => setFmInbox(prev => prev.filter(l => l.id !== id));
 
-  const generateProposal = async (job) => {
-    const co   = companies.find(c => c.id === job.companyId);
-    const site = sites.find(s => s.id === job.siteId);
-    setGeneratingProp(true);
-    setProposalText("");
-    try {
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: "claude-sonnet-4-20250514",
-          max_tokens: 1500,
-          system: `You write professional facility maintenance proposals for Farmer Development Inc. Write in a clean, professional tone. Return only the proposal text — no JSON, no markdown headers, just the formatted proposal body ready to present to a client. Use line breaks naturally.`,
-          messages: [{ role: "user", content: `Write a facility maintenance proposal with these details:
+  const newItem = () => ({ id: "i" + Date.now() + Math.random(), desc: "", unit: "EA", qty: 1, unitPrice: 0, labor: 0, material: 0, sub: 0, misc: 0 });
+  const newSection = (name="") => ({ id: "s" + Date.now() + Math.random(), name, items: [newItem()] });
 
-FROM: Farmer Development Inc., 124 N Grand Ave, Fowlerville, MI 48836 | (810) 844-1544
-TO: ${co?.name || "Client"}, ${site?.address || job.storeCode || "Site Address"}
-DATE: ${new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
-PROPOSAL #: ${proposalNum || "[PROPOSAL NUMBER]"}
-WORK ORDER #: ${job.ownersProjectNo || "[WO NUMBER]"}
-SCOPE OF WORK: ${job.scopeOfWork || job.name}
-GROSS VALUE: ${job.contractValue ? "$" + Number(job.contractValue).toLocaleString() : "[TO BE DETERMINED]"}
-NOT TO EXCEED: ${job.nte ? "$" + Number(job.nte).toLocaleString() : "N/A"}
-
-Include: professional greeting, clear scope description, pricing, terms (net 30), and a signature block for both parties.` }]
-        })
-      });
-      const data = await res.json();
-      const text = data.content?.find(b => b.type === "text")?.text || "";
-      setProposalText(text);
-    } catch(e) {
-      setProposalText("Error generating proposal — please try again.");
-    }
-    setGeneratingProp(false);
+  const initProposal = (job) => {
+    setProposalJob(job);
+    setProposalNum("");
+    setProposalExtras({ laborBurden: 0, salesTax: 0, generalLiability: 0, permitCost: 0 });
+    // Pre-populate: one section with sub quote as first line, overhead as second
+    const nte = Number(job.contractValue || 0);
+    const subPrice = Number(job.vendorQuotePrice || 0);
+    const gp = fmGrossProfit(nte);
+    const ohp = nte - subPrice; // OH&P absorbs the rest to hit NTE exactly
+    setProposalSections([{
+      id: "s1", name: "01 General",
+      items: [
+        { id: "i1", desc: job.scopeOfWork || job.name, unit: "LS", qty: 1, unitPrice: subPrice, labor: 0, material: 0, sub: subPrice, misc: 0 },
+      ]
+    }]);
+    setShowProposal(true);
   };
+
+  const proposalLineTotal = (item) => item.qty * item.unitPrice;
+  const sectionTotal = (sec) => sec.items.reduce((s, i) => s + proposalLineTotal(i), 0);
+  const proposalSubtotal = (sections) => sections.reduce((s, sec) => s + sectionTotal(sec), 0);
 
   const saveCompany = () => {
     if (!companyForm.name.trim()) return;
@@ -3350,10 +3339,7 @@ Include: professional greeting, clear scope description, pricing, terms (net 30)
                           <div style={{ fontSize: 10, color: "#3A4560", marginBottom: 4 }}>Quote Received — Price</div>
                           <input className="fi" type="number" placeholder="Sub's quoted price"
                             value={job.vendorQuotePrice || ""}
-                            onChange={e => {
-                              const val = e.target.value;
-                              update({ vendorQuotePrice: val, ...(val ? { stage: "generate_proposal" } : {}) });
-                            }} />
+                            onChange={e => update({ vendorQuotePrice: e.target.value })} />
                         </div>
                         <div>
                           <div style={{ fontSize: 10, color: "#3A4560", marginBottom: 4 }}>Quote Scope</div>
@@ -3370,12 +3356,18 @@ Include: professional greeting, clear scope description, pricing, terms (net 30)
                             </span>
                           </div>
                         )}
-                        {quotePrice > 0 && (
-                          <button onClick={() => update({ stage: "generate_proposal", pmPingedAt: new Date().toISOString() })}
-                            style={{ width: "100%", padding: "10px", borderRadius: 6, border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 12, fontWeight: 700, background: "#C084FC", color: "#FFFFFF" }}>
-                            ✓ Quote Received → Generate Proposal
-                          </button>
-                        )}
+                        {(() => {
+                          const hasPrice = quotePrice > 0;
+                          const hasScope = !!(job.vendorQuoteScope || "").trim();
+                          const ready = hasPrice && hasScope;
+                          return (
+                            <button onClick={() => ready && update({ stage: "generate_proposal" })}
+                              style={{ width: "100%", padding: "10px", borderRadius: 6, border: ready ? "none" : "1px solid #2A3560", cursor: ready ? "pointer" : "not-allowed", fontFamily: "inherit", fontSize: 12, fontWeight: 700,
+                                background: ready ? "#C084FC" : "transparent", color: ready ? "#FFFFFF" : "#3A4560", transition: "all 0.2s" }}>
+                              {ready ? "→ Generate Proposal" : "Enter price + scope to continue"}
+                            </button>
+                          );
+                        })()}
                       </div>
                     </div>
                   );
@@ -3401,7 +3393,7 @@ Include: professional greeting, clear scope description, pricing, terms (net 30)
                         </div>
                       </div>
                       <button
-                        onClick={() => { setProposalJob(job); setShowProposal(true); if (!proposalText) generateProposal(job); }}
+                        onClick={() => { initProposal(job); }}
                         style={{ width: "100%", padding: "10px", borderRadius: 6, border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 12, fontWeight: 700, background: "#C084FC", color: "#FFFFFF" }}>
                         ✨ Generate Proposal
                       </button>
@@ -3773,85 +3765,258 @@ Include: professional greeting, clear scope description, pricing, terms (net 30)
         </div>
       )}
 
-      {/* ── PROPOSAL MODAL ── */}
-      {showProposal && proposalJob && (
-        <div className="modal-bg" onClick={e => e.target === e.currentTarget && setShowProposal(false)}>
-          <div className="modal fade-in" style={{ maxWidth: 720, width: "95vw", maxHeight: "90vh", overflowY: "auto" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-              <div style={{ fontSize: 14, fontWeight: 700, color: "#C084FC", textTransform: "uppercase", letterSpacing: "0.07em" }}>📄 Proposal Preview</div>
-              <div style={{ display: "flex", gap: 8 }}>
-                <button className="btn-ghost" style={{ fontSize: 11 }} onClick={() => { setProposalText(""); generateProposal(proposalJob); }}>↺ Regenerate</button>
-                <button className="btn-primary" style={{ fontSize: 11 }} onClick={() => {
-                  const el = document.getElementById("proposal-content");
-                  if (el) { const w = window.open("","_blank"); w.document.write("<pre style='font-family:Georgia,serif;font-size:13px;line-height:1.8;padding:48px;max-width:800px;margin:auto'>" + el.innerText + "</pre>"); w.print(); }
-                }}>🖨 Print / Save PDF</button>
-                <button className="btn-ghost" onClick={() => setShowProposal(false)}>✕</button>
-              </div>
-            </div>
+      {/* ── PROPOSAL MODAL — BID QUOTE TAKE-OFF ── */}
+      {showProposal && proposalJob && (() => {
+        const job = proposalJob;
+        const co   = companies.find(c => c.id === job.companyId);
+        const site = sites.find(s => s.id === job.siteId);
+        const subtotal = proposalSubtotal(proposalSections);
+        const extrasTotal = Object.values(proposalExtras).reduce((s, v) => s + Number(v||0), 0);
+        const subTotal = subtotal + extrasTotal;
+        const nte = Number(job.contractValue || 0);
+        const ohp = Math.max(0, nte - subTotal);
+        const grandTotal = subTotal + ohp;
 
-            {/* Proposal number input at top */}
-            <div style={{ display: "flex", gap: 10, marginBottom: 16 }}>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 10, color: "#3A4560", marginBottom: 4 }}>Proposal #</div>
-                <input className="fi" placeholder="e.g. PROP-2026-001" value={proposalNum} onChange={e => { setProposalNum(e.target.value); }} />
-              </div>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 10, color: "#3A4560", marginBottom: 4 }}>Work Order #</div>
-                <input className="fi" value={proposalJob.ownersProjectNo || ""} readOnly style={{ opacity: 0.6 }} />
-              </div>
-            </div>
+        const fmtD = (v) => "$\u00A0" + Number(v||0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+        const colW = { desc: "30%", unit: "6%", qty: "6%", unitPrice: "9%", alt: "7%", labor: "8%", material: "9%", sub: "8%", misc: "7%", total: "9%" };
 
-            {/* Proposal content */}
-            <div id="proposal-content" style={{ background: "#FFFFFF", borderRadius: 8, padding: "40px 48px", color: "#1A1A2E", fontFamily: "Georgia, serif", fontSize: 13, lineHeight: 1.8, minHeight: 400, position: "relative" }}>
-              {generatingProp && (
-                <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "#FFFFFF", borderRadius: 8 }}>
-                  <div style={{ textAlign: "center", color: "#888" }}>
-                    <div style={{ fontSize: 28, marginBottom: 10 }}>✨</div>
-                    <div style={{ fontSize: 13 }}>Generating proposal…</div>
-                  </div>
-                </div>
-              )}
-              {!generatingProp && proposalText && (
-                <div>
-                  {/* Editable header */}
-                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 32, paddingBottom: 20, borderBottom: "2px solid #1A1A2E" }}>
+        const printProposal = () => {
+          const el = document.getElementById("bqto-content");
+          if (!el) return;
+          const w = window.open("", "_blank");
+          w.document.write(`<!DOCTYPE html><html><head><title>Bid Quote Take-Off</title><style>
+            * { box-sizing: border-box; margin: 0; padding: 0; }
+            body { font-family: Arial, sans-serif; font-size: 11px; color: #000; padding: 24px 32px; }
+            .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; padding-bottom: 8px; border-bottom: 2px solid #ccc; }
+            .logo-area { display: flex; align-items: center; gap: 10px; }
+            .logo-diamond { width: 48px; height: 48px; }
+            .co-info { text-align: right; }
+            .co-name { font-size: 13px; font-weight: bold; }
+            .title { text-align: center; font-size: 16px; font-weight: bold; margin: 20px 0 12px; }
+            .meta { display: flex; justify-content: space-between; margin-bottom: 16px; font-size: 11px; }
+            table { width: 100%; border-collapse: collapse; font-size: 10px; }
+            th { background: #4a4a4a; color: white; padding: 4px 6px; text-align: left; font-size: 10px; }
+            td { padding: 3px 6px; border-bottom: 1px solid #eee; }
+            .section-row td { font-weight: bold; background: #f0f0f0; }
+            .subtotal-row td { font-weight: bold; border-top: 1px solid #999; background: #f9f9f9; }
+            .summary { margin-left: auto; width: 300px; margin-top: 12px; }
+            .summary-row { display: flex; justify-content: space-between; padding: 3px 0; font-size: 11px; }
+            .summary-total { display: flex; justify-content: space-between; padding: 5px 0; font-weight: bold; font-size: 12px; border-top: 2px solid #000; }
+            .summary-subtotal { display: flex; justify-content: space-between; padding: 4px 0; font-weight: bold; border-top: 1px solid #999; }
+            @media print { body { padding: 12px 20px; } }
+          </style></head><body>${el.innerHTML}</body></html>`);
+          w.document.close();
+          setTimeout(() => { w.print(); }, 300);
+        };
+
+        const updateItem = (secId, itemId, patch) => {
+          setProposalSections(prev => prev.map(sec => sec.id !== secId ? sec : {
+            ...sec, items: sec.items.map(it => it.id !== itemId ? it : { ...it, ...patch })
+          }));
+        };
+        const addItem = (secId) => setProposalSections(prev => prev.map(sec => sec.id !== secId ? sec : { ...sec, items: [...sec.items, newItem()] }));
+        const removeItem = (secId, itemId) => setProposalSections(prev => prev.map(sec => sec.id !== secId ? sec : { ...sec, items: sec.items.filter(i => i.id !== itemId) }));
+        const addSection = () => setProposalSections(prev => [...prev, newSection("")]);
+        const removeSection = (secId) => setProposalSections(prev => prev.filter(s => s.id !== secId));
+
+        const inputSt = { border: "1px solid #ddd", borderRadius: 3, padding: "2px 4px", fontSize: 10, width: "100%", fontFamily: "Arial,sans-serif" };
+        const numSt   = { ...inputSt, textAlign: "right" };
+
+        return (
+          <div className="modal-bg" onClick={e => e.target === e.currentTarget && setShowProposal(false)}>
+            <div className="modal fade-in" style={{ maxWidth: 1100, width: "97vw", maxHeight: "94vh", overflowY: "auto", padding: 0, background: "#161B28", borderRadius: 12 }}>
+
+              {/* Dark toolbar */}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 20px", borderBottom: "1px solid #1E2640" }}>
+                <div style={{ fontSize: 14, fontWeight: 700, color: "#C084FC", letterSpacing: "0.05em" }}>📄 Bid Quote Take-Off</div>
+                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  <div style={{ display: "flex", gap: 8 }}>
                     <div>
-                      <div style={{ fontSize: 20, fontWeight: 700, color: "#1A1A2E", letterSpacing: "-0.01em" }}>FARMER DEVELOPMENT INC.</div>
-                      <div style={{ fontSize: 11, color: "#666", marginTop: 2 }}>124 N Grand Ave, Fowlerville, MI 48836</div>
-                      <div style={{ fontSize: 11, color: "#666" }}>(810) 844-1544</div>
+                      <input className="fi" style={{ width: 140 }} placeholder="Proposal #" value={proposalNum} onChange={e => setProposalNum(e.target.value)} />
+                    </div>
+                  </div>
+                  <button className="btn-primary" style={{ fontSize: 11 }} onClick={printProposal}>🖨 Print / PDF</button>
+                  <button className="btn-ghost" onClick={() => setShowProposal(false)}>✕</button>
+                </div>
+              </div>
+
+              {/* White document area */}
+              <div style={{ background: "#FFF", margin: 16, borderRadius: 8, padding: "24px 32px" }}>
+                <div id="bqto-content">
+
+                  {/* Header — matching template */}
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8, paddingBottom: 10, borderBottom: "2px solid #ccc" }}>
+                    {/* Logo left */}
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <svg width="52" height="52" viewBox="0 0 52 52">
+                        <polygon points="26,2 50,26 26,50 2,26" fill="#2B4BAA"/>
+                        <text x="26" y="23" textAnchor="middle" fill="white" fontSize="9" fontWeight="bold" fontFamily="Arial">FARMER</text>
+                        <text x="26" y="33" textAnchor="middle" fill="white" fontSize="5" fontFamily="Arial">COMPANIES</text>
+                        <text x="26" y="41" textAnchor="middle" fill="white" fontSize="4" fontFamily="Arial">BUILDING VALUE</text>
+                      </svg>
+                    </div>
+                    {/* Company info right */}
+                    <div style={{ textAlign: "right", fontFamily: "Arial, sans-serif" }}>
+                      <div style={{ fontSize: 13, fontWeight: "bold", color: "#000" }}>Farmer Development, Inc.</div>
+                      <div style={{ fontSize: 11, fontStyle: "italic", color: "#333" }}>124 N Grand Ave Fowlerville, MI 48836</div>
+                      <div style={{ marginTop: 4, fontSize: 11 }}><strong>Phone #:</strong> (810) 844-1544</div>
+                      <div style={{ fontSize: 11 }}><strong>Fax #:</strong> (517) 682-0800</div>
+                    </div>
+                  </div>
+
+                  {/* Title */}
+                  <div style={{ textAlign: "center", fontSize: 18, fontWeight: "bold", fontFamily: "Arial, sans-serif", margin: "18px 0 14px", color: "#000" }}>Bid Quote Take-Off</div>
+
+                  {/* Meta row */}
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 16, fontFamily: "Arial, sans-serif", fontSize: 11, color: "#000" }}>
+                    <div>
+                      <div>{proposalNum || job.ownersProjectNo || "—"}</div>
+                      {co && <div>{co.name}</div>}
+                      {site?.address && <div>{site.address}</div>}
+                      {!site?.address && job.storeCode && <div>Store {job.storeCode}</div>}
                     </div>
                     <div style={{ textAlign: "right" }}>
-                      <div style={{ fontSize: 13, fontWeight: 600, color: "#1A1A2E" }}>PROPOSAL</div>
-                      {proposalNum && <div style={{ fontSize: 12, color: "#444", marginTop: 2 }}># {proposalNum}</div>}
-                      <div style={{ fontSize: 11, color: "#666", marginTop: 2 }}>{new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}</div>
-                      {proposalJob.ownersProjectNo && <div style={{ fontSize: 11, color: "#666" }}>WO: {proposalJob.ownersProjectNo}</div>}
+                      <div>Printed: {new Date().toLocaleDateString("en-US", { month: "2-digit", day: "2-digit", year: "numeric" })}</div>
+                      {job.ownersProjectNo && <div>WO#: {job.ownersProjectNo}</div>}
                     </div>
                   </div>
-                  {/* AI body — editable textarea */}
-                  <textarea
-                    value={proposalText}
-                    onChange={e => setProposalText(e.target.value)}
-                    style={{ width: "100%", border: "none", outline: "none", resize: "none", fontFamily: "Georgia, serif", fontSize: 13, lineHeight: 1.8, color: "#1A1A2E", background: "transparent", minHeight: 400, boxSizing: "border-box" }}
-                  />
-                </div>
-              )}
-              {!generatingProp && !proposalText && (
-                <div style={{ textAlign: "center", padding: "60px 0", color: "#aaa" }}>
-                  <div style={{ fontSize: 24, marginBottom: 10 }}>📄</div>
-                  <div>Click Generate Proposal to create</div>
-                </div>
-              )}
-            </div>
 
-            <div style={{ marginTop: 16, display: "flex", justifyContent: "flex-end", gap: 8 }}>
-              <button className="btn-ghost" onClick={() => setShowProposal(false)}>Close</button>
-              <button className="btn-primary" onClick={() => {
-                navigator.clipboard?.writeText(proposalText);
-              }}>📋 Copy Text</button>
+                  {/* Line items table */}
+                  <table style={{ width: "100%", borderCollapse: "collapse", fontFamily: "Arial, sans-serif", fontSize: 10 }}>
+                    <thead>
+                      <tr style={{ background: "#4a4a4a", color: "#fff" }}>
+                        {[["Description","30%"],["Unit","6%"],["Qty","6%"],["Unit $","8%"],["Alt $","6%"],["Labor","7%"],["Material","9%"],["Sub","8%"],["Misc","6%"],["Total","8%"],["","4%"]].map(([h,w]) => (
+                          <th key={h} style={{ padding: "5px 6px", textAlign: h === "Total" || h === "Unit $" || h === "Alt $" || h === "Labor" || h === "Material" || h === "Sub" || h === "Misc" ? "right" : "left", width: w, fontSize: 10 }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {proposalSections.map(sec => {
+                        const secTot = sectionTotal(sec);
+                        const secLabor = sec.items.reduce((s,i) => s + Number(i.labor||0), 0);
+                        const secMat   = sec.items.reduce((s,i) => s + Number(i.material||0), 0);
+                        const secSub   = sec.items.reduce((s,i) => s + Number(i.sub||0), 0);
+                        const secMisc  = sec.items.reduce((s,i) => s + Number(i.misc||0), 0);
+                        return [
+                          // Section header row
+                          <tr key={sec.id + "-hdr"} style={{ background: "#f0f0f0" }}>
+                            <td colSpan={11} style={{ padding: "4px 6px" }}>
+                              <input value={sec.name} onChange={e => setProposalSections(prev => prev.map(s => s.id === sec.id ? { ...s, name: e.target.value } : s))}
+                                placeholder="Section name (e.g. 08 Openings)" style={{ ...inputSt, fontWeight: "bold", background: "transparent", border: "1px dashed #ccc", width: "40%" }} />
+                              <button onClick={() => removeSection(sec.id)} style={{ marginLeft: 8, fontSize: 10, color: "#999", background: "none", border: "none", cursor: "pointer" }}>✕ remove section</button>
+                            </td>
+                          </tr>,
+                          // Item rows
+                          ...sec.items.map(item => {
+                            const lineTotal = Number(item.qty||0) * Number(item.unitPrice||0);
+                            return (
+                              <tr key={item.id} style={{ borderBottom: "1px solid #eee" }}>
+                                <td style={{ padding: "2px 4px" }}><input value={item.desc} onChange={e => updateItem(sec.id, item.id, { desc: e.target.value })} placeholder="Description" style={inputSt} /></td>
+                                <td style={{ padding: "2px 4px" }}>
+                                  <select value={item.unit} onChange={e => updateItem(sec.id, item.id, { unit: e.target.value })} style={{ ...inputSt, width: 44 }}>
+                                    {["EA","LS","LF","SF","CY","HR","DAY","TON"].map(u => <option key={u}>{u}</option>)}
+                                  </select>
+                                </td>
+                                <td style={{ padding: "2px 4px" }}><input type="number" value={item.qty} onChange={e => updateItem(sec.id, item.id, { qty: e.target.value })} style={numSt} /></td>
+                                <td style={{ padding: "2px 4px" }}><input type="number" value={item.unitPrice} onChange={e => updateItem(sec.id, item.id, { unitPrice: e.target.value })} style={numSt} /></td>
+                                <td style={{ padding: "2px 4px" }}><input type="number" defaultValue="0.00" style={numSt} /></td>
+                                <td style={{ padding: "2px 4px" }}><input type="number" value={item.labor} onChange={e => updateItem(sec.id, item.id, { labor: e.target.value })} style={numSt} /></td>
+                                <td style={{ padding: "2px 4px" }}><input type="number" value={item.material} onChange={e => updateItem(sec.id, item.id, { material: e.target.value })} style={numSt} /></td>
+                                <td style={{ padding: "2px 4px" }}><input type="number" value={item.sub} onChange={e => updateItem(sec.id, item.id, { sub: e.target.value })} style={numSt} /></td>
+                                <td style={{ padding: "2px 4px" }}><input type="number" value={item.misc} onChange={e => updateItem(sec.id, item.id, { misc: e.target.value })} style={numSt} /></td>
+                                <td style={{ padding: "2px 4px", textAlign: "right", fontWeight: 600, fontSize: 10, color: "#000" }}>{lineTotal.toFixed(2)}</td>
+                                <td style={{ padding: "2px 4px", textAlign: "center" }}>
+                                  <button onClick={() => removeItem(sec.id, item.id)} style={{ fontSize: 9, color: "#ccc", background: "none", border: "none", cursor: "pointer" }}>✕</button>
+                                </td>
+                              </tr>
+                            );
+                          }),
+                          // Add item row
+                          <tr key={sec.id + "-add"}>
+                            <td colSpan={11} style={{ padding: "2px 6px" }}>
+                              <button onClick={() => addItem(sec.id)} style={{ fontSize: 10, color: "#3B6FE8", background: "none", border: "none", cursor: "pointer", padding: "2px 0" }}>+ Add line item</button>
+                            </td>
+                          </tr>,
+                          // Section subtotal
+                          <tr key={sec.id + "-sub"} style={{ background: "#f9f9f9", borderTop: "1px solid #999" }}>
+                            <td colSpan={2} style={{ padding: "4px 6px", fontWeight: "bold", fontSize: 10 }}>{sec.name ? sec.name + " - Subtotal" : "Subtotal"}</td>
+                            <td /><td /><td />
+                            <td style={{ padding: "4px 6px", textAlign: "right", fontWeight: "bold", fontSize: 10 }}>{secLabor.toFixed(2)}</td>
+                            <td style={{ padding: "4px 6px", textAlign: "right", fontWeight: "bold", fontSize: 10 }}>{secMat.toFixed(2)}</td>
+                            <td style={{ padding: "4px 6px", textAlign: "right", fontWeight: "bold", fontSize: 10 }}>{secSub.toFixed(2)}</td>
+                            <td style={{ padding: "4px 6px", textAlign: "right", fontWeight: "bold", fontSize: 10 }}>{secMisc.toFixed(2)}</td>
+                            <td style={{ padding: "4px 6px", textAlign: "right", fontWeight: "bold", fontSize: 10 }}>{secTot.toFixed(2)}</td>
+                            <td />
+                          </tr>
+                        ];
+                      })}
+                    </tbody>
+                  </table>
+
+                  {/* Add section */}
+                  <div style={{ marginTop: 8, marginBottom: 16 }}>
+                    <button onClick={addSection} style={{ fontSize: 11, color: "#3B6FE8", background: "none", border: "1px dashed #3B6FE840", borderRadius: 4, cursor: "pointer", padding: "4px 12px" }}>+ Add Section</button>
+                  </div>
+
+                  {/* Summary block — right aligned matching template */}
+                  <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                    <div style={{ width: 320, fontFamily: "Arial, sans-serif", fontSize: 11 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", padding: "4px 0", borderBottom: "1px solid #eee" }}>
+                        <strong>Total</strong><strong>{fmtD(subtotal)}</strong>
+                      </div>
+                      {[
+                        ["Labor Burden", "laborBurden"],
+                        ["Sales Tax",    "salesTax"],
+                        ["General Liability", "generalLiability"],
+                        ["Permit Cost",  "permitCost"],
+                      ].map(([label, key]) => (
+                        <div key={key} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "3px 0", borderBottom: "1px solid #f0f0f0" }}>
+                          <span style={{ color: "#444" }}>{label}</span>
+                          <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                            <span style={{ color: "#888", fontSize: 10 }}>$</span>
+                            <input type="number" value={proposalExtras[key]} onChange={e => setProposalExtras(p => ({ ...p, [key]: e.target.value }))}
+                              style={{ width: 80, textAlign: "right", border: "1px solid #ddd", borderRadius: 3, padding: "1px 4px", fontSize: 10, fontFamily: "Arial" }} />
+                          </div>
+                        </div>
+                      ))}
+                      <div style={{ display: "flex", justifyContent: "space-between", padding: "5px 0", fontWeight: "bold", borderTop: "1px solid #999", borderBottom: "1px solid #eee" }}>
+                        <strong>Sub Total</strong><strong>{fmtD(subTotal)}</strong>
+                      </div>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "4px 0", borderBottom: "1px solid #eee" }}>
+                        <span>OH &amp; P</span>
+                        <span style={{ fontWeight: 600, color: ohp > 0 ? "#1a1a1a" : "#F87171" }}>{fmtD(ohp)}</span>
+                      </div>
+                      {nte > 0 && (
+                        <div style={{ fontSize: 9, color: "#888", textAlign: "right", marginTop: 2, marginBottom: 4 }}>
+                          Auto-calculated to match NTE ({fmtD(nte)})
+                        </div>
+                      )}
+                      <div style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", fontWeight: "bold", fontSize: 13, borderTop: "2px solid #000" }}>
+                        <strong>Total</strong><strong>{fmtD(grandTotal)}</strong>
+                      </div>
+                      <div style={{ display: "flex", justifyContent: "space-between", padding: "3px 0", color: "#666", fontSize: 10 }}>
+                        <span>Cost/Sq. Ft. (0)</span><span>$\u00A00.00</span>
+                      </div>
+                    </div>
+                  </div>
+
+                </div>
+              </div>
+
+              <div style={{ padding: "12px 16px", borderTop: "1px solid #1E2640", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div style={{ fontSize: 11, color: ohp < 0 ? "#F87171" : "#4ADE80", fontWeight: 600 }}>
+                  {ohp < 0 ? "⚠ Line items exceed NTE by " + fmtD(-ohp) : "✓ OH&P: " + fmtD(ohp) + " (" + (nte > 0 ? Math.round((ohp/nte)*100) : 0) + "% margin)"}
+                </div>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button className="btn-ghost" onClick={() => setShowProposal(false)}>Close</button>
+                  <button className="btn-primary" onClick={printProposal}>🖨 Print / Save PDF</button>
+                </div>
+              </div>
+
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
     </div>
   );
