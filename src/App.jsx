@@ -257,7 +257,180 @@ const INIT_FM_JOBS = [
   { id: "fm3", name: "Plumbing Leak Repair",  companyId: "c2", siteId: "s1", contractValue: 4500,  grossProfit: 1200, stage: "estimating", startDate: "",           endDate: "",           pm: "Mike Torres", pct: 0,   bidDueDate: "2026-03-19", quoteDueDate: "", proposalDate: "", followUpDate: "", buyoutDate: "", invoiceDate: "", notes: "Awaiting scope", storeCode: "001", projectNo: "260003", ownersProjectNo: "", vendorInvoiceAmount: 0, vendorInvoiceNumber: "", subcontractorId: "", vendorNextStep: "", vendorQuotePrice: "", vendorQuoteScope: "", scopeOfWork: "S207 pipe is leaking near unit 3B", coordinator: "" },
 ];
 
+// ── SUB-FACING RESPONSE PAGE ─────────────────────────────────────────────────
+function SubPage({ token, fmJobs, setFmJobs, subcontractors, companies, sites }) {
+  const job = fmJobs.find(j => j.subToken === token);
+  const sub = subcontractors.find(s => s.id === job?.subcontractorId);
+  const co  = companies.find(c => c.id === job?.companyId);
+  const site = sites.find(s => s.id === job?.siteId);
+
+  const [view,       setView]       = useState("main"); // main | quote | declined | done
+  const [quotePrice, setQuotePrice] = useState("");
+  const [quoteScope, setQuoteScope] = useState("");
+  const [quoteNote,  setQuoteNote]  = useState("");
+
+  const vendorNTE = job ? (job.vendorNTE ? Number(job.vendorNTE) : fmVendorNTE(Number(job.contractValue||0))) : 0;
+
+  const update = (patch) => setFmJobs(prev => prev.map(j => j.id === job.id ? { ...j, ...patch } : j));
+
+  if (!job) return (
+    <div style={{ minHeight: "100vh", background: "#0F1117", display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <div style={{ textAlign: "center", color: "#3A4560" }}>
+        <div style={{ fontSize: 48, marginBottom: 16 }}>🔗</div>
+        <div style={{ fontSize: 18, color: "#E8ECF4", marginBottom: 8 }}>Link not found</div>
+        <div style={{ fontSize: 13 }}>This link may have expired or already been responded to.</div>
+      </div>
+    </div>
+  );
+
+  if (view === "done" || job.subResponse) return (
+    <div style={{ minHeight: "100vh", background: "#0F1117", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+      <div style={{ maxWidth: 480, width: "100%", textAlign: "center" }}>
+        <div style={{ fontSize: 56, marginBottom: 16 }}>
+          {job.subResponse === "accepted" ? "✅" : job.subResponse === "quoted" ? "📋" : "❌"}
+        </div>
+        <div style={{ fontSize: 22, fontWeight: 700, color: "#E8ECF4", marginBottom: 8 }}>
+          {job.subResponse === "accepted" ? "Accepted!" : job.subResponse === "quoted" ? "Quote Submitted!" : "Declined"}
+        </div>
+        <div style={{ fontSize: 14, color: "#3A4560" }}>
+          {job.subResponse === "accepted" && "We'll be in touch shortly with next steps."}
+          {job.subResponse === "quoted"   && "Your quote has been sent to the team for review."}
+          {job.subResponse === "declined" && "Thank you for letting us know. We'll find another vendor."}
+        </div>
+        <div style={{ marginTop: 32, fontSize: 12, color: "#2A3560" }}>Farmer Development Inc. · farmerdevelopment.com</div>
+      </div>
+    </div>
+  );
+
+  if (view === "declined") return (
+    <div style={{ minHeight: "100vh", background: "#0F1117", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+      <div style={{ maxWidth: 480, width: "100%", background: "#161B28", borderRadius: 16, padding: 32, border: "1px solid #1E2640" }}>
+        <div style={{ fontSize: 14, fontWeight: 700, color: "#F87171", marginBottom: 16 }}>Decline this job?</div>
+        <div style={{ fontSize: 13, color: "#6A7590", marginBottom: 24 }}>Please confirm you are unable to take <strong style={{ color: "#E8ECF4" }}>{job.name}</strong>. The team will be notified.</div>
+        <div style={{ display: "flex", gap: 10 }}>
+          <button onClick={() => setView("main")} style={{ flex: 1, padding: "12px", borderRadius: 8, border: "1px solid #2A3560", background: "transparent", color: "#6A7590", fontSize: 14, cursor: "pointer", fontFamily: "inherit" }}>Go Back</button>
+          <button onClick={() => { update({ subResponse: "declined", stage: "estimating", subSentAt: null }); setView("done"); }}
+            style={{ flex: 1, padding: "12px", borderRadius: 8, border: "none", background: "#F87171", color: "#FFF", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
+            Confirm Decline
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
+  if (view === "quote") return (
+    <div style={{ minHeight: "100vh", background: "#0F1117", padding: 24, fontFamily: "inherit" }}>
+      <div style={{ maxWidth: 520, margin: "0 auto" }}>
+        <div style={{ marginBottom: 24 }}>
+          <div style={{ fontSize: 11, color: "#3B6FE8", fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 4 }}>FARMER DEVELOPMENT INC.</div>
+          <div style={{ fontSize: 20, fontWeight: 700, color: "#E8ECF4" }}>Submit Your Quote</div>
+          <div style={{ fontSize: 13, color: "#6A7590", marginTop: 4 }}>{job.name}</div>
+        </div>
+
+        <div style={{ background: "#FCD34D10", border: "1px solid #FCD34D30", borderRadius: 10, padding: "14px 16px", marginBottom: 20, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div style={{ fontSize: 11, color: "#FCD34D", textTransform: "uppercase", letterSpacing: "0.07em" }}>Client Authorized Amount</div>
+          <div style={{ fontSize: 20, fontWeight: 700, color: "#FCD34D" }}>{fmt(vendorNTE)}</div>
+        </div>
+
+        <div style={{ background: "#161B28", borderRadius: 12, padding: 24, border: "1px solid #1E2640", display: "flex", flexDirection: "column", gap: 18 }}>
+          <div>
+            <label style={{ display: "block", fontSize: 11, color: "#6A7590", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.07em" }}>Your Price *</label>
+            <div style={{ position: "relative" }}>
+              <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "#6A7590", fontSize: 14 }}>$</span>
+              <input value={quotePrice} onChange={e => setQuotePrice(e.target.value)} type="number" placeholder="0.00"
+                style={{ width: "100%", boxSizing: "border-box", padding: "12px 12px 12px 28px", background: "#0F1117", border: "1px solid #2A3560", borderRadius: 8, color: "#E8ECF4", fontSize: 16, fontFamily: "inherit", outline: "none" }} />
+            </div>
+            {quotePrice && (
+              <div style={{ marginTop: 6, fontSize: 12, fontWeight: 600, color: Number(quotePrice) <= vendorNTE ? "#4ADE80" : "#F87171" }}>
+                {Number(quotePrice) <= vendorNTE ? "✓ Within authorized amount" : "⚠ Exceeds authorized amount by " + fmt(Number(quotePrice) - vendorNTE)}
+              </div>
+            )}
+          </div>
+          <div>
+            <label style={{ display: "block", fontSize: 11, color: "#6A7590", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.07em" }}>Scope of Work You're Quoting</label>
+            <textarea value={quoteScope} onChange={e => setQuoteScope(e.target.value)} rows={3} placeholder="Describe the work you are quoting for…"
+              style={{ width: "100%", boxSizing: "border-box", padding: "10px 12px", background: "#0F1117", border: "1px solid #2A3560", borderRadius: 8, color: "#E8ECF4", fontSize: 14, fontFamily: "inherit", outline: "none", resize: "vertical" }} />
+          </div>
+          <div>
+            <label style={{ display: "block", fontSize: 11, color: "#6A7590", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.07em" }}>Notes (optional)</label>
+            <textarea value={quoteNote} onChange={e => setQuoteNote(e.target.value)} rows={2} placeholder="Any conditions, exclusions, or comments…"
+              style={{ width: "100%", boxSizing: "border-box", padding: "10px 12px", background: "#0F1117", border: "1px solid #2A3560", borderRadius: 8, color: "#E8ECF4", fontSize: 14, fontFamily: "inherit", outline: "none", resize: "vertical" }} />
+          </div>
+          <div style={{ display: "flex", gap: 10, paddingTop: 4 }}>
+            <button onClick={() => setView("main")} style={{ flex: 0, padding: "12px 20px", borderRadius: 8, border: "1px solid #2A3560", background: "transparent", color: "#6A7590", fontSize: 14, cursor: "pointer", fontFamily: "inherit" }}>← Back</button>
+            <button disabled={!quotePrice}
+              onClick={() => { update({ vendorQuotePrice: quotePrice, vendorQuoteScope: quoteScope, vendorQuoteNotes: quoteNote, subResponse: "quoted", stage: "waiting_quote" }); setView("done"); }}
+              style={{ flex: 1, padding: "12px", borderRadius: 8, border: "none", background: !quotePrice ? "#2A3560" : "#3B6FE8", color: !quotePrice ? "#4A5270" : "#FFF", fontSize: 15, fontWeight: 700, cursor: quotePrice ? "pointer" : "not-allowed", fontFamily: "inherit" }}>
+              Submit Quote
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  // Main view
+  return (
+    <div style={{ minHeight: "100vh", background: "#0F1117", padding: 24, fontFamily: "inherit" }}>
+      <div style={{ maxWidth: 520, margin: "0 auto" }}>
+        {/* Header */}
+        <div style={{ marginBottom: 28 }}>
+          <div style={{ fontSize: 11, color: "#3B6FE8", fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 6 }}>FARMER DEVELOPMENT INC.</div>
+          <div style={{ fontSize: 22, fontWeight: 700, color: "#E8ECF4", lineHeight: 1.2 }}>Quote Request</div>
+          {sub && <div style={{ fontSize: 14, color: "#6A7590", marginTop: 4 }}>Hi {sub.name} — please review and respond below.</div>}
+        </div>
+
+        {/* Job card */}
+        <div style={{ background: "#161B28", borderRadius: 12, padding: 24, border: "1px solid #1E2640", marginBottom: 16 }}>
+          <div style={{ fontSize: 11, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 10 }}>Job Details</div>
+          <div style={{ fontSize: 18, fontWeight: 700, color: "#E8ECF4", marginBottom: 12 }}>{job.name}</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {co && <div style={{ display: "flex", gap: 10 }}><span style={{ fontSize: 12, color: "#3A4560", width: 80, flexShrink: 0 }}>Client</span><span style={{ fontSize: 12, color: "#E8ECF4" }}>{co.name}</span></div>}
+            {(site?.address || job.storeCode) && <div style={{ display: "flex", gap: 10 }}><span style={{ fontSize: 12, color: "#3A4560", width: 80, flexShrink: 0 }}>Location</span><span style={{ fontSize: 12, color: "#E8ECF4" }}>{site?.address || "Store " + job.storeCode}</span></div>}
+            {job.ownersProjectNo && <div style={{ display: "flex", gap: 10 }}><span style={{ fontSize: 12, color: "#3A4560", width: 80, flexShrink: 0 }}>WO #</span><span style={{ fontSize: 12, color: "#E8ECF4" }}>{job.ownersProjectNo}</span></div>}
+            {job.bidDueDate && <div style={{ display: "flex", gap: 10 }}><span style={{ fontSize: 12, color: "#3A4560", width: 80, flexShrink: 0 }}>Bid Due</span><span style={{ fontSize: 12, color: "#FCD34D" }}>{new Date(job.bidDueDate + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}</span></div>}
+          </div>
+          {job.scopeOfWork && (
+            <div style={{ marginTop: 14, paddingTop: 14, borderTop: "1px solid #1E2640" }}>
+              <div style={{ fontSize: 11, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 6 }}>Scope of Work</div>
+              <div style={{ fontSize: 13, color: "#BCC6D8", lineHeight: 1.6 }}>{job.scopeOfWork}</div>
+            </div>
+          )}
+        </div>
+
+        {/* Approved amount */}
+        <div style={{ background: "#FCD34D0F", border: "1px solid #FCD34D40", borderRadius: 12, padding: 20, marginBottom: 24, textAlign: "center" }}>
+          <div style={{ fontSize: 11, color: "#FCD34D", textTransform: "uppercase", letterSpacing: "0.09em", marginBottom: 6 }}>You Are Approved For</div>
+          <div style={{ fontSize: 36, fontWeight: 800, color: "#FCD34D", letterSpacing: "-0.02em" }}>{fmt(vendorNTE)}</div>
+          <div style={{ fontSize: 11, color: "#6A5020", marginTop: 4 }}>Accept this amount or submit a custom quote below</div>
+        </div>
+
+        {/* Three action buttons */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <button onClick={() => { update({ subResponse: "accepted", vendorQuotePrice: String(vendorNTE), stage: "waiting_quote" }); setView("done"); }}
+            style={{ width: "100%", padding: "16px", borderRadius: 10, border: "none", background: "#4ADE80", color: "#0A1A0A", fontSize: 16, fontWeight: 800, cursor: "pointer", fontFamily: "inherit", letterSpacing: "-0.01em" }}>
+            ✅ Accept at {fmt(vendorNTE)}
+          </button>
+          <button onClick={() => setView("quote")}
+            style={{ width: "100%", padding: "16px", borderRadius: 10, border: "2px solid #3B6FE8", background: "transparent", color: "#3B6FE8", fontSize: 16, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
+            📋 Provide a Quote
+          </button>
+          <button onClick={() => setView("declined")}
+            style={{ width: "100%", padding: "14px", borderRadius: 10, border: "1px solid #2A3560", background: "transparent", color: "#4A5270", fontSize: 14, cursor: "pointer", fontFamily: "inherit" }}>
+            ✕ Unable to Help
+          </button>
+        </div>
+
+        <div style={{ marginTop: 32, textAlign: "center", fontSize: 11, color: "#2A3560" }}>Farmer Development Inc. · (810) 844-1544 · farmerdevelopment.com</div>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
+  // URL routing — sub-facing page
+  const urlToken = useMemo(() => new URLSearchParams(window.location.search).get("subtoken"), []);
+
   const [activeBU,  setActiveBU]  = useState("all");
   const [activeNav, setActiveNav] = useState("dashboard");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -861,6 +1034,9 @@ Include: professional greeting, clear scope description, pricing, terms (net 30)
   `;
 
   const panelOpen = selectedJob || selectedOpp || selectedCompany || selectedSite || selectedCapexJob || selectedFmJob;
+
+  // Render sub-facing page if subtoken is in URL
+  if (urlToken) return <SubPage token={urlToken} fmJobs={fmJobs} setFmJobs={setFmJobs} subcontractors={subcontractors} companies={companies} sites={sites} />;
 
   return (
     <div style={{ display: "flex", minHeight: "100vh", background: "#0F1117", color: "#E8ECF4", fontFamily: "'Inter','Segoe UI',sans-serif" }}>
@@ -3078,12 +3254,30 @@ Include: professional greeting, clear scope description, pricing, terms (net 30)
                           </select>
                         </div>
                         {job.subcontractorId && (
-                          <button
-                            onClick={() => update({ subSentAt: new Date().toISOString(), stage: "waiting_quote" })}
-                            style={{ width: "100%", padding: "10px", borderRadius: 6, border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 12, fontWeight: 700,
-                              background: job.subSentAt ? "#4ADE8020" : "#818CF8", color: job.subSentAt ? "#4ADE80" : "#FFFFFF" }}>
-                            {job.subSentAt ? "✓ Sent — " + new Date(job.subSentAt).toLocaleDateString() : "📤 Send to Sub for Quote"}
-                          </button>
+                          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                            {job.subSentAt ? (
+                              <div style={{ background: "#4ADE8015", border: "1px solid #4ADE8030", borderRadius: 6, padding: "10px 12px" }}>
+                                <div style={{ fontSize: 11, color: "#4ADE80", fontWeight: 600 }}>✓ Sent — {new Date(job.subSentAt).toLocaleDateString()}</div>
+                                {job.subToken && (
+                                  <button onClick={() => navigator.clipboard?.writeText(window.location.origin + "/?subtoken=" + job.subToken)}
+                                    style={{ marginTop: 6, fontSize: 10, background: "transparent", border: "1px solid #4ADE8030", borderRadius: 4, color: "#4ADE80", padding: "4px 8px", cursor: "pointer", fontFamily: "inherit" }}>
+                                    📋 Copy Link Again
+                                  </button>
+                                )}
+                              </div>
+                            ) : (
+                              <button
+                                onClick={() => {
+                                  const token = "sub" + Math.random().toString(36).slice(2, 10);
+                                  update({ subSentAt: new Date().toISOString(), stage: "waiting_quote", subToken: token });
+                                  navigator.clipboard?.writeText(window.location.origin + "/?subtoken=" + token);
+                                  alert("✅ Link copied to clipboard!\n\nSend this to " + (subcontractors.find(s => s.id === job.subcontractorId)?.name || "the sub") + ":\n\n" + window.location.origin + "/?subtoken=" + token);
+                                }}
+                                style={{ width: "100%", padding: "10px", borderRadius: 6, border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 12, fontWeight: 700, background: "#818CF8", color: "#FFFFFF" }}>
+                                📤 Send to Sub for Quote
+                              </button>
+                            )}
+                          </div>
                         )}
                         {!job.subcontractorId && <div style={{ fontSize: 10, color: "#2A3560", fontStyle: "italic" }}>Assign a sub above to send for quote</div>}
                       </div>
