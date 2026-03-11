@@ -758,6 +758,13 @@ export default function App() {
   const [mapLoaded,        setMapLoaded]        = useState(false);
 
   // Lawn Bids
+  const LAWN_BID_STATUSES = [
+    { id: "bidding",          label: "Bidding",           color: "#FCD34D" },
+    { id: "proposed",         label: "Proposed to Owner", color: "#60A5FA" },
+    { id: "owner_approved",   label: "Owner Approved",    color: "#4ADE80" },
+    { id: "contracted",       label: "Contracted",        color: "#A78BFA" },
+  ];
+
   const LAWN_SERVICES = [
     { id: "spring_cleanup",    label: "Spring Clean-up",     freq: "1x/year",   unit: "flat" },
     { id: "spring_mulch",      label: "Mulch (2\")",          freq: "1x/year",   unit: "flat" },
@@ -782,7 +789,7 @@ export default function App() {
   const initLawnBid = (siteId) => {
     const services = {};
     LAWN_SERVICES.forEach(s => { services[s.id] = { subPrice: 0, ourPrice: 0, included: false }; });
-    return { id: "lb_" + siteId + "_" + Date.now(), siteId, season: lawnBidSeason, services, locked: false, lockedDate: null, subName: "", notes: "" };
+    return { id: "lb_" + siteId + "_" + Date.now(), siteId, season: lawnBidSeason, services, locked: false, lockedDate: null, subcontractorId: "", notes: "", status: "bidding", subToken: null, subSentAt: null, ownerApprovedDate: null };
   };
 
   const getLawnBid = (siteId) => lawnBids.find(b => b.siteId === siteId && b.season === lawnBidSeason) || null;
@@ -2145,11 +2152,12 @@ Return ONLY valid JSON, no markdown, no extra text:
                 </div>
 
                 {/* Stats */}
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 12 }}>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 12 }}>
                   {[
-                    { label: "Total Sites",      value: currentSites.length,       color: buColor.accent },
-                    { label: "Companies",         value: uniqueCompanyIds.length,   color: "#A78BFA" },
-                    { label: "Mapped",            value: sitesWithCoords.length,    color: "#4ADE80" },
+                    { label: "Total Sites",        value: currentSites.length,       color: buColor.accent },
+                    { label: "Companies",           value: uniqueCompanyIds.length,   color: "#A78BFA" },
+                    { label: "Contracts Signed",    value: activeBU === "lawn" ? currentSites.filter(s => { const b = getLawnBid(s.id); return b && b.status === "owner_approved" || (b && b.locked); }).length : sitesWithCoords.length, color: "#4ADE80" },
+                    { label: "Mapped",              value: sitesWithCoords.length,    color: "#60A5FA" },
                   ].map(s => (
                     <div key={s.label} className="stat-card" style={{ position: "relative", overflow: "hidden", padding: "14px 18px" }}>
                       <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: s.color }} />
@@ -2217,23 +2225,32 @@ Return ONLY valid JSON, no markdown, no extra text:
                   {filteredSites.map(site => {
                     const co = companies.find(c => c.id === site.companyId);
                     const pinColor = companyColorMap[site.companyId] || "#3A4560";
+                    const bid = activeBU === "lawn" ? getLawnBid(site.id) : null;
+                    const bidStatus = bid ? LAWN_BID_STATUSES.find(s => s.id === bid.status) : null;
+                    const sub = bid?.subcontractorId ? subcontractors.find(s => s.id === bid.subcontractorId) : null;
+                    const annualVal = bid ? lawnBidAnnualOur(bid) : 0;
                     return (
                       <div key={site.id} className="opp-row" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }} onClick={() => setSelectedLsSite(site)}>
                         <div style={{ display: "flex", alignItems: "center", gap: 12, flex: 1, minWidth: 0 }}>
                           <div style={{ width: 10, height: 10, borderRadius: "50%", background: pinColor, flexShrink: 0 }} />
                           <div>
                             <div style={{ fontSize: 13, color: "#E8ECF4", fontWeight: 600 }}>{site.storeNumber ? "Store #" + site.storeNumber : site.address}</div>
-                            <div style={{ display: "flex", gap: 12, marginTop: 2 }}>
+                            <div style={{ display: "flex", gap: 10, marginTop: 2, alignItems: "center", flexWrap: "wrap" }}>
                               {co      && <span style={{ fontSize: 11, color: "#3B6FE8" }}>{co.name}</span>}
                               {site.address && site.storeNumber && <span style={{ fontSize: 11, color: "#3A4560" }}>📍 {site.address}</span>}
                               {site.phone   && <span style={{ fontSize: 11, color: "#3A4560" }}>📞 {site.phone}</span>}
+                              {sub && <span style={{ fontSize: 10, color: "#A78BFA", background: "#A78BFA15", border: "1px solid #A78BFA30", borderRadius: 4, padding: "1px 6px" }}>🔧 {sub.name}</span>}
                               {!site.lat    && <span style={{ fontSize: 10, color: "#F87171" }}>⚠ No coordinates</span>}
                             </div>
                           </div>
                         </div>
-                        <div style={{ display: "flex", gap: 5 }} onClick={e => e.stopPropagation()}>
-                          <button className="btn-ghost" style={{ fontSize: 11 }} onClick={() => openEditLsSite(site)}>✎</button>
-                          <button className="btn-ghost" style={{ fontSize: 11, color: "#F87171", borderColor: "#F8717120" }} onClick={() => deleteLsSite(site.id)}>✕</button>
+                        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                          {bidStatus && <span style={{ fontSize: 10, fontWeight: 600, color: bidStatus.color, background: bidStatus.color + "15", border: "1px solid " + bidStatus.color + "30", borderRadius: 5, padding: "3px 8px", whiteSpace: "nowrap" }}>{bidStatus.label}</span>}
+                          {annualVal > 0 && <span style={{ fontSize: 12, fontWeight: 700, color: "#4ADE80", whiteSpace: "nowrap" }}>${Math.round(annualVal).toLocaleString()}/yr</span>}
+                          <div style={{ display: "flex", gap: 5 }} onClick={e => e.stopPropagation()}>
+                            <button className="btn-ghost" style={{ fontSize: 11 }} onClick={() => openEditLsSite(site)}>✎</button>
+                            <button className="btn-ghost" style={{ fontSize: 11, color: "#F87171", borderColor: "#F8717120" }} onClick={() => deleteLsSite(site.id)}>✕</button>
+                          </div>
                         </div>
                       </div>
                     );
@@ -2952,10 +2969,14 @@ Return ONLY valid JSON, no markdown, no extra text:
                               <div style={{ width: 36, height: 36, borderRadius: 8, background: isLocked ? "#4ADE8015" : "#3B6FE815", border: "1px solid " + (isLocked ? "#4ADE8030" : "#3B6FE830"), display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}>{isLocked ? "📋" : "🌿"}</div>
                               <div>
                                 <div style={{ fontSize: 14, fontWeight: 600, color: "#E8ECF4" }}>{co ? co.name : "Unknown"} — #{site.storeNumber || site.id}</div>
-                                <div style={{ fontSize: 11, color: "#3A4560", marginTop: 2 }}>{site.address}</div>
+                                <div style={{ display: "flex", gap: 8, marginTop: 2, alignItems: "center" }}>
+                                  <span style={{ fontSize: 11, color: "#3A4560" }}>{site.address}</span>
+                                  {bid?.subcontractorId && (() => { const sub = subcontractors.find(s => s.id === bid.subcontractorId); return sub ? <span style={{ fontSize: 10, color: "#A78BFA", background: "#A78BFA15", border: "1px solid #A78BFA30", borderRadius: 4, padding: "1px 6px" }}>🔧 {sub.name}</span> : null; })()}
+                                </div>
                               </div>
                             </div>
-                            <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                              {bid?.status && (() => { const st = LAWN_BID_STATUSES.find(s => s.id === bid.status); return st ? <span style={{ fontSize: 10, fontWeight: 600, color: st.color, background: st.color + "15", border: "1px solid " + st.color + "30", borderRadius: 5, padding: "3px 8px" }}>{st.label}</span> : null; })()}
                               {isLocked && bid.lockedDate && <div style={{ fontSize: 11, color: "#4ADE80" }}>✓ Signed {bid.lockedDate}</div>}
                               {annualOur > 0 && <div style={{ fontSize: 15, fontWeight: 700, color: "#4ADE80" }}>${Math.round(annualOur).toLocaleString()}<span style={{ fontSize: 10, color: "#3A4560", fontWeight: 400 }}>/yr</span></div>}
                               {!bid && <div style={{ fontSize: 11, color: "#3A4560" }}>No bid yet</div>}
@@ -2966,17 +2987,80 @@ Return ONLY valid JSON, no markdown, no extra text:
                           {/* Expanded detail */}
                           {isEditing && (
                             <div style={{ borderTop: "1px solid #1E2640", padding: "18px 18px 20px" }}>
-                              {/* Sub name + notes */}
-                              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 18 }}>
+                              {/* Status + Sub + notes */}
+                              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 18 }}>
                                 <div>
-                                  <div style={{ fontSize: 10, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5 }}>Sub / Service Provider</div>
-                                  <input disabled={!canEdit} value={bid?.subName || ""} onChange={e => upsertLawnBid(site.id, b => ({ ...b, subName: e.target.value }))} placeholder="e.g. Arabellas Landscaping LLC" style={{ width: "100%", background: canEdit ? "#141824" : "#0A0D16", border: "1px solid #1E2640", borderRadius: 6, padding: "7px 10px", fontSize: 12, color: "#E8ECF4", opacity: canEdit ? 1 : 0.6, boxSizing: "border-box" }} />
+                                  <div style={{ fontSize: 10, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5 }}>Status</div>
+                                  <select disabled={isLocked} value={bid?.status || "bidding"} onChange={e => {
+                                    const newStatus = e.target.value;
+                                    upsertLawnBid(site.id, b => {
+                                      const updates = { ...b, status: newStatus };
+                                      if (newStatus === "owner_approved" && !b.ownerApprovedDate) {
+                                        updates.ownerApprovedDate = new Date().toISOString().split("T")[0];
+                                        // Auto-generate sub contract token
+                                        if (!b.subToken && b.subcontractorId) {
+                                          const tok = "lnsub" + Math.random().toString(36).slice(2,10);
+                                          updates.subToken = tok;
+                                          updates.subSentAt = new Date().toISOString();
+                                          const link = window.location.origin + "/?lnsubtoken=" + tok;
+                                          navigator.clipboard?.writeText(link);
+                                          setTimeout(() => alert("✅ Owner Approved!\n\nSub contract link copied to clipboard:\n" + link), 100);
+                                        } else if (newStatus === "owner_approved" && !b.subcontractorId) {
+                                          setTimeout(() => alert("⚠️ Owner Approved — but no subcontractor assigned yet.\nAssign a sub to generate the contract link."), 100);
+                                        }
+                                      }
+                                      return updates;
+                                    });
+                                  }} style={{ width: "100%", background: isLocked ? "#0A0D16" : "#141824", border: "1px solid #1E2640", borderRadius: 6, padding: "7px 10px", fontSize: 12, color: (() => { const st = LAWN_BID_STATUSES.find(s => s.id === (bid?.status || "bidding")); return st ? st.color : "#E8ECF4"; })(), opacity: isLocked ? 0.6 : 1, boxSizing: "border-box" }}>
+                                    {LAWN_BID_STATUSES.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
+                                  </select>
+                                </div>
+                                <div>
+                                  <div style={{ fontSize: 10, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5 }}>Service Provider (Sub)</div>
+                                  <select disabled={!canEdit} value={bid?.subcontractorId || ""} onChange={e => upsertLawnBid(site.id, b => ({ ...b, subcontractorId: e.target.value }))} style={{ width: "100%", background: canEdit ? "#141824" : "#0A0D16", border: "1px solid #1E2640", borderRadius: 6, padding: "7px 10px", fontSize: 12, color: "#E8ECF4", opacity: canEdit ? 1 : 0.6, boxSizing: "border-box" }}>
+                                    <option value="">Select sub…</option>
+                                    {subcontractors.map(s => <option key={s.id} value={s.id}>{s.name}{s.trade ? " — " + s.trade : ""}</option>)}
+                                  </select>
                                 </div>
                                 <div>
                                   <div style={{ fontSize: 10, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5 }}>Notes</div>
                                   <input disabled={!canEdit} value={bid?.notes || ""} onChange={e => upsertLawnBid(site.id, b => ({ ...b, notes: e.target.value }))} placeholder="Any site-specific notes…" style={{ width: "100%", background: canEdit ? "#141824" : "#0A0D16", border: "1px solid #1E2640", borderRadius: 6, padding: "7px 10px", fontSize: 12, color: "#E8ECF4", opacity: canEdit ? 1 : 0.6, boxSizing: "border-box" }} />
                                 </div>
                               </div>
+
+                              {/* Sub contract link (owner_approved) */}
+                              {bid?.status === "owner_approved" && (
+                                <div style={{ background: "#4ADE8010", border: "1px solid #4ADE8030", borderRadius: 8, padding: "12px 14px", marginBottom: 16, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                  <div>
+                                    <div style={{ fontSize: 11, color: "#4ADE80", fontWeight: 600 }}>✅ Owner Approved {bid.ownerApprovedDate ? "— " + bid.ownerApprovedDate : ""}</div>
+                                    {bid.subToken ? (
+                                      <div style={{ fontSize: 11, color: "#3A4560", marginTop: 3 }}>Sub contract link generated · {bid.subSentAt ? new Date(bid.subSentAt).toLocaleDateString() : ""}</div>
+                                    ) : (
+                                      <div style={{ fontSize: 11, color: "#FCD34D", marginTop: 3 }}>⚠ Assign a subcontractor to generate contract link</div>
+                                    )}
+                                  </div>
+                                  {bid.subToken && (
+                                    <div style={{ display: "flex", gap: 8 }}>
+                                      <button onClick={() => navigator.clipboard?.writeText(window.location.origin + "/?lnsubtoken=" + bid.subToken)} style={{ fontSize: 11, background: "#4ADE8015", border: "1px solid #4ADE8030", borderRadius: 5, color: "#4ADE80", padding: "5px 10px", cursor: "pointer", fontFamily: "inherit" }}>📋 Copy Contract Link</button>
+                                      {!bid.subcontractorId && bid.status === "owner_approved" && (
+                                        <button onClick={() => {
+                                          const tok = "lnsub" + Math.random().toString(36).slice(2,10);
+                                          upsertLawnBid(site.id, b => ({ ...b, subToken: tok, subSentAt: new Date().toISOString() }));
+                                          navigator.clipboard?.writeText(window.location.origin + "/?lnsubtoken=" + tok);
+                                        }} style={{ fontSize: 11, background: "#3B6FE815", border: "1px solid #3B6FE830", borderRadius: 5, color: "#3B6FE8", padding: "5px 10px", cursor: "pointer", fontFamily: "inherit" }}>🔄 Regen Link</button>
+                                      )}
+                                    </div>
+                                  )}
+                                  {!bid.subToken && bid.subcontractorId && (
+                                    <button onClick={() => {
+                                      const tok = "lnsub" + Math.random().toString(36).slice(2,10);
+                                      upsertLawnBid(site.id, b => ({ ...b, subToken: tok, subSentAt: new Date().toISOString() }));
+                                      const link = window.location.origin + "/?lnsubtoken=" + tok;
+                                      navigator.clipboard?.writeText(link);
+                                    }} style={{ fontSize: 11, background: "#4ADE8015", border: "1px solid #4ADE8030", borderRadius: 5, color: "#4ADE80", padding: "5px 10px", cursor: "pointer", fontFamily: "inherit" }}>📤 Generate & Copy Link</button>
+                                  )}
+                                </div>
+                              )}
 
                               {/* Services table */}
                               <div style={{ overflowX: "auto" }}>
