@@ -306,7 +306,7 @@ export default function App() {
   const [fmJobs,        setFmJobs]        = useState(INIT_FM_JOBS);
   const [showFmForm,    setShowFmForm]    = useState(false);
   const [editFmId,      setEditFmId]      = useState(null);
-  const [fmForm,        setFmForm]        = useState({ name: "", companyId: "", siteId: "", contractValue: "", grossProfit: "", stage: "estimating", startDate: "", endDate: "", pm: "", pct: 0, bidDueDate: "", quoteDueDate: "", proposalDate: "", followUpDate: "", buyoutDate: "", invoiceDate: "", notes: "", storeCode: "", projectNo: "", ownersProjectNo: "", vendorInvoiceAmount: "", vendorInvoiceNumber: "", subcontractorId: "", vendorNextStep: "", vendorQuotePrice: "", vendorQuoteScope: "", scopeOfWork: "", coordinator: "" });
+  const [fmForm,        setFmForm]        = useState({ name: "", companyId: "", siteId: "", contractValue: "", grossProfit: "", nte: "", stage: "estimating", startDate: "", endDate: "", pm: "", pct: 0, bidDueDate: "", quoteDueDate: "", proposalDate: "", followUpDate: "", buyoutDate: "", invoiceDate: "", notes: "", storeCode: "", projectNo: "", ownersProjectNo: "", vendorInvoiceAmount: "", vendorInvoiceNumber: "", subcontractorId: "", vendorNextStep: "", vendorQuotePrice: "", vendorQuoteScope: "", scopeOfWork: "", coordinator: "" });
   const [selectedFmJob, setSelectedFmJob] = useState(null);
   const [fmSearch,      setFmSearch]      = useState("");
   const [fmCoordFilter, setFmCoordFilter] = useState("all");
@@ -315,7 +315,12 @@ export default function App() {
   const [showInboxForm, setShowInboxForm] = useState(false);
   const [inboxParseText,setInboxParseText]= useState("");
   const [inboxParsing,  setInboxParsing]  = useState(false);
-  const [inboxForm,     setInboxForm]     = useState({ name: "", companyName: "", storeCode: "", address: "", scopeOfWork: "", ownersProjectNo: "", bidDueDate: "", authorizedAmount: "", contactName: "", contactPhone: "", notes: "", source: "manual" });
+  const [inboxForm,     setInboxForm]     = useState({ name: "", companyId: "", storeId: "", address: "", scopeOfWork: "", ownersProjectNo: "", bidDueDate: "", authorizedAmount: "", contactName: "", contactPhone: "", notes: "", source: "manual" });
+  const [showProposal,  setShowProposal]  = useState(false);
+  const [proposalJob,   setProposalJob]   = useState(null);
+  const [proposalText,  setProposalText]  = useState("");
+  const [proposalNum,   setProposalNum]   = useState("");
+  const [generatingProp,setGeneratingProp]= useState(false);
 
   // Sites
   const [sites,        setSites]        = useState(INIT_SITES);
@@ -494,33 +499,71 @@ Return ONLY valid JSON, no markdown, no extra text:
 
   const saveInboxLead = () => {
     if (!inboxForm.name.trim()) return;
-    setFmInbox(prev => [...prev, { ...inboxForm, id: "inbox" + Date.now(), createdAt: new Date().toISOString() }]);
-    setInboxForm({ name: "", companyName: "", storeCode: "", address: "", scopeOfWork: "", ownersProjectNo: "", bidDueDate: "", authorizedAmount: "", contactName: "", contactPhone: "", notes: "", source: "manual" });
+    const co   = companies.find(c => c.id === inboxForm.companyId);
+    const site = sites.find(s => s.id === inboxForm.storeId);
+    setFmInbox(prev => [...prev, {
+      ...inboxForm,
+      companyName: co?.name || "",
+      storeCode:   site?.storeNumber || "",
+      address:     inboxForm.address || site?.address || "",
+      id: "inbox" + Date.now(), createdAt: new Date().toISOString()
+    }]);
+    setInboxForm({ name: "", companyId: "", storeId: "", address: "", scopeOfWork: "", ownersProjectNo: "", bidDueDate: "", authorizedAmount: "", contactName: "", contactPhone: "", notes: "", source: "manual" });
     setShowInboxForm(false);
   };
 
   const assignInboxLead = (lead, coordinator) => {
-    // Move from inbox to fmJobs as an Estimating job
-    const co = companies.find(c => c.name.toLowerCase() === lead.companyName.toLowerCase());
-    let companyId = co?.id || "";
-    const newCompanies = [];
-    if (!companyId && lead.companyName) {
-      companyId = "c" + Date.now();
-      newCompanies.push({ id: companyId, name: lead.companyName, website: "", address: "", logo: "", notes: "" });
-    }
-    if (newCompanies.length) setCompanies(prev => [...prev, ...newCompanies]);
+    const co = companies.find(c => c.id === lead.companyId) || companies.find(c => c.name.toLowerCase() === (lead.companyName||"").toLowerCase());
+    const companyId = co?.id || "";
     setFmJobs(prev => [...prev, {
-      id: "fm" + Date.now(), name: lead.name, companyId, siteId: "", contractValue: 0, grossProfit: 0,
-      stage: "estimating", startDate: "", endDate: "", pm: "", pct: 0,
-      bidDueDate: lead.bidDueDate || "", quoteDueDate: "", followUpDate: "", buyoutDate: "", invoiceDate: "",
+      id: "fm" + Date.now(), name: lead.name, companyId, siteId: lead.storeId || "", contractValue: 0, grossProfit: 0,
+      stage: "estimating", startDate: "", endDate: "", pm: "", pct: 0, nte: lead.authorizedAmount || "",
+      bidDueDate: lead.bidDueDate || "", quoteDueDate: "", proposalDate: "", followUpDate: "", buyoutDate: "", invoiceDate: "",
       notes: lead.notes || "", storeCode: lead.storeCode || "", projectNo: "", ownersProjectNo: lead.ownersProjectNo || "",
       vendorInvoiceAmount: 0, vendorInvoiceNumber: "", subcontractorId: "", vendorNextStep: "",
-      scopeOfWork: lead.scopeOfWork || lead.name, coordinator
+      vendorQuotePrice: "", vendorQuoteScope: "", scopeOfWork: lead.scopeOfWork || lead.name,
+      coordinator, subSentAt: null, pmPingedAt: null
     }]);
     setFmInbox(prev => prev.filter(l => l.id !== lead.id));
   };
 
   const deleteInboxLead = (id) => setFmInbox(prev => prev.filter(l => l.id !== id));
+
+  const generateProposal = async (job) => {
+    const co   = companies.find(c => c.id === job.companyId);
+    const site = sites.find(s => s.id === job.siteId);
+    setGeneratingProp(true);
+    setProposalText("");
+    try {
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-20250514",
+          max_tokens: 1500,
+          system: `You write professional facility maintenance proposals for Farmer Development Inc. Write in a clean, professional tone. Return only the proposal text — no JSON, no markdown headers, just the formatted proposal body ready to present to a client. Use line breaks naturally.`,
+          messages: [{ role: "user", content: `Write a facility maintenance proposal with these details:
+
+FROM: Farmer Development Inc., 124 N Grand Ave, Fowlerville, MI 48836 | (810) 844-1544
+TO: ${co?.name || "Client"}, ${site?.address || job.storeCode || "Site Address"}
+DATE: ${new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
+PROPOSAL #: ${proposalNum || "[PROPOSAL NUMBER]"}
+WORK ORDER #: ${job.ownersProjectNo || "[WO NUMBER]"}
+SCOPE OF WORK: ${job.scopeOfWork || job.name}
+GROSS VALUE: ${job.contractValue ? "$" + Number(job.contractValue).toLocaleString() : "[TO BE DETERMINED]"}
+NOT TO EXCEED: ${job.nte ? "$" + Number(job.nte).toLocaleString() : "N/A"}
+
+Include: professional greeting, clear scope description, pricing, terms (net 30), and a signature block for both parties.` }]
+        })
+      });
+      const data = await res.json();
+      const text = data.content?.find(b => b.type === "text")?.text || "";
+      setProposalText(text);
+    } catch(e) {
+      setProposalText("Error generating proposal — please try again.");
+    }
+    setGeneratingProp(false);
+  };
 
   const saveCompany = () => {
     if (!companyForm.name.trim()) return;
@@ -1209,10 +1252,25 @@ Return ONLY valid JSON, no markdown, no extra text:
                         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                           <div><label className="lbl">Job Title / Name *</label><input className="fi" value={inboxForm.name} onChange={e => setInboxForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Roof Leak Repair" /></div>
                           <div className="g2">
-                            <div><label className="lbl">Client / Company</label><input className="fi" value={inboxForm.companyName} onChange={e => setInboxForm(f => ({ ...f, companyName: e.target.value }))} /></div>
-                            <div><label className="lbl">Store Code</label><input className="fi" value={inboxForm.storeCode} onChange={e => setInboxForm(f => ({ ...f, storeCode: e.target.value }))} placeholder="e.g. CS 4308" /></div>
+                            <div><label className="lbl">Client / Company</label>
+                              <select className="fi" value={inboxForm.companyId} onChange={e => setInboxForm(f => ({ ...f, companyId: e.target.value, storeId: "", address: "" }))}>
+                                <option value="">Select company…</option>
+                                {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                              </select>
+                            </div>
+                            <div><label className="lbl">Store / Site</label>
+                              <select className="fi" value={inboxForm.storeId} onChange={e => {
+                                const s = sites.find(x => x.id === e.target.value);
+                                setInboxForm(f => ({ ...f, storeId: e.target.value, address: s?.address || f.address }));
+                              }}>
+                                <option value="">Select store…</option>
+                                {sites.filter(s => !inboxForm.companyId || s.companyId === inboxForm.companyId).map(s => <option key={s.id} value={s.id}>#{s.storeNumber} — {s.address}</option>)}
+                              </select>
+                            </div>
                           </div>
-                          <div><label className="lbl">Site Address</label><input className="fi" value={inboxForm.address} onChange={e => setInboxForm(f => ({ ...f, address: e.target.value }))} /></div>
+                          <div><label className="lbl">Site Address {inboxForm.storeId && <span style={{ color: "#4ADE80", fontSize: 9 }}>● AUTO-FILLED</span>}</label>
+                            <input className="fi" value={inboxForm.address} onChange={e => setInboxForm(f => ({ ...f, address: e.target.value }))} placeholder="Auto-fills from store selection" />
+                          </div>
                           <div><label className="lbl">Scope of Work</label><textarea className="fi" rows={3} value={inboxForm.scopeOfWork} onChange={e => setInboxForm(f => ({ ...f, scopeOfWork: e.target.value }))} style={{ resize: "vertical" }} /></div>
                           <div className="g2">
                             <div><label className="lbl">Owner's Project / WO #</label><input className="fi" value={inboxForm.ownersProjectNo} onChange={e => setInboxForm(f => ({ ...f, ownersProjectNo: e.target.value }))} /></div>
@@ -2937,7 +2995,109 @@ Return ONLY valid JSON, no markdown, no extra text:
                   </select>
                 </div>
 
-                {/* Subcontractor */}
+                {/* ── ESTIMATING stage panel ── */}
+                {job.stage === "estimating" && (
+                  <div style={{ background: "#0A0D16", border: "1px solid #818CF840", borderRadius: 8, padding: "14px" }}>
+                    <div style={{ fontSize: 10, color: "#818CF8", textTransform: "uppercase", letterSpacing: "0.07em", fontWeight: 700, marginBottom: 12 }}>📋 Estimating</div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                      <div>
+                        <div style={{ fontSize: 10, color: "#3A4560", marginBottom: 4 }}>Not to Exceed (NTE)</div>
+                        <input className="fi" type="number" placeholder="e.g. 500"
+                          value={job.nte || ""}
+                          onChange={e => update({ nte: e.target.value })} />
+                        {job.nte && <div style={{ fontSize: 10, color: "#818CF8", marginTop: 3 }}>NTE: {fmt(Number(job.nte))}</div>}
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 10, color: "#3A4560", marginBottom: 4 }}>Assign Subcontractor to Quote</div>
+                        <select className="fi" value={job.subcontractorId || ""} onChange={e => update({ subcontractorId: e.target.value })}>
+                          <option value="">Select sub…</option>
+                          {subcontractors.map(s => <option key={s.id} value={s.id}>{s.name}{s.trade ? " — " + s.trade : ""}</option>)}
+                        </select>
+                      </div>
+                      {job.subcontractorId && (
+                        <button
+                          onClick={() => update({ subSentAt: new Date().toISOString(), stage: "waiting_quote" })}
+                          style={{ width: "100%", padding: "10px", borderRadius: 6, border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 12, fontWeight: 700,
+                            background: job.subSentAt ? "#4ADE8020" : "#818CF8", color: job.subSentAt ? "#4ADE80" : "#FFFFFF", transition: "all 0.2s" }}>
+                          {job.subSentAt ? "✓ Sent to Sub — " + new Date(job.subSentAt).toLocaleDateString() : "📤 Send to Sub for Quote"}
+                        </button>
+                      )}
+                      {!job.subcontractorId && <div style={{ fontSize: 10, color: "#2A3560", fontStyle: "italic" }}>Assign a sub above to send for quote</div>}
+                    </div>
+                  </div>
+                )}
+
+                {/* ── WAITING FOR QUOTE panel ── */}
+                {job.stage === "waiting_quote" && (
+                  <div style={{ background: "#0A0D16", border: "1px solid #A78BFA40", borderRadius: 8, padding: "14px" }}>
+                    <div style={{ fontSize: 10, color: "#A78BFA", textTransform: "uppercase", letterSpacing: "0.07em", fontWeight: 700, marginBottom: 12 }}>⏳ Waiting for Quote</div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                      {job.subSentAt && <div style={{ fontSize: 11, color: "#4A5270" }}>Sent to sub: {new Date(job.subSentAt).toLocaleDateString()}</div>}
+                      <div>
+                        <div style={{ fontSize: 10, color: "#3A4560", marginBottom: 4 }}>NTE: {job.nte ? fmt(Number(job.nte)) : "Not set"}</div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 10, color: "#3A4560", marginBottom: 4 }}>Quote Received — Price</div>
+                        <input className="fi" type="number" placeholder="Sub's quoted price"
+                          value={job.vendorQuotePrice || ""}
+                          onChange={e => update({ vendorQuotePrice: e.target.value })} />
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 10, color: "#3A4560", marginBottom: 4 }}>Quote Scope</div>
+                        <textarea className="fi" rows={2} placeholder="What the sub quoted…"
+                          value={job.vendorQuoteScope || ""}
+                          onChange={e => update({ vendorQuoteScope: e.target.value })}
+                          style={{ resize: "vertical" }} />
+                      </div>
+                      {job.vendorQuotePrice && (
+                        <div style={{ background: Number(job.vendorQuotePrice) <= Number(job.nte||99999999) ? "#4ADE8015" : "#F8717115", border: "1px solid " + (Number(job.vendorQuotePrice) <= Number(job.nte||99999999) ? "#4ADE8030" : "#F8717130"), borderRadius: 6, padding: "8px 12px", display: "flex", justifyContent: "space-between" }}>
+                          <span style={{ fontSize: 11, fontWeight: 600, color: "#E8ECF4" }}>Quote: {fmt(Number(job.vendorQuotePrice))}</span>
+                          <span style={{ fontSize: 10, color: Number(job.vendorQuotePrice) <= Number(job.nte||99999999) ? "#4ADE80" : "#F87171" }}>
+                            {Number(job.vendorQuotePrice) <= Number(job.nte||99999999) ? "✓ Within NTE" : "⚠ Exceeds NTE"}
+                          </span>
+                        </div>
+                      )}
+                      {job.vendorQuotePrice && (
+                        <button onClick={() => update({ stage: "generate_proposal", pmPingedAt: new Date().toISOString() })}
+                          style={{ width: "100%", padding: "10px", borderRadius: 6, border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 12, fontWeight: 700, background: "#C084FC", color: "#FFFFFF" }}>
+                          ✓ Quote Received → Generate Proposal
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* ── GENERATE PROPOSAL panel ── */}
+                {job.stage === "generate_proposal" && (
+                  <div style={{ background: "#0A0D16", border: "1px solid #C084FC40", borderRadius: 8, padding: "14px" }}>
+                    <div style={{ fontSize: 10, color: "#C084FC", textTransform: "uppercase", letterSpacing: "0.07em", fontWeight: 700, marginBottom: 12 }}>📄 Generate Proposal</div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                      <div className="g2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                        <div>
+                          <div style={{ fontSize: 10, color: "#3A4560", marginBottom: 4 }}>Work Order #</div>
+                          <input className="fi" placeholder="WO-260311-00207"
+                            value={job.ownersProjectNo || ""}
+                            onChange={e => update({ ownersProjectNo: e.target.value })} />
+                        </div>
+                        <div>
+                          <div style={{ fontSize: 10, color: "#3A4560", marginBottom: 4 }}>Proposal #</div>
+                          <input className="fi" placeholder="e.g. PROP-2026-001"
+                            value={proposalNum}
+                            onChange={e => setProposalNum(e.target.value)} />
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => { setProposalJob(job); setShowProposal(true); if (!proposalText) generateProposal(job); }}
+                        style={{ width: "100%", padding: "10px", borderRadius: 6, border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 12, fontWeight: 700, background: "#C084FC", color: "#FFFFFF" }}>
+                        ✨ Generate Proposal
+                      </button>
+                      <button onClick={() => update({ stage: "owner_approval", pmPingedAt: new Date().toISOString() })}
+                        style={{ width: "100%", padding: "9px", borderRadius: 6, border: "1px solid #60A5FA40", cursor: "pointer", fontFamily: "inherit", fontSize: 11, background: "transparent", color: "#60A5FA" }}>
+                        → Send to Owner Approval
+                      </button>
+                    </div>
+                  </div>
+                )}
                 <div>
                   <div style={{ fontSize: 10, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5 }}>Subcontractor / Vendor</div>
                   <select className="fi" value={job.subcontractorId || ""} onChange={e => update({ subcontractorId: e.target.value })}>
@@ -3259,6 +3419,86 @@ Return ONLY valid JSON, no markdown, no extra text:
                 <button className="btn-ghost" style={{ padding: "8px 16px" }} onClick={() => setShowLsSiteForm(false)}>Cancel</button>
                 <button className="btn-primary" onClick={saveLsSite}>{editLsSiteId ? "Save Changes" : "Add Site"}</button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── PROPOSAL MODAL ── */}
+      {showProposal && proposalJob && (
+        <div className="modal-bg" onClick={e => e.target === e.currentTarget && setShowProposal(false)}>
+          <div className="modal fade-in" style={{ maxWidth: 720, width: "95vw", maxHeight: "90vh", overflowY: "auto" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+              <div style={{ fontSize: 14, fontWeight: 700, color: "#C084FC", textTransform: "uppercase", letterSpacing: "0.07em" }}>📄 Proposal Preview</div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button className="btn-ghost" style={{ fontSize: 11 }} onClick={() => { setProposalText(""); generateProposal(proposalJob); }}>↺ Regenerate</button>
+                <button className="btn-primary" style={{ fontSize: 11 }} onClick={() => {
+                  const el = document.getElementById("proposal-content");
+                  if (el) { const w = window.open("","_blank"); w.document.write("<pre style='font-family:Georgia,serif;font-size:13px;line-height:1.8;padding:48px;max-width:800px;margin:auto'>" + el.innerText + "</pre>"); w.print(); }
+                }}>🖨 Print / Save PDF</button>
+                <button className="btn-ghost" onClick={() => setShowProposal(false)}>✕</button>
+              </div>
+            </div>
+
+            {/* Proposal number input at top */}
+            <div style={{ display: "flex", gap: 10, marginBottom: 16 }}>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 10, color: "#3A4560", marginBottom: 4 }}>Proposal #</div>
+                <input className="fi" placeholder="e.g. PROP-2026-001" value={proposalNum} onChange={e => { setProposalNum(e.target.value); }} />
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 10, color: "#3A4560", marginBottom: 4 }}>Work Order #</div>
+                <input className="fi" value={proposalJob.ownersProjectNo || ""} readOnly style={{ opacity: 0.6 }} />
+              </div>
+            </div>
+
+            {/* Proposal content */}
+            <div id="proposal-content" style={{ background: "#FFFFFF", borderRadius: 8, padding: "40px 48px", color: "#1A1A2E", fontFamily: "Georgia, serif", fontSize: 13, lineHeight: 1.8, minHeight: 400, position: "relative" }}>
+              {generatingProp && (
+                <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "#FFFFFF", borderRadius: 8 }}>
+                  <div style={{ textAlign: "center", color: "#888" }}>
+                    <div style={{ fontSize: 28, marginBottom: 10 }}>✨</div>
+                    <div style={{ fontSize: 13 }}>Generating proposal…</div>
+                  </div>
+                </div>
+              )}
+              {!generatingProp && proposalText && (
+                <div>
+                  {/* Editable header */}
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 32, paddingBottom: 20, borderBottom: "2px solid #1A1A2E" }}>
+                    <div>
+                      <div style={{ fontSize: 20, fontWeight: 700, color: "#1A1A2E", letterSpacing: "-0.01em" }}>FARMER DEVELOPMENT INC.</div>
+                      <div style={{ fontSize: 11, color: "#666", marginTop: 2 }}>124 N Grand Ave, Fowlerville, MI 48836</div>
+                      <div style={{ fontSize: 11, color: "#666" }}>(810) 844-1544</div>
+                    </div>
+                    <div style={{ textAlign: "right" }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: "#1A1A2E" }}>PROPOSAL</div>
+                      {proposalNum && <div style={{ fontSize: 12, color: "#444", marginTop: 2 }}># {proposalNum}</div>}
+                      <div style={{ fontSize: 11, color: "#666", marginTop: 2 }}>{new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}</div>
+                      {proposalJob.ownersProjectNo && <div style={{ fontSize: 11, color: "#666" }}>WO: {proposalJob.ownersProjectNo}</div>}
+                    </div>
+                  </div>
+                  {/* AI body — editable textarea */}
+                  <textarea
+                    value={proposalText}
+                    onChange={e => setProposalText(e.target.value)}
+                    style={{ width: "100%", border: "none", outline: "none", resize: "none", fontFamily: "Georgia, serif", fontSize: 13, lineHeight: 1.8, color: "#1A1A2E", background: "transparent", minHeight: 400, boxSizing: "border-box" }}
+                  />
+                </div>
+              )}
+              {!generatingProp && !proposalText && (
+                <div style={{ textAlign: "center", padding: "60px 0", color: "#aaa" }}>
+                  <div style={{ fontSize: 24, marginBottom: 10 }}>📄</div>
+                  <div>Click Generate Proposal to create</div>
+                </div>
+              )}
+            </div>
+
+            <div style={{ marginTop: 16, display: "flex", justifyContent: "flex-end", gap: 8 }}>
+              <button className="btn-ghost" onClick={() => setShowProposal(false)}>Close</button>
+              <button className="btn-primary" onClick={() => {
+                navigator.clipboard?.writeText(proposalText);
+              }}>📋 Copy Text</button>
             </div>
           </div>
         </div>
