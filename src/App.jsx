@@ -43,6 +43,7 @@ const NAV_ITEMS = {
     { id: "pipeline", label: "Pipeline", icon: "◈" },
     { id: "budgeting", label: "Budgeting", icon: "💲" },
     { id: "team", label: "Team", icon: "👥" },
+    { id: "subcontractors", label: "Subcontractors", icon: "🔧" },
     { id: "customers", label: "Customers", icon: "🤝" },
   ],
   lawn: [
@@ -306,7 +307,6 @@ export default function App() {
   const [showSubForm,       setShowSubForm]       = useState(false);
   const [editSubId,         setEditSubId]         = useState(null);
   const [subForm,           setSubForm]           = useState({ name: "", trade: "", phone: "", email: "", msaStatus: "missing", coiExpiry: "", w9: false, notes: "" });
-  const [teamTab,           setTeamTab]           = useState("team"); // "team" | "subs"
 
   const navItems = NAV_ITEMS[activeBU] || NAV_ITEMS.all;
   const buColor  = BU_COLORS[activeBU];
@@ -1556,128 +1556,53 @@ export default function App() {
             </div>
           )}
 
-          {/* ── TEAM (FM only) ── */}
-          {activeNav === "team" && activeBU === "facility" && (
+          {/* ── TEAM ── */}
+          {activeNav === "team" && (
             <div className="fade-in" style={{ display: "flex", flexDirection: "column", gap: 22 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div>
                   <div style={{ fontSize: 22, fontWeight: 700, color: "#FFFFFF", letterSpacing: "-0.01em", textTransform: "uppercase" }}>Team</div>
-                  <div style={{ fontSize: 11, color: "#3A4560", marginTop: 3, letterSpacing: "0.06em" }}>FACILITY MAINTENANCE</div>
+                  <div style={{ fontSize: 11, color: "#3A4560", marginTop: 3, letterSpacing: "0.06em" }}>{BUSINESS_UNITS.find(b => b.id === activeBU)?.label.toUpperCase()} · {fmTeam.length} MEMBERS</div>
                 </div>
-                <button className="btn-primary" onClick={() => {
-                  if (teamTab === "team") { setEditTeamId(null); setTeamForm({ name: "", phone: "", email: "" }); setShowTeamForm(true); }
-                  else { setEditSubId(null); setSubForm({ name: "", trade: "", phone: "", email: "", msaStatus: "missing", coiExpiry: "", w9: false, notes: "" }); setShowSubForm(true); }
-                }}>+ {teamTab === "team" ? "Add Member" : "Add Subcontractor"}</button>
+                <button className="btn-primary" onClick={() => { setEditTeamId(null); setTeamForm({ name: "", phone: "", email: "" }); setShowTeamForm(true); }}>+ Add Member</button>
               </div>
 
-              {/* Tab toggle */}
-              <div style={{ display: "flex", gap: 0, background: "#161B28", borderRadius: 8, padding: 4, width: "fit-content", border: "1px solid #1E2640" }}>
-                {[{ id: "team", label: "👥 Team Members" }, { id: "subs", label: "🔧 Subcontractors" }].map(t => (
-                  <button key={t.id} onClick={() => setTeamTab(t.id)}
-                    style={{ padding: "7px 18px", borderRadius: 6, border: "none", cursor: "pointer", fontSize: 12, fontFamily: "inherit", fontWeight: 500, transition: "all 0.15s",
-                      background: teamTab === t.id ? buColor.accent : "transparent",
-                      color: teamTab === t.id ? "#FFFFFF" : "#3A4560" }}>
-                    {t.label}
-                  </button>
-                ))}
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 12 }}>
+                <div className="stat-card" style={{ position: "relative", overflow: "hidden", padding: "14px 18px" }}>
+                  <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: buColor.accent }} />
+                  <div style={{ fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "#3A4560", marginBottom: 6 }}>Total Members</div>
+                  <div style={{ fontSize: 22, fontWeight: 700, color: buColor.accent }}>{fmTeam.length}</div>
+                </div>
               </div>
 
-              {/* Stats row */}
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 12 }}>
-                {teamTab === "team" ? [
-                  { label: "Team Members", value: fmTeam.length, color: buColor.accent },
-                ] : [
-                  { label: "Subcontractors",  value: subcontractors.length,                                                    color: buColor.accent },
-                  { label: "MSA Signed",       value: subcontractors.filter(s => s.msaStatus === "signed").length,              color: "#4ADE80" },
-                  { label: "COI Expiring Soon",value: subcontractors.filter(s => { if (!s.coiExpiry) return false; const d = new Date(s.coiExpiry); return d > new Date() && d <= new Date(Date.now() + 30*86400000); }).length, color: "#FCD34D" },
-                  { label: "Missing Docs",     value: subcontractors.filter(s => s.msaStatus !== "signed" || !s.w9 || !s.coiExpiry).length, color: "#F87171" },
-                ].map(s => (
-                  <div key={s.label} className="stat-card" style={{ position: "relative", overflow: "hidden", padding: "14px 18px" }}>
-                    <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: s.color }} />
-                    <div style={{ fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "#3A4560", marginBottom: 6 }}>{s.label}</div>
-                    <div style={{ fontSize: 22, fontWeight: 700, color: s.color }}>{s.value}</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {fmTeam.length === 0 && (
+                  <div style={{ textAlign: "center", padding: "48px", color: "#2A3560", fontSize: 12, background: "#161B28", borderRadius: 10, border: "1px solid #1E2640" }}>No team members yet — add your first one</div>
+                )}
+                {fmTeam.map(m => (
+                  <div key={m.id} className="opp-row">
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                        <div style={{ width: 40, height: 40, borderRadius: "50%", background: buColor.light, border: "1px solid " + buColor.accent + "40", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 700, color: buColor.accent, flexShrink: 0 }}>
+                          {m.name.charAt(0).toUpperCase()}
+                        </div>
+                        <div>
+                          <div style={{ fontSize: 14, color: "#E8ECF4", fontWeight: 600 }}>{m.name}</div>
+                          <div style={{ display: "flex", gap: 16, marginTop: 3 }}>
+                            {m.phone && <span style={{ fontSize: 11, color: "#3A4560" }}>📞 {m.phone}</span>}
+                            {m.email && <span style={{ fontSize: 11, color: "#3A4560" }}>✉ {m.email}</span>}
+                          </div>
+                        </div>
+                      </div>
+                      <div style={{ display: "flex", gap: 5 }}>
+                        <button className="btn-ghost" style={{ fontSize: 11 }} onClick={() => { setEditTeamId(m.id); setTeamForm({ name: m.name, phone: m.phone, email: m.email }); setShowTeamForm(true); }}>✎</button>
+                        <button className="btn-ghost" style={{ fontSize: 11, color: "#F87171", borderColor: "#F8717120" }} onClick={() => setFmTeam(fmTeam.filter(x => x.id !== m.id))}>✕</button>
+                      </div>
+                    </div>
                   </div>
                 ))}
               </div>
 
-              {/* Team Members list */}
-              {teamTab === "team" && (
-                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  {fmTeam.length === 0 && (
-                    <div style={{ textAlign: "center", padding: "48px", color: "#2A3560", fontSize: 12, background: "#161B28", borderRadius: 10, border: "1px solid #1E2640" }}>No team members yet — add your first one</div>
-                  )}
-                  {fmTeam.map(m => (
-                    <div key={m.id} className="opp-row">
-                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                          <div style={{ width: 38, height: 38, borderRadius: "50%", background: buColor.light, border: "1px solid " + buColor.accent + "40", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 700, color: buColor.accent, flexShrink: 0 }}>
-                            {m.name.charAt(0).toUpperCase()}
-                          </div>
-                          <div>
-                            <div style={{ fontSize: 14, color: "#E8ECF4", fontWeight: 600 }}>{m.name}</div>
-                            <div style={{ display: "flex", gap: 14, marginTop: 3 }}>
-                              {m.phone && <span style={{ fontSize: 11, color: "#3A4560" }}>📞 {m.phone}</span>}
-                              {m.email && <span style={{ fontSize: 11, color: "#3A4560" }}>✉ {m.email}</span>}
-                            </div>
-                          </div>
-                        </div>
-                        <div style={{ display: "flex", gap: 5 }}>
-                          <button className="btn-ghost" style={{ fontSize: 11 }} onClick={() => { setEditTeamId(m.id); setTeamForm({ name: m.name, phone: m.phone, email: m.email }); setShowTeamForm(true); }}>✎</button>
-                          <button className="btn-ghost" style={{ fontSize: 11, color: "#F87171", borderColor: "#F8717120" }} onClick={() => setFmTeam(fmTeam.filter(x => x.id !== m.id))}>✕</button>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* Subcontractors list */}
-              {teamTab === "subs" && (
-                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  {subcontractors.length === 0 && (
-                    <div style={{ textAlign: "center", padding: "48px", color: "#2A3560", fontSize: 12, background: "#161B28", borderRadius: 10, border: "1px solid #1E2640" }}>No subcontractors yet — add your first one</div>
-                  )}
-                  {subcontractors.map(s => {
-                    const msaColor  = s.msaStatus === "signed" ? "#4ADE80" : s.msaStatus === "expired" ? "#F87171" : "#FCD34D";
-                    const msaLabel  = s.msaStatus === "signed" ? "MSA ✓" : s.msaStatus === "expired" ? "MSA Expired" : "MSA Missing";
-                    const coiDate   = s.coiExpiry ? new Date(s.coiExpiry) : null;
-                    const coiExpired = coiDate && coiDate < new Date();
-                    const coiSoon   = coiDate && !coiExpired && coiDate <= new Date(Date.now() + 30*86400000);
-                    const coiColor  = !coiDate ? "#F87171" : coiExpired ? "#F87171" : coiSoon ? "#FCD34D" : "#4ADE80";
-                    const coiLabel  = !coiDate ? "COI Missing" : coiExpired ? "COI Expired" : coiSoon ? "COI Expiring " + s.coiExpiry : "COI ✓ " + s.coiExpiry;
-                    const w9Color   = s.w9 ? "#4ADE80" : "#F87171";
-                    return (
-                      <div key={s.id} className="opp-row">
-                        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
-                              <div style={{ fontSize: 14, color: "#E8ECF4", fontWeight: 600 }}>{s.name}</div>
-                              {s.trade && <span style={{ fontSize: 10, color: buColor.accent, background: buColor.light, padding: "2px 8px", borderRadius: 10, textTransform: "uppercase", letterSpacing: "0.06em" }}>{s.trade}</span>}
-                            </div>
-                            <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginBottom: 10 }}>
-                              {s.phone && <span style={{ fontSize: 11, color: "#3A4560" }}>📞 {s.phone}</span>}
-                              {s.email && <span style={{ fontSize: 11, color: "#3A4560" }}>✉ {s.email}</span>}
-                            </div>
-                            {/* Compliance badges */}
-                            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                              <span style={{ fontSize: 10, fontWeight: 600, color: msaColor, background: msaColor + "15", border: "1px solid " + msaColor + "30", padding: "3px 10px", borderRadius: 10 }}>{msaLabel}</span>
-                              <span style={{ fontSize: 10, fontWeight: 600, color: coiColor, background: coiColor + "15", border: "1px solid " + coiColor + "30", padding: "3px 10px", borderRadius: 10 }}>{coiLabel}</span>
-                              <span style={{ fontSize: 10, fontWeight: 600, color: w9Color, background: w9Color + "15", border: "1px solid " + w9Color + "30", padding: "3px 10px", borderRadius: 10 }}>{s.w9 ? "W9 ✓" : "W9 Missing"}</span>
-                            </div>
-                            {s.notes && <div style={{ fontSize: 11, color: "#3A4560", marginTop: 8, fontStyle: "italic" }}>{s.notes}</div>}
-                          </div>
-                          <div style={{ display: "flex", gap: 5, flexShrink: 0 }}>
-                            <button className="btn-ghost" style={{ fontSize: 11 }} onClick={() => { setEditSubId(s.id); setSubForm({ name: s.name, trade: s.trade, phone: s.phone, email: s.email, msaStatus: s.msaStatus, coiExpiry: s.coiExpiry, w9: s.w9, notes: s.notes }); setShowSubForm(true); }}>✎</button>
-                            <button className="btn-ghost" style={{ fontSize: 11, color: "#F87171", borderColor: "#F8717120" }} onClick={() => setSubcontractors(subcontractors.filter(x => x.id !== s.id))}>✕</button>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-
-              {/* Team member form modal */}
               {showTeamForm && (
                 <div style={{ position: "fixed", inset: 0, background: "#00000080", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center" }}>
                   <div style={{ background: "#161B28", border: "1px solid #1E2640", borderRadius: 12, padding: 28, width: 400 }}>
@@ -1702,8 +1627,79 @@ export default function App() {
                   </div>
                 </div>
               )}
+            </div>
+          )}
 
-              {/* Subcontractor form modal */}
+          {/* ── SUBCONTRACTORS (FM only) ── */}
+          {activeNav === "subcontractors" && activeBU === "facility" && (
+            <div className="fade-in" style={{ display: "flex", flexDirection: "column", gap: 22 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div>
+                  <div style={{ fontSize: 22, fontWeight: 700, color: "#FFFFFF", letterSpacing: "-0.01em", textTransform: "uppercase" }}>Subcontractors</div>
+                  <div style={{ fontSize: 11, color: "#3A4560", marginTop: 3, letterSpacing: "0.06em" }}>FACILITY MAINTENANCE · {subcontractors.length} SUBS</div>
+                </div>
+                <button className="btn-primary" onClick={() => { setEditSubId(null); setSubForm({ name: "", trade: "", phone: "", email: "", msaStatus: "missing", coiExpiry: "", w9: false, notes: "" }); setShowSubForm(true); }}>+ Add Subcontractor</button>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 12 }}>
+                {[
+                  { label: "Total Subs",    value: subcontractors.length,                                                                                                                    color: buColor.accent },
+                  { label: "MSA Signed",    value: subcontractors.filter(s => s.msaStatus === "signed").length,                                                                              color: "#4ADE80" },
+                  { label: "COI Expiring",  value: subcontractors.filter(s => { if (!s.coiExpiry) return false; const d = new Date(s.coiExpiry); return d > new Date() && d <= new Date(Date.now() + 30*86400000); }).length, color: "#FCD34D" },
+                  { label: "Missing Docs",  value: subcontractors.filter(s => s.msaStatus !== "signed" || !s.w9 || !s.coiExpiry).length,                                                    color: "#F87171" },
+                ].map(s => (
+                  <div key={s.label} className="stat-card" style={{ position: "relative", overflow: "hidden", padding: "14px 18px" }}>
+                    <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: s.color }} />
+                    <div style={{ fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "#3A4560", marginBottom: 6 }}>{s.label}</div>
+                    <div style={{ fontSize: 22, fontWeight: 700, color: s.color }}>{s.value}</div>
+                  </div>
+                ))}
+              </div>
+
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {subcontractors.length === 0 && (
+                  <div style={{ textAlign: "center", padding: "48px", color: "#2A3560", fontSize: 12, background: "#161B28", borderRadius: 10, border: "1px solid #1E2640" }}>No subcontractors yet — add your first one</div>
+                )}
+                {subcontractors.map(s => {
+                  const msaColor   = s.msaStatus === "signed" ? "#4ADE80" : s.msaStatus === "expired" ? "#F87171" : "#FCD34D";
+                  const msaLabel   = s.msaStatus === "signed" ? "MSA ✓" : s.msaStatus === "expired" ? "MSA Expired" : "MSA Missing";
+                  const coiDate    = s.coiExpiry ? new Date(s.coiExpiry) : null;
+                  const coiExpired = coiDate && coiDate < new Date();
+                  const coiSoon    = coiDate && !coiExpired && coiDate <= new Date(Date.now() + 30*86400000);
+                  const coiColor   = !coiDate ? "#F87171" : coiExpired ? "#F87171" : coiSoon ? "#FCD34D" : "#4ADE80";
+                  const coiLabel   = !coiDate ? "COI Missing" : coiExpired ? "COI Expired" : coiSoon ? "COI Expiring " + s.coiExpiry : "COI ✓ " + s.coiExpiry;
+                  const w9Color    = s.w9 ? "#4ADE80" : "#F87171";
+                  const assignedJobs = fmJobs.filter(j => j.subcontractorId === s.id);
+                  return (
+                    <div key={s.id} className="opp-row">
+                      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+                            <div style={{ fontSize: 14, color: "#E8ECF4", fontWeight: 600 }}>{s.name}</div>
+                            {s.trade && <span style={{ fontSize: 10, color: buColor.accent, background: buColor.light, padding: "2px 8px", borderRadius: 10, textTransform: "uppercase", letterSpacing: "0.06em" }}>{s.trade}</span>}
+                          </div>
+                          <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginBottom: 10 }}>
+                            {s.phone && <span style={{ fontSize: 11, color: "#3A4560" }}>📞 {s.phone}</span>}
+                            {s.email && <span style={{ fontSize: 11, color: "#3A4560" }}>✉ {s.email}</span>}
+                            {assignedJobs.length > 0 && <span style={{ fontSize: 11, color: buColor.accent }}>🔨 {assignedJobs.length} active job{assignedJobs.length !== 1 ? "s" : ""}</span>}
+                          </div>
+                          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                            <span style={{ fontSize: 10, fontWeight: 600, color: msaColor, background: msaColor + "15", border: "1px solid " + msaColor + "30", padding: "3px 10px", borderRadius: 10 }}>{msaLabel}</span>
+                            <span style={{ fontSize: 10, fontWeight: 600, color: coiColor, background: coiColor + "15", border: "1px solid " + coiColor + "30", padding: "3px 10px", borderRadius: 10 }}>{coiLabel}</span>
+                            <span style={{ fontSize: 10, fontWeight: 600, color: w9Color, background: w9Color + "15", border: "1px solid " + w9Color + "30", padding: "3px 10px", borderRadius: 10 }}>{s.w9 ? "W9 ✓" : "W9 Missing"}</span>
+                          </div>
+                          {s.notes && <div style={{ fontSize: 11, color: "#3A4560", marginTop: 8, fontStyle: "italic" }}>{s.notes}</div>}
+                        </div>
+                        <div style={{ display: "flex", gap: 5, flexShrink: 0 }}>
+                          <button className="btn-ghost" style={{ fontSize: 11 }} onClick={() => { setEditSubId(s.id); setSubForm({ name: s.name, trade: s.trade, phone: s.phone, email: s.email, msaStatus: s.msaStatus, coiExpiry: s.coiExpiry, w9: s.w9, notes: s.notes }); setShowSubForm(true); }}>✎</button>
+                          <button className="btn-ghost" style={{ fontSize: 11, color: "#F87171", borderColor: "#F8717120" }} onClick={() => setSubcontractors(subcontractors.filter(x => x.id !== s.id))}>✕</button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
               {showSubForm && (
                 <div style={{ position: "fixed", inset: 0, background: "#00000080", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center" }}>
                   <div style={{ background: "#161B28", border: "1px solid #1E2640", borderRadius: 12, padding: 28, width: 460, maxHeight: "90vh", overflowY: "auto" }}>
@@ -1752,7 +1748,7 @@ export default function App() {
           )}
 
           {/* ── COMING SOON (other nav items) ── */}
-          {(!["dashboard", "customers", "jobs", "pipeline", "budgeting", "finance", "sites", "projects", "team"].includes(activeNav) || (activeNav === "team" && activeBU !== "facility")) && (
+          {!["dashboard", "customers", "jobs", "pipeline", "budgeting", "finance", "sites", "projects", "team", "subcontractors"].includes(activeNav) && (
             <div className="fade-in">
               <div style={{ marginBottom: 28 }}>
                 <div style={{ fontSize: 22, fontWeight: 700, color: "#FFFFFF", textTransform: "uppercase" }}>{navItems.find(n => n.id === activeNav)?.label}</div>
