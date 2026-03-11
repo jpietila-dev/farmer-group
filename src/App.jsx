@@ -1254,7 +1254,78 @@ Return ONLY valid JSON, no markdown, no extra text:
                 ))}
               </div>
 
-              {pipelineView === "kanban" && (
+              {/* ── FM PIPELINE: show fmJobs in pipeline stages ── */}
+              {activeBU === "facility" && (() => {
+                const q = search.toLowerCase();
+                const fmPipelineJobs = fmJobs.filter(j =>
+                  FM_PIPELINE_STAGES.some(s => s.id === j.stage) &&
+                  (j.name.toLowerCase().includes(q) || (j.storeCode||"").toLowerCase().includes(q))
+                );
+                const totalFmPipeline = fmPipelineJobs.reduce((s,j) => s + (j.contractValue||0), 0);
+                return (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                    <div style={{ fontSize: 11, color: "#3A4560", letterSpacing: "0.07em", textTransform: "uppercase", borderBottom: "1px solid #1E2640", paddingBottom: 10 }}>
+                      {fmPipelineJobs.length} jobs in pipeline · {fmt(totalFmPipeline)} total value
+                    </div>
+                    <div style={{ display: "flex", gap: 10, overflowX: "auto", paddingBottom: 8 }}>
+                      {FM_PIPELINE_STAGES.map(st => {
+                        const stageJobs = fmPipelineJobs.filter(j => j.stage === st.id);
+                        return (
+                          <div key={st.id} style={{ minWidth: 220, flex: "0 0 220px" }}>
+                            <div style={{ background: st.color + "15", border: "1px solid " + st.color + "30", borderRadius: 7, padding: "8px 12px", marginBottom: 10 }}>
+                              <div style={{ fontSize: 10, letterSpacing: "0.07em", textTransform: "uppercase", color: st.color, fontWeight: 600, marginBottom: 2 }}>{st.label}</div>
+                              <div style={{ display: "flex", justifyContent: "space-between" }}>
+                                <span style={{ fontSize: 10, color: "#3A4560" }}>{stageJobs.length} job{stageJobs.length !== 1 ? "s" : ""}</span>
+                                <span style={{ fontSize: 11, color: st.color, fontWeight: 600 }}>{fmt(stageJobs.reduce((s,j) => s+(j.contractValue||0),0))}</span>
+                              </div>
+                            </div>
+                            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                              {stageJobs.map(job => {
+                                const co  = companies.find(c => c.id === job.companyId);
+                                const sub = subcontractors.find(s => s.id === job.subcontractorId);
+                                const actionDate = job[st.actionKey];
+                                const overdue = actionDate && new Date(actionDate) < new Date();
+                                const soon    = actionDate && new Date(actionDate) <= new Date(Date.now() + 3*86400000);
+                                return (
+                                  <div key={job.id} style={{ background: "#161B28", border: "1px solid " + st.color + "25", borderRadius: 8, padding: 12, cursor: "pointer" }} onClick={() => setSelectedFmJob(job)}>
+                                    <div style={{ fontSize: 12, color: "#E8ECF4", fontWeight: 500, lineHeight: 1.35, marginBottom: 4 }}>{job.name}</div>
+                                    {co && <div style={{ fontSize: 10, color: "#3B6FE8", marginBottom: 3 }}>🏢 {co.name}</div>}
+                                    {job.storeCode && <div style={{ fontSize: 10, color: "#3A4560", marginBottom: 3 }}>#{job.storeCode}</div>}
+                                    {job.coordinator && <div style={{ fontSize: 10, color: "#4A5270", marginBottom: 3 }}>👤 {job.coordinator}</div>}
+                                    {sub && <div style={{ fontSize: 10, color: "#4A5270", marginBottom: 3 }}>🔧 {sub.name}</div>}
+                                    {actionDate && <div style={{ fontSize: 10, color: overdue ? "#F87171" : soon ? "#FCD34D" : "#3A4560", marginBottom: 6 }}>📅 {st.actionLabel}: {actionDate}{overdue ? " ⚠" : ""}</div>}
+                                    {job.contractValue > 0 && <div style={{ fontSize: 14, fontWeight: 700, color: st.color, marginBottom: 8 }}>{fmt(job.contractValue)}</div>}
+                                    <div style={{ display: "flex", gap: 5 }} onClick={e => e.stopPropagation()}>
+                                      {FM_PIPELINE_STAGES.map((s, i) => {
+                                        const curIdx = FM_PIPELINE_STAGES.findIndex(x => x.id === job.stage);
+                                        if (i === curIdx - 1) return <button key="prev" className="btn-ghost" style={{ flex: 1, fontSize: 11 }} onClick={() => setFmJobs(fmJobs.map(j => j.id === job.id ? { ...j, stage: s.id } : j))}>←</button>;
+                                        if (i === curIdx + 1) return <button key="next" className="btn-ghost" style={{ flex: 1, fontSize: 11 }} onClick={() => setFmJobs(fmJobs.map(j => j.id === job.id ? { ...j, stage: s.id } : j))}>→</button>;
+                                        return null;
+                                      })}
+                                      {/* Promote to Active */}
+                                      {job.stage === "owner_approval" && (
+                                        <button className="btn-ghost" style={{ fontSize: 10, color: "#4ADE80", borderColor: "#4ADE8040", whiteSpace: "nowrap" }}
+                                          onClick={() => setFmJobs(fmJobs.map(j => j.id === job.id ? { ...j, stage: "buyout" } : j))}>
+                                          → Active ✓
+                                        </button>
+                                      )}
+                                      <button className="btn-ghost" style={{ fontSize: 11 }} onClick={() => openEditFm(job)}>✎</button>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                              {stageJobs.length === 0 && <div style={{ border: "1px dashed " + st.color + "20", borderRadius: 8, padding: "20px 8px", textAlign: "center", fontSize: 10, color: "#1E2840" }}>EMPTY</div>}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* ── NON-FM PIPELINE (kanban + list) ── */}
+              {activeBU !== "facility" && pipelineView === "kanban" && (
                 <div style={{ display: "flex", gap: 10, overflowX: "auto", paddingBottom: 8 }}>
                   {stages.map(stage => {
                     const sc        = STAGE_COLORS[stage] || { color: "#60A5FA", bg: "#60A5FA15" };
@@ -1293,7 +1364,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                 </div>
               )}
 
-              {pipelineView === "list" && (
+              {activeBU !== "facility" && pipelineView === "list" && (
                 <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                   <div style={{ display: "grid", gridTemplateColumns: "2fr 1.5fr 1fr 1fr 1fr auto", gap: 12, padding: "6px 16px", fontSize: 10, letterSpacing: "0.08em", textTransform: "uppercase", color: "#2A3560" }}>
                     <span>Opportunity</span><span>Company</span><span>Stage</span><span style={{ textAlign: "right" }}>Value</span><span>Close</span><span />
@@ -1967,7 +2038,10 @@ Return ONLY valid JSON, no markdown, no extra text:
               const sub     = subcontractors.find(s => s.id === job.subcontractorId);
               const actionDate = st ? job[st.actionKey] : null;
               return (
-                <div style={{ background: "#0D1020", border: "1px solid #1E2640", borderRadius: 8, padding: "14px 16px", display: "flex", flexDirection: "column", gap: 8 }}>
+                <div style={{ background: "#0D1020", border: "1px solid #1E2640", borderRadius: 8, padding: "14px 16px", display: "flex", flexDirection: "column", gap: 8, cursor: "pointer", transition: "border-color 0.15s" }}
+                  onClick={() => setSelectedFmJob(job)}
+                  onMouseEnter={e => e.currentTarget.style.borderColor = buColor.accent + "60"}
+                  onMouseLeave={e => e.currentTarget.style.borderColor = "#1E2640"}>
                   <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10 }}>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 4 }}>
@@ -2770,45 +2844,141 @@ Return ONLY valid JSON, no markdown, no extra text:
 
       {/* ── FM JOB SIDE PANEL ── */}
       {selectedFmJob && (
-        <div className="side-panel slide-in">
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-            <div style={{ fontSize: 13, fontWeight: 600, color: "#FFFFFF", textTransform: "uppercase", letterSpacing: "0.06em" }}>Facility Maintenance</div>
-            <button className="btn-ghost" onClick={() => setSelectedFmJob(null)}>✕</button>
-          </div>
+        <div className="side-panel slide-in" style={{ overflowY: "auto" }}>
           {(() => {
-            const st   = CAPEX_FM_STAGES.find(s => s.id === selectedFmJob.stage) || CAPEX_FM_STAGES[0];
-            const co   = companies.find(c => c.id === selectedFmJob.companyId);
-            const site = sites.find(s => s.id === selectedFmJob.siteId);
-            const actionDate = selectedFmJob[st.actionKey];
+            const job  = selectedFmJob;
+            const st   = FM_STAGES.find(s => s.id === job.stage) || FM_STAGES[0];
+            const co   = companies.find(c => c.id === job.companyId);
+            const site = sites.find(s => s.id === job.siteId);
+            const sub  = subcontractors.find(s => s.id === job.subcontractorId);
+            const actionDate = job[st.actionKey];
             const overdue = actionDate && new Date(actionDate) < new Date();
+            const curStageIdx = FM_STAGES.findIndex(s => s.id === job.stage);
+            const update = (fields) => {
+              const updated = { ...job, ...fields };
+              setFmJobs(fmJobs.map(j => j.id === job.id ? updated : j));
+              setSelectedFmJob(updated);
+            };
             return (
               <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                {/* Header */}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 11, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 4 }}>FM Job</div>
+                    <div style={{ fontSize: 15, color: "#E8ECF4", fontWeight: 700, lineHeight: 1.3 }}>{job.name}</div>
+                    {job.storeCode && <div style={{ fontSize: 11, color: "#3A4560", marginTop: 2 }}>#{job.storeCode} {job.projectNo ? "· " + job.projectNo : ""}</div>}
+                  </div>
+                  <button className="btn-ghost" onClick={() => setSelectedFmJob(null)} style={{ flexShrink: 0 }}>✕</button>
+                </div>
+
+                {co && <div style={{ fontSize: 12, color: "#3B6FE8", cursor: "pointer" }} onClick={() => { setSelectedFmJob(null); setSelectedCompany(co); }}>🏢 {co.name}</div>}
+                {site && <div style={{ fontSize: 11, color: "#4A5270" }}>📍 {site.address}</div>}
+
+                {/* Stage selector — full pipeline across all 6 stages */}
                 <div>
-                  <div style={{ fontSize: 15, color: "#E8ECF4", fontWeight: 600, marginBottom: 6 }}>{selectedFmJob.name}</div>
-                  {co && <div style={{ fontSize: 12, color: "#3B6FE8", marginBottom: 2, cursor: "pointer" }} onClick={() => { setSelectedFmJob(null); setSelectedCompany(co); }}>🏢 {co.name}</div>}
-                  {site && <div style={{ fontSize: 11, color: "#4A5270", marginBottom: 8 }}>📍 Store #{site.storeNumber} — {site.address}</div>}
-                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                    <span className="pill" style={{ background: st.color + "20", color: st.color }}>{st.label}</span>
-                    <span style={{ fontSize: 20, fontWeight: 700, color: "#FFFFFF" }}>{fmt(selectedFmJob.contractValue)}</span>
+                  <div style={{ fontSize: 10, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 8 }}>Stage</div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                    {/* Pipeline stages */}
+                    <div style={{ fontSize: 9, color: "#2A3560", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 2 }}>Pipeline</div>
+                    <div style={{ display: "flex", gap: 4, marginBottom: 6 }}>
+                      {FM_PIPELINE_STAGES.map(s => (
+                        <button key={s.id} onClick={() => update({ stage: s.id })}
+                          style={{ flex: 1, padding: "6px 4px", borderRadius: 5, border: "1px solid", cursor: "pointer", fontSize: 10, fontFamily: "inherit", fontWeight: 600, transition: "all 0.15s", textAlign: "center",
+                            borderColor: job.stage === s.id ? s.color : "#1E2640",
+                            background:  job.stage === s.id ? s.color + "25" : "transparent",
+                            color:       job.stage === s.id ? s.color : "#3A4560" }}>
+                          {s.label}
+                        </button>
+                      ))}
+                    </div>
+                    {/* Active stages */}
+                    <div style={{ fontSize: 9, color: "#2A3560", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 2 }}>Active Jobs</div>
+                    <div style={{ display: "flex", gap: 4 }}>
+                      {FM_ACTIVE_STAGES.map(s => (
+                        <button key={s.id} onClick={() => update({ stage: s.id })}
+                          style={{ flex: 1, padding: "6px 4px", borderRadius: 5, border: "1px solid", cursor: "pointer", fontSize: 10, fontFamily: "inherit", fontWeight: 600, transition: "all 0.15s", textAlign: "center",
+                            borderColor: job.stage === s.id ? s.color : "#1E2640",
+                            background:  job.stage === s.id ? s.color + "25" : "transparent",
+                            color:       job.stage === s.id ? s.color : "#3A4560" }}>
+                          {s.label}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 </div>
-                <div style={{ background: "#0A0D16", borderRadius: 8, padding: "14px", border: "1px solid #1E2640", display: "flex", flexDirection: "column", gap: 10 }}>
-                  {[
-                    { label: "PM",           value: selectedFmJob.pm        || "—" },
-                    { label: "Start Date",   value: selectedFmJob.startDate || "—" },
-                    { label: "End Date",     value: selectedFmJob.endDate   || "—" },
-                    { label: st.actionLabel, value: actionDate || "—", highlight: overdue },
-                  ].map(r => (
-                    <div key={r.label} style={{ display: "flex", justifyContent: "space-between" }}>
-                      <span style={{ fontSize: 11, color: "#3A4560" }}>{r.label}</span>
-                      <span style={{ fontSize: 11, color: r.highlight ? "#F87171" : "#B8C4E0", fontWeight: r.highlight ? 600 : 400 }}>{r.value}{r.highlight ? " ⚠" : ""}</span>
-                    </div>
-                  ))}
+
+                {/* Key action date */}
+                {st.actionKey && (
+                  <div>
+                    <div style={{ fontSize: 10, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5 }}>{st.actionLabel}</div>
+                    <input className="fi" type="date" value={job[st.actionKey] || ""}
+                      onChange={e => update({ [st.actionKey]: e.target.value })}
+                      style={{ borderColor: overdue ? "#F87171" : undefined }} />
+                    {overdue && <div style={{ fontSize: 10, color: "#F87171", marginTop: 3 }}>⚠ Overdue</div>}
+                  </div>
+                )}
+
+                {/* Coordinator */}
+                <div>
+                  <div style={{ fontSize: 10, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5 }}>Coordinator</div>
+                  <select className="fi" value={job.coordinator || ""} onChange={e => update({ coordinator: e.target.value })}>
+                    <option value="">Unassigned</option>
+                    {fmTeam.map(m => <option key={m.id} value={m.name}>{m.name}</option>)}
+                  </select>
                 </div>
-                {selectedFmJob.notes && <div style={{ fontSize: 12, color: "#6B7694", lineHeight: 1.6, background: "#0A0D16", padding: "10px 12px", borderRadius: 6, border: "1px solid #1E2640" }}>{selectedFmJob.notes}</div>}
+
+                {/* Subcontractor */}
+                <div>
+                  <div style={{ fontSize: 10, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5 }}>Subcontractor / Vendor</div>
+                  <select className="fi" value={job.subcontractorId || ""} onChange={e => update({ subcontractorId: e.target.value })}>
+                    <option value="">Unassigned</option>
+                    {subcontractors.map(s => (
+                      <option key={s.id} value={s.id}>{s.name}{s.trade ? " — " + s.trade : ""}</option>
+                    ))}
+                  </select>
+                  {sub && (
+                    <div style={{ marginTop: 6, background: "#0A0D16", borderRadius: 6, padding: "8px 12px", border: "1px solid #1E2640" }}>
+                      {(() => {
+                        const coiDate = sub.coiExpiry ? new Date(sub.coiExpiry) : null;
+                        const coiExpiring = coiDate && coiDate > new Date() && coiDate <= new Date(Date.now() + 30*86400000);
+                        const coiExpired  = coiDate && coiDate < new Date();
+                        return (
+                          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                            <span style={{ fontSize: 10, background: sub.msaStatus === "signed" ? "#4ADE8015" : "#F8717115", color: sub.msaStatus === "signed" ? "#4ADE80" : "#F87171", padding: "2px 7px", borderRadius: 4 }}>MSA: {sub.msaStatus}</span>
+                            <span style={{ fontSize: 10, background: coiExpired ? "#F8717115" : coiExpiring ? "#FCD34D15" : "#4ADE8015", color: coiExpired ? "#F87171" : coiExpiring ? "#FCD34D" : "#4ADE80", padding: "2px 7px", borderRadius: 4 }}>COI: {sub.coiExpiry || "none"}</span>
+                            <span style={{ fontSize: 10, background: sub.w9 ? "#4ADE8015" : "#F8717115", color: sub.w9 ? "#4ADE80" : "#F87171", padding: "2px 7px", borderRadius: 4 }}>W9: {sub.w9 ? "✓" : "Missing"}</span>
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  )}
+                </div>
+
+                {/* Vendor next step */}
+                <div>
+                  <div style={{ fontSize: 10, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5 }}>Vendor Next Step</div>
+                  <input className="fi" value={job.vendorNextStep || ""} placeholder="e.g. Awaiting confirmation…"
+                    onChange={e => update({ vendorNextStep: e.target.value })} />
+                </div>
+
+                {/* Financials */}
+                <div style={{ background: "#0A0D16", borderRadius: 8, padding: "12px 14px", border: "1px solid #1E2640", display: "flex", gap: 20 }}>
+                  <div>
+                    <div style={{ fontSize: 9, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 3 }}>Gross Value</div>
+                    <div style={{ fontSize: 18, fontWeight: 700, color: "#E8ECF4" }}>{fmt(job.contractValue)}</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 9, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 3 }}>Gross Profit</div>
+                    <div style={{ fontSize: 18, fontWeight: 700, color: "#4ADE80" }}>{fmt(job.grossProfit)}</div>
+                  </div>
+                </div>
+
+                {/* Notes */}
+                {job.notes && <div style={{ fontSize: 12, color: "#6B7694", lineHeight: 1.6, background: "#0A0D16", padding: "10px 12px", borderRadius: 6, border: "1px solid #1E2640" }}>{job.notes}</div>}
+
                 <div style={{ display: "flex", gap: 8 }}>
-                  <button className="btn-ghost" style={{ flex: 1 }} onClick={() => { openEditFm(selectedFmJob); setSelectedFmJob(null); }}>✎ Edit</button>
-                  <button className="btn-ghost" style={{ color: "#F87171", borderColor: "#F8717120" }} onClick={() => deleteFm(selectedFmJob.id)}>✕</button>
+                  <button className="btn-ghost" style={{ flex: 1 }} onClick={() => { openEditFm(job); setSelectedFmJob(null); }}>✎ Full Edit</button>
+                  <button className="btn-ghost" style={{ color: "#F87171", borderColor: "#F8717120" }} onClick={() => deleteFm(job.id)}>✕</button>
                 </div>
               </div>
             );
