@@ -268,6 +268,7 @@ function SubPage({ token, fmJobs, setFmJobs, subcontractors, companies, sites })
   const [quotePrice, setQuotePrice] = useState("");
   const [quoteScope, setQuoteScope] = useState("");
   const [quoteNote,  setQuoteNote]  = useState("");
+  const [subAccepted,setSubAccepted]= useState(job?.subResponse === "accepted");
 
   const vendorNTE = job ? (job.vendorNTE ? Number(job.vendorNTE) : fmVendorNTE(Number(job.contractValue||0))) : 0;
 
@@ -359,7 +360,7 @@ function SubPage({ token, fmJobs, setFmJobs, subcontractors, companies, sites })
           <div style={{ display: "flex", gap: 10, paddingTop: 4 }}>
             <button onClick={() => setView("main")} style={{ flex: 0, padding: "12px 20px", borderRadius: 8, border: "1px solid #2A3560", background: "transparent", color: "#6A7590", fontSize: 14, cursor: "pointer", fontFamily: "inherit" }}>← Back</button>
             <button disabled={!quotePrice}
-              onClick={() => { update({ vendorQuotePrice: quotePrice, vendorQuoteScope: quoteScope, vendorQuoteNotes: quoteNote, subResponse: "quoted", stage: "waiting_quote" }); setView("done"); }}
+              onClick={() => { update({ vendorQuotePrice: quotePrice, vendorQuoteScope: quoteScope, vendorQuoteNotes: quoteNote, subResponse: "quoted", stage: "generate_proposal" }); setView("done"); }}
               style={{ flex: 1, padding: "12px", borderRadius: 8, border: "none", background: !quotePrice ? "#2A3560" : "#3B6FE8", color: !quotePrice ? "#4A5270" : "#FFF", fontSize: 15, fontWeight: 700, cursor: quotePrice ? "pointer" : "not-allowed", fontFamily: "inherit" }}>
               Submit Quote
             </button>
@@ -389,6 +390,7 @@ function SubPage({ token, fmJobs, setFmJobs, subcontractors, companies, sites })
             {(site?.address || job.storeCode) && <div style={{ display: "flex", gap: 10 }}><span style={{ fontSize: 12, color: "#3A4560", width: 80, flexShrink: 0 }}>Location</span><span style={{ fontSize: 12, color: "#E8ECF4" }}>{site?.address || "Store " + job.storeCode}</span></div>}
             {job.ownersProjectNo && <div style={{ display: "flex", gap: 10 }}><span style={{ fontSize: 12, color: "#3A4560", width: 80, flexShrink: 0 }}>WO #</span><span style={{ fontSize: 12, color: "#E8ECF4" }}>{job.ownersProjectNo}</span></div>}
             {job.bidDueDate && <div style={{ display: "flex", gap: 10 }}><span style={{ fontSize: 12, color: "#3A4560", width: 80, flexShrink: 0 }}>Bid Due</span><span style={{ fontSize: 12, color: "#FCD34D" }}>{new Date(job.bidDueDate + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}</span></div>}
+            {site?.phone && <div style={{ display: "flex", gap: 10 }}><span style={{ fontSize: 12, color: "#3A4560", width: 80, flexShrink: 0 }}>Site Phone</span><span style={{ fontSize: 12, color: "#E8ECF4" }}>{site.phone}</span></div>}
           </div>
           {job.scopeOfWork && (
             <div style={{ marginTop: 14, paddingTop: 14, borderTop: "1px solid #1E2640" }}>
@@ -396,7 +398,43 @@ function SubPage({ token, fmJobs, setFmJobs, subcontractors, companies, sites })
               <div style={{ fontSize: 13, color: "#BCC6D8", lineHeight: 1.6 }}>{job.scopeOfWork}</div>
             </div>
           )}
+          {job.notes && (
+            <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid #1E2640" }}>
+              <div style={{ fontSize: 11, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 4 }}>Additional Notes</div>
+              <div style={{ fontSize: 13, color: "#BCC6D8", lineHeight: 1.6 }}>{job.notes}</div>
+            </div>
+          )}
+
+          {/* Access code — shown only after accept */}
+          {subAccepted && site?.accessCode && (
+            <div style={{ marginTop: 14, paddingTop: 14, borderTop: "1px solid #1E2640" }}>
+              <div style={{ background: "#4ADE8010", border: "1px solid #4ADE8030", borderRadius: 8, padding: "12px 14px" }}>
+                <div style={{ fontSize: 11, color: "#4ADE80", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 4 }}>🔐 Site Access Code</div>
+                <div style={{ fontSize: 22, fontWeight: 800, color: "#4ADE80", letterSpacing: "0.15em", fontFamily: "monospace" }}>{site.accessCode}</div>
+              </div>
+            </div>
+          )}
+          {subAccepted && !site?.accessCode && (
+            <div style={{ marginTop: 14, paddingTop: 14, borderTop: "1px solid #1E2640" }}>
+              <div style={{ fontSize: 12, color: "#3A4560", fontStyle: "italic" }}>No access code on file — contact coordinator if needed.</div>
+            </div>
+          )}
         </div>
+
+        {/* Job photos — shown only after accept */}
+        {subAccepted && job.photos && job.photos.length > 0 && (
+          <div style={{ background: "#161B28", borderRadius: 12, padding: 20, border: "1px solid #1E2640", marginBottom: 16 }}>
+            <div style={{ fontSize: 11, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 12 }}>📸 Site Photos</div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 8 }}>
+              {job.photos.map((p, i) => (
+                <a key={i} href={p.data} target="_blank" rel="noreferrer">
+                  <img src={p.data} alt={p.name || "Photo " + (i+1)} style={{ width: "100%", borderRadius: 8, objectFit: "cover", aspectRatio: "4/3", display: "block" }} />
+                  {p.caption && <div style={{ fontSize: 11, color: "#6A7590", marginTop: 4 }}>{p.caption}</div>}
+                </a>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Approved amount */}
         <div style={{ background: "#FCD34D0F", border: "1px solid #FCD34D40", borderRadius: 12, padding: 20, marginBottom: 24, textAlign: "center" }}>
@@ -407,7 +445,7 @@ function SubPage({ token, fmJobs, setFmJobs, subcontractors, companies, sites })
 
         {/* Three action buttons */}
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          <button onClick={() => { update({ subResponse: "accepted", vendorQuotePrice: String(vendorNTE), stage: "waiting_quote" }); setView("done"); }}
+          <button onClick={() => { update({ subResponse: "accepted", vendorQuotePrice: String(vendorNTE), stage: "generate_proposal" }); setSubAccepted(true); setView("done"); }}
             style={{ width: "100%", padding: "16px", borderRadius: 10, border: "none", background: "#4ADE80", color: "#0A1A0A", fontSize: 16, fontWeight: 800, cursor: "pointer", fontFamily: "inherit", letterSpacing: "-0.01em" }}>
             ✅ Accept at {fmt(vendorNTE)}
           </button>
@@ -3312,7 +3350,10 @@ Include: professional greeting, clear scope description, pricing, terms (net 30)
                           <div style={{ fontSize: 10, color: "#3A4560", marginBottom: 4 }}>Quote Received — Price</div>
                           <input className="fi" type="number" placeholder="Sub's quoted price"
                             value={job.vendorQuotePrice || ""}
-                            onChange={e => update({ vendorQuotePrice: e.target.value })} />
+                            onChange={e => {
+                              const val = e.target.value;
+                              update({ vendorQuotePrice: val, ...(val ? { stage: "generate_proposal" } : {}) });
+                            }} />
                         </div>
                         <div>
                           <div style={{ fontSize: 10, color: "#3A4560", marginBottom: 4 }}>Quote Scope</div>
@@ -3464,10 +3505,45 @@ Include: professional greeting, clear scope description, pricing, terms (net 30)
                     <div style={{ fontSize: 9, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 3 }}>Gross Profit</div>
                     <div style={{ fontSize: 18, fontWeight: 700, color: "#4ADE80" }}>{fmt(job.grossProfit)}</div>
                   </div>
+                  {job.vendorNTE && <div>
+                    <div style={{ fontSize: 9, color: "#FCD34D", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 3 }}>Vendor NTE</div>
+                    <div style={{ fontSize: 18, fontWeight: 700, color: "#FCD34D" }}>{fmt(Number(job.vendorNTE))}</div>
+                  </div>}
                 </div>
 
                 {/* Notes */}
                 {job.notes && <div style={{ fontSize: 12, color: "#6B7694", lineHeight: 1.6, background: "#0A0D16", padding: "10px 12px", borderRadius: 6, border: "1px solid #1E2640" }}>{job.notes}</div>}
+
+                {/* Photos */}
+                <div>
+                  <div style={{ fontSize: 10, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span>📸 Site Photos</span>
+                    <span style={{ color: "#2A3560" }}>{(job.photos||[]).length} photo{(job.photos||[]).length !== 1 ? "s" : ""} · shown to sub after accept</span>
+                  </div>
+                  {(job.photos||[]).length > 0 && (
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6, marginBottom: 8 }}>
+                      {(job.photos||[]).map((p, i) => (
+                        <div key={i} style={{ position: "relative" }}>
+                          <img src={p.data} alt={p.name} style={{ width: "100%", aspectRatio: "1", objectFit: "cover", borderRadius: 6, display: "block" }} />
+                          <button onClick={() => update({ photos: job.photos.filter((_,j) => j !== i) })}
+                            style={{ position: "absolute", top: 3, right: 3, width: 18, height: 18, borderRadius: "50%", border: "none", background: "#F87171CC", color: "#FFF", fontSize: 9, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0 }}>✕</button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <label style={{ display: "block", padding: "8px 12px", borderRadius: 6, border: "1px dashed #2A3560", textAlign: "center", cursor: "pointer", fontSize: 11, color: "#3A4560" }}>
+                    + Add Photos
+                    <input type="file" accept="image/*" multiple style={{ display: "none" }} onChange={e => {
+                      const files = Array.from(e.target.files);
+                      Promise.all(files.map(f => new Promise(res => {
+                        const r = new FileReader();
+                        r.onload = ev => res({ data: ev.target.result, name: f.name });
+                        r.readAsDataURL(f);
+                      }))).then(newPhotos => update({ photos: [...(job.photos||[]), ...newPhotos] }));
+                      e.target.value = "";
+                    }} />
+                  </label>
+                </div>
 
                 <div style={{ display: "flex", gap: 8 }}>
                   <button className="btn-ghost" style={{ flex: 1 }} onClick={() => { openEditFm(job); setSelectedFmJob(null); }}>✎ Full Edit</button>
