@@ -757,6 +757,56 @@ export default function App() {
   const [lsSiteForm,       setLsSiteForm]       = useState({ companyId: "", storeNumber: "", address: "", phone: "", accessCode: "", notes: "", lat: "", lng: "" });
   const [mapLoaded,        setMapLoaded]        = useState(false);
 
+  // Lawn Bids
+  const LAWN_SERVICES = [
+    { id: "spring_cleanup",    label: "Spring Clean-up",     freq: "1x/year",   unit: "flat" },
+    { id: "spring_mulch",      label: "Mulch (2\")",          freq: "1x/year",   unit: "flat" },
+    { id: "spring_sprinkler",  label: "Sprinkler Start-up",  freq: "1x/year",   unit: "flat" },
+    { id: "spring_trees",      label: "Prune Trees ≤12'",    freq: "1x/year",   unit: "flat" },
+    { id: "mowing",            label: "Weekly Mowing",       freq: "28 cuts",   unit: "per_cut" },
+    { id: "fall_cleanup",      label: "Fall Clean-up",       freq: "1x/year",   unit: "flat" },
+    { id: "gutter_cleaning",   label: "Gutter Cleaning",     freq: "up to 3x",  unit: "flat" },
+    { id: "retention_areas",   label: "Retention Areas",     freq: "monthly",   unit: "monthly" },
+    { id: "weed_control",      label: "Weed Control",        freq: "4x/year",   unit: "flat" },
+  ];
+  // lawnBids: one record per site-season
+  // services: { [serviceId]: { subPrice: number, ourPrice: number, included: bool } }
+  const [lawnBids,       setLawnBids]       = useState([]);
+  const [lawnBidMode,    setLawnBidMode]    = useState("bid"); // "bid" | "contract"
+  const [lawnBidSeason,  setLawnBidSeason]  = useState("2025");
+  const [editLawnBidId,  setEditLawnBidId]  = useState(null); // which site row is open
+
+  const GP_MARGIN = 0.30;
+  const calcOurPrice = (subPrice) => subPrice > 0 ? Math.ceil(subPrice / (1 - GP_MARGIN) * 100) / 100 : 0;
+
+  const initLawnBid = (siteId) => {
+    const services = {};
+    LAWN_SERVICES.forEach(s => { services[s.id] = { subPrice: 0, ourPrice: 0, included: false }; });
+    return { id: "lb_" + siteId + "_" + Date.now(), siteId, season: lawnBidSeason, services, locked: false, lockedDate: null, subName: "", notes: "" };
+  };
+
+  const getLawnBid = (siteId) => lawnBids.find(b => b.siteId === siteId && b.season === lawnBidSeason) || null;
+
+  const upsertLawnBid = (siteId, updater) => {
+    setLawnBids(prev => {
+      const existing = prev.find(b => b.siteId === siteId && b.season === lawnBidSeason);
+      if (existing) return prev.map(b => b.siteId === siteId && b.season === lawnBidSeason ? updater(b) : b);
+      const fresh = initLawnBid(siteId);
+      return [...prev, updater(fresh)];
+    });
+  };
+
+  const lawnBidAnnualOur = (bid) => {
+    if (!bid) return 0;
+    return LAWN_SERVICES.reduce((sum, s) => {
+      const sv = bid.services[s.id];
+      if (!sv || !sv.included || !sv.ourPrice) return sum;
+      if (s.unit === "per_cut") return sum + sv.ourPrice * 28;
+      if (s.unit === "monthly") return sum + sv.ourPrice * 7; // ~7 months season
+      return sum + sv.ourPrice;
+    }, 0);
+  };
+
   // FM Team
   const [fmTeam,         setFmTeam]         = useState([]);
   const [showTeamForm,   setShowTeamForm]   = useState(false);
@@ -2822,6 +2872,205 @@ Return ONLY valid JSON, no markdown, no extra text:
               )}
             </div>
           )}
+
+          {/* ── LAWN BUDGETING ── */}
+          {activeNav === "budgeting" && activeBU === "lawn" && (() => {
+            const currentSites = lawnSites;
+            const totalOur = currentSites.reduce((sum, site) => sum + lawnBidAnnualOur(getLawnBid(site.id)), 0);
+            const lockedCount = currentSites.filter(s => { const b = getLawnBid(s.id); return b && b.locked; }).length;
+            const bidCount = currentSites.filter(s => { const b = getLawnBid(s.id); return b && !b.locked; }).length;
+
+            return (
+              <div className="fade-in" style={{ display: "flex", flexDirection: "column", gap: 22 }}>
+                {/* Header */}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                  <div>
+                    <div style={{ fontSize: 22, fontWeight: 700, color: "#FFFFFF", letterSpacing: "-0.01em", textTransform: "uppercase" }}>Lawn Bidding</div>
+                    <div style={{ fontSize: 11, color: "#3A4560", marginTop: 3, letterSpacing: "0.06em" }}>LAWN · {currentSites.length} SITES · SEASON {lawnBidSeason}</div>
+                  </div>
+                  <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                    {/* Season picker */}
+                    <select value={lawnBidSeason} onChange={e => setLawnBidSeason(e.target.value)} style={{ background: "#141824", border: "1px solid #1E2640", color: "#B8C4E0", borderRadius: 6, padding: "6px 10px", fontSize: 13 }}>
+                      {["2024","2025","2026","2027"].map(y => <option key={y} value={y}>{y}</option>)}
+                    </select>
+                    {/* Bid / Contract toggle */}
+                    <div style={{ display: "flex", background: "#0A0D16", border: "1px solid #1E2640", borderRadius: 8, overflow: "hidden" }}>
+                      {["bid","contract"].map(m => (
+                        <button key={m} onClick={() => setLawnBidMode(m)} style={{ padding: "7px 18px", fontSize: 12, fontWeight: 600, border: "none", cursor: "pointer", textTransform: "uppercase", letterSpacing: "0.05em", background: lawnBidMode === m ? "#4ADE8020" : "transparent", color: lawnBidMode === m ? "#4ADE80" : "#3A4560", borderRight: m === "bid" ? "1px solid #1E2640" : "none", transition: "all 0.15s" }}>
+                          {m === "bid" ? "🖊 Bid Mode" : "📋 Contract Mode"}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Stat cards */}
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 12 }}>
+                  {[
+                    { label: "Total Sites",        value: currentSites.length,                          color: "#3B6FE8" },
+                    { label: "Bids in Progress",   value: bidCount,                                     color: "#FCD34D" },
+                    { label: "Contracts Signed",   value: lockedCount,                                  color: "#4ADE80" },
+                    { label: "Annual Book Value",  value: "$" + Math.round(totalOur).toLocaleString(),  color: "#C084FC" },
+                  ].map(s => (
+                    <div key={s.label} className="stat-card" style={{ position: "relative", overflow: "hidden", padding: "14px 18px" }}>
+                      <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: s.color }} />
+                      <div style={{ fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "#3A4560", marginBottom: 6 }}>{s.label}</div>
+                      <div style={{ fontSize: 22, fontWeight: 700, color: s.color }}>{s.value}</div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Mode label */}
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: lawnBidMode === "bid" ? "#FCD34D" : "#4ADE80", textTransform: "uppercase", letterSpacing: "0.08em", background: lawnBidMode === "bid" ? "#FCD34D15" : "#4ADE8015", border: "1px solid " + (lawnBidMode === "bid" ? "#FCD34D30" : "#4ADE8030"), borderRadius: 6, padding: "4px 10px" }}>
+                    {lawnBidMode === "bid" ? "🖊 Bid Mode — Editable" : "📋 Contract Mode — Locked"}
+                  </div>
+                  {lawnBidMode === "contract" && <div style={{ fontSize: 11, color: "#3A4560" }}>Prices are locked. Switch to Bid Mode to make changes.</div>}
+                </div>
+
+                {/* Per-site rows */}
+                {currentSites.length === 0 ? (
+                  <div className="coming-soon">
+                    <div style={{ fontSize: 22 }}>🌿</div>
+                    <div style={{ fontSize: 14, color: "#3A4560" }}>No lawn sites yet. Add sites in the Sites tab.</div>
+                  </div>
+                ) : (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                    {currentSites.map(site => {
+                      const bid = getLawnBid(site.id);
+                      const isLocked = bid && bid.locked;
+                      const isEditing = editLawnBidId === site.id;
+                      const co = companies.find(c => c.id === site.companyId);
+                      const annualOur = lawnBidAnnualOur(bid);
+                      const canEdit = lawnBidMode === "bid" && !isLocked;
+
+                      return (
+                        <div key={site.id} style={{ background: "#0F1117", border: "1px solid " + (isLocked ? "#4ADE8030" : "#1E2640"), borderRadius: 12, overflow: "hidden" }}>
+                          {/* Site header row */}
+                          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 18px", cursor: "pointer", background: isEditing ? "#141824" : "transparent" }} onClick={() => setEditLawnBidId(isEditing ? null : site.id)}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                              <div style={{ width: 36, height: 36, borderRadius: 8, background: isLocked ? "#4ADE8015" : "#3B6FE815", border: "1px solid " + (isLocked ? "#4ADE8030" : "#3B6FE830"), display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}>{isLocked ? "📋" : "🌿"}</div>
+                              <div>
+                                <div style={{ fontSize: 14, fontWeight: 600, color: "#E8ECF4" }}>{co ? co.name : "Unknown"} — #{site.storeNumber || site.id}</div>
+                                <div style={{ fontSize: 11, color: "#3A4560", marginTop: 2 }}>{site.address}</div>
+                              </div>
+                            </div>
+                            <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                              {isLocked && bid.lockedDate && <div style={{ fontSize: 11, color: "#4ADE80" }}>✓ Signed {bid.lockedDate}</div>}
+                              {annualOur > 0 && <div style={{ fontSize: 15, fontWeight: 700, color: "#4ADE80" }}>${Math.round(annualOur).toLocaleString()}<span style={{ fontSize: 10, color: "#3A4560", fontWeight: 400 }}>/yr</span></div>}
+                              {!bid && <div style={{ fontSize: 11, color: "#3A4560" }}>No bid yet</div>}
+                              <div style={{ fontSize: 14, color: "#3A4560" }}>{isEditing ? "▲" : "▼"}</div>
+                            </div>
+                          </div>
+
+                          {/* Expanded detail */}
+                          {isEditing && (
+                            <div style={{ borderTop: "1px solid #1E2640", padding: "18px 18px 20px" }}>
+                              {/* Sub name + notes */}
+                              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 18 }}>
+                                <div>
+                                  <div style={{ fontSize: 10, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5 }}>Sub / Service Provider</div>
+                                  <input disabled={!canEdit} value={bid?.subName || ""} onChange={e => upsertLawnBid(site.id, b => ({ ...b, subName: e.target.value }))} placeholder="e.g. Arabellas Landscaping LLC" style={{ width: "100%", background: canEdit ? "#141824" : "#0A0D16", border: "1px solid #1E2640", borderRadius: 6, padding: "7px 10px", fontSize: 12, color: "#E8ECF4", opacity: canEdit ? 1 : 0.6, boxSizing: "border-box" }} />
+                                </div>
+                                <div>
+                                  <div style={{ fontSize: 10, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5 }}>Notes</div>
+                                  <input disabled={!canEdit} value={bid?.notes || ""} onChange={e => upsertLawnBid(site.id, b => ({ ...b, notes: e.target.value }))} placeholder="Any site-specific notes…" style={{ width: "100%", background: canEdit ? "#141824" : "#0A0D16", border: "1px solid #1E2640", borderRadius: 6, padding: "7px 10px", fontSize: 12, color: "#E8ECF4", opacity: canEdit ? 1 : 0.6, boxSizing: "border-box" }} />
+                                </div>
+                              </div>
+
+                              {/* Services table */}
+                              <div style={{ overflowX: "auto" }}>
+                                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                                  <thead>
+                                    <tr style={{ borderBottom: "1px solid #1E2640" }}>
+                                      <th style={{ textAlign: "left", padding: "6px 10px", color: "#3A4560", fontWeight: 600, fontSize: 10, textTransform: "uppercase", letterSpacing: "0.07em" }}>Include</th>
+                                      <th style={{ textAlign: "left", padding: "6px 10px", color: "#3A4560", fontWeight: 600, fontSize: 10, textTransform: "uppercase", letterSpacing: "0.07em" }}>Service</th>
+                                      <th style={{ textAlign: "left", padding: "6px 10px", color: "#3A4560", fontWeight: 600, fontSize: 10, textTransform: "uppercase", letterSpacing: "0.07em" }}>Frequency</th>
+                                      <th style={{ textAlign: "right", padding: "6px 10px", color: "#3A4560", fontWeight: 600, fontSize: 10, textTransform: "uppercase", letterSpacing: "0.07em" }}>Sub Price</th>
+                                      <th style={{ textAlign: "right", padding: "6px 10px", color: "#4ADE80", fontWeight: 600, fontSize: 10, textTransform: "uppercase", letterSpacing: "0.07em" }}>Our Price</th>
+                                      <th style={{ textAlign: "right", padding: "6px 10px", color: "#3A4560", fontWeight: 600, fontSize: 10, textTransform: "uppercase", letterSpacing: "0.07em" }}>Annual (Ours)</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {LAWN_SERVICES.map(svc => {
+                                      const sv = bid?.services?.[svc.id] || { subPrice: 0, ourPrice: 0, included: false };
+                                      const annualSvc = sv.included && sv.ourPrice
+                                        ? svc.unit === "per_cut" ? sv.ourPrice * 28
+                                        : svc.unit === "monthly" ? sv.ourPrice * 7
+                                        : sv.ourPrice
+                                        : 0;
+                                      return (
+                                        <tr key={svc.id} style={{ borderBottom: "1px solid #1E264040", background: sv.included ? "#3B6FE808" : "transparent" }}>
+                                          {/* Include checkbox */}
+                                          <td style={{ padding: "8px 10px" }}>
+                                            <input type="checkbox" checked={sv.included || false} disabled={!canEdit} onChange={e => upsertLawnBid(site.id, b => ({ ...b, services: { ...b.services, [svc.id]: { ...sv, included: e.target.checked } } }))} style={{ accentColor: "#4ADE80", width: 14, height: 14, cursor: canEdit ? "pointer" : "default" }} />
+                                          </td>
+                                          {/* Service label */}
+                                          <td style={{ padding: "8px 10px", color: sv.included ? "#E8ECF4" : "#4A5270", fontWeight: sv.included ? 500 : 400 }}>{svc.label}</td>
+                                          {/* Frequency */}
+                                          <td style={{ padding: "8px 10px", color: "#3A4560", fontSize: 11 }}>{svc.freq}</td>
+                                          {/* Sub price (internal — shown only in bid mode) */}
+                                          {lawnBidMode === "bid" ? (
+                                            <td style={{ padding: "8px 10px", textAlign: "right" }}>
+                                              <input type="number" min="0" step="0.01" disabled={!canEdit || !sv.included} value={sv.subPrice || ""} placeholder="0" onChange={e => {
+                                                const subP = parseFloat(e.target.value) || 0;
+                                                const ourP = calcOurPrice(subP);
+                                                upsertLawnBid(site.id, b => ({ ...b, services: { ...b.services, [svc.id]: { ...sv, subPrice: subP, ourPrice: ourP } } }));
+                                              }} style={{ width: 80, background: canEdit && sv.included ? "#141824" : "#0A0D16", border: "1px solid #1E2640", borderRadius: 5, padding: "5px 8px", fontSize: 12, color: "#B8C4E0", textAlign: "right", opacity: sv.included ? 1 : 0.4, boxSizing: "border-box" }} />
+                                            </td>
+                                          ) : (
+                                            <td style={{ padding: "8px 10px", textAlign: "right", color: "#3A4560", fontSize: 11 }}>—</td>
+                                          )}
+                                          {/* Our price — override allowed */}
+                                          <td style={{ padding: "8px 10px", textAlign: "right" }}>
+                                            <input type="number" min="0" step="0.01" disabled={!canEdit || !sv.included} value={sv.ourPrice || ""} placeholder="0" onChange={e => {
+                                              const ourP = parseFloat(e.target.value) || 0;
+                                              upsertLawnBid(site.id, b => ({ ...b, services: { ...b.services, [svc.id]: { ...sv, ourPrice: ourP } } }));
+                                            }} style={{ width: 80, background: canEdit && sv.included ? "#141824" : "#0A0D16", border: "1px solid " + (sv.included ? "#4ADE8040" : "#1E2640"), borderRadius: 5, padding: "5px 8px", fontSize: 12, color: "#4ADE80", fontWeight: 600, textAlign: "right", opacity: sv.included ? 1 : 0.4, boxSizing: "border-box" }} />
+                                          </td>
+                                          {/* Annual total */}
+                                          <td style={{ padding: "8px 10px", textAlign: "right", color: annualSvc > 0 ? "#4ADE80" : "#3A4560", fontWeight: annualSvc > 0 ? 600 : 400, fontSize: 12 }}>{annualSvc > 0 ? "$" + Math.round(annualSvc).toLocaleString() : "—"}</td>
+                                        </tr>
+                                      );
+                                    })}
+                                  </tbody>
+                                  <tfoot>
+                                    <tr style={{ borderTop: "2px solid #1E2640", background: "#0A0D16" }}>
+                                      <td colSpan={5} style={{ padding: "10px 10px", fontSize: 11, color: "#3A4560", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.07em" }}>Annual Total (Our Price)</td>
+                                      <td style={{ padding: "10px 10px", textAlign: "right", fontSize: 14, fontWeight: 700, color: "#4ADE80" }}>${Math.round(annualOur).toLocaleString()}</td>
+                                    </tr>
+                                  </tfoot>
+                                </table>
+                              </div>
+
+                              {/* Actions */}
+                              <div style={{ display: "flex", gap: 10, marginTop: 16, justifyContent: "flex-end", alignItems: "center" }}>
+                                {lawnBidMode === "bid" && !isLocked && (
+                                  <button className="btn-primary" style={{ background: "#4ADE8020", color: "#4ADE80", border: "1px solid #4ADE8040" }} onClick={() => {
+                                    if (!bid) return;
+                                    const today = new Date().toISOString().split("T")[0];
+                                    upsertLawnBid(site.id, b => ({ ...b, locked: true, lockedDate: today }));
+                                  }}>📋 Lock as Contract</button>
+                                )}
+                                {lawnBidMode === "bid" && isLocked && (
+                                  <button className="btn-ghost" style={{ color: "#F87171", borderColor: "#F8717120" }} onClick={() => upsertLawnBid(site.id, b => ({ ...b, locked: false, lockedDate: null }))}>🔓 Unlock Bid</button>
+                                )}
+                                {lawnBidMode === "bid" && !isLocked && bid && (
+                                  <button className="btn-ghost" style={{ color: "#F87171", borderColor: "#F8717120" }} onClick={() => {
+                                    if (window.confirm("Clear all bid data for this site?")) setLawnBids(prev => prev.filter(b => !(b.siteId === site.id && b.season === lawnBidSeason)));
+                                  }}>✕ Clear Bid</button>
+                                )}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
 
           {/* ── COMING SOON (other nav items) ── */}
           {!["dashboard", "customers", "jobs", "pipeline", "budgeting", "finance", "sites", "projects", "team", "subcontractors"].includes(activeNav) && (
