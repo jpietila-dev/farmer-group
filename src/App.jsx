@@ -294,6 +294,11 @@ export default function App() {
   const [fmSearch,      setFmSearch]      = useState("");
   const [fmCoordFilter, setFmCoordFilter] = useState("all");
   const [selectedCoord, setSelectedCoord] = useState(null); // coordinator report
+  const [fmInbox,       setFmInbox]       = useState([]);   // unassigned leads
+  const [showInboxForm, setShowInboxForm] = useState(false);
+  const [inboxParseText,setInboxParseText]= useState("");
+  const [inboxParsing,  setInboxParsing]  = useState(false);
+  const [inboxForm,     setInboxForm]     = useState({ name: "", companyName: "", storeCode: "", address: "", scopeOfWork: "", ownersProjectNo: "", bidDueDate: "", notes: "", source: "manual" });
 
   // Sites
   const [sites,        setSites]        = useState(INIT_SITES);
@@ -429,6 +434,71 @@ export default function App() {
     setShowFmForm(false);
   };
   const deleteFm = (id) => { setFmJobs(fmJobs.filter(j => j.id !== id)); setSelectedFmJob(null); };
+
+  const parseInboxEmail = async () => {
+    if (!inboxParseText.trim()) return;
+    setInboxParsing(true);
+    try {
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "claude-sonnet-4-20250514",
+          max_tokens: 1000,
+          system: `You extract FM (Facility Maintenance) lead info from emails. Return ONLY valid JSON, no markdown, no extra text:
+{
+  "name": "short job title e.g. Roof Leak Repair",
+  "companyName": "client company name",
+  "storeCode": "store number or code if mentioned",
+  "address": "site address if mentioned",
+  "scopeOfWork": "description of the work needed",
+  "ownersProjectNo": "WO number or project reference if mentioned",
+  "bidDueDate": "YYYY-MM-DD if a bid/quote deadline is mentioned, else empty string",
+  "notes": "any other relevant details"
+}`,
+          messages: [{ role: "user", content: "Extract lead info from this email:\n\n" + inboxParseText }]
+        })
+      });
+      const data = await res.json();
+      const text = data.content?.find(b => b.type === "text")?.text || "{}";
+      const parsed = JSON.parse(text.replace(/```json|```/g, "").trim());
+      setInboxForm(f => ({ ...f, ...parsed }));
+      setInboxParseText("");
+    } catch(e) {
+      alert("Parse failed — please fill in manually.");
+    }
+    setInboxParsing(false);
+  };
+
+  const saveInboxLead = () => {
+    if (!inboxForm.name.trim()) return;
+    setFmInbox(prev => [...prev, { ...inboxForm, id: "inbox" + Date.now(), createdAt: new Date().toISOString() }]);
+    setInboxForm({ name: "", companyName: "", storeCode: "", address: "", scopeOfWork: "", ownersProjectNo: "", bidDueDate: "", notes: "", source: "manual" });
+    setShowInboxForm(false);
+  };
+
+  const assignInboxLead = (lead, coordinator) => {
+    // Move from inbox to fmJobs as an Estimating job
+    const co = companies.find(c => c.name.toLowerCase() === lead.companyName.toLowerCase());
+    let companyId = co?.id || "";
+    const newCompanies = [];
+    if (!companyId && lead.companyName) {
+      companyId = "c" + Date.now();
+      newCompanies.push({ id: companyId, name: lead.companyName, website: "", address: "", logo: "", notes: "" });
+    }
+    if (newCompanies.length) setCompanies(prev => [...prev, ...newCompanies]);
+    setFmJobs(prev => [...prev, {
+      id: "fm" + Date.now(), name: lead.name, companyId, siteId: "", contractValue: 0, grossProfit: 0,
+      stage: "estimating", startDate: "", endDate: "", pm: "", pct: 0,
+      bidDueDate: lead.bidDueDate || "", quoteDueDate: "", followUpDate: "", buyoutDate: "", invoiceDate: "",
+      notes: lead.notes || "", storeCode: lead.storeCode || "", projectNo: "", ownersProjectNo: lead.ownersProjectNo || "",
+      vendorInvoiceAmount: 0, vendorInvoiceNumber: "", subcontractorId: "", vendorNextStep: "",
+      scopeOfWork: lead.scopeOfWork || lead.name, coordinator
+    }]);
+    setFmInbox(prev => prev.filter(l => l.id !== lead.id));
+  };
+
+  const deleteInboxLead = (id) => setFmInbox(prev => prev.filter(l => l.id !== id));
 
   const saveCompany = () => {
     if (!companyForm.name.trim()) return;
@@ -1037,6 +1107,106 @@ export default function App() {
           {/* ── PIPELINE ── */}
           {activeNav === "pipeline" && (
             <div className="fade-in" style={{ display: "flex", flexDirection: "column", gap: 22 }}>
+
+              {/* ── FM INBOX (unassigned leads) — FM only ── */}
+              {activeBU === "facility" && (
+                <div style={{ background: "#0D1020", border: "1px solid #FCD34D30", borderRadius: 12, padding: "18px 20px" }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#FCD34D", boxShadow: fmInbox.length > 0 ? "0 0 8px #FCD34D" : "none" }} />
+                      <span style={{ fontSize: 13, fontWeight: 700, color: "#FCD34D", textTransform: "uppercase", letterSpacing: "0.07em" }}>Lead Inbox</span>
+                      <span style={{ fontSize: 11, color: "#3A4560" }}>{fmInbox.length} unassigned</span>
+                    </div>
+                    <button className="btn-ghost" style={{ fontSize: 11, borderColor: "#FCD34D40", color: "#FCD34D" }} onClick={() => { setInboxForm({ name: "", companyName: "", storeCode: "", address: "", scopeOfWork: "", ownersProjectNo: "", bidDueDate: "", notes: "", source: "manual" }); setInboxParseText(""); setShowInboxForm(true); }}>+ New Lead</button>
+                  </div>
+
+                  {fmInbox.length === 0 && (
+                    <div style={{ textAlign: "center", padding: "24px", color: "#2A3560", fontSize: 12, border: "1px dashed #1E2640", borderRadius: 8 }}>
+                      No unassigned leads — add one manually or paste an email to parse
+                    </div>
+                  )}
+
+                  <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                    {fmInbox.map(lead => (
+                      <div key={lead.id} style={{ background: "#161B28", border: "1px solid #FCD34D20", borderRadius: 8, padding: "14px 16px" }}>
+                        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10 }}>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 5, flexWrap: "wrap" }}>
+                              <span style={{ fontSize: 13, fontWeight: 600, color: "#E8ECF4" }}>{lead.name}</span>
+                              {lead.source === "email" && <span style={{ fontSize: 10, background: "#3B6FE820", color: "#3B6FE8", padding: "1px 7px", borderRadius: 4 }}>✉ email</span>}
+                              {lead.storeCode && <span style={{ fontSize: 10, background: "#1A2035", color: "#3A4560", padding: "1px 7px", borderRadius: 4 }}>#{lead.storeCode}</span>}
+                              {lead.bidDueDate && <span style={{ fontSize: 10, background: "#FCD34D15", color: "#FCD34D", padding: "1px 7px", borderRadius: 4 }}>📋 Bid: {lead.bidDueDate}</span>}
+                            </div>
+                            <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
+                              {lead.companyName && <span style={{ fontSize: 11, color: "#3B6FE8" }}>🏢 {lead.companyName}</span>}
+                              {lead.address     && <span style={{ fontSize: 11, color: "#4A5270" }}>📍 {lead.address}</span>}
+                            </div>
+                            {lead.scopeOfWork && <div style={{ fontSize: 11, color: "#4A5270", marginTop: 4, fontStyle: "italic" }}>{lead.scopeOfWork}</div>}
+                          </div>
+                          <div style={{ display: "flex", gap: 6, flexShrink: 0, alignItems: "center" }}>
+                            {/* Assign dropdown */}
+                            <select
+                              style={{ background: "#0F1420", border: "1px solid #3B6FE860", color: "#3B6FE8", fontSize: 11, borderRadius: 5, padding: "5px 10px", cursor: "pointer", fontFamily: "inherit" }}
+                              defaultValue=""
+                              onChange={e => { if (e.target.value) assignInboxLead(lead, e.target.value); }}>
+                              <option value="" disabled>Assign to…</option>
+                              {fmTeam.map(m => <option key={m.id} value={m.name}>{m.name}</option>)}
+                              {fmTeam.length === 0 && <option disabled>No team members yet</option>}
+                            </select>
+                            <button className="btn-ghost" style={{ fontSize: 11, color: "#F87171", borderColor: "#F8717120", padding: "4px 8px" }} onClick={() => deleteInboxLead(lead.id)}>✕</button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Add lead modal */}
+                  {showInboxForm && (
+                    <div className="modal-bg" onClick={e => e.target === e.currentTarget && setShowInboxForm(false)}>
+                      <div className="modal fade-in" style={{ maxHeight: "90vh", overflowY: "auto" }}>
+                        <div style={{ fontSize: 15, fontWeight: 700, color: "#FCD34D", marginBottom: 18, textTransform: "uppercase", letterSpacing: "0.05em" }}>New Lead</div>
+
+                        {/* Email parse box */}
+                        <div style={{ background: "#0D1020", border: "1px solid #3B6FE840", borderRadius: 8, padding: 14, marginBottom: 18 }}>
+                          <div style={{ fontSize: 10, color: "#3B6FE8", textTransform: "uppercase", letterSpacing: "0.07em", fontWeight: 600, marginBottom: 8 }}>⚡ Parse from Email</div>
+                          <textarea
+                            className="fi" rows={5}
+                            placeholder="Paste the email text here and click Parse — Claude will extract the lead details automatically…"
+                            value={inboxParseText}
+                            onChange={e => setInboxParseText(e.target.value)}
+                            style={{ resize: "vertical", fontSize: 12 }} />
+                          <button
+                            className="btn-primary" style={{ marginTop: 8, width: "100%", opacity: inboxParsing ? 0.6 : 1 }}
+                            onClick={parseInboxEmail} disabled={inboxParsing || !inboxParseText.trim()}>
+                            {inboxParsing ? "Parsing…" : "⚡ Parse Email"}
+                          </button>
+                        </div>
+
+                        <div style={{ fontSize: 10, color: "#2A3560", textTransform: "uppercase", letterSpacing: "0.1em", textAlign: "center", marginBottom: 14 }}>— or fill in manually —</div>
+
+                        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                          <div><label className="lbl">Job Title / Name *</label><input className="fi" value={inboxForm.name} onChange={e => setInboxForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Roof Leak Repair" /></div>
+                          <div className="g2">
+                            <div><label className="lbl">Client / Company</label><input className="fi" value={inboxForm.companyName} onChange={e => setInboxForm(f => ({ ...f, companyName: e.target.value }))} /></div>
+                            <div><label className="lbl">Store Code</label><input className="fi" value={inboxForm.storeCode} onChange={e => setInboxForm(f => ({ ...f, storeCode: e.target.value }))} placeholder="e.g. CS 4308" /></div>
+                          </div>
+                          <div><label className="lbl">Site Address</label><input className="fi" value={inboxForm.address} onChange={e => setInboxForm(f => ({ ...f, address: e.target.value }))} /></div>
+                          <div><label className="lbl">Scope of Work</label><textarea className="fi" rows={3} value={inboxForm.scopeOfWork} onChange={e => setInboxForm(f => ({ ...f, scopeOfWork: e.target.value }))} style={{ resize: "vertical" }} /></div>
+                          <div className="g2">
+                            <div><label className="lbl">Owner's Project / WO #</label><input className="fi" value={inboxForm.ownersProjectNo} onChange={e => setInboxForm(f => ({ ...f, ownersProjectNo: e.target.value }))} /></div>
+                            <div><label className="lbl">Bid Due Date</label><input className="fi" type="date" value={inboxForm.bidDueDate} onChange={e => setInboxForm(f => ({ ...f, bidDueDate: e.target.value }))} /></div>
+                          </div>
+                          <div><label className="lbl">Notes</label><textarea className="fi" rows={2} value={inboxForm.notes} onChange={e => setInboxForm(f => ({ ...f, notes: e.target.value }))} style={{ resize: "vertical" }} /></div>
+                          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", paddingTop: 4 }}>
+                            <button className="btn-ghost" style={{ padding: "8px 16px" }} onClick={() => setShowInboxForm(false)}>Cancel</button>
+                            <button className="btn-primary" onClick={saveInboxLead}>Add to Inbox</button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                 <div>
                   <div style={{ fontSize: 22, fontWeight: 700, color: "#FFFFFF", letterSpacing: "-0.01em", textTransform: "uppercase" }}>Pipeline</div>
