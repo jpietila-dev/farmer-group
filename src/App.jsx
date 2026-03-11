@@ -187,6 +187,18 @@ const INIT_SITES = [
 
 const NEXT_STEP_OPTIONS = ["Geotechnical", "Engage Engineer", "Underwriting", "LOI", "Under Contract"];
 const SITES_BUS = ["capital", "facility", "lawn", "snow"];
+const LAWN_SNOW_SITES_BUS = ["lawn", "snow"];
+
+const PIN_COLORS = ["#3B6FE8","#4ADE80","#F97316","#A78BFA","#F87171","#FCD34D","#60A5FA","#FB923C","#34D399","#E879F9","#F472B6","#38BDF8"];
+
+const INIT_LAWN_SITES = [
+  { id: "ln1", companyId: "c1", storeNumber: "L001", address: "Philadelphia, PA", phone: "", accessCode: "", notes: "", lat: 39.9526, lng: -75.1652 },
+  { id: "ln2", companyId: "c2", storeNumber: "L002", address: "Baltimore, MD",    phone: "", accessCode: "", notes: "", lat: 39.2904, lng: -76.6122 },
+];
+const INIT_SNOW_SITES = [
+  { id: "sn1", companyId: "c1", storeNumber: "S001", address: "Philadelphia, PA", phone: "", accessCode: "", notes: "", lat: 39.9526, lng: -75.1652 },
+  { id: "sn2", companyId: "c3", storeNumber: "S002", address: "Pittsburgh, PA",   phone: "", accessCode: "", notes: "", lat: 40.4406, lng: -79.9959 },
+];
 
 const CAPEX_FM_STAGES = [
   { id: "estimating",      label: "Estimating",      actionLabel: "Bid Due Date",      actionKey: "bidDueDate",      color: "#818CF8" },
@@ -273,6 +285,16 @@ export default function App() {
   const [selectedSite, setSelectedSite] = useState(null);
   const [siteSearch,   setSiteSearch]   = useState("");
 
+  // Lawn / Snow sites
+  const [lawnSites,        setLawnSites]        = useState(INIT_LAWN_SITES);
+  const [snowSites,        setSnowSites]        = useState(INIT_SNOW_SITES);
+  const [lsSearch,         setLsSearch]         = useState("");
+  const [selectedLsSite,   setSelectedLsSite]   = useState(null);
+  const [showLsSiteForm,   setShowLsSiteForm]   = useState(false);
+  const [editLsSiteId,     setEditLsSiteId]     = useState(null);
+  const [lsSiteForm,       setLsSiteForm]       = useState({ companyId: "", storeNumber: "", address: "", phone: "", accessCode: "", notes: "", lat: "", lng: "" });
+  const [mapLoaded,        setMapLoaded]        = useState(false);
+
   const navItems = NAV_ITEMS[activeBU] || NAV_ITEMS.all;
   const buColor  = BU_COLORS[activeBU];
 
@@ -331,6 +353,27 @@ export default function App() {
     const ids = siteForm.contactIds || [];
     setSiteForm(f => ({ ...f, contactIds: ids.includes(contactId) ? ids.filter(i => i !== contactId) : [...ids, contactId] }));
   };
+
+  // Lawn/Snow site helpers
+  const lsData     = activeBU === "lawn" ? lawnSites : snowSites;
+  const setLsData  = activeBU === "lawn" ? setLawnSites : setSnowSites;
+  const openAddLsSite  = () => { setEditLsSiteId(null); setLsSiteForm({ companyId: "", storeNumber: "", address: "", phone: "", accessCode: "", notes: "", lat: "", lng: "" }); setShowLsSiteForm(true); };
+  const openEditLsSite = (s) => { setEditLsSiteId(s.id); setLsSiteForm({ ...s, lat: String(s.lat || ""), lng: String(s.lng || "") }); setShowLsSiteForm(true); };
+  const saveLsSite = () => {
+    if (!lsSiteForm.address.trim() && !lsSiteForm.storeNumber.trim()) return;
+    const entry = { ...lsSiteForm, lat: parseFloat(lsSiteForm.lat) || null, lng: parseFloat(lsSiteForm.lng) || null };
+    if (editLsSiteId) setLsData(lsData.map(s => s.id === editLsSiteId ? { ...entry, id: editLsSiteId } : s));
+    else setLsData([...lsData, { ...entry, id: (activeBU === "lawn" ? "ln" : "sn") + Date.now() }]);
+    setShowLsSiteForm(false);
+  };
+  const deleteLsSite = (id) => { setLsData(lsData.filter(s => s.id !== id)); setSelectedLsSite(null); };
+
+  // Company color map for pins
+  const companyColorMap = useMemo(() => {
+    const map = {};
+    companies.forEach((c, i) => { map[c.id] = PIN_COLORS[i % PIN_COLORS.length]; });
+    return map;
+  }, [companies]);
 
   // CapEx job helpers
   const openAddCapex = () => { setEditCapexId(null); setCapexForm({ name: "", companyId: "", siteId: "", contractValue: "", stage: "estimating", startDate: "", endDate: "", pm: "", pct: 0, bidDueDate: "", followUpDate: "", buyoutDate: "", invoiceDate: "", notes: "" }); setShowCapexForm(true); };
@@ -1068,28 +1111,58 @@ export default function App() {
             </div>
           )}
 
-          {/* ── SITES ── */}
-          {activeNav === "sites" && SITES_BUS.includes(activeBU) && (
+          {/* ── SITES (CI / FM) ── */}
+          {activeNav === "sites" && (activeBU === "capital" || activeBU === "facility") && (
             <div className="fade-in" style={{ display: "flex", flexDirection: "column", gap: 22 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div>
                   <div style={{ fontSize: 22, fontWeight: 700, color: "#FFFFFF", letterSpacing: "-0.01em", textTransform: "uppercase" }}>Sites</div>
                   <div style={{ fontSize: 11, color: "#3A4560", marginTop: 3, letterSpacing: "0.06em" }}>
-                    {BUSINESS_UNITS.find(b => b.id === activeBU)?.label.toUpperCase()} · {sites.filter(s => activeBU === "all" || s.companyId).length} SITES
+                    {BUSINESS_UNITS.find(b => b.id === activeBU)?.label.toUpperCase()} · {sites.length} SITES
                   </div>
                 </div>
                 <div style={{ display: "flex", gap: 8 }}>
                   <input className="fi" style={{ width: 200 }} placeholder="Search sites…" value={siteSearch} onChange={e => setSiteSearch(e.target.value)} />
+                  <label className="btn-ghost" style={{ cursor: "pointer", display: "inline-flex", alignItems: "center", padding: "5px 10px", borderRadius: 5, border: "1px solid #1E2640", color: "#4A5270", fontSize: 11, fontFamily: "inherit" }}>
+                    ↑ Import CSV
+                    <input type="file" accept=".csv" style={{ display: "none" }} onChange={e => {
+                      const file = e.target.files[0]; if (!file) return;
+                      const reader = new FileReader();
+                      reader.onload = (evt) => {
+                        const lines = evt.target.result.split("\n").map(l => l.trim()).filter(Boolean);
+                        if (lines.length < 2) return;
+                        const headers = lines[0].split(",").map(h => h.trim().toLowerCase().replace(/[^a-z]/g, ""));
+                        const col = (name) => headers.indexOf(name);
+                        const newCompanies = []; const newSites = []; const companyMap = {};
+                        companies.forEach(c => { companyMap[c.name.toLowerCase()] = c.id; });
+                        lines.slice(1).forEach(line => {
+                          const cells = line.split(",").map(c => c.trim().replace(/^"|"$/g, ""));
+                          const companyName = col("company") >= 0 ? cells[col("company")] : "";
+                          const storeNumber = col("storenumber") >= 0 ? cells[col("storenumber")] : "";
+                          const address = col("address") >= 0 ? cells[col("address")] : "";
+                          const phone = col("phone") >= 0 ? cells[col("phone")] : "";
+                          const accessCode = col("accesscode") >= 0 ? cells[col("accesscode")] : "";
+                          if (!storeNumber && !address) return;
+                          let companyId = companyMap[companyName.toLowerCase()];
+                          if (!companyId && companyName) { companyId = "c" + Date.now() + Math.random().toString(36).slice(2,6); newCompanies.push({ id: companyId, name: companyName, website: "", address: "", logo: "", notes: "" }); companyMap[companyName.toLowerCase()] = companyId; }
+                          newSites.push({ id: "s" + Date.now() + Math.random().toString(36).slice(2,6), companyId: companyId || "", contactIds: [], storeNumber, address, phone, accessCode, notes: "" });
+                        });
+                        if (newCompanies.length) setCompanies(prev => [...prev, ...newCompanies]);
+                        if (newSites.length) setSites(prev => [...prev, ...newSites]);
+                        alert("Imported " + newSites.length + " sites" + (newCompanies.length ? " + " + newCompanies.length + " companies" : "") + "!");
+                        e.target.value = "";
+                      };
+                      reader.readAsText(file);
+                    }} />
+                  </label>
                   <button className="btn-primary" onClick={openAddSite}>+ Add Site</button>
                 </div>
               </div>
-
-              {/* Stats */}
               <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 12 }}>
                 {[
-                  { label: "Total Sites",    value: sites.length,                                                        color: buColor.accent },
-                  { label: "Companies",      value: [...new Set(sites.map(s => s.companyId))].length,                    color: "#A78BFA" },
-                  { label: "Total Contacts", value: [...new Set(sites.flatMap(s => s.contactIds || []))].length,         color: "#4ADE80" },
+                  { label: "Total Sites", value: sites.length, color: buColor.accent },
+                  { label: "Companies",   value: [...new Set(sites.map(s => s.companyId))].length, color: "#A78BFA" },
+                  { label: "Contacts",    value: [...new Set(sites.flatMap(s => s.contactIds || []))].length, color: "#4ADE80" },
                 ].map(s => (
                   <div key={s.label} className="stat-card" style={{ position: "relative", overflow: "hidden", padding: "14px 18px" }}>
                     <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: s.color }} />
@@ -1098,16 +1171,10 @@ export default function App() {
                   </div>
                 ))}
               </div>
-
-              {/* Sites grid */}
               <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 12 }}>
-                {sites.filter(site => {
+                {sites.filter(site => { const co = companies.find(c => c.id === site.companyId); const q = siteSearch.toLowerCase(); return !q || (site.storeNumber||"").toLowerCase().includes(q) || (site.address||"").toLowerCase().includes(q) || (co?.name||"").toLowerCase().includes(q); }).map(site => {
                   const co = companies.find(c => c.id === site.companyId);
-                  const q  = siteSearch.toLowerCase();
-                  return !q || (site.storeNumber || "").toLowerCase().includes(q) || (site.address || "").toLowerCase().includes(q) || (co?.name || "").toLowerCase().includes(q);
-                }).map(site => {
-                  const co           = companies.find(c => c.id === site.companyId);
-                  const siteContacts = contacts.filter(p => (site.contactIds || []).includes(p.id));
+                  const siteContacts = contacts.filter(p => (site.contactIds||[]).includes(p.id));
                   return (
                     <div key={site.id} className="company-card" onClick={() => setSelectedSite(site)}>
                       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
@@ -1129,14 +1196,176 @@ export default function App() {
                     </div>
                   );
                 })}
-                {sites.length === 0 && (
-                  <div style={{ gridColumn: "1/-1", textAlign: "center", padding: "48px", color: "#2A3560", fontSize: 12, background: "#161B28", borderRadius: 10, border: "1px solid #1E2640" }}>
-                    No sites yet — add your first one
-                  </div>
-                )}
+                {sites.length === 0 && <div style={{ gridColumn: "1/-1", textAlign: "center", padding: "48px", color: "#2A3560", fontSize: 12, background: "#161B28", borderRadius: 10, border: "1px solid #1E2640" }}>No sites yet</div>}
               </div>
             </div>
           )}
+
+          {/* ── SITES MAP (Lawn / Snow) ── */}
+          {activeNav === "sites" && LAWN_SNOW_SITES_BUS.includes(activeBU) && (() => {
+            const currentSites = activeBU === "lawn" ? lawnSites : snowSites;
+            const setCurrentSites = activeBU === "lawn" ? setLawnSites : setSnowSites;
+            const filteredSites = currentSites.filter(site => {
+              const co = companies.find(c => c.id === site.companyId);
+              const q = lsSearch.toLowerCase();
+              return !q || (site.storeNumber||"").toLowerCase().includes(q) || (site.address||"").toLowerCase().includes(q) || (co?.name||"").toLowerCase().includes(q);
+            });
+            const uniqueCompanyIds = [...new Set(currentSites.map(s => s.companyId).filter(Boolean))];
+            const sitesWithCoords = filteredSites.filter(s => s.lat && s.lng);
+
+            return (
+              <div className="fade-in" style={{ display: "flex", flexDirection: "column", gap: 22 }}>
+                {/* Header */}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div>
+                    <div style={{ fontSize: 22, fontWeight: 700, color: "#FFFFFF", letterSpacing: "-0.01em", textTransform: "uppercase" }}>Sites — {activeBU === "lawn" ? "Lawn" : "Snow"}</div>
+                    <div style={{ fontSize: 11, color: "#3A4560", marginTop: 3, letterSpacing: "0.06em" }}>{currentSites.length} SITES · {uniqueCompanyIds.length} COMPANIES</div>
+                  </div>
+                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                    <input className="fi" style={{ width: 180 }} placeholder="Search sites…" value={lsSearch} onChange={e => setLsSearch(e.target.value)} />
+                    <label className="btn-ghost" style={{ cursor: "pointer", display: "inline-flex", alignItems: "center", padding: "5px 10px", borderRadius: 5, border: "1px solid #1E2640", color: "#4A5270", fontSize: 11, fontFamily: "inherit" }}>
+                      ↑ Import CSV
+                      <input type="file" accept=".csv" style={{ display: "none" }} onChange={e => {
+                        const file = e.target.files[0]; if (!file) return;
+                        const reader = new FileReader();
+                        reader.onload = async (evt) => {
+                          const lines = evt.target.result.split("\n").map(l => l.trim()).filter(Boolean);
+                          if (lines.length < 2) return;
+                          const headers = lines[0].split(",").map(h => h.trim().toLowerCase().replace(/[^a-z]/g, ""));
+                          const col = (name) => headers.indexOf(name);
+                          const newCompanies = []; const newSites = []; const companyMap = {};
+                          companies.forEach(c => { companyMap[c.name.toLowerCase()] = c.id; });
+                          for (const line of lines.slice(1)) {
+                            const cells = line.split(",").map(c => c.trim().replace(/^"|"$/g, ""));
+                            const companyName = col("company") >= 0 ? cells[col("company")] : "";
+                            const storeNumber = col("storenumber") >= 0 ? cells[col("storenumber")] : "";
+                            const address = col("address") >= 0 ? cells[col("address")] : "";
+                            const phone = col("phone") >= 0 ? cells[col("phone")] : "";
+                            const accessCode = col("accesscode") >= 0 ? cells[col("accesscode")] : "";
+                            if (!storeNumber && !address) continue;
+                            let companyId = companyMap[companyName.toLowerCase()];
+                            if (!companyId && companyName) { companyId = "c" + Date.now() + Math.random().toString(36).slice(2,6); newCompanies.push({ id: companyId, name: companyName, website: "", address: "", logo: "", notes: "" }); companyMap[companyName.toLowerCase()] = companyId; }
+                            let lat = null, lng = null;
+                            if (address) {
+                              try {
+                                const res = await fetch("https://nominatim.openstreetmap.org/search?format=json&limit=1&q=" + encodeURIComponent(address));
+                                const geo = await res.json();
+                                if (geo[0]) { lat = parseFloat(geo[0].lat); lng = parseFloat(geo[0].lon); }
+                              } catch(e) {}
+                            }
+                            newSites.push({ id: (activeBU === "lawn" ? "ln" : "sn") + Date.now() + Math.random().toString(36).slice(2,6), companyId: companyId || "", storeNumber, address, phone, accessCode, notes: "", lat, lng });
+                          }
+                          if (newCompanies.length) setCompanies(prev => [...prev, ...newCompanies]);
+                          if (newSites.length) setCurrentSites(prev => [...prev, ...newSites]);
+                          alert("Imported " + newSites.length + " sites" + (newSites.filter(s=>s.lat).length < newSites.length ? " (" + newSites.filter(s=>!s.lat).length + " without coordinates — enter address manually to geocode)" : "") + "!");
+                          e.target.value = "";
+                        };
+                        reader.readAsText(file);
+                      }} />
+                    </label>
+                    <button className="btn-primary" onClick={openAddLsSite}>+ Add Site</button>
+                  </div>
+                </div>
+
+                {/* Stats */}
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 12 }}>
+                  {[
+                    { label: "Total Sites",      value: currentSites.length,       color: buColor.accent },
+                    { label: "Companies",         value: uniqueCompanyIds.length,   color: "#A78BFA" },
+                    { label: "Mapped",            value: sitesWithCoords.length,    color: "#4ADE80" },
+                  ].map(s => (
+                    <div key={s.label} className="stat-card" style={{ position: "relative", overflow: "hidden", padding: "14px 18px" }}>
+                      <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: s.color }} />
+                      <div style={{ fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "#3A4560", marginBottom: 6 }}>{s.label}</div>
+                      <div style={{ fontSize: 22, fontWeight: 700, color: s.color }}>{s.value}</div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* MAP */}
+                <div style={{ background: "#161B28", border: "1px solid #1E2640", borderRadius: 12, overflow: "hidden" }}>
+                  <div style={{ padding: "12px 16px", borderBottom: "1px solid #1E2640", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <div style={{ fontSize: 11, color: "#3A4560", letterSpacing: "0.08em", textTransform: "uppercase", fontWeight: 600 }}>Service Area Map</div>
+                    <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+                      {uniqueCompanyIds.map(cid => {
+                        const co = companies.find(c => c.id === cid);
+                        return co ? (
+                          <div key={cid} style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                            <div style={{ width: 10, height: 10, borderRadius: "50%", background: companyColorMap[cid], flexShrink: 0 }} />
+                            <span style={{ fontSize: 10, color: "#B8C4E0" }}>{co.name}</span>
+                          </div>
+                        ) : null;
+                      })}
+                    </div>
+                  </div>
+                  <div style={{ position: "relative", height: 460 }}>
+                    <iframe
+                      key={activeBU + currentSites.length}
+                      style={{ width: "100%", height: "100%", border: "none" }}
+                      srcDoc={`<!DOCTYPE html><html><head>
+                        <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+                        <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+                        <style>html,body,#map{margin:0;padding:0;height:100%;background:#0F1117;}</style>
+                      </head><body>
+                        <div id="map"></div>
+                        <script>
+                          var map = L.map('map', { zoomControl: true, attributionControl: false }).setView([39.5, -78.5], 6);
+                          L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { maxZoom: 19 }).addTo(map);
+                          var sites = ${JSON.stringify(sitesWithCoords.map(s => ({ lat: s.lat, lng: s.lng, label: (s.storeNumber ? "#" + s.storeNumber + " " : "") + s.address, company: companies.find(c => c.id === s.companyId)?.name || "", color: companyColorMap[s.companyId] || "#3B6FE8" })))};
+                          var bounds = [];
+                          sites.forEach(function(s) {
+                            var icon = L.divIcon({ className: '', html: '<div style="width:14px;height:14px;border-radius:50%;background:' + s.color + ';border:2px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.5);cursor:pointer;"></div>', iconSize:[14,14], iconAnchor:[7,7] });
+                            L.marker([s.lat, s.lng], { icon: icon }).addTo(map).bindPopup('<div style="font-family:sans-serif;font-size:12px;color:#111;min-width:160px"><b>' + (s.label||'Site') + '</b><br/><span style="color:#555">' + s.company + '</span></div>');
+                            bounds.push([s.lat, s.lng]);
+                          });
+                          if (bounds.length > 1) map.fitBounds(bounds, { padding: [40,40] });
+                          else if (bounds.length === 1) map.setView(bounds[0], 10);
+                        </script>
+                      </body></html>`}
+                    />
+                    {sitesWithCoords.length === 0 && (
+                      <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "#0F111780", pointerEvents: "none" }}>
+                        <div style={{ textAlign: "center", color: "#3A4560" }}>
+                          <div style={{ fontSize: 32, marginBottom: 8 }}>🗺️</div>
+                          <div style={{ fontSize: 13 }}>No sites with coordinates yet</div>
+                          <div style={{ fontSize: 11, marginTop: 4 }}>Add sites with addresses to see them on the map</div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Sites list */}
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  {filteredSites.map(site => {
+                    const co = companies.find(c => c.id === site.companyId);
+                    const pinColor = companyColorMap[site.companyId] || "#3A4560";
+                    return (
+                      <div key={site.id} className="opp-row" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }} onClick={() => setSelectedLsSite(site)}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 12, flex: 1, minWidth: 0 }}>
+                          <div style={{ width: 10, height: 10, borderRadius: "50%", background: pinColor, flexShrink: 0 }} />
+                          <div>
+                            <div style={{ fontSize: 13, color: "#E8ECF4", fontWeight: 600 }}>{site.storeNumber ? "Store #" + site.storeNumber : site.address}</div>
+                            <div style={{ display: "flex", gap: 12, marginTop: 2 }}>
+                              {co      && <span style={{ fontSize: 11, color: "#3B6FE8" }}>{co.name}</span>}
+                              {site.address && site.storeNumber && <span style={{ fontSize: 11, color: "#3A4560" }}>📍 {site.address}</span>}
+                              {site.phone   && <span style={{ fontSize: 11, color: "#3A4560" }}>📞 {site.phone}</span>}
+                              {!site.lat    && <span style={{ fontSize: 10, color: "#F87171" }}>⚠ No coordinates</span>}
+                            </div>
+                          </div>
+                        </div>
+                        <div style={{ display: "flex", gap: 5 }} onClick={e => e.stopPropagation()}>
+                          <button className="btn-ghost" style={{ fontSize: 11 }} onClick={() => openEditLsSite(site)}>✎</button>
+                          <button className="btn-ghost" style={{ fontSize: 11, color: "#F87171", borderColor: "#F8717120" }} onClick={() => deleteLsSite(site.id)}>✕</button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {filteredSites.length === 0 && <div style={{ textAlign: "center", padding: "48px", color: "#2A3560", fontSize: 12, background: "#161B28", borderRadius: 10, border: "1px solid #1E2640" }}>No sites yet — add your first one</div>}
+                </div>
+              </div>
+            );
+          })()}
 
           {/* ── CAPEX JOBS ── */}
           {activeNav === "jobs" && activeBU === "capital" && (
@@ -2019,6 +2248,81 @@ export default function App() {
               <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
                 <button className="btn-ghost"   style={{ padding: "8px 16px" }} onClick={() => setShowFmForm(false)}>Cancel</button>
                 <button className="btn-primary" onClick={saveFm}>{editFmId ? "Save Changes" : "Add Job"}</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── LAWN/SNOW SITE SIDE PANEL ── */}
+      {selectedLsSite && (
+        <div className="side-panel slide-in">
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: "#FFFFFF", textTransform: "uppercase", letterSpacing: "0.06em" }}>{activeBU === "lawn" ? "🌿 Lawn Site" : "❄️ Snow Site"}</div>
+            <button className="btn-ghost" onClick={() => setSelectedLsSite(null)}>✕</button>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <div style={{ width: 12, height: 12, borderRadius: "50%", background: companyColorMap[selectedLsSite.companyId] || "#3A4560", flexShrink: 0 }} />
+              <div>
+                <div style={{ fontSize: 15, color: "#E8ECF4", fontWeight: 600 }}>{selectedLsSite.storeNumber ? "Store #" + selectedLsSite.storeNumber : selectedLsSite.address}</div>
+                {(() => { const co = companies.find(c => c.id === selectedLsSite.companyId); return co ? <div style={{ fontSize: 11, color: "#3B6FE8" }}>{co.name}</div> : null; })()}
+              </div>
+            </div>
+            <div style={{ background: "#0A0D16", borderRadius: 8, padding: "14px", border: "1px solid #1E2640", display: "flex", flexDirection: "column", gap: 10 }}>
+              {[
+                { label: "Address",     value: selectedLsSite.address     || "—" },
+                { label: "Phone",       value: selectedLsSite.phone        || "—" },
+                { label: "Coordinates", value: selectedLsSite.lat ? selectedLsSite.lat.toFixed(4) + ", " + selectedLsSite.lng.toFixed(4) : "Not geocoded" },
+              ].map(r => (
+                <div key={r.label} style={{ display: "flex", justifyContent: "space-between" }}>
+                  <span style={{ fontSize: 11, color: "#3A4560" }}>{r.label}</span>
+                  <span style={{ fontSize: 11, color: "#B8C4E0" }}>{r.value}</span>
+                </div>
+              ))}
+            </div>
+            {selectedLsSite.accessCode && (
+              <div style={{ background: "#FCD34D15", border: "1px solid #FCD34D40", borderRadius: 8, padding: "12px 14px" }}>
+                <div style={{ fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "#3A4560", marginBottom: 4 }}>Access Code</div>
+                <div style={{ fontSize: 18, fontWeight: 700, color: "#FCD34D", letterSpacing: "0.15em" }}>{selectedLsSite.accessCode}</div>
+              </div>
+            )}
+            {selectedLsSite.notes && <div style={{ fontSize: 12, color: "#6B7694", lineHeight: 1.6, background: "#0A0D16", padding: "10px 12px", borderRadius: 6, border: "1px solid #1E2640" }}>{selectedLsSite.notes}</div>}
+            <div style={{ display: "flex", gap: 8 }}>
+              <button className="btn-ghost" style={{ flex: 1 }} onClick={() => { openEditLsSite(selectedLsSite); setSelectedLsSite(null); }}>✎ Edit</button>
+              <button className="btn-ghost" style={{ color: "#F87171", borderColor: "#F8717120" }} onClick={() => deleteLsSite(selectedLsSite.id)}>✕</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── LAWN/SNOW SITE FORM ── */}
+      {showLsSiteForm && (
+        <div className="modal-bg" onClick={e => e.target === e.currentTarget && setShowLsSiteForm(false)}>
+          <div className="modal fade-in">
+            <div style={{ fontSize: 16, fontWeight: 700, color: "#FFFFFF", marginBottom: 22, textTransform: "uppercase" }}>{editLsSiteId ? "Edit Site" : "Add Site"}</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              <div><label className="lbl">Company</label>
+                <select className="fi" value={lsSiteForm.companyId} onChange={e => setLsSiteForm(f => ({ ...f, companyId: e.target.value }))}>
+                  <option value="">Select company…</option>
+                  {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              </div>
+              <div className="g2">
+                <div><label className="lbl">Store Number</label><input className="fi" value={lsSiteForm.storeNumber} onChange={e => setLsSiteForm(f => ({ ...f, storeNumber: e.target.value }))} placeholder="e.g. 1042" /></div>
+                <div><label className="lbl">Phone</label><input className="fi" value={lsSiteForm.phone} onChange={e => setLsSiteForm(f => ({ ...f, phone: e.target.value }))} placeholder="(555) 000-0000" /></div>
+              </div>
+              <div><label className="lbl">Address</label><input className="fi" value={lsSiteForm.address} onChange={e => setLsSiteForm(f => ({ ...f, address: e.target.value }))} placeholder="123 Main St, City, State" /></div>
+              <div><label className="lbl">Access Code</label><input className="fi" value={lsSiteForm.accessCode} onChange={e => setLsSiteForm(f => ({ ...f, accessCode: e.target.value }))} placeholder="Gate / door code" /></div>
+              <div className="g2">
+                <div><label className="lbl">Latitude</label><input className="fi" type="number" step="0.0001" value={lsSiteForm.lat} onChange={e => setLsSiteForm(f => ({ ...f, lat: e.target.value }))} placeholder="e.g. 39.9526" /></div>
+                <div><label className="lbl">Longitude</label><input className="fi" type="number" step="0.0001" value={lsSiteForm.lng} onChange={e => setLsSiteForm(f => ({ ...f, lng: e.target.value }))} placeholder="e.g. -75.1652" /></div>
+              </div>
+              <div style={{ fontSize: 10, color: "#3A4560" }}>💡 Tip: Import via CSV to auto-geocode addresses, or look up coordinates at maps.google.com</div>
+              <div><label className="lbl">Notes</label><textarea className="fi" rows={3} value={lsSiteForm.notes} onChange={e => setLsSiteForm(f => ({ ...f, notes: e.target.value }))} style={{ resize: "vertical" }} /></div>
+              <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+                <button className="btn-ghost" style={{ padding: "8px 16px" }} onClick={() => setShowLsSiteForm(false)}>Cancel</button>
+                <button className="btn-primary" onClick={saveLsSite}>{editLsSiteId ? "Save Changes" : "Add Site"}</button>
               </div>
             </div>
           </div>
