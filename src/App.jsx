@@ -468,9 +468,206 @@ function SubPage({ token, fmJobs, setFmJobs, subcontractors, companies, sites })
   );
 }
 
+// ── SUB SCHEDULING + INVOICE PAGE ────────────────────────────────────────────
+function SchedPage({ token, fmJobs, setFmJobs, subcontractors, companies, sites }) {
+  const job = fmJobs.find(j => j.schedToken === token);
+  const sub  = subcontractors.find(s => s.id === job?.subcontractorId);
+  const co   = companies.find(c => c.id === job?.companyId);
+  const site = sites.find(s => s.id === job?.siteId);
+
+  const [view,         setView]         = useState("main"); // main | invoice | done
+  const [schedDate,    setSchedDate]    = useState(job?.scheduledDate || "");
+  const [invoiceAmt,   setInvoiceAmt]   = useState("");
+  const [invoiceNotes, setInvoiceNotes] = useState("");
+  const [invoicePhotos,setInvoicePhotos]= useState([]);
+  const [uploading,    setUploading]    = useState(false);
+
+  const update = (patch) => setFmJobs(prev => prev.map(j => j.id === job.id ? { ...j, ...patch } : j));
+
+  const today = new Date(); today.setHours(0,0,0,0);
+  const schedDt = job?.scheduledDate ? new Date(job.scheduledDate + "T12:00:00") : null;
+  const twoDaysBefore = schedDt ? new Date(schedDt.getTime() - 2*86400000) : null;
+  const isReminder = twoDaysBefore && today >= twoDaysBefore && today < schedDt;
+
+  const handlePhotoUpload = (e) => {
+    const files = Array.from(e.target.files);
+    setUploading(true);
+    Promise.all(files.map(f => new Promise(res => {
+      const r = new FileReader();
+      r.onload = ev => res({ data: ev.target.result, name: f.name });
+      r.readAsDataURL(f);
+    }))).then(photos => { setInvoicePhotos(prev => [...prev, ...photos]); setUploading(false); });
+    e.target.value = "";
+  };
+
+  if (!job) return (
+    <div style={{ minHeight: "100vh", background: "#0F1117", display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <div style={{ textAlign: "center", color: "#3A4560" }}>
+        <div style={{ fontSize: 48, marginBottom: 16 }}>🔗</div>
+        <div style={{ fontSize: 18, color: "#E8ECF4", marginBottom: 8 }}>Link not found</div>
+        <div style={{ fontSize: 13 }}>This scheduling link may have expired.</div>
+      </div>
+    </div>
+  );
+
+  const inputSt = { width: "100%", boxSizing: "border-box", padding: "12px", background: "#0F1117", border: "1px solid #2A3560", borderRadius: 8, color: "#E8ECF4", fontSize: 14, fontFamily: "inherit", outline: "none" };
+
+  if (view === "done") return (
+    <div style={{ minHeight: "100vh", background: "#0F1117", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+      <div style={{ maxWidth: 480, width: "100%", textAlign: "center" }}>
+        <div style={{ fontSize: 56, marginBottom: 16 }}>✅</div>
+        <div style={{ fontSize: 22, fontWeight: 700, color: "#E8ECF4", marginBottom: 8 }}>Invoice Submitted!</div>
+        <div style={{ fontSize: 14, color: "#3A4560" }}>Your invoice and photos have been sent to the team for review.</div>
+        <div style={{ marginTop: 32, fontSize: 12, color: "#2A3560" }}>Farmer Development Inc. · (810) 844-1544</div>
+      </div>
+    </div>
+  );
+
+  if (view === "invoice") return (
+    <div style={{ minHeight: "100vh", background: "#0F1117", padding: 24, fontFamily: "inherit" }}>
+      <div style={{ maxWidth: 520, margin: "0 auto" }}>
+        <div style={{ marginBottom: 24 }}>
+          <div style={{ fontSize: 11, color: "#3B6FE8", fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 4 }}>FARMER DEVELOPMENT INC.</div>
+          <div style={{ fontSize: 20, fontWeight: 700, color: "#E8ECF4" }}>Submit Invoice</div>
+          <div style={{ fontSize: 13, color: "#6A7590", marginTop: 4 }}>{job.name}</div>
+        </div>
+
+        <div style={{ background: "#161B28", borderRadius: 12, padding: 24, border: "1px solid #1E2640", display: "flex", flexDirection: "column", gap: 18 }}>
+          <div>
+            <label style={{ display: "block", fontSize: 11, color: "#6A7590", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.07em" }}>Invoice Amount *</label>
+            <div style={{ position: "relative" }}>
+              <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "#6A7590" }}>$</span>
+              <input type="number" value={invoiceAmt} onChange={e => setInvoiceAmt(e.target.value)} placeholder="0.00" style={{ ...inputSt, paddingLeft: 28 }} />
+            </div>
+          </div>
+          <div>
+            <label style={{ display: "block", fontSize: 11, color: "#6A7590", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.07em" }}>Work Completed Notes</label>
+            <textarea value={invoiceNotes} onChange={e => setInvoiceNotes(e.target.value)} rows={3} placeholder="Describe the work completed…" style={{ ...inputSt, resize: "vertical" }} />
+          </div>
+          <div>
+            <label style={{ display: "block", fontSize: 11, color: "#6A7590", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.07em" }}>
+              Photos of Completed Work * <span style={{ color: "#F87171" }}>(Required)</span>
+            </label>
+            {invoicePhotos.length > 0 && (
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8, marginBottom: 10 }}>
+                {invoicePhotos.map((p, i) => (
+                  <div key={i} style={{ position: "relative" }}>
+                    <img src={p.data} alt={p.name} style={{ width: "100%", aspectRatio: "1", objectFit: "cover", borderRadius: 8 }} />
+                    <button onClick={() => setInvoicePhotos(prev => prev.filter((_,j) => j !== i))}
+                      style={{ position: "absolute", top: 4, right: 4, width: 20, height: 20, borderRadius: "50%", border: "none", background: "#F87171CC", color: "#FFF", fontSize: 10, cursor: "pointer", padding: 0 }}>✕</button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <label style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "14px", borderRadius: 8, border: "2px dashed #2A3560", cursor: "pointer", color: "#3B6FE8", fontSize: 13 }}>
+              📷 {uploading ? "Uploading…" : "Add Photos"}
+              <input type="file" accept="image/*" multiple style={{ display: "none" }} onChange={handlePhotoUpload} />
+            </label>
+          </div>
+          <div style={{ display: "flex", gap: 10 }}>
+            <button onClick={() => setView("main")} style={{ flex: 0, padding: "12px 20px", borderRadius: 8, border: "1px solid #2A3560", background: "transparent", color: "#6A7590", fontSize: 14, cursor: "pointer", fontFamily: "inherit" }}>← Back</button>
+            <button
+              disabled={!invoiceAmt || invoicePhotos.length === 0}
+              onClick={() => { update({ subInvoiceSubmitted: true, subInvoiceAmount: invoiceAmt, subInvoiceNotes: invoiceNotes, subInvoicePhotos: invoicePhotos, subInvoiceDate: new Date().toISOString() }); setView("done"); }}
+              style={{ flex: 1, padding: "12px", borderRadius: 8, border: "none", background: (!invoiceAmt || invoicePhotos.length === 0) ? "#2A3560" : "#4ADE80", color: (!invoiceAmt || invoicePhotos.length === 0) ? "#4A5270" : "#0A1A0A", fontSize: 15, fontWeight: 700, cursor: (!invoiceAmt || invoicePhotos.length === 0) ? "not-allowed" : "pointer", fontFamily: "inherit" }}>
+              {invoicePhotos.length === 0 ? "Add photos to submit" : !invoiceAmt ? "Enter invoice amount" : "✅ Submit Invoice"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  return (
+    <div style={{ minHeight: "100vh", background: "#0F1117", padding: 24, fontFamily: "inherit" }}>
+      <div style={{ maxWidth: 520, margin: "0 auto" }}>
+        <div style={{ marginBottom: 24 }}>
+          <div style={{ fontSize: 11, color: "#3B6FE8", fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 6 }}>FARMER DEVELOPMENT INC.</div>
+          <div style={{ fontSize: 22, fontWeight: 700, color: "#E8ECF4" }}>{job.scheduledDate ? (isReminder ? "⏰ Reminder: Work Tomorrow" : "📋 Job Details") : "📅 Schedule Your Visit"}</div>
+          {sub && <div style={{ fontSize: 14, color: "#6A7590", marginTop: 4 }}>Hi {sub.name}</div>}
+        </div>
+
+        {/* 2-day reminder banner */}
+        {isReminder && (
+          <div style={{ background: "#FCD34D15", border: "1px solid #FCD34D40", borderRadius: 12, padding: 16, marginBottom: 16, textAlign: "center" }}>
+            <div style={{ fontSize: 13, color: "#FCD34D", fontWeight: 700 }}>⏰ Work is scheduled for {new Date(job.scheduledDate + "T12:00:00").toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}</div>
+            <div style={{ fontSize: 12, color: "#6A5020", marginTop: 4 }}>Please submit your invoice + photos after completing the work.</div>
+          </div>
+        )}
+
+        {/* Job details */}
+        <div style={{ background: "#161B28", borderRadius: 12, padding: 24, border: "1px solid #1E2640", marginBottom: 16 }}>
+          <div style={{ fontSize: 11, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 10 }}>Job Details</div>
+          <div style={{ fontSize: 18, fontWeight: 700, color: "#E8ECF4", marginBottom: 12 }}>{job.name}</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {co   && <div style={{ display: "flex", gap: 10 }}><span style={{ fontSize: 12, color: "#3A4560", width: 80, flexShrink: 0 }}>Client</span><span style={{ fontSize: 12, color: "#E8ECF4" }}>{co.name}</span></div>}
+            {(site?.address || job.storeCode) && <div style={{ display: "flex", gap: 10 }}><span style={{ fontSize: 12, color: "#3A4560", width: 80, flexShrink: 0 }}>Location</span><span style={{ fontSize: 12, color: "#E8ECF4" }}>{site?.address || "Store " + job.storeCode}</span></div>}
+            {site?.accessCode && <div style={{ display: "flex", gap: 10 }}><span style={{ fontSize: 12, color: "#3A4560", width: 80, flexShrink: 0 }}>Access Code</span><span style={{ fontSize: 14, fontWeight: 700, color: "#4ADE80", fontFamily: "monospace", letterSpacing: "0.1em" }}>{site.accessCode}</span></div>}
+            {job.ownersProjectNo && <div style={{ display: "flex", gap: 10 }}><span style={{ fontSize: 12, color: "#3A4560", width: 80, flexShrink: 0 }}>WO #</span><span style={{ fontSize: 12, color: "#E8ECF4" }}>{job.ownersProjectNo}</span></div>}
+          </div>
+          {job.scopeOfWork && (
+            <div style={{ marginTop: 14, paddingTop: 14, borderTop: "1px solid #1E2640" }}>
+              <div style={{ fontSize: 11, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 6 }}>Scope of Work</div>
+              <div style={{ fontSize: 13, color: "#BCC6D8", lineHeight: 1.6 }}>{job.scopeOfWork}</div>
+            </div>
+          )}
+          {/* Site photos */}
+          {(job.photos||[]).length > 0 && (
+            <div style={{ marginTop: 14, paddingTop: 14, borderTop: "1px solid #1E2640" }}>
+              <div style={{ fontSize: 11, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 8 }}>📸 Site Photos</div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 8 }}>
+                {(job.photos||[]).map((p,i) => <a key={i} href={p.data} target="_blank" rel="noreferrer"><img src={p.data} alt={p.name} style={{ width: "100%", aspectRatio: "4/3", objectFit: "cover", borderRadius: 8 }} /></a>)}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Schedule or invoice actions */}
+        {!job.subInvoiceSubmitted ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            {!job.scheduledDate ? (
+              <>
+                <div style={{ background: "#161B28", borderRadius: 12, padding: 20, border: "1px solid #1E2640" }}>
+                  <div style={{ fontSize: 13, color: "#E8ECF4", fontWeight: 600, marginBottom: 12 }}>Confirm your scheduled date</div>
+                  <input type="date" value={schedDate} onChange={e => setSchedDate(e.target.value)} style={{ ...inputSt, marginBottom: 12 }} min={new Date().toISOString().slice(0,10)} />
+                  <button disabled={!schedDate}
+                    onClick={() => update({ scheduledDate: schedDate })}
+                    style={{ width: "100%", padding: "14px", borderRadius: 10, border: "none", background: schedDate ? "#3B6FE8" : "#2A3560", color: schedDate ? "#FFF" : "#4A5270", fontSize: 15, fontWeight: 700, cursor: schedDate ? "pointer" : "not-allowed", fontFamily: "inherit" }}>
+                    📅 Confirm Schedule Date
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div style={{ background: "#4ADE8015", border: "1px solid #4ADE8030", borderRadius: 12, padding: 16, textAlign: "center" }}>
+                  <div style={{ fontSize: 12, color: "#4ADE80", marginBottom: 4 }}>✓ Scheduled</div>
+                  <div style={{ fontSize: 18, fontWeight: 700, color: "#E8ECF4" }}>{new Date(job.scheduledDate + "T12:00:00").toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}</div>
+                </div>
+                <button onClick={() => setView("invoice")}
+                  style={{ width: "100%", padding: "16px", borderRadius: 10, border: "none", background: "#4ADE80", color: "#0A1A0A", fontSize: 16, fontWeight: 800, cursor: "pointer", fontFamily: "inherit" }}>
+                  📋 Submit Invoice + Photos
+                </button>
+              </>
+            )}
+          </div>
+        ) : (
+          <div style={{ background: "#4ADE8015", border: "1px solid #4ADE8030", borderRadius: 12, padding: 20, textAlign: "center" }}>
+            <div style={{ fontSize: 32, marginBottom: 8 }}>✅</div>
+            <div style={{ fontSize: 16, fontWeight: 700, color: "#4ADE80" }}>Invoice already submitted</div>
+            <div style={{ fontSize: 13, color: "#3A4560", marginTop: 4 }}>Amount: {fmt(Number(job.subInvoiceAmount || 0))}</div>
+          </div>
+        )}
+
+        <div style={{ marginTop: 32, textAlign: "center", fontSize: 11, color: "#2A3560" }}>Farmer Development Inc. · (810) 844-1544</div>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   // URL routing — sub-facing page
-  const urlToken = useMemo(() => new URLSearchParams(window.location.search).get("subtoken"), []);
+  const urlToken  = useMemo(() => new URLSearchParams(window.location.search).get("subtoken"), []);
+  const urlSched  = useMemo(() => new URLSearchParams(window.location.search).get("schedtoken"), []);
 
   const [activeBU,  setActiveBU]  = useState("all");
   const [activeNav, setActiveNav] = useState("dashboard");
@@ -580,7 +777,7 @@ export default function App() {
   // Punch list
   const dynamicPunchList = useMemo(() => {
     const items = [...PUNCH_LIST_STATIC];
-    const today = new Date();
+    const today = new Date(); today.setHours(0,0,0,0);
     const soon  = new Date(today.getTime() + 7 * 86400000);
     const urgent = new Date(today.getTime() + 2 * 86400000);
     pipeline.forEach(o => {
@@ -599,13 +796,42 @@ export default function App() {
         }
       });
     });
+    // FM: owner_approval follow-up reminders (hit PM's list)
+    fmJobs.forEach(j => {
+      if (j.stage === "owner_approval" && j.followUpDate) {
+        const d = new Date(j.followUpDate + "T12:00:00");
+        const overdue = d < today;
+        const pmName = j.pm || j.coordinator || "";
+        if (overdue || d <= soon) {
+          items.push({
+            id: "followup-" + j.id,
+            text: "Follow up on proposal: " + j.name + (pmName ? " (" + pmName + ")" : ""),
+            bu: "facility", priority: overdue || d <= urgent ? "high" : "medium",
+            dueDate: j.followUpDate, tag: "FOLLOW-UP", fmJobId: j.id
+          });
+        }
+      }
+      // 2-day reminder before scheduled work date
+      if (j.stage === "do_work" && j.scheduledDate && !j.subInvoiceSubmitted) {
+        const d = new Date(j.scheduledDate + "T12:00:00");
+        const twoDaysBefore = new Date(d.getTime() - 2*86400000);
+        if (today >= twoDaysBefore && today <= d) {
+          items.push({
+            id: "sched-" + j.id,
+            text: "Work scheduled in 2 days: " + j.name,
+            bu: "facility", priority: "high",
+            dueDate: j.scheduledDate, tag: "SCHEDULED", fmJobId: j.id
+          });
+        }
+      }
+    });
     return items.sort((a, b) => {
       if (!a.dueDate && !b.dueDate) return 0;
       if (!a.dueDate) return 1;
       if (!b.dueDate) return -1;
       return new Date(a.dueDate) - new Date(b.dueDate);
     });
-  }, [pipeline]);
+  }, [pipeline, fmJobs]);
 
   const majorJobs = jobs.filter(j => j.bu === "major");
 
@@ -1076,6 +1302,7 @@ Return ONLY valid JSON, no markdown, no extra text:
 
   // Render sub-facing page if subtoken is in URL
   if (urlToken) return <SubPage token={urlToken} fmJobs={fmJobs} setFmJobs={setFmJobs} subcontractors={subcontractors} companies={companies} sites={sites} />;
+  if (urlSched) return <SchedPage token={urlSched} fmJobs={fmJobs} setFmJobs={setFmJobs} subcontractors={subcontractors} companies={companies} sites={sites} />;
 
   return (
     <div style={{ display: "flex", minHeight: "100vh", background: "#0F1117", color: "#E8ECF4", fontFamily: "'Inter','Segoe UI',sans-serif" }}>
@@ -3199,7 +3426,15 @@ Return ONLY valid JSON, no markdown, no extra text:
                     <div style={{ fontSize: 9, color: "#2A3560", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 2 }}>Pipeline</div>
                     <div style={{ display: "flex", gap: 4, marginBottom: 6 }}>
                       {FM_PIPELINE_STAGES.map(s => (
-                        <button key={s.id} onClick={() => update({ stage: s.id })}
+                        <button key={s.id} onClick={() => {
+                          const patch = { stage: s.id };
+                          if (s.id === "owner_approval" && job.stage !== "owner_approval") {
+                            patch.ownerApprovalDate = new Date().toISOString();
+                            patch.followUpDate = new Date(Date.now() + 3*86400000).toISOString().slice(0,10);
+                            patch.vendorNextStep = "awaiting_confirm";
+                          }
+                          update(patch);
+                        }}
                           style={{ flex: 1, padding: "6px 4px", borderRadius: 5, border: "1px solid", cursor: "pointer", fontSize: 10, fontFamily: "inherit", fontWeight: 600, transition: "all 0.15s", textAlign: "center",
                             borderColor: job.stage === s.id ? s.color : "#1E2640",
                             background:  job.stage === s.id ? s.color + "25" : "transparent",
@@ -3212,7 +3447,20 @@ Return ONLY valid JSON, no markdown, no extra text:
                     <div style={{ fontSize: 9, color: "#2A3560", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 2 }}>Active Jobs</div>
                     <div style={{ display: "flex", gap: 4 }}>
                       {FM_ACTIVE_STAGES.map(s => (
-                        <button key={s.id} onClick={() => update({ stage: s.id })}
+                        <button key={s.id} onClick={() => {
+                          const patch = { stage: s.id };
+                          if (s.id === "do_work" && job.stage !== "do_work") {
+                            // Generate scheduling token for sub
+                            const schedToken = "sched" + Math.random().toString(36).slice(2, 10);
+                            patch.schedToken = schedToken;
+                            patch.schedSentAt = new Date().toISOString();
+                            // Copy link to clipboard + alert
+                            const link = window.location.origin + "/?schedtoken=" + schedToken;
+                            navigator.clipboard?.writeText(link);
+                            setTimeout(() => alert("📅 Scheduling link copied!\n\nSend to " + (subcontractors.find(sub => sub.id === job.subcontractorId)?.name || "the sub") + ":\n\n" + link), 50);
+                          }
+                          update(patch);
+                        }}
                           style={{ flex: 1, padding: "6px 4px", borderRadius: 5, border: "1px solid", cursor: "pointer", fontSize: 10, fontFamily: "inherit", fontWeight: 600, transition: "all 0.15s", textAlign: "center",
                             borderColor: job.stage === s.id ? s.color : "#1E2640",
                             background:  job.stage === s.id ? s.color + "25" : "transparent",
@@ -3223,6 +3471,65 @@ Return ONLY valid JSON, no markdown, no extra text:
                     </div>
                   </div>
                 </div>
+
+                {/* Owner Approval info panel */}
+                {job.stage === "owner_approval" && (
+                  <div style={{ background: "#60A5FA10", border: "1px solid #60A5FA30", borderRadius: 8, padding: "12px 14px" }}>
+                    <div style={{ fontSize: 10, color: "#60A5FA", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 10 }}>📋 Owner Approval</div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                      {job.ownerApprovalDate && (
+                        <div style={{ fontSize: 11, color: "#6A7590" }}>
+                          Sent for approval: <span style={{ color: "#E8ECF4" }}>{new Date(job.ownerApprovalDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</span>
+                        </div>
+                      )}
+                      <div>
+                        <div style={{ fontSize: 10, color: "#3A4560", marginBottom: 4 }}>Follow-up Reminder Date</div>
+                        <input className="fi" type="date" value={job.followUpDate || ""}
+                          onChange={e => update({ followUpDate: e.target.value })}
+                          style={{ borderColor: job.followUpDate && new Date(job.followUpDate) < new Date() ? "#F87171" : undefined }} />
+                        {job.followUpDate && new Date(job.followUpDate) < new Date() && (
+                          <div style={{ fontSize: 10, color: "#F87171", marginTop: 3 }}>⚠ Follow-up overdue</div>
+                        )}
+                      </div>
+                      <div style={{ fontSize: 10, color: "#FCD34D", background: "#FCD34D10", borderRadius: 4, padding: "6px 10px" }}>
+                        🔒 Vendor status locked: Awaiting Confirmation
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Do Work — scheduling info */}
+                {job.stage === "do_work" && job.schedToken && (
+                  <div style={{ background: "#4ADE8010", border: "1px solid #4ADE8030", borderRadius: 8, padding: "12px 14px" }}>
+                    <div style={{ fontSize: 10, color: "#4ADE80", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 8 }}>📅 Scheduling</div>
+                    {job.scheduledDate ? (
+                      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                        <div style={{ fontSize: 11, color: "#E8ECF4" }}>Scheduled: <strong>{new Date(job.scheduledDate + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}</strong></div>
+                        {job.subInvoiceSubmitted && (
+                          <div style={{ background: "#4ADE8015", borderRadius: 6, padding: "8px 10px" }}>
+                            <div style={{ fontSize: 10, color: "#4ADE80", fontWeight: 700, marginBottom: 4 }}>✓ Invoice Submitted</div>
+                            {job.subInvoiceAmount && <div style={{ fontSize: 12, color: "#E8ECF4" }}>Amount: {fmt(Number(job.subInvoiceAmount))}</div>}
+                            {job.subInvoiceNotes && <div style={{ fontSize: 11, color: "#6A7590", marginTop: 2 }}>{job.subInvoiceNotes}</div>}
+                            {(job.subInvoicePhotos||[]).length > 0 && (
+                              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 4, marginTop: 6 }}>
+                                {(job.subInvoicePhotos||[]).map((p,i) => <img key={i} src={p.data} style={{ width: "100%", aspectRatio: "1", objectFit: "cover", borderRadius: 4 }} />)}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div style={{ fontSize: 11, color: "#6A7590" }}>
+                        Awaiting sub to confirm schedule date
+                        {job.schedSentAt && <div style={{ fontSize: 10, marginTop: 2 }}>Link sent: {new Date(job.schedSentAt).toLocaleDateString()}</div>}
+                      </div>
+                    )}
+                    <button onClick={() => navigator.clipboard?.writeText(window.location.origin + "/?schedtoken=" + job.schedToken)}
+                      style={{ marginTop: 8, fontSize: 10, background: "transparent", border: "1px solid #4ADE8030", borderRadius: 4, color: "#4ADE80", padding: "4px 8px", cursor: "pointer", fontFamily: "inherit" }}>
+                      📋 Copy Scheduling Link
+                    </button>
+                  </div>
+                )}
 
                 {/* Key action date */}
                 {st.actionKey && (
@@ -3445,11 +3752,17 @@ Return ONLY valid JSON, no markdown, no extra text:
                 {/* Vendor next step */}
                 <div>
                   <div style={{ fontSize: 10, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5 }}>Vendor Next Step</div>
-                  <select className="fi" value={job.vendorNextStep || ""}
-                    onChange={e => update({ vendorNextStep: e.target.value, vendorQuotePrice: e.target.value !== "need_quote" ? job.vendorQuotePrice : "", vendorQuoteScope: e.target.value !== "need_quote" ? job.vendorQuoteScope : "" })}>
-                    <option value="">— Select —</option>
-                    {VENDOR_NEXT_STEPS.map(v => <option key={v.id} value={v.id}>{v.label}</option>)}
-                  </select>
+                  {job.stage === "owner_approval" ? (
+                    <div style={{ padding: "8px 12px", background: "#FCD34D10", border: "1px solid #FCD34D30", borderRadius: 6, fontSize: 12, color: "#FCD34D", fontWeight: 600 }}>
+                      🔒 Awaiting Confirmation
+                    </div>
+                  ) : (
+                    <select className="fi" value={job.vendorNextStep || ""}
+                      onChange={e => update({ vendorNextStep: e.target.value, vendorQuotePrice: e.target.value !== "need_quote" ? job.vendorQuotePrice : "", vendorQuoteScope: e.target.value !== "need_quote" ? job.vendorQuoteScope : "" })}>
+                      <option value="">— Select —</option>
+                      {VENDOR_NEXT_STEPS.map(v => <option key={v.id} value={v.id}>{v.label}</option>)}
+                    </select>
+                  )}
                   {/* Quote fields — shown only when Need Quote is selected */}
                   {job.vendorNextStep === "need_quote" && (
                     <div style={{ marginTop: 10, background: "#0A0D16", border: "1px solid #A78BFA40", borderRadius: 8, padding: "12px 14px", display: "flex", flexDirection: "column", gap: 10 }}>
@@ -3840,18 +4153,18 @@ Return ONLY valid JSON, no markdown, no extra text:
             <div className="modal fade-in" style={{ maxWidth: 1100, width: "97vw", maxHeight: "94vh", overflowY: "auto", padding: 0, background: "#161B28", borderRadius: 12 }}>
 
               {/* Dark toolbar */}
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 20px", borderBottom: "1px solid #1E2640", flexWrap: "wrap", gap: 10 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "16px 20px", borderBottom: "1px solid #1E2640", flexWrap: "wrap", gap: 12, background: "#0F1117", borderRadius: "12px 12px 0 0" }}>
                 <div style={{ fontSize: 14, fontWeight: 700, color: "#C084FC", letterSpacing: "0.05em" }}>📄 Bid Quote Take-Off</div>
-                <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+                <div style={{ display: "flex", gap: 12, alignItems: "flex-end", flexWrap: "wrap" }}>
                   <div>
-                    <div style={{ fontSize: 9, color: "#3A4560", marginBottom: 3 }}>Proposal #</div>
-                    <input className="fi" style={{ width: 130 }} placeholder="e.g. PS-2026-001" value={proposalNum} onChange={e => setProposalNum(e.target.value)} />
+                    <div style={{ fontSize: 10, color: "#6A7590", marginBottom: 5, textTransform: "uppercase", letterSpacing: "0.07em", fontWeight: 600 }}>Proposal #</div>
+                    <input className="fi" style={{ width: 150, fontSize: 14, fontWeight: 600, borderColor: "#3B6FE8", background: "#161B28" }} placeholder="PS-2026-001" value={proposalNum} onChange={e => setProposalNum(e.target.value)} />
                   </div>
                   <div>
-                    <div style={{ fontSize: 9, color: "#3A4560", marginBottom: 3 }}>Gross Value (override)</div>
+                    <div style={{ fontSize: 10, color: "#FCD34D", marginBottom: 5, textTransform: "uppercase", letterSpacing: "0.07em", fontWeight: 600 }}>Gross Value</div>
                     <div style={{ position: "relative" }}>
-                      <span style={{ position: "absolute", left: 8, top: "50%", transform: "translateY(-50%)", color: "#6A7590", fontSize: 12 }}>$</span>
-                      <input className="fi" type="number" style={{ width: 110, paddingLeft: 20 }}
+                      <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "#FCD34D", fontSize: 14, fontWeight: 700 }}>$</span>
+                      <input className="fi" type="number" style={{ width: 130, paddingLeft: 24, fontSize: 16, fontWeight: 700, color: "#FCD34D", borderColor: "#FCD34D60", background: "#161B28" }}
                         value={proposalGrossValue}
                         onChange={e => {
                           const v = Number(e.target.value);
@@ -3860,10 +4173,10 @@ Return ONLY valid JSON, no markdown, no extra text:
                         }} />
                     </div>
                   </div>
-                  <div style={{ fontSize: 11, color: "#4ADE80", background: "#4ADE8015", border: "1px solid #4ADE8030", borderRadius: 6, padding: "6px 12px", whiteSpace: "nowrap" }}>
-                    OH&P: {fmtD(Math.round(grossValue * 0.20 * 100)/100)} · Grand Total: {fmtD(grandTotal)}
+                  <div style={{ fontSize: 12, color: "#4ADE80", background: "#4ADE8015", border: "1px solid #4ADE8030", borderRadius: 6, padding: "8px 14px", whiteSpace: "nowrap", fontWeight: 600 }}>
+                    OH&P {fmtD(Math.round(grossValue * 0.20 * 100)/100)} · Total {fmtD(grandTotal)}
                   </div>
-                  <button className="btn-primary" style={{ fontSize: 11 }} onClick={printProposal}>🖨 Print / PDF</button>
+                  <button className="btn-primary" onClick={printProposal}>🖨 Print / PDF</button>
                   <button className="btn-ghost" onClick={() => setShowProposal(false)}>✕</button>
                 </div>
               </div>
@@ -4012,9 +4325,6 @@ Return ONLY valid JSON, no markdown, no extra text:
                       <div style={{ display: "flex", justifyContent: "space-between", padding: "4px 0", borderBottom: "1px solid #eee" }}>
                         <span>OH &amp; P</span>
                         <span style={{ fontWeight: 600 }}>{fmtD(ohp20pct)}</span>
-                      </div>
-                      <div style={{ fontSize: 9, color: "#888", textAlign: "right", marginBottom: 4 }}>
-                        20% of {fmtD(grossValue)} · actual margin: {fmtD(grossValue - lineSubTotal)}
                       </div>
                       <div style={{ display: "flex", justifyContent: "space-between", padding: "6px 0", fontWeight: "bold", fontSize: 13, borderTop: "2px solid #000" }}>
                         <strong>Total</strong><strong>{fmtD(grandTotal)}</strong>
