@@ -217,12 +217,13 @@ const CAPEX_STAGES = [
 ];
 
 const FM_STAGES = [
-  { id: "estimating",       label: "Estimating",        actionLabel: "Bid Due Date",    actionKey: "bidDueDate",    color: "#818CF8", phase: "pipeline" },
-  { id: "waiting_quote",    label: "Waiting for Quote", actionLabel: "Quote Due",       actionKey: "quoteDueDate",  color: "#A78BFA", phase: "pipeline" },
-  { id: "owner_approval",   label: "Owner Approval",    actionLabel: "Follow-up Date",  actionKey: "followUpDate",  color: "#60A5FA", phase: "pipeline" },
-  { id: "buyout",           label: "Buyout",             actionLabel: "Buyout Date",     actionKey: "buyoutDate",    color: "#FCD34D", phase: "active"   },
-  { id: "do_work",          label: "Do Work",            actionLabel: "Target End Date", actionKey: "endDate",       color: "#4ADE80", phase: "active"   },
-  { id: "bill",             label: "Bill",               actionLabel: "Invoice Date",    actionKey: "invoiceDate",   color: "#F97316", phase: "active"   },
+  { id: "estimating",         label: "Estimating",          actionLabel: "Bid Due Date",    actionKey: "bidDueDate",    color: "#818CF8", phase: "pipeline" },
+  { id: "waiting_quote",      label: "Waiting for Quote",   actionLabel: "Quote Due",       actionKey: "quoteDueDate",  color: "#A78BFA", phase: "pipeline" },
+  { id: "generate_proposal",  label: "Generate Proposal",   actionLabel: "Proposal Date",   actionKey: "proposalDate",  color: "#C084FC", phase: "pipeline" },
+  { id: "owner_approval",     label: "Owner Approval",      actionLabel: "Follow-up Date",  actionKey: "followUpDate",  color: "#60A5FA", phase: "pipeline" },
+  { id: "buyout",             label: "Buyout",               actionLabel: "Buyout Date",     actionKey: "buyoutDate",    color: "#FCD34D", phase: "active"   },
+  { id: "do_work",            label: "Do Work",              actionLabel: "Target End Date", actionKey: "endDate",       color: "#4ADE80", phase: "active"   },
+  { id: "bill",               label: "Bill",                 actionLabel: "Invoice Date",    actionKey: "invoiceDate",   color: "#F97316", phase: "active"   },
 ];
 
 const FM_PIPELINE_STAGES = FM_STAGES.filter(s => s.phase === "pipeline");
@@ -231,6 +232,15 @@ const FM_ACTIVE_STAGES   = FM_STAGES.filter(s => s.phase === "active");
 // Keep CAPEX_FM_STAGES as alias for CapEx (uses same 5-stage system)
 const CAPEX_FM_STAGES = CAPEX_STAGES;
 
+const VENDOR_NEXT_STEPS = [
+  { id: "need_quote",         label: "Need Quote",          hasQuote: true  },
+  { id: "awaiting_confirm",   label: "Awaiting Confirmation", hasQuote: false },
+  { id: "scheduled",          label: "Scheduled",           hasQuote: false },
+  { id: "work_in_progress",   label: "Work in Progress",    hasQuote: false },
+  { id: "work_complete",      label: "Work Complete",       hasQuote: false },
+  { id: "invoice_submitted",  label: "Invoice Submitted",   hasQuote: false },
+];
+
 const INIT_CAPEX_JOBS = [
   { id: "cx1", name: "Harbor HVAC Upgrade",    companyId: "c3", siteId: "s2", contractValue: 85000,  stage: "do_work",      startDate: "2026-02-15", endDate: "2026-05-30", pm: "Sarah Lee",   pct: 40, bidDueDate: "", followUpDate: "", buyoutDate: "", invoiceDate: "", notes: "Phase 1 underway" },
   { id: "cx2", name: "Elmwood Roof Repair",     companyId: "c2", siteId: "s1", contractValue: 42000,  stage: "estimating",   startDate: "",           endDate: "",           pm: "John Smith",  pct: 0,  bidDueDate: "2026-03-20", followUpDate: "", buyoutDate: "", invoiceDate: "", notes: "Awaiting site visit" },
@@ -238,9 +248,9 @@ const INIT_CAPEX_JOBS = [
 ];
 
 const INIT_FM_JOBS = [
-  { id: "fm1", name: "Door Lock Replacement", companyId: "c2", siteId: "s1", contractValue: 3200,  grossProfit: 800,  stage: "do_work",    startDate: "2026-03-10", endDate: "2026-03-14", pm: "John Smith",  pct: 75,  bidDueDate: "", quoteDueDate: "", followUpDate: "", buyoutDate: "", invoiceDate: "", notes: "Parts on order",  storeCode: "001", projectNo: "260001", ownersProjectNo: "WO-001-0001", vendorInvoiceAmount: 2400, vendorInvoiceNumber: "", subcontractorId: "", vendorNextStep: "", scopeOfWork: "Replace door lock hardware on main entrance", coordinator: "" },
-  { id: "fm2", name: "Ceiling Tile Repair",   companyId: "c3", siteId: "s2", contractValue: 1800,  grossProfit: 600,  stage: "bill",       startDate: "2026-03-05", endDate: "2026-03-06", pm: "Sarah Lee",   pct: 100, bidDueDate: "", quoteDueDate: "", followUpDate: "", buyoutDate: "", invoiceDate: "2026-03-15", notes: "Work complete", storeCode: "002", projectNo: "260002", ownersProjectNo: "WO-002-0002", vendorInvoiceAmount: 1200, vendorInvoiceNumber: "INV-2024", subcontractorId: "", vendorNextStep: "", scopeOfWork: "Replace damaged ceiling tiles in units 4 and 7", coordinator: "" },
-  { id: "fm3", name: "Plumbing Leak Repair",  companyId: "c2", siteId: "s1", contractValue: 4500,  grossProfit: 1200, stage: "estimating", startDate: "",           endDate: "",           pm: "Mike Torres", pct: 0,   bidDueDate: "2026-03-19", quoteDueDate: "", followUpDate: "", buyoutDate: "", invoiceDate: "", notes: "Awaiting scope", storeCode: "001", projectNo: "260003", ownersProjectNo: "", vendorInvoiceAmount: 0, vendorInvoiceNumber: "", subcontractorId: "", vendorNextStep: "", scopeOfWork: "S207 pipe is leaking near unit 3B", coordinator: "" },
+  { id: "fm1", name: "Door Lock Replacement", companyId: "c2", siteId: "s1", contractValue: 3200,  grossProfit: 800,  stage: "do_work",    startDate: "2026-03-10", endDate: "2026-03-14", pm: "John Smith",  pct: 75,  bidDueDate: "", quoteDueDate: "", proposalDate: "", followUpDate: "", buyoutDate: "", invoiceDate: "", notes: "Parts on order",  storeCode: "001", projectNo: "260001", ownersProjectNo: "WO-001-0001", vendorInvoiceAmount: 2400, vendorInvoiceNumber: "", subcontractorId: "", vendorNextStep: "", vendorQuotePrice: "", vendorQuoteScope: "", scopeOfWork: "Replace door lock hardware on main entrance", coordinator: "" },
+  { id: "fm2", name: "Ceiling Tile Repair",   companyId: "c3", siteId: "s2", contractValue: 1800,  grossProfit: 600,  stage: "bill",       startDate: "2026-03-05", endDate: "2026-03-06", pm: "Sarah Lee",   pct: 100, bidDueDate: "", quoteDueDate: "", proposalDate: "", followUpDate: "", buyoutDate: "", invoiceDate: "2026-03-15", notes: "Work complete", storeCode: "002", projectNo: "260002", ownersProjectNo: "WO-002-0002", vendorInvoiceAmount: 1200, vendorInvoiceNumber: "INV-2024", subcontractorId: "", vendorNextStep: "", vendorQuotePrice: "", vendorQuoteScope: "", scopeOfWork: "Replace damaged ceiling tiles in units 4 and 7", coordinator: "" },
+  { id: "fm3", name: "Plumbing Leak Repair",  companyId: "c2", siteId: "s1", contractValue: 4500,  grossProfit: 1200, stage: "estimating", startDate: "",           endDate: "",           pm: "Mike Torres", pct: 0,   bidDueDate: "2026-03-19", quoteDueDate: "", proposalDate: "", followUpDate: "", buyoutDate: "", invoiceDate: "", notes: "Awaiting scope", storeCode: "001", projectNo: "260003", ownersProjectNo: "", vendorInvoiceAmount: 0, vendorInvoiceNumber: "", subcontractorId: "", vendorNextStep: "", vendorQuotePrice: "", vendorQuoteScope: "", scopeOfWork: "S207 pipe is leaking near unit 3B", coordinator: "" },
 ];
 
 export default function App() {
@@ -296,7 +306,7 @@ export default function App() {
   const [fmJobs,        setFmJobs]        = useState(INIT_FM_JOBS);
   const [showFmForm,    setShowFmForm]    = useState(false);
   const [editFmId,      setEditFmId]      = useState(null);
-  const [fmForm,        setFmForm]        = useState({ name: "", companyId: "", siteId: "", contractValue: "", grossProfit: "", stage: "estimating", startDate: "", endDate: "", pm: "", pct: 0, bidDueDate: "", quoteDueDate: "", followUpDate: "", buyoutDate: "", invoiceDate: "", notes: "", storeCode: "", projectNo: "", ownersProjectNo: "", vendorInvoiceAmount: "", vendorInvoiceNumber: "", subcontractorId: "", vendorNextStep: "", scopeOfWork: "", coordinator: "" });
+  const [fmForm,        setFmForm]        = useState({ name: "", companyId: "", siteId: "", contractValue: "", grossProfit: "", stage: "estimating", startDate: "", endDate: "", pm: "", pct: 0, bidDueDate: "", quoteDueDate: "", proposalDate: "", followUpDate: "", buyoutDate: "", invoiceDate: "", notes: "", storeCode: "", projectNo: "", ownersProjectNo: "", vendorInvoiceAmount: "", vendorInvoiceNumber: "", subcontractorId: "", vendorNextStep: "", vendorQuotePrice: "", vendorQuoteScope: "", scopeOfWork: "", coordinator: "" });
   const [selectedFmJob, setSelectedFmJob] = useState(null);
   const [fmSearch,      setFmSearch]      = useState("");
   const [fmCoordFilter, setFmCoordFilter] = useState("all");
@@ -431,7 +441,7 @@ export default function App() {
   const moveCapexStage = (id, dir) => setCapexJobs(capexJobs.map(j => { if (j.id !== id) return j; const idx = CAPEX_FM_STAGES.findIndex(s => s.id === j.stage); return { ...j, stage: CAPEX_FM_STAGES[Math.max(0, Math.min(CAPEX_FM_STAGES.length - 1, idx + dir))].id }; }));
 
   // FM job helpers
-  const openAddFm = () => { setEditFmId(null); setFmForm({ name: "", companyId: "", siteId: "", contractValue: "", grossProfit: "", stage: "estimating", startDate: "", endDate: "", pm: "", pct: 0, bidDueDate: "", quoteDueDate: "", followUpDate: "", buyoutDate: "", invoiceDate: "", notes: "", storeCode: "", projectNo: "", ownersProjectNo: "", vendorInvoiceAmount: "", vendorInvoiceNumber: "", subcontractorId: "", vendorNextStep: "", scopeOfWork: "", coordinator: "" }); setShowFmForm(true); };
+  const openAddFm = () => { setEditFmId(null); setFmForm({ name: "", companyId: "", siteId: "", contractValue: "", grossProfit: "", stage: "estimating", startDate: "", endDate: "", pm: "", pct: 0, bidDueDate: "", quoteDueDate: "", proposalDate: "", followUpDate: "", buyoutDate: "", invoiceDate: "", notes: "", storeCode: "", projectNo: "", ownersProjectNo: "", vendorInvoiceAmount: "", vendorInvoiceNumber: "", subcontractorId: "", vendorNextStep: "", vendorQuotePrice: "", vendorQuoteScope: "", scopeOfWork: "", coordinator: "" }); setShowFmForm(true); };
   const openEditFm = (j) => { setEditFmId(j.id); setFmForm({ ...j, contractValue: String(j.contractValue) }); setShowFmForm(true); };
   const saveFm = () => {
     if (!fmForm.name.trim()) return;
@@ -1867,7 +1877,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                             </td>
                             {/* Vendor Next Step */}
                             <td style={{ padding: "10px 12px", fontSize: 11, color: "#4A5270", maxWidth: 120 }}>
-                              <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{job.vendorNextStep || "—"}</div>
+                              <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{VENDOR_NEXT_STEPS.find(v => v.id === job.vendorNextStep)?.label || job.vendorNextStep || "—"}</div>
                             </td>
                             {/* Actions */}
                             <td style={{ padding: "10px 12px" }} onClick={e => e.stopPropagation()}>
@@ -2068,7 +2078,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                       </span>
                     )}
                     {job.startDate && <span style={{ fontSize: 11, color: "#4A5270" }}>▶ Start: {job.startDate}</span>}
-                    {job.vendorNextStep && <span style={{ fontSize: 11, color: "#B8C4E0" }}>↪ Vendor: {job.vendorNextStep}</span>}
+                    {job.vendorNextStep && <span style={{ fontSize: 11, color: "#B8C4E0" }}>↪ Vendor: {VENDOR_NEXT_STEPS.find(v => v.id === job.vendorNextStep)?.label || job.vendorNextStep}</span>}
                     {job.ownersProjectNo && <span style={{ fontSize: 11, color: "#3A4560" }}>WO: {job.ownersProjectNo}</span>}
                   </div>
                   {job.notes && (
@@ -2957,8 +2967,58 @@ Return ONLY valid JSON, no markdown, no extra text:
                 {/* Vendor next step */}
                 <div>
                   <div style={{ fontSize: 10, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5 }}>Vendor Next Step</div>
-                  <input className="fi" value={job.vendorNextStep || ""} placeholder="e.g. Awaiting confirmation…"
-                    onChange={e => update({ vendorNextStep: e.target.value })} />
+                  <select className="fi" value={job.vendorNextStep || ""}
+                    onChange={e => update({ vendorNextStep: e.target.value, vendorQuotePrice: e.target.value !== "need_quote" ? job.vendorQuotePrice : "", vendorQuoteScope: e.target.value !== "need_quote" ? job.vendorQuoteScope : "" })}>
+                    <option value="">— Select —</option>
+                    {VENDOR_NEXT_STEPS.map(v => <option key={v.id} value={v.id}>{v.label}</option>)}
+                  </select>
+                  {/* Quote fields — shown only when Need Quote is selected */}
+                  {job.vendorNextStep === "need_quote" && (
+                    <div style={{ marginTop: 10, background: "#0A0D16", border: "1px solid #A78BFA40", borderRadius: 8, padding: "12px 14px", display: "flex", flexDirection: "column", gap: 10 }}>
+                      <div style={{ fontSize: 10, color: "#A78BFA", textTransform: "uppercase", letterSpacing: "0.07em", fontWeight: 600, marginBottom: 2 }}>Quote Details</div>
+                      <div>
+                        <div style={{ fontSize: 10, color: "#3A4560", marginBottom: 4 }}>Quote Price</div>
+                        <input className="fi" type="number" placeholder="0.00"
+                          value={job.vendorQuotePrice || ""}
+                          onChange={e => update({ vendorQuotePrice: e.target.value })} />
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 10, color: "#3A4560", marginBottom: 4 }}>Quote Scope</div>
+                        <textarea className="fi" rows={3} placeholder="Describe what the vendor quoted…"
+                          value={job.vendorQuoteScope || ""}
+                          onChange={e => update({ vendorQuoteScope: e.target.value })}
+                          style={{ resize: "vertical" }} />
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 10, color: "#3A4560", marginBottom: 4 }}>Attach File</div>
+                        <label style={{ display: "flex", alignItems: "center", gap: 8, background: "#161B28", border: "1px solid #1E2640", borderRadius: 5, padding: "7px 12px", cursor: "pointer", fontSize: 11, color: "#4A5270" }}>
+                          📎 {job.vendorQuoteFile ? job.vendorQuoteFile : "Choose file…"}
+                          <input type="file" style={{ display: "none" }} onChange={e => {
+                            if (e.target.files[0]) update({ vendorQuoteFile: e.target.files[0].name });
+                          }} />
+                        </label>
+                      </div>
+                      {/* Summary pill once filled */}
+                      {job.vendorQuotePrice && (
+                        <div style={{ background: "#A78BFA15", border: "1px solid #A78BFA30", borderRadius: 6, padding: "8px 12px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                          <span style={{ fontSize: 11, color: "#A78BFA", fontWeight: 600 }}>Quote received: {fmt(Number(job.vendorQuotePrice))}</span>
+                          {job.contractValue > 0 && (
+                            <span style={{ fontSize: 10, color: Number(job.vendorQuotePrice) < job.contractValue ? "#4ADE80" : "#F87171" }}>
+                              {Number(job.vendorQuotePrice) < job.contractValue ? "✓ Under budget" : "⚠ Over budget"}
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  {/* Show label for other statuses */}
+                  {job.vendorNextStep && job.vendorNextStep !== "need_quote" && (
+                    <div style={{ marginTop: 6 }}>
+                      <span style={{ fontSize: 11, background: "#3B6FE815", color: "#3B6FE8", border: "1px solid #3B6FE830", padding: "3px 10px", borderRadius: 4 }}>
+                        {VENDOR_NEXT_STEPS.find(v => v.id === job.vendorNextStep)?.label}
+                      </span>
+                    </div>
+                  )}
                 </div>
 
                 {/* Financials */}
@@ -3104,7 +3164,21 @@ Return ONLY valid JSON, no markdown, no extra text:
                 <div><label className="lbl">Start Work Date</label><input className="fi" type="date" value={fmForm.startDate} onChange={e => setFmForm(f => ({ ...f, startDate: e.target.value }))} /></div>
                 <div><label className="lbl">End Date</label><input className="fi" type="date" value={fmForm.endDate} onChange={e => setFmForm(f => ({ ...f, endDate: e.target.value }))} /></div>
               </div>
-              <div><label className="lbl">Vendor Next Step</label><input className="fi" value={fmForm.vendorNextStep} onChange={e => setFmForm(f => ({ ...f, vendorNextStep: e.target.value }))} placeholder="e.g. 05. Awaiting Confirmation" /></div>
+              <div><label className="lbl">Vendor Next Step</label>
+                <select className="fi" value={fmForm.vendorNextStep} onChange={e => setFmForm(f => ({ ...f, vendorNextStep: e.target.value }))}>
+                  <option value="">— Select —</option>
+                  {VENDOR_NEXT_STEPS.map(v => <option key={v.id} value={v.id}>{v.label}</option>)}
+                </select>
+              </div>
+              {fmForm.vendorNextStep === "need_quote" && (
+                <div style={{ background: "#0A0D16", border: "1px solid #A78BFA40", borderRadius: 8, padding: "12px 14px", display: "flex", flexDirection: "column", gap: 10 }}>
+                  <div style={{ fontSize: 10, color: "#A78BFA", textTransform: "uppercase", letterSpacing: "0.07em", fontWeight: 600 }}>Quote Details</div>
+                  <div className="g2">
+                    <div><label className="lbl">Quote Price</label><input className="fi" type="number" placeholder="0.00" value={fmForm.vendorQuotePrice} onChange={e => setFmForm(f => ({ ...f, vendorQuotePrice: e.target.value }))} /></div>
+                  </div>
+                  <div><label className="lbl">Quote Scope</label><textarea className="fi" rows={2} value={fmForm.vendorQuoteScope} onChange={e => setFmForm(f => ({ ...f, vendorQuoteScope: e.target.value }))} style={{ resize: "vertical" }} /></div>
+                </div>
+              )}
               <div><label className="lbl">Notes</label><textarea className="fi" rows={3} value={fmForm.notes} onChange={e => setFmForm(f => ({ ...f, notes: e.target.value }))} style={{ resize: "vertical" }} /></div>
               <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
                 <button className="btn-ghost" style={{ padding: "8px 16px" }} onClick={() => setShowFmForm(false)}>Cancel</button>
