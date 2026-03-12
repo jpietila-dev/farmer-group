@@ -2135,23 +2135,40 @@ Return ONLY valid JSON, no markdown, no extra text:
                       const file = e.target.files[0]; if (!file) return;
                       const reader = new FileReader();
                       reader.onload = (evt) => {
-                        const lines = evt.target.result.split("\n").map(l => l.trim()).filter(Boolean);
+                        // Strip BOM if present
+                        let text = evt.target.result.replace(/^\uFEFF/, "");
+                        // Parse CSV properly handling quoted fields with commas
+                        const parseCSVLine = (line) => {
+                          const cells = []; let cur = ""; let inQuote = false;
+                          for (let i = 0; i < line.length; i++) {
+                            const ch = line[i];
+                            if (ch === '"') { inQuote = !inQuote; }
+                            else if (ch === ',' && !inQuote) { cells.push(cur.trim()); cur = ""; }
+                            else { cur += ch; }
+                          }
+                          cells.push(cur.trim());
+                          return cells;
+                        };
+                        const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
                         if (lines.length < 2) return;
-                        const headers = lines[0].split(",").map(h => h.trim().toLowerCase().replace(/[^a-z]/g, ""));
+                        const headers = parseCSVLine(lines[0]).map(h => h.toLowerCase().replace(/[^a-z]/g, ""));
                         const col = (name) => headers.indexOf(name);
                         const newCompanies = []; const newSites = []; const companyMap = {};
                         companies.forEach(c => { companyMap[c.name.toLowerCase()] = c.id; });
                         lines.slice(1).forEach(line => {
-                          const cells = line.split(",").map(c => c.trim().replace(/^"|"$/g, ""));
-                          const companyName = col("company") >= 0 ? cells[col("company")] : "";
-                          const storeNumber = col("storenumber") >= 0 ? cells[col("storenumber")] : "";
-                          const address = col("address") >= 0 ? cells[col("address")] : "";
-                          const phone = col("phone") >= 0 ? cells[col("phone")] : "";
-                          const accessCode = col("accesscode") >= 0 ? cells[col("accesscode")] : "";
+                          const cells = parseCSVLine(line);
+                          const companyName = col("company") >= 0 ? cells[col("company")] || "" : "";
+                          const storeNumber = col("storenumber") >= 0 ? cells[col("storenumber")] || "" : "";
+                          const address = col("address") >= 0 ? cells[col("address")] || "" : "";
+                          // support both "phone" and "site_phone" / "sitephone"
+                          const phoneIdx = col("sitephone") >= 0 ? col("sitephone") : col("phone") >= 0 ? col("phone") : -1;
+                          const phone = phoneIdx >= 0 ? cells[phoneIdx] || "" : "";
+                          const accessCode = col("accesscode") >= 0 ? cells[col("accesscode")] || "" : "";
+                          const notes = col("notes") >= 0 ? cells[col("notes")] || "" : "";
                           if (!storeNumber && !address) return;
                           let companyId = companyMap[companyName.toLowerCase()];
                           if (!companyId && companyName) { companyId = "c" + Date.now() + Math.random().toString(36).slice(2,6); newCompanies.push({ id: companyId, name: companyName, website: "", address: "", logo: "", notes: "" }); companyMap[companyName.toLowerCase()] = companyId; }
-                          newSites.push({ id: "s" + Date.now() + Math.random().toString(36).slice(2,6), companyId: companyId || "", contactIds: [], storeNumber, address, phone, accessCode, notes: "", lat: null, lng: null, businessUnits: ["fm"] });
+                          newSites.push({ id: "s" + Date.now() + Math.random().toString(36).slice(2,6), companyId: companyId || "", contactIds: [], storeNumber, address, phone, accessCode, notes, lat: null, lng: null, businessUnits: ["fm"] });
                         });
                         if (newCompanies.length) {
                           setCompanies(prev => [...prev, ...newCompanies]);
@@ -2251,19 +2268,33 @@ Return ONLY valid JSON, no markdown, no extra text:
                         const file = e.target.files[0]; if (!file) return;
                         const reader = new FileReader();
                         reader.onload = async (evt) => {
-                          const lines = evt.target.result.split("\n").map(l => l.trim()).filter(Boolean);
+                          let text = evt.target.result.replace(/^\uFEFF/, "");
+                          const parseCSVLine = (line) => {
+                            const cells = []; let cur = ""; let inQuote = false;
+                            for (let i = 0; i < line.length; i++) {
+                              const ch = line[i];
+                              if (ch === '"') { inQuote = !inQuote; }
+                              else if (ch === ',' && !inQuote) { cells.push(cur.trim()); cur = ""; }
+                              else { cur += ch; }
+                            }
+                            cells.push(cur.trim());
+                            return cells;
+                          };
+                          const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
                           if (lines.length < 2) return;
-                          const headers = lines[0].split(",").map(h => h.trim().toLowerCase().replace(/[^a-z]/g, ""));
+                          const headers = parseCSVLine(lines[0]).map(h => h.toLowerCase().replace(/[^a-z]/g, ""));
                           const col = (name) => headers.indexOf(name);
                           const newCompanies = []; const newSites = []; const companyMap = {};
                           companies.forEach(c => { companyMap[c.name.toLowerCase()] = c.id; });
                           for (const line of lines.slice(1)) {
-                            const cells = line.split(",").map(c => c.trim().replace(/^"|"$/g, ""));
-                            const companyName = col("company") >= 0 ? cells[col("company")] : "";
-                            const storeNumber = col("storenumber") >= 0 ? cells[col("storenumber")] : "";
-                            const address = col("address") >= 0 ? cells[col("address")] : "";
-                            const phone = col("phone") >= 0 ? cells[col("phone")] : "";
-                            const accessCode = col("accesscode") >= 0 ? cells[col("accesscode")] : "";
+                            const cells = parseCSVLine(line);
+                            const companyName = col("company") >= 0 ? cells[col("company")] || "" : "";
+                            const storeNumber = col("storenumber") >= 0 ? cells[col("storenumber")] || "" : "";
+                            const address = col("address") >= 0 ? cells[col("address")] || "" : "";
+                            const phoneIdx = col("sitephone") >= 0 ? col("sitephone") : col("phone") >= 0 ? col("phone") : -1;
+                            const phone = phoneIdx >= 0 ? cells[phoneIdx] || "" : "";
+                            const accessCode = col("accesscode") >= 0 ? cells[col("accesscode")] || "" : "";
+                            const notes = col("notes") >= 0 ? cells[col("notes")] || "" : "";
                             if (!storeNumber && !address) continue;
                             let companyId = companyMap[companyName.toLowerCase()];
                             if (!companyId && companyName) { companyId = "c" + Date.now() + Math.random().toString(36).slice(2,6); newCompanies.push({ id: companyId, name: companyName, website: "", address: "", logo: "", notes: "" }); companyMap[companyName.toLowerCase()] = companyId; }
@@ -2275,7 +2306,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                                 if (geo[0]) { lat = parseFloat(geo[0].lat); lng = parseFloat(geo[0].lon); }
                               } catch(e) {}
                             }
-                            newSites.push({ id: (activeBU === "lawn" ? "ln" : "sn") + Date.now() + Math.random().toString(36).slice(2,6), companyId: companyId || "", contactIds: [], storeNumber, address, phone, accessCode, notes: "", lat, lng, businessUnits: [activeBU] });
+                            newSites.push({ id: (activeBU === "lawn" ? "ln" : "sn") + Date.now() + Math.random().toString(36).slice(2,6), companyId: companyId || "", contactIds: [], storeNumber, address, phone, accessCode, notes, lat, lng, businessUnits: [activeBU] });
                           }
                           if (newCompanies.length) {
                             setCompanies(prev => [...prev, ...newCompanies]);
