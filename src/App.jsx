@@ -5136,7 +5136,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                             <div style={{fontSize:9,marginTop:4}}>Please provide a cost for each of the following</div>
                           </td>
                           <td style={{ border:"1px solid #000",padding:"6px",verticalAlign:"top" }}>
-                            {["☐ 2" mulch of beds","☐ Sprinkler start up – if applicable","☐ Prune trees up to 12' in height","☐ Annual trim of Palm trees"].map(t=><div key={t} style={{marginBottom:2}}>{t}</div>)}
+                            {['☐ 2" mulch of beds','☐ Sprinkler start up – if applicable',"☐ Prune trees up to 12' in height","☐ Annual trim of Palm trees"].map(t=><div key={t} style={{marginBottom:2}}>{t}</div>)}
                           </td>
                           <td style={{ border:"1px solid #000",padding:"6px",fontSize:9,verticalAlign:"top" }}>
                             {["☐ Annual 1 time","☐ Annual 1 time","☐ Annual 1 time if applicable","☐ Annual 1 time if applicable"].map(t=><div key={t}>{t}</div>)}
