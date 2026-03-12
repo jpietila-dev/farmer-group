@@ -2153,8 +2153,14 @@ Return ONLY valid JSON, no markdown, no extra text:
                           if (!companyId && companyName) { companyId = "c" + Date.now() + Math.random().toString(36).slice(2,6); newCompanies.push({ id: companyId, name: companyName, website: "", address: "", logo: "", notes: "" }); companyMap[companyName.toLowerCase()] = companyId; }
                           newSites.push({ id: "s" + Date.now() + Math.random().toString(36).slice(2,6), companyId: companyId || "", contactIds: [], storeNumber, address, phone, accessCode, notes: "" });
                         });
-                        if (newCompanies.length) setCompanies(prev => [...prev, ...newCompanies]);
-                        if (newSites.length) setSites(prev => [...prev, ...newSites]);
+                        if (newCompanies.length) {
+                          setCompanies(prev => [...prev, ...newCompanies]);
+                          newCompanies.forEach(c => supa.from("companies").insert(companyToDB(c)));
+                        }
+                        if (newSites.length) {
+                          setSites(prev => [...prev, ...newSites]);
+                          newSites.forEach(s => supa.from("sites").insert(siteToDB(s)));
+                        }
                         alert("Imported " + newSites.length + " sites" + (newCompanies.length ? " + " + newCompanies.length + " companies" : "") + "!");
                         e.target.value = "";
                       };
@@ -2266,8 +2272,15 @@ Return ONLY valid JSON, no markdown, no extra text:
                             }
                             newSites.push({ id: (activeBU === "lawn" ? "ln" : "sn") + Date.now() + Math.random().toString(36).slice(2,6), companyId: companyId || "", storeNumber, address, phone, accessCode, notes: "", lat, lng });
                           }
-                          if (newCompanies.length) setCompanies(prev => [...prev, ...newCompanies]);
-                          if (newSites.length) setCurrentSites(prev => [...prev, ...newSites]);
+                          if (newCompanies.length) {
+                            setCompanies(prev => [...prev, ...newCompanies]);
+                            newCompanies.forEach(c => supa.from("companies").insert(companyToDB(c)));
+                          }
+                          if (newSites.length) {
+                            setCurrentSites(prev => [...prev, ...newSites]);
+                            const table = activeBU === "lawn" ? "lawn_sites" : "snow_sites";
+                            newSites.forEach(s => supa.from(table).insert(lsSiteToDB(s)));
+                          }
                           alert("Imported " + newSites.length + " sites" + (newSites.filter(s=>s.lat).length < newSites.length ? " (" + newSites.filter(s=>!s.lat).length + " without coordinates — enter address manually to geocode)" : "") + "!");
                           e.target.value = "";
                         };
