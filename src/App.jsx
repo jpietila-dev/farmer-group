@@ -2270,8 +2270,24 @@ Return ONLY valid JSON, no markdown, no extra text:
             // Parse state from address — "City, ST XXXXX" → "ST"
             const getState = (address) => {
               if (!address) return "Unknown";
-              const m = address.match(/,\s*([A-Z]{2})\s*\d/);
-              return m ? m[1] : "Other";
+              // Try: ", MI 48601" or ", MI," or ", MI" at end
+              let m = address.match(/,\s*([A-Z]{2})\s*[\d,]/) || address.match(/,\s*([A-Z]{2})\s*$/);
+              if (m) return m[1];
+              // Try: "Saginaw MI 48601" (no comma before state)
+              m = address.match(/\s([A-Z]{2})\s+\d{5}/);
+              if (m) return m[1];
+              // Try: "Flint MI, 40501" (comma after zip)
+              m = address.match(/\s([A-Z]{2}),\s*\d/);
+              if (m) return m[1];
+              // Try lowercase state abbreviation: "Fall River Ma 02721"
+              m = address.match(/\s([A-Z][a-z])\s+\d{5}/);
+              if (m) return m[1].toUpperCase();
+              // Try spelled-out state names
+              const stateNames = {Ohio:"OH",Indiana:"IN",Michigan:"MI",Illinois:"IL",Wisconsin:"WI",Minnesota:"MN",Iowa:"IA",Nebraska:"NE",Missouri:"MO",Arkansas:"AR",Oklahoma:"OK",Kansas:"KS",Massachusetts:"MA"};
+              for (const [name, abbr] of Object.entries(stateNames)) {
+                if (address.includes(name)) return abbr;
+              }
+              return "Other";
             };
 
             // Build hierarchy: company → state → sites
