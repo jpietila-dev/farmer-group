@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect, useCallback } from "react";
 
 // ── Supabase client ─────────────────────────────────────────
 const SUPA_URL = "https://bplleiwxbejqfinmyxnq.supabase.co";
-const SUPA_KEY = "sb_publishable_h2ji1vl19r3cAx0SnrOYwA_rOEyTzAj";
+const SUPA_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJwbGxlaXd4YmVqcWZpbm15eG5xIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMyMzc3OTgsImV4cCI6MjA4ODgxMzc5OH0.AupjLONxaN73jbZN0Y9QHwWHJDuOyuyVL1tnG0X8cxw";
 const supa = {
   from: (table) => ({
     select: function(cols = "*") {
