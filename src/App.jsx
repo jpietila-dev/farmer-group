@@ -1,4 +1,55 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
+
+// ── Supabase client ─────────────────────────────────────────
+const SUPA_URL = "https://bplleiwxbejqfinmyxnq.supabase.co";
+const SUPA_KEY = "sb_publishable_h2ji1vl19r3cAx0SnrOYwA_rOEyTzAj";
+const supa = {
+  from: (table) => ({
+    select: function(cols = "*") {
+      return fetch(`${SUPA_URL}/rest/v1/${table}?select=${cols}&order=created_at.asc`, {
+        headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}` }
+      }).then(r => r.json()).then(data => ({ data, error: null })).catch(error => ({ data: null, error }));
+    },
+    insert: function(rows) {
+      const body = Array.isArray(rows) ? rows : [rows];
+      return fetch(`${SUPA_URL}/rest/v1/${table}`, {
+        method: "POST",
+        headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}`, "Content-Type": "application/json", Prefer: "return=representation" },
+        body: JSON.stringify(body)
+      }).then(r => r.json()).then(data => ({ data, error: null })).catch(error => ({ data: null, error }));
+    },
+    update: function(row) {
+      return {
+        eq: (col, val) => fetch(`${SUPA_URL}/rest/v1/${table}?${col}=eq.${encodeURIComponent(val)}`, {
+          method: "PATCH",
+          headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}`, "Content-Type": "application/json", Prefer: "return=representation" },
+          body: JSON.stringify(row)
+        }).then(r => r.json()).then(data => ({ data, error: null })).catch(error => ({ data: null, error }))
+      };
+    },
+    delete: function() {
+      return {
+        eq: (col, val) => fetch(`${SUPA_URL}/rest/v1/${table}?${col}=eq.${encodeURIComponent(val)}`, {
+          method: "DELETE",
+          headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}` }
+        }).then(r => ({ data: null, error: r.ok ? null : "Delete failed" })).catch(error => ({ data: null, error }))
+      };
+    }
+  })
+};
+
+// ── DB row mappers (snake_case ↔ camelCase) ──────────────────
+const dbToCompany = r => ({ id: r.id, name: r.name, address: r.address||"", website: r.website||"", logo: r.logo||"", notes: r.notes||"" });
+const companyToDB = c => ({ id: c.id, name: c.name, address: c.address||"", website: c.website||"", logo: c.logo||"", notes: c.notes||"" });
+
+const dbToSite = r => ({ id: r.id, companyId: r.company_id||"", contactIds: r.contact_ids||[], storeNumber: r.store_number||"", address: r.address||"", phone: r.phone||"", accessCode: r.access_code||"", notes: r.notes||"" });
+const siteToDB = s => ({ id: s.id, company_id: s.companyId||null, contact_ids: s.contactIds||[], store_number: s.storeNumber||"", address: s.address||"", phone: s.phone||"", access_code: s.accessCode||"", notes: s.notes||"" });
+
+const dbToLsSite = r => ({ id: r.id, companyId: r.company_id||"", storeNumber: r.store_number||"", address: r.address||"", phone: r.phone||"", accessCode: r.access_code||"", notes: r.notes||"", lat: r.lat ? parseFloat(r.lat) : null, lng: r.lng ? parseFloat(r.lng) : null });
+const lsSiteToDB = s => ({ id: s.id, company_id: s.companyId||null, store_number: s.storeNumber||"", address: s.address||"", phone: s.phone||"", access_code: s.accessCode||"", notes: s.notes||"", lat: s.lat||null, lng: s.lng||null });
+
+const dbToSub = r => ({ id: r.id, name: r.name||"", trade: r.trade||"", phone: r.phone||"", email: r.email||"", msaStatus: r.msa_status||"missing", coiExpiry: r.coi_expiry||"", w9: r.w9||false, notes: r.notes||"", services: r.services||[] });
+const subToDB = s => ({ id: s.id, name: s.name||"", trade: s.trade||"", phone: s.phone||"", email: s.email||"", msa_status: s.msaStatus||"missing", coi_expiry: s.coiExpiry||null, w9: s.w9||false, notes: s.notes||"", services: s.services||[] });
 
 const BUSINESS_UNITS = [
   { id: "all", label: "All", short: "ALL" },
@@ -679,6 +730,8 @@ export default function App() {
   // CRM
   const [companies,       setCompanies]       = useState(INIT_COMPANIES);
   const [contacts,        setContacts]        = useState(INIT_CONTACTS);
+  const [dbLoading,       setDbLoading]       = useState({ companies: false, sites: false, lawnSites: false, subcontractors: false });
+  const [dbError,         setDbError]         = useState(null);
   const [selectedCompany, setSelectedCompany] = useState(null);
   const [showCompanyForm, setShowCompanyForm] = useState(false);
   const [showContactForm, setShowContactForm] = useState(false);
@@ -744,6 +797,7 @@ export default function App() {
 
   // Sites
   const [sites,        setSites]        = useState(INIT_SITES);
+  const [supaReady,    setSupaReady]    = useState(false);
   const [showSiteForm, setShowSiteForm] = useState(false);
   const [editSiteId,   setEditSiteId]   = useState(null);
   const [siteForm,     setSiteForm]     = useState({ companyId: "", contactIds: [], storeNumber: "", address: "", phone: "", accessCode: "", notes: "" });
@@ -753,6 +807,7 @@ export default function App() {
   // Lawn / Snow sites
   const [lawnSites,        setLawnSites]        = useState(INIT_LAWN_SITES);
   const [snowSites,        setSnowSites]        = useState(INIT_SNOW_SITES);
+  // Note: lawnSites & snowSites seeded from DB on mount via useEffect below
   const [lsSearch,         setLsSearch]         = useState("");
   const [selectedLsSite,   setSelectedLsSite]   = useState(null);
   const [showLsSiteForm,   setShowLsSiteForm]   = useState(false);
@@ -906,16 +961,50 @@ export default function App() {
   const getCompanyTotalValue = (cid) => jobs.filter(j => j.companyId === cid).reduce((s, j) => s + j.contractValue, 0);
   const getCompanySites     = (cid) => sites.filter(s => s.companyId === cid);
 
+  // ── Supabase: load data on mount ──────────────────────────
+  useEffect(() => {
+    const load = async () => {
+      setDbLoading(l => ({ ...l, companies: true, sites: true, lawnSites: true, subcontractors: true }));
+      try {
+        const [coRes, siteRes, lsRes, snRes, subRes] = await Promise.all([
+          supa.from("companies").select("*"),
+          supa.from("sites").select("*"),
+          supa.from("lawn_sites").select("*"),
+          supa.from("snow_sites").select("*"),
+          supa.from("subcontractors").select("*"),
+        ]);
+        if (coRes.data?.length)   setCompanies(coRes.data.map(dbToCompany));
+        if (siteRes.data?.length) setSites(siteRes.data.map(dbToSite));
+        if (lsRes.data?.length)   setLawnSites(lsRes.data.map(dbToLsSite));
+        if (snRes.data?.length)   setSnowSites(snRes.data.map(dbToLsSite));
+        if (subRes.data?.length)  setSubcontractors(subRes.data.map(dbToSub));
+        setSupaReady(true);
+      } catch(e) {
+        setDbError("Could not connect to database. Using local data.");
+      }
+      setDbLoading(l => ({ ...l, companies: false, sites: false, lawnSites: false, subcontractors: false }));
+    };
+    load();
+  }, []);
+
   // Site helpers
   const openAddSite = () => { setEditSiteId(null); setSiteForm({ companyId: "", contactIds: [], storeNumber: "", address: "", phone: "", accessCode: "", notes: "" }); setShowSiteForm(true); };
   const openEditSite = (s) => { setEditSiteId(s.id); setSiteForm({ ...s }); setShowSiteForm(true); };
-  const saveSite = () => {
+  const saveSite = async () => {
     if (!siteForm.storeNumber.trim() && !siteForm.address.trim()) return;
-    if (editSiteId) setSites(sites.map(s => s.id === editSiteId ? { ...siteForm, id: editSiteId } : s));
-    else setSites([...sites, { ...siteForm, id: "s" + Date.now() }]);
+    if (editSiteId) {
+      const updated = { ...siteForm, id: editSiteId };
+      setSites(sites.map(s => s.id === editSiteId ? updated : s));
+      supa.from("sites").update(siteToDB(updated)).eq("id", editSiteId);
+    } else {
+      const newId = "s" + Date.now();
+      const entry = { ...siteForm, id: newId };
+      setSites(s => [...s, entry]);
+      supa.from("sites").insert(siteToDB(entry));
+    }
     setShowSiteForm(false);
   };
-  const deleteSite = (id) => { setSites(sites.filter(s => s.id !== id)); setSelectedSite(null); };
+  const deleteSite = async (id) => { setSites(sites.filter(s => s.id !== id)); setSelectedSite(null); supa.from("sites").delete().eq("id", id); };
   const toggleSiteContact = (contactId) => {
     const ids = siteForm.contactIds || [];
     setSiteForm(f => ({ ...f, contactIds: ids.includes(contactId) ? ids.filter(i => i !== contactId) : [...ids, contactId] }));
@@ -926,14 +1015,28 @@ export default function App() {
   const setLsData  = activeBU === "lawn" ? setLawnSites : setSnowSites;
   const openAddLsSite  = () => { setEditLsSiteId(null); setLsSiteForm({ companyId: "", storeNumber: "", address: "", phone: "", accessCode: "", notes: "", lat: "", lng: "" }); setShowLsSiteForm(true); };
   const openEditLsSite = (s) => { setEditLsSiteId(s.id); setLsSiteForm({ ...s, lat: String(s.lat || ""), lng: String(s.lng || "") }); setShowLsSiteForm(true); };
-  const saveLsSite = () => {
+  const saveLsSite = async () => {
     if (!lsSiteForm.address.trim() && !lsSiteForm.storeNumber.trim()) return;
     const entry = { ...lsSiteForm, lat: parseFloat(lsSiteForm.lat) || null, lng: parseFloat(lsSiteForm.lng) || null };
-    if (editLsSiteId) setLsData(lsData.map(s => s.id === editLsSiteId ? { ...entry, id: editLsSiteId } : s));
-    else setLsData([...lsData, { ...entry, id: (activeBU === "lawn" ? "ln" : "sn") + Date.now() }]);
+    const table = activeBU === "lawn" ? "lawn_sites" : "snow_sites";
+    if (editLsSiteId) {
+      const updated = { ...entry, id: editLsSiteId };
+      setLsData(lsData.map(s => s.id === editLsSiteId ? updated : s));
+      supa.from(table).update(lsSiteToDB(updated)).eq("id", editLsSiteId);
+    } else {
+      const newId = (activeBU === "lawn" ? "ln" : "sn") + Date.now();
+      const newEntry = { ...entry, id: newId };
+      setLsData(d => [...d, newEntry]);
+      supa.from(table).insert(lsSiteToDB(newEntry));
+    }
     setShowLsSiteForm(false);
   };
-  const deleteLsSite = (id) => { setLsData(lsData.filter(s => s.id !== id)); setSelectedLsSite(null); };
+  const deleteLsSite = async (id) => {
+    const table = activeBU === "lawn" ? "lawn_sites" : "snow_sites";
+    setLsData(lsData.filter(s => s.id !== id));
+    setSelectedLsSite(null);
+    supa.from(table).delete().eq("id", id);
+  };
 
   // Company color map for pins
   const companyColorMap = useMemo(() => {
@@ -1075,10 +1178,18 @@ Return ONLY valid JSON, no markdown, no extra text:
   const sectionTotal = (sec) => sec.items.reduce((s, i) => s + proposalLineTotal(i), 0);
   const proposalSubtotal = (sections) => sections.reduce((s, sec) => s + sectionTotal(sec), 0);
 
-  const saveCompany = () => {
+  const saveCompany = async () => {
     if (!companyForm.name.trim()) return;
-    if (editCompanyId) setCompanies(companies.map(c => c.id === editCompanyId ? { ...companyForm, id: editCompanyId } : c));
-    else setCompanies([...companies, { ...companyForm, id: "c" + Date.now() }]);
+    if (editCompanyId) {
+      const updated = { ...companyForm, id: editCompanyId };
+      setCompanies(companies.map(c => c.id === editCompanyId ? updated : c));
+      supa.from("companies").update(companyToDB(updated)).eq("id", editCompanyId);
+    } else {
+      const newId = "c" + Date.now();
+      const entry = { ...companyForm, id: newId };
+      setCompanies(c => [...c, entry]);
+      supa.from("companies").insert(companyToDB(entry));
+    }
     setShowCompanyForm(false); setEditCompanyId(null);
     setCompanyForm({ name: "", website: "", address: "", logo: "", notes: "" });
   };
@@ -1403,7 +1514,11 @@ Return ONLY valid JSON, no markdown, no extra text:
             {BUSINESS_UNITS.map(bu => <button key={bu.id} className={"bu-tab" + (activeBU === bu.id ? " active" : "")} onClick={() => handleBUChange(bu.id)}>{bu.short}</button>)}
           </div>
           <div style={{ fontSize: 11, color: "#2A3560", letterSpacing: "0.1em", textTransform: "uppercase" }}>{BUSINESS_UNITS.find(b => b.id === activeBU)?.label}</div>
-          <div style={{ background: "#1A2340", border: "1px solid #3B6FE8", color: "#3B6FE8", fontSize: 11, fontWeight: 600, padding: "4px 14px", borderRadius: 4, letterSpacing: "0.08em" }}>OWNER</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            {supaReady && <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 10, color: "#4ADE80", background: "#4ADE8015", border: "1px solid #4ADE8030", padding: "3px 10px", borderRadius: 4 }}><span style={{ width: 6, height: 6, borderRadius: "50%", background: "#4ADE80", display: "inline-block" }}></span>DB Live</div>}
+            {dbError && <div style={{ fontSize: 10, color: "#F87171", background: "#F8717115", border: "1px solid #F8717130", padding: "3px 10px", borderRadius: 4 }}>⚠ Offline</div>}
+            <div style={{ background: "#1A2340", border: "1px solid #3B6FE8", color: "#3B6FE8", fontSize: 11, fontWeight: 600, padding: "4px 14px", borderRadius: 4, letterSpacing: "0.08em" }}>OWNER</div>
+          </div>
         </div>
 
         {/* Content */}
@@ -5054,10 +5169,18 @@ Return ONLY valid JSON, no markdown, no extra text:
             </div>
             <div style={{ display: "flex", gap: 8, marginTop: 20 }}>
               <button className="btn-ghost" style={{ flex: 1 }} onClick={() => setShowSubForm(false)}>Cancel</button>
-              <button className="btn-primary" style={{ flex: 1 }} onClick={() => {
+              <button className="btn-primary" style={{ flex: 1 }} onClick={async () => {
                 if (!subForm.name) return;
-                if (editSubId) setSubcontractors(subcontractors.map(s => s.id === editSubId ? { ...s, ...subForm } : s));
-                else setSubcontractors([...subcontractors, { id: "sub" + Date.now(), ...subForm }]);
+                if (editSubId) {
+                  const updated = { ...subcontractors.find(s => s.id === editSubId), ...subForm };
+                  setSubcontractors(subcontractors.map(s => s.id === editSubId ? updated : s));
+                  supa.from("subcontractors").update(subToDB(updated)).eq("id", editSubId);
+                } else {
+                  const newId = "sub" + Date.now();
+                  const entry = { id: newId, ...subForm };
+                  setSubcontractors(s => [...s, entry]);
+                  supa.from("subcontractors").insert(subToDB(entry));
+                }
                 setShowSubForm(false);
               }}>Save</button>
             </div>
