@@ -1341,7 +1341,7 @@ Return ONLY valid JSON, no markdown, no extra text:
     .pill{display:inline-flex;align-items:center;padding:3px 9px;border-radius:20px;font-size:10px;letter-spacing:0.05em;white-space:nowrap;font-weight:500}
     .opp-row{background:#161B28;border:1px solid #1E2640;border-radius:8px;padding:14px 16px;transition:all 0.15s;cursor:pointer}
     .opp-row:hover{border-color:#2A3560;background:#1A1F30}
-    .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,0.8);display:flex;align-items:flex-start;justify-content:center;z-index:100;backdrop-filter:blur(4px);overflow-y:auto;padding:40px 16px}
+    .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,0.8);display:flex;align-items:center;justify-content:center;z-index:9000;backdrop-filter:blur(4px)}
     .modal{background:#0F1117;border:1px solid #2A3560;border-radius:12px;padding:28px;width:540px;max-height:90vh;overflow-y:auto}
     .g2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
     .side-panel{position:fixed;right:0;top:52px;bottom:0;width:400px;background:#0B0E18;border-left:1px solid #1E2640;padding:24px;overflow-y:auto;z-index:40}
@@ -2639,30 +2639,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                 })}
               </div>
 
-              {showTeamForm && (
-                <div style={{ position: "fixed", inset: 0, background: "#00000080", zIndex: 200, display: "flex", alignItems: "flex-start", justifyContent: "center", overflowY: "auto", padding: "40px 16px" }}>
-                  <div style={{ background: "#161B28", border: "1px solid #1E2640", borderRadius: 12, padding: 28, width: 400 }}>
-                    <div style={{ fontSize: 14, fontWeight: 600, color: "#FFFFFF", marginBottom: 20 }}>{editTeamId ? "Edit" : "Add"} Team Member</div>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                      {[["Name", "name"], ["Phone", "phone"], ["Email", "email"]].map(([label, key]) => (
-                        <div key={key}>
-                          <div style={{ fontSize: 10, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5 }}>{label}</div>
-                          <input className="fi" style={{ width: "100%", boxSizing: "border-box" }} value={teamForm[key]} onChange={e => setTeamForm({ ...teamForm, [key]: e.target.value })} />
-                        </div>
-                      ))}
-                    </div>
-                    <div style={{ display: "flex", gap: 8, marginTop: 20 }}>
-                      <button className="btn-ghost" style={{ flex: 1 }} onClick={() => setShowTeamForm(false)}>Cancel</button>
-                      <button className="btn-primary" style={{ flex: 1 }} onClick={() => {
-                        if (!teamForm.name) return;
-                        if (editTeamId) setFmTeam(fmTeam.map(m => m.id === editTeamId ? { ...m, ...teamForm } : m));
-                        else setFmTeam([...fmTeam, { id: "tm" + Date.now(), ...teamForm }]);
-                        setShowTeamForm(false);
-                      }}>Save</button>
-                    </div>
-                  </div>
-                </div>
-              )}
+              {/* showTeamForm rendered at root level */}
             </div>
           )}
 
@@ -2929,68 +2906,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                   })}
                 </div>
 
-                {showSubForm && (
-                  <div style={{ position: "fixed", inset: 0, background: "#00000080", zIndex: 200, display: "flex", alignItems: "flex-start", justifyContent: "center", overflowY: "auto", padding: "40px 16px" }}>
-                    <div style={{ background: "#161B28", border: "1px solid #1E2640", borderRadius: 12, padding: 28, width: 480 }}>
-                      <div style={{ fontSize: 14, fontWeight: 600, color: "#FFFFFF", marginBottom: 20 }}>{editSubId ? "Edit" : "Add"} Subcontractor</div>
-                      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                        {[["Name", "name"], ["Trade / Specialty", "trade"], ["Phone", "phone"], ["Email", "email"]].map(([label, key]) => (
-                          <div key={key}>
-                            <div style={{ fontSize: 10, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5 }}>{label}</div>
-                            <input className="fi" style={{ width: "100%", boxSizing: "border-box" }} value={subForm[key]} onChange={e => setSubForm({ ...subForm, [key]: e.target.value })} />
-                          </div>
-                        ))}
-                        {/* Services / divisions */}
-                        <div>
-                          <div style={{ fontSize: 10, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 8 }}>Works for Division(s)</div>
-                          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                            {[{ id: "fm", label: "Facility Maint.", color: "#7BA7F5" }, { id: "lawn", label: "Lawn", color: "#4CAF82" }, { id: "snow", label: "Snow", color: "#A8C4F8" }].map(sv => {
-                              const checked = (subForm.services || []).includes(sv.id);
-                              return (
-                                <button key={sv.id} onClick={() => {
-                                  const cur = subForm.services || [];
-                                  setSubForm({ ...subForm, services: checked ? cur.filter(x => x !== sv.id) : [...cur, sv.id] });
-                                }} style={{ padding: "6px 14px", borderRadius: 20, border: "1px solid " + (checked ? sv.color : "#1E2640"), background: checked ? sv.color + "25" : "transparent", color: checked ? sv.color : "#3A4560", fontSize: 11, fontWeight: checked ? 600 : 400, cursor: "pointer", fontFamily: "inherit", transition: "all 0.15s" }}>
-                                  {sv.label}
-                                </button>
-                              );
-                            })}
-                          </div>
-                          <div style={{ fontSize: 10, color: "#2A3560", marginTop: 5 }}>Leave blank to include in all divisions</div>
-                        </div>
-                        <div>
-                          <div style={{ fontSize: 10, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5 }}>MSA Status</div>
-                          <select className="fi" style={{ width: "100%" }} value={subForm.msaStatus} onChange={e => setSubForm({ ...subForm, msaStatus: e.target.value })}>
-                            <option value="missing">Missing</option>
-                            <option value="signed">Signed</option>
-                            <option value="expired">Expired</option>
-                          </select>
-                        </div>
-                        <div>
-                          <div style={{ fontSize: 10, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5 }}>COI Expiry Date</div>
-                          <input className="fi" type="date" style={{ width: "100%", boxSizing: "border-box" }} value={subForm.coiExpiry} onChange={e => setSubForm({ ...subForm, coiExpiry: e.target.value })} />
-                        </div>
-                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                          <input type="checkbox" id="w9check" checked={subForm.w9} onChange={e => setSubForm({ ...subForm, w9: e.target.checked })} style={{ width: 16, height: 16, accentColor: buColor.accent }} />
-                          <label htmlFor="w9check" style={{ fontSize: 12, color: "#B8C4E0", cursor: "pointer" }}>W9 on file</label>
-                        </div>
-                        <div>
-                          <div style={{ fontSize: 10, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5 }}>Notes</div>
-                          <textarea className="fi" rows={3} style={{ width: "100%", boxSizing: "border-box", resize: "vertical" }} value={subForm.notes} onChange={e => setSubForm({ ...subForm, notes: e.target.value })} />
-                        </div>
-                      </div>
-                      <div style={{ display: "flex", gap: 8, marginTop: 20 }}>
-                        <button className="btn-ghost" style={{ flex: 1 }} onClick={() => setShowSubForm(false)}>Cancel</button>
-                        <button className="btn-primary" style={{ flex: 1 }} onClick={() => {
-                          if (!subForm.name) return;
-                          if (editSubId) setSubcontractors(subcontractors.map(s => s.id === editSubId ? { ...s, ...subForm } : s));
-                          else setSubcontractors([...subcontractors, { id: "sub" + Date.now(), ...subForm }]);
-                          setShowSubForm(false);
-                        }}>Save</button>
-                      </div>
-                    </div>
-                  </div>
-                )}
+                {/* showSubForm rendered at root level */}
               </div>
             );
           })()}
@@ -5008,6 +4924,95 @@ Return ONLY valid JSON, no markdown, no extra text:
           </div>
         );
       })()}
+
+      {/* ── TEAM MEMBER FORM MODAL ── */}
+      {showTeamForm && (
+        <div style={{ position: "fixed", inset: 0, background: "#00000090", zIndex: 9000, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div style={{ background: "#161B28", border: "1px solid #1E2640", borderRadius: 12, padding: 28, width: 400, maxHeight: "90vh", overflowY: "auto" }}>
+            <div style={{ fontSize: 14, fontWeight: 600, color: "#FFFFFF", marginBottom: 20 }}>{editTeamId ? "Edit" : "Add"} Team Member</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              {[["Name", "name"], ["Phone", "phone"], ["Email", "email"]].map(([label, key]) => (
+                <div key={key}>
+                  <div style={{ fontSize: 10, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5 }}>{label}</div>
+                  <input className="fi" style={{ width: "100%", boxSizing: "border-box" }} value={teamForm[key]} onChange={e => setTeamForm({ ...teamForm, [key]: e.target.value })} />
+                </div>
+              ))}
+            </div>
+            <div style={{ display: "flex", gap: 8, marginTop: 20 }}>
+              <button className="btn-ghost" style={{ flex: 1 }} onClick={() => setShowTeamForm(false)}>Cancel</button>
+              <button className="btn-primary" style={{ flex: 1 }} onClick={() => {
+                if (!teamForm.name) return;
+                if (editTeamId) setFmTeam(fmTeam.map(m => m.id === editTeamId ? { ...m, ...teamForm } : m));
+                else setFmTeam([...fmTeam, { id: "tm" + Date.now(), ...teamForm }]);
+                setShowTeamForm(false);
+              }}>Save</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── SUBCONTRACTOR FORM MODAL ── */}
+      {showSubForm && (
+        <div style={{ position: "fixed", inset: 0, background: "#00000090", zIndex: 9000, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div style={{ background: "#161B28", border: "1px solid #1E2640", borderRadius: 12, padding: 28, width: 480, maxHeight: "90vh", overflowY: "auto" }}>
+            <div style={{ fontSize: 14, fontWeight: 600, color: "#FFFFFF", marginBottom: 20 }}>{editSubId ? "Edit" : "Add"} Subcontractor</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              {[["Name", "name"], ["Trade / Specialty", "trade"], ["Phone", "phone"], ["Email", "email"]].map(([label, key]) => (
+                <div key={key}>
+                  <div style={{ fontSize: 10, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5 }}>{label}</div>
+                  <input className="fi" style={{ width: "100%", boxSizing: "border-box" }} value={subForm[key]} onChange={e => setSubForm({ ...subForm, [key]: e.target.value })} />
+                </div>
+              ))}
+              <div>
+                <div style={{ fontSize: 10, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 8 }}>Works for Division(s)</div>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  {[{ id: "fm", label: "Facility Maint.", color: "#7BA7F5" }, { id: "lawn", label: "Lawn", color: "#4CAF82" }, { id: "snow", label: "Snow", color: "#A8C4F8" }].map(sv => {
+                    const checked = (subForm.services || []).includes(sv.id);
+                    return (
+                      <button key={sv.id} onClick={() => {
+                        const cur = subForm.services || [];
+                        setSubForm({ ...subForm, services: checked ? cur.filter(x => x !== sv.id) : [...cur, sv.id] });
+                      }} style={{ padding: "6px 14px", borderRadius: 20, border: "1px solid " + (checked ? sv.color : "#1E2640"), background: checked ? sv.color + "25" : "transparent", color: checked ? sv.color : "#3A4560", fontSize: 11, fontWeight: checked ? 600 : 400, cursor: "pointer", fontFamily: "inherit", transition: "all 0.15s" }}>
+                        {sv.label}
+                      </button>
+                    );
+                  })}
+                </div>
+                <div style={{ fontSize: 10, color: "#2A3560", marginTop: 5 }}>Leave blank to include in all divisions</div>
+              </div>
+              <div>
+                <div style={{ fontSize: 10, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5 }}>MSA Status</div>
+                <select className="fi" style={{ width: "100%" }} value={subForm.msaStatus} onChange={e => setSubForm({ ...subForm, msaStatus: e.target.value })}>
+                  <option value="missing">Missing</option>
+                  <option value="signed">Signed</option>
+                  <option value="expired">Expired</option>
+                </select>
+              </div>
+              <div>
+                <div style={{ fontSize: 10, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5 }}>COI Expiry Date</div>
+                <input className="fi" type="date" style={{ width: "100%", boxSizing: "border-box" }} value={subForm.coiExpiry} onChange={e => setSubForm({ ...subForm, coiExpiry: e.target.value })} />
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <input type="checkbox" id="w9check" checked={subForm.w9} onChange={e => setSubForm({ ...subForm, w9: e.target.checked })} style={{ width: 16, height: 16, accentColor: buColor.accent }} />
+                <label htmlFor="w9check" style={{ fontSize: 12, color: "#B8C4E0", cursor: "pointer" }}>W9 on file</label>
+              </div>
+              <div>
+                <div style={{ fontSize: 10, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5 }}>Notes</div>
+                <textarea className="fi" rows={3} style={{ width: "100%", boxSizing: "border-box", resize: "vertical" }} value={subForm.notes} onChange={e => setSubForm({ ...subForm, notes: e.target.value })} />
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: 8, marginTop: 20 }}>
+              <button className="btn-ghost" style={{ flex: 1 }} onClick={() => setShowSubForm(false)}>Cancel</button>
+              <button className="btn-primary" style={{ flex: 1 }} onClick={() => {
+                if (!subForm.name) return;
+                if (editSubId) setSubcontractors(subcontractors.map(s => s.id === editSubId ? { ...s, ...subForm } : s));
+                else setSubcontractors([...subcontractors, { id: "sub" + Date.now(), ...subForm }]);
+                setShowSubForm(false);
+              }}>Save</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── LANDSCAPING SUBCONTRACT MODAL ── */}
       {lawnSubcontractSiteId && (() => {
