@@ -971,6 +971,8 @@ export default function App() {
 
   // ── Supabase: load data on mount ──────────────────────────
   useEffect(() => {
+    // Safety: always show app after 8s even if DB hangs
+    const timeout = setTimeout(() => { setSupaReady(true); setDbError("Connection timed out."); }, 8000);
     const load = async () => {
       setDbLoading(l => ({ ...l, companies: true, sites: true, lawnSites: true, subcontractors: true }));
       try {
@@ -984,9 +986,11 @@ export default function App() {
         if (subRes.data?.length)  setSubcontractors(subRes.data.map(dbToSub));
         setSupaReady(true);
       } catch(e) {
-        setDbError("Could not connect to database. Using local data.");
+        setDbError("Could not connect to database.");
+        setSupaReady(true); // Always show the app even if DB fails
       }
       setDbLoading(l => ({ ...l, companies: false, sites: false, lawnSites: false, subcontractors: false }));
+      clearTimeout(timeout);
     };
     load();
   }, []);
