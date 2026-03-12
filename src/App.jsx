@@ -787,6 +787,7 @@ export default function App() {
   const [lawnBidSeason,  setLawnBidSeason]  = useState("2025");
   const [editLawnBidId,  setEditLawnBidId]  = useState(null); // which site row is open
   const [lawnBidDocSiteId, setLawnBidDocSiteId] = useState(null); // site id for bid doc modal
+  const [lawnSubcontractSiteId, setLawnSubcontractSiteId] = useState(null); // site id for subcontract modal
 
   const GP_MARGIN = 0.30;
   const calcOurPrice = (subPrice) => subPrice > 0 ? Math.ceil(subPrice / (1 - GP_MARGIN) * 100) / 100 : 0;
@@ -794,7 +795,7 @@ export default function App() {
   const initLawnBid = (siteId) => {
     const services = {};
     LAWN_SERVICES.forEach(s => { services[s.id] = { subPrice: 0, ourPrice: 0, included: false }; });
-    return { id: "lb_" + siteId + "_" + Date.now(), siteId, season: lawnBidSeason, services, locked: false, lockedDate: null, subcontractorId: "", notes: "", status: "bidding", subToken: null, subSentAt: null, ownerApprovedDate: null };
+    return { id: "lb_" + siteId + "_" + Date.now(), siteId, season: lawnBidSeason, services, locked: false, lockedDate: null, subcontractorIds: [], selectedSubId: "", notes: "", status: "bidding", subToken: null, subSentAt: null, ownerApprovedDate: null };
   };
 
   const getLawnBid = (siteId) => lawnBids.find(b => b.siteId === siteId && b.season === lawnBidSeason) || null;
@@ -2232,7 +2233,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                             const contracted = isContracted(s);
                             const markerColor = activeBU === "lawn" ? (contracted ? "#4ADE80" : "#F87171") : (companyColorMap[s.companyId] || "#3B6FE8");
                             const bid = activeBU === "lawn" ? getLawnBid(s.id) : null;
-                            const subName = bid?.subcontractorId ? (subcontractors.find(x => x.id === bid.subcontractorId)?.name || "") : "";
+                            const subName = bid?.selectedSubId ? (subcontractors.find(x => x.id === bid.selectedSubId)?.name || "") : (bid?.subcontractorIds||[])[0] ? (subcontractors.find(x => x.id === (bid.subcontractorIds||[])[0])?.name || "") : "";
                             return { lat: s.lat, lng: s.lng, label: (s.storeNumber ? "#" + s.storeNumber + " " : "") + s.address, company: companies.find(c => c.id === s.companyId)?.name || "", color: markerColor, contracted, subName };
                           }))};
                           var bounds = [];
@@ -2268,7 +2269,9 @@ Return ONLY valid JSON, no markdown, no extra text:
                     const co = companies.find(c => c.id === site.companyId);
                     const bid = activeBU === "lawn" ? getLawnBid(site.id) : null;
                     const bidStatus = bid ? LAWN_BID_STATUSES.find(s => s.id === bid.status) : null;
-                    const sub = bid?.subcontractorId ? subcontractors.find(s => s.id === bid.subcontractorId) : null;
+                    const sub = bid?.selectedSubId ? subcontractors.find(s => s.id === bid.selectedSubId)
+                             : (bid?.subcontractorIds||[]).length > 0 ? subcontractors.find(s => s.id === bid.subcontractorIds[0])
+                             : null;
                     const annualVal = bid ? lawnBidAnnualOur(bid) : 0;
                     const contracted = isContracted(site);
                     const statusDotColor = activeBU === "lawn" ? (contracted ? "#4ADE80" : "#F87171") : (companyColorMap[site.companyId] || "#3A4560");
@@ -3071,9 +3074,10 @@ Return ONLY valid JSON, no markdown, no extra text:
                               <div style={{ width: 36, height: 36, borderRadius: 8, background: isLocked ? "#4ADE8015" : "#3B6FE815", border: "1px solid " + (isLocked ? "#4ADE8030" : "#3B6FE830"), display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}>{isLocked ? "📋" : "🌿"}</div>
                               <div>
                                 <div style={{ fontSize: 14, fontWeight: 600, color: "#E8ECF4" }}>{co ? co.name : "Unknown"} — #{site.storeNumber || site.id}</div>
-                                <div style={{ display: "flex", gap: 8, marginTop: 2, alignItems: "center" }}>
+                                <div style={{ display: "flex", gap: 8, marginTop: 2, alignItems: "center", flexWrap: "wrap" }}>
                                   <span style={{ fontSize: 11, color: "#3A4560" }}>{site.address}</span>
-                                  {bid?.subcontractorId && (() => { const sub = subcontractors.find(s => s.id === bid.subcontractorId); return sub ? <span style={{ fontSize: 10, color: "#A78BFA", background: "#A78BFA15", border: "1px solid #A78BFA30", borderRadius: 4, padding: "1px 6px" }}>🔧 {sub.name}</span> : null; })()}
+                                  {bid?.selectedSubId && (() => { const sub = subcontractors.find(s => s.id === bid.selectedSubId); return sub ? <span style={{ fontSize: 10, color: "#4ADE80", background: "#4ADE8015", border: "1px solid #4ADE8030", borderRadius: 4, padding: "1px 6px", fontWeight: 600 }}>✓ {sub.name}</span> : null; })()}
+                                  {(bid?.subcontractorIds||[]).filter(id => id !== bid?.selectedSubId).map(id => { const sub = subcontractors.find(s => s.id === id); return sub ? <span key={id} style={{ fontSize: 10, color: "#A78BFA", background: "#A78BFA15", border: "1px solid #A78BFA30", borderRadius: 4, padding: "1px 6px" }}>🔧 {sub.name}</span> : null; })}
                                 </div>
                               </div>
                             </div>
@@ -3089,27 +3093,21 @@ Return ONLY valid JSON, no markdown, no extra text:
                           {/* Expanded detail */}
                           {isEditing && (
                             <div style={{ borderTop: "1px solid #1E2640", padding: "18px 18px 20px" }}>
-                              {/* Status + Sub + notes */}
-                              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 18 }}>
+                              {/* Status + notes row */}
+                              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 18 }}>
                                 <div>
                                   <div style={{ fontSize: 10, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5 }}>Status</div>
                                   <select disabled={isLocked} value={bid?.status || "bidding"} onChange={e => {
                                     const newStatus = e.target.value;
+                                    const hasSelectedSub = bid?.selectedSubId;
+                                    if (newStatus === "contracted" && !hasSelectedSub) {
+                                      alert("⚠️ You must select a contracted sub before marking as Contracted.\n\nChoose one of the assigned vendors as the contracted sub.");
+                                      return;
+                                    }
                                     upsertLawnBid(site.id, b => {
                                       const updates = { ...b, status: newStatus };
                                       if (newStatus === "owner_approved" && !b.ownerApprovedDate) {
                                         updates.ownerApprovedDate = new Date().toISOString().split("T")[0];
-                                        // Auto-generate sub contract token
-                                        if (!b.subToken && b.subcontractorId) {
-                                          const tok = "lnsub" + Math.random().toString(36).slice(2,10);
-                                          updates.subToken = tok;
-                                          updates.subSentAt = new Date().toISOString();
-                                          const link = window.location.origin + "/?lnsubtoken=" + tok;
-                                          navigator.clipboard?.writeText(link);
-                                          setTimeout(() => alert("✅ Owner Approved!\n\nSub contract link copied to clipboard:\n" + link), 100);
-                                        } else if (newStatus === "owner_approved" && !b.subcontractorId) {
-                                          setTimeout(() => alert("⚠️ Owner Approved — but no subcontractor assigned yet.\nAssign a sub to generate the contract link."), 100);
-                                        }
                                       }
                                       return updates;
                                     });
@@ -3118,48 +3116,74 @@ Return ONLY valid JSON, no markdown, no extra text:
                                   </select>
                                 </div>
                                 <div>
-                                  <div style={{ fontSize: 10, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5 }}>Service Provider (Sub)</div>
-                                  <select disabled={!canEdit} value={bid?.subcontractorId || ""} onChange={e => upsertLawnBid(site.id, b => ({ ...b, subcontractorId: e.target.value }))} style={{ width: "100%", background: canEdit ? "#141824" : "#0A0D16", border: "1px solid #1E2640", borderRadius: 6, padding: "7px 10px", fontSize: 12, color: "#E8ECF4", opacity: canEdit ? 1 : 0.6, boxSizing: "border-box" }}>
-                                    <option value="">Select sub…</option>
-                                    {subcontractors.map(s => <option key={s.id} value={s.id}>{s.name}{s.trade ? " — " + s.trade : ""}</option>)}
-                                  </select>
-                                </div>
-                                <div>
                                   <div style={{ fontSize: 10, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5 }}>Notes</div>
                                   <input disabled={!canEdit} value={bid?.notes || ""} onChange={e => upsertLawnBid(site.id, b => ({ ...b, notes: e.target.value }))} placeholder="Any site-specific notes…" style={{ width: "100%", background: canEdit ? "#141824" : "#0A0D16", border: "1px solid #1E2640", borderRadius: 6, padding: "7px 10px", fontSize: 12, color: "#E8ECF4", opacity: canEdit ? 1 : 0.6, boxSizing: "border-box" }} />
                                 </div>
                               </div>
 
-                              {/* Sub contract link (owner_approved) */}
+                              {/* Multi-vendor picker */}
+                              <div style={{ marginBottom: 18 }}>
+                                <div style={{ fontSize: 10, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 8 }}>Vendors Sent Bid To</div>
+                                {/* Add vendor dropdown */}
+                                {canEdit && (
+                                  <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+                                    <select defaultValue="" onChange={e => {
+                                      const subId = e.target.value;
+                                      if (!subId) return;
+                                      const cur = bid?.subcontractorIds || [];
+                                      if (!cur.includes(subId)) upsertLawnBid(site.id, b => ({ ...b, subcontractorIds: [...(b.subcontractorIds||[]), subId] }));
+                                      e.target.value = "";
+                                    }} style={{ flex: 1, background: "#141824", border: "1px solid #1E2640", borderRadius: 6, padding: "7px 10px", fontSize: 12, color: "#E8ECF4", boxSizing: "border-box" }}>
+                                      <option value="">+ Add vendor…</option>
+                                      {subcontractors.filter(s => !(bid?.subcontractorIds||[]).includes(s.id)).map(s => <option key={s.id} value={s.id}>{s.name}{s.trade ? " — " + s.trade : ""}</option>)}
+                                    </select>
+                                  </div>
+                                )}
+                                {/* Vendor tag list */}
+                                {(bid?.subcontractorIds || []).length === 0 && (
+                                  <div style={{ fontSize: 11, color: "#3A4560", fontStyle: "italic" }}>No vendors assigned yet</div>
+                                )}
+                                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                                  {(bid?.subcontractorIds || []).map(subId => {
+                                    const s = subcontractors.find(x => x.id === subId);
+                                    if (!s) return null;
+                                    const isSelected = bid?.selectedSubId === subId;
+                                    return (
+                                      <div key={subId} style={{ display: "flex", alignItems: "center", gap: 8, background: isSelected ? "#4ADE8015" : "#141824", border: "1px solid " + (isSelected ? "#4ADE8040" : "#1E2640"), borderRadius: 8, padding: "8px 12px" }}>
+                                        <div style={{ flex: 1, minWidth: 0 }}>
+                                          <div style={{ fontSize: 12, color: "#E8ECF4", fontWeight: isSelected ? 600 : 400 }}>🔧 {s.name}{s.trade ? <span style={{ color: "#3A4560", fontWeight: 400 }}> — {s.trade}</span> : ""}</div>
+                                          {s.phone && <div style={{ fontSize: 10, color: "#3A4560", marginTop: 2 }}>{s.phone}{s.email ? " · " + s.email : ""}</div>}
+                                        </div>
+                                        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                                          {isSelected
+                                            ? <span style={{ fontSize: 10, color: "#4ADE80", background: "#4ADE8015", border: "1px solid #4ADE8030", borderRadius: 4, padding: "2px 8px", fontWeight: 600 }}>✓ Contracted Sub</span>
+                                            : canEdit && <button onClick={() => upsertLawnBid(site.id, b => ({ ...b, selectedSubId: subId }))} style={{ fontSize: 10, color: "#60A5FA", background: "#60A5FA10", border: "1px solid #60A5FA30", borderRadius: 4, padding: "2px 8px", cursor: "pointer", fontFamily: "inherit" }}>Select as Sub</button>
+                                          }
+                                          {canEdit && (
+                                            <button onClick={() => upsertLawnBid(site.id, b => ({ ...b, subcontractorIds: (b.subcontractorIds||[]).filter(x => x !== subId), selectedSubId: b.selectedSubId === subId ? "" : b.selectedSubId }))} style={{ fontSize: 10, color: "#F87171", background: "none", border: "none", cursor: "pointer", padding: "2px 4px" }}>✕</button>
+                                          )}
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                                {(bid?.subcontractorIds||[]).length > 0 && !bid?.selectedSubId && (
+                                  <div style={{ fontSize: 10, color: "#FCD34D", marginTop: 6, display: "flex", alignItems: "center", gap: 4 }}>⚠ Select a contracted sub above before moving to "Contracted" status</div>
+                                )}
+                              </div>
+
+                              {/* Owner approved action bar */}
                               {bid?.status === "owner_approved" && (
                                 <div style={{ background: "#4ADE8010", border: "1px solid #4ADE8030", borderRadius: 8, padding: "12px 14px", marginBottom: 16, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                                   <div>
                                     <div style={{ fontSize: 11, color: "#4ADE80", fontWeight: 600 }}>✅ Owner Approved {bid.ownerApprovedDate ? "— " + bid.ownerApprovedDate : ""}</div>
-                                    {bid.subToken ? (
-                                      <div style={{ fontSize: 11, color: "#3A4560", marginTop: 3 }}>Sub contract link generated · {bid.subSentAt ? new Date(bid.subSentAt).toLocaleDateString() : ""}</div>
-                                    ) : (
-                                      <div style={{ fontSize: 11, color: "#FCD34D", marginTop: 3 }}>⚠ Assign a subcontractor to generate contract link</div>
-                                    )}
+                                    {bid.selectedSubId
+                                      ? <div style={{ fontSize: 11, color: "#3A4560", marginTop: 3 }}>Ready to generate subcontract for {subcontractors.find(s => s.id === bid.selectedSubId)?.name}</div>
+                                      : <div style={{ fontSize: 11, color: "#FCD34D", marginTop: 3 }}>⚠ Select a contracted sub above to generate subcontract</div>
+                                    }
                                   </div>
-                                  {bid.subToken && (
-                                    <div style={{ display: "flex", gap: 8 }}>
-                                      <button onClick={() => navigator.clipboard?.writeText(window.location.origin + "/?lnsubtoken=" + bid.subToken)} style={{ fontSize: 11, background: "#4ADE8015", border: "1px solid #4ADE8030", borderRadius: 5, color: "#4ADE80", padding: "5px 10px", cursor: "pointer", fontFamily: "inherit" }}>📋 Copy Contract Link</button>
-                                      {!bid.subcontractorId && bid.status === "owner_approved" && (
-                                        <button onClick={() => {
-                                          const tok = "lnsub" + Math.random().toString(36).slice(2,10);
-                                          upsertLawnBid(site.id, b => ({ ...b, subToken: tok, subSentAt: new Date().toISOString() }));
-                                          navigator.clipboard?.writeText(window.location.origin + "/?lnsubtoken=" + tok);
-                                        }} style={{ fontSize: 11, background: "#3B6FE815", border: "1px solid #3B6FE830", borderRadius: 5, color: "#3B6FE8", padding: "5px 10px", cursor: "pointer", fontFamily: "inherit" }}>🔄 Regen Link</button>
-                                      )}
-                                    </div>
-                                  )}
-                                  {!bid.subToken && bid.subcontractorId && (
-                                    <button onClick={() => {
-                                      const tok = "lnsub" + Math.random().toString(36).slice(2,10);
-                                      upsertLawnBid(site.id, b => ({ ...b, subToken: tok, subSentAt: new Date().toISOString() }));
-                                      const link = window.location.origin + "/?lnsubtoken=" + tok;
-                                      navigator.clipboard?.writeText(link);
-                                    }} style={{ fontSize: 11, background: "#4ADE8015", border: "1px solid #4ADE8030", borderRadius: 5, color: "#4ADE80", padding: "5px 10px", cursor: "pointer", fontFamily: "inherit" }}>📤 Generate & Copy Link</button>
+                                  {bid.selectedSubId && (
+                                    <button onClick={() => setLawnSubcontractSiteId(site.id)} style={{ fontSize: 11, background: "#4ADE8020", border: "1px solid #4ADE8040", borderRadius: 6, color: "#4ADE80", padding: "7px 14px", cursor: "pointer", fontFamily: "inherit", fontWeight: 600 }}>📄 Generate Subcontract</button>
                                   )}
                                 </div>
                               )}
@@ -4796,7 +4820,9 @@ Return ONLY valid JSON, no markdown, no extra text:
         if (!site) { setLawnBidDocSiteId(null); return null; }
         const bid  = getLawnBid(site.id);
         const co   = companies.find(c => c.id === site.companyId);
-        const sub  = bid?.subcontractorId ? subcontractors.find(s => s.id === bid.subcontractorId) : null;
+        const sub  = bid?.selectedSubId ? subcontractors.find(s => s.id === bid.selectedSubId)
+                   : (bid?.subcontractorIds||[]).length > 0 ? subcontractors.find(s => s.id === bid.subcontractorIds[0])
+                   : null;
         const mapLat = site.lat || 39.9526;
         const mapLng = site.lng || -75.1652;
         const mapUrl = `https://maps.googleapis.com/maps/api/staticmap?center=${mapLat},${mapLng}&zoom=18&size=640x320&maptype=satellite&markers=color:red%7C${mapLat},${mapLng}&key=AIzaSyD-9tSrke72PouQMnMX-a7eZSW0jkFMBWY`;
@@ -4978,6 +5004,280 @@ Return ONLY valid JSON, no markdown, no extra text:
                 </div>
               </div>
 
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* ── LANDSCAPING SUBCONTRACT MODAL ── */}
+      {lawnSubcontractSiteId && (() => {
+        const site = lawnSites.find(s => s.id === lawnSubcontractSiteId);
+        if (!site) { setLawnSubcontractSiteId(null); return null; }
+        const bid  = getLawnBid(site.id);
+        const co   = companies.find(c => c.id === site.companyId);
+        const sub  = bid?.selectedSubId ? subcontractors.find(s => s.id === bid.selectedSubId) : null;
+        const today = new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+        const startDate = "May 1"; const endDate = "Oct 31";
+        const getSvcData = (id) => { const sv = bid?.services?.[id]; return sv || { subPrice: 0, ourPrice: 0, included: false }; };
+
+        const printSubcontract = () => {
+          const el = document.getElementById("subcontract-content");
+          if (!el) return;
+          const w = window.open("", "_blank");
+          w.document.write(`<!DOCTYPE html><html><head><title>Landscaping Contract</title><style>
+            *{box-sizing:border-box;margin:0;padding:0;}body{font-family:Arial,sans-serif;font-size:10px;color:#000;padding:20px 28px;}
+            table{border-collapse:collapse;}img{max-width:100%;}
+            @media print{body{padding:10px 16px;}@page{margin:0.5cm;}}
+          </style></head><body>${el.innerHTML}</body></html>`);
+          w.document.close(); setTimeout(() => w.print(), 400);
+        };
+
+        return (
+          <div style={{ position: "fixed", inset: 0, background: "#00000090", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center" }} onClick={e => { if (e.target === e.currentTarget) setLawnSubcontractSiteId(null); }}>
+            <div style={{ background: "#0F1117", border: "1px solid #1E2640", borderRadius: 14, width: "min(900px, 96vw)", maxHeight: "93vh", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+              <div style={{ padding: "14px 20px", borderBottom: "1px solid #1E2640", display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>
+                <div>
+                  <div style={{ fontSize: 15, fontWeight: 700, color: "#FFFFFF" }}>📄 Landscaping Subcontract</div>
+                  <div style={{ fontSize: 11, color: "#3A4560", marginTop: 2 }}>{site.address} · {sub?.name || "No sub selected"} · Season {lawnBidSeason}</div>
+                </div>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button onClick={printSubcontract} style={{ padding: "7px 16px", background: "#4ADE8020", border: "1px solid #4ADE8040", borderRadius: 7, color: "#4ADE80", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>🖨 Print / Save PDF</button>
+                  <button onClick={() => setLawnSubcontractSiteId(null)} style={{ padding: "7px 14px", background: "transparent", border: "1px solid #1E2640", borderRadius: 7, color: "#6A7590", fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>✕ Close</button>
+                </div>
+              </div>
+
+              <div style={{ overflowY: "auto", padding: "20px 24px", flex: 1 }}>
+                <div id="subcontract-content" style={{ background: "#fff", color: "#000", fontFamily: "Arial, sans-serif", fontSize: 10, padding: "20px 28px", borderRadius: 6, maxWidth: 820, margin: "0 auto" }}>
+                  <div style={{ border: "2px solid #000", padding: 14 }}>
+
+                    {/* Header */}
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
+                      <div style={{ border: "2px solid #1a3a6b", padding: "6px 10px" }}>
+                        <div style={{ fontSize: 22, fontWeight: 900, color: "#1a3a6b", letterSpacing: "0.05em" }}>FARMER</div>
+                        <div style={{ fontSize: 7, color: "#1a3a6b", letterSpacing: "0.15em", textTransform: "uppercase" }}>Development, Inc.</div>
+                      </div>
+                      <div style={{ textAlign: "center", flex: 1, padding: "0 20px" }}>
+                        <div style={{ fontSize: 16, fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.05em" }}>LANDSCAPING CONTRACT</div>
+                      </div>
+                      <div style={{ fontSize: 9, textAlign: "right", lineHeight: 1.7 }}>
+                        <div>124 N Grand Ave</div><div>Fowlerville, MI 48836</div><div>AP@FarmerDevelopment.com</div>
+                      </div>
+                    </div>
+
+                    {/* Info rows */}
+                    <table style={{ width: "100%", borderCollapse: "collapse", marginBottom: 0 }}>
+                      <tbody>
+                        <tr>
+                          <td style={{ border: "1px solid #000", padding: "5px 8px", width: "55%", fontSize: 10, verticalAlign: "top" }}>
+                            <strong>Contractor:</strong> Farmer Development, Inc. ("Agent"), solely in its capacity as agent for the record owner of the Store ("Owner").
+                          </td>
+                          <td style={{ border: "1px solid #000", padding: "5px 8px", fontSize: 10, verticalAlign: "top" }}>
+                            <div style={{ fontWeight: "bold", textTransform: "uppercase", fontSize: 10, marginBottom: 2 }}>Service Provider:</div>
+                            <div style={{ fontSize: 13, fontWeight: "bold" }}>{sub?.name || "________________________"}</div>
+                            {sub?.phone && <div style={{ fontSize: 9, color: "#555", marginTop: 2 }}>{sub.phone}{sub.email ? " · " + sub.email : ""}</div>}
+                          </td>
+                        </tr>
+                        <tr>
+                          <td colSpan={2} style={{ border: "1px solid #000", padding: "5px 8px", fontSize: 10 }}>
+                            <strong>Owner/Property:</strong> <span style={{ fontSize: 12 }}>{co?.name || "________________________"}</span>
+                            <span style={{ float: "right" }}><strong>Number:</strong> {site.storeNumber || "________"}</span>
+                          </td>
+                        </tr>
+                        <tr>
+                          <td colSpan={2} style={{ border: "1px solid #000", padding: "5px 8px", fontSize: 10 }}>
+                            <strong>Address:</strong> {site.address}
+                          </td>
+                        </tr>
+                        <tr>
+                          <td style={{ border: "1px solid #000", padding: "5px 8px", fontSize: 10 }}>
+                            <strong>City:</strong> ________________________ &nbsp;&nbsp; <strong>State:</strong> ______
+                          </td>
+                          <td style={{ border: "1px solid #000", padding: "5px 8px", fontSize: 10 }}><strong>Zip Code:</strong> ____________</td>
+                        </tr>
+                        <tr>
+                          <td colSpan={2} style={{ border: "1px solid #000", padding: "6px 8px", fontSize: 10, lineHeight: 1.7 }}>
+                            <strong>Contract Term:</strong> ☒ <strong>7</strong> months beginning on <strong>{startDate}</strong>, <strong>{lawnBidSeason}</strong> and expiring on <strong>{endDate}</strong>, 20{String(lawnBidSeason).slice(2)}.
+                            Owner may terminate this Contract at any time upon 30 days prior written notice to Service Provider.<br/>
+                            ☐ One time service to occur on _____________, 20____.
+                          </td>
+                        </tr>
+                        <tr>
+                          <td colSpan={2} style={{ border: "1px solid #000", padding: "5px 8px", fontSize: 10, fontWeight: "bold" }}>
+                            Service Provider will perform the following services at the store subject to the terms of this Contract (IT IS AGREED THAT SERVICE PROVIDER WILL NOT PERFORM ANY SERVICE THAT IS NOT LISTED BELOW):
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+
+                    {/* Services table */}
+                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 10 }}>
+                      <thead>
+                        <tr style={{ background: "#e8e8e8" }}>
+                          {["SERVICE","DESCRIPTION","FREQUENCY","COST"].map(h => <th key={h} style={{ border: "1px solid #000", padding: "4px 6px", textAlign: "center" }}>{h}</th>)}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {/* Spring Cleanup */}
+                        <tr>
+                          <td style={{ border:"1px solid #000",padding:"6px",fontWeight:"bold",verticalAlign:"top" }}>Spring Clean-up</td>
+                          <td style={{ border:"1px solid #000",padding:"6px",verticalAlign:"top" }}>
+                            {["☐ Provide clean-up per spec","☐ Blow/vacuum – driveways & landscape per spec","☐ Prune hedges, shrubs, and evergreens","☐ Cultivate & cut beds / tree rings","☐ Apply pre-emergent weed control to beds","☐ Trim trees/shrubs protruding through fence lines (perimeter)"].map(t=><div key={t} style={{marginBottom:2}}>{t}</div>)}
+                          </td>
+                          <td style={{ border:"1px solid #000",padding:"6px",textAlign:"center",verticalAlign:"top" }}>☐ Annually 1 Time Fee</td>
+                          <td style={{ border:"1px solid #000",padding:"6px",textAlign:"right",verticalAlign:"top" }}>
+                            {(() => { const sv=getSvcData("spring_cleanup"); return sv.included && sv.subPrice > 0 ? <strong>${sv.subPrice.toFixed(2)}</strong> : <span style={{color:"#888"}}>$Upon Request</span>; })()}
+                          </td>
+                        </tr>
+                        {/* Spring Services Optional */}
+                        <tr>
+                          <td style={{ border:"1px solid #000",padding:"6px",verticalAlign:"top" }}>
+                            <div style={{fontWeight:"bold"}}>Spring Service-</div>
+                            <div style={{color:"#c8760a",fontWeight:"bold"}}>(optional costs)</div>
+                            <div style={{fontSize:9,marginTop:4}}>Please provide a cost for each of the following</div>
+                          </td>
+                          <td style={{ border:"1px solid #000",padding:"6px",verticalAlign:"top" }}>
+                            {["☐ 2" mulch of beds","☐ Sprinkler start up – if applicable","☐ Prune trees up to 12' in height","☐ Annual trim of Palm trees"].map(t=><div key={t} style={{marginBottom:2}}>{t}</div>)}
+                          </td>
+                          <td style={{ border:"1px solid #000",padding:"6px",fontSize:9,verticalAlign:"top" }}>
+                            {["☐ Annual 1 time","☐ Annual 1 time","☐ Annual 1 time if applicable","☐ Annual 1 time if applicable"].map(t=><div key={t}>{t}</div>)}
+                          </td>
+                          <td style={{ border:"1px solid #000",padding:"6px",verticalAlign:"top" }}>
+                            {["spring_mulch","spring_sprinkler","spring_trees"].map(id => { const sv=getSvcData(id); return <div key={id} style={{marginBottom:4}}>$ {sv.included&&sv.subPrice>0?<strong>{sv.subPrice.toFixed(2)}</strong>:<span style={{display:"inline-block",borderBottom:"1px solid #000",minWidth:50,height:12}}/>}</div>; })}
+                          </td>
+                        </tr>
+                        {/* Weekly Mowing */}
+                        {(() => { const sv=getSvcData("mowing"); return (
+                          <tr>
+                            <td style={{ border:"1px solid #000",padding:"6px",fontWeight:"bold",verticalAlign:"top" }}>Weekly Lawn Maintenance<div style={{fontWeight:"normal",fontSize:9}}>(per specifications provided)</div></td>
+                            <td style={{ border:"1px solid #000",padding:"6px",verticalAlign:"top" }}>Provide weekly cut, clippings removal, clean up, trimming / edging, and weed maintenance</td>
+                            <td style={{ border:"1px solid #000",padding:"6px",textAlign:"center",verticalAlign:"top" }}>☐ Monthly</td>
+                            <td style={{ border:"1px solid #000",padding:"6px",textAlign:"right",fontWeight:"bold",fontSize:13,verticalAlign:"top" }}>
+                              {sv.included&&sv.subPrice>0 ? <>$ {sv.subPrice.toFixed(0)}</> : <span style={{color:"#888",fontSize:10,fontWeight:"normal"}}>$</span>}
+                            </td>
+                          </tr>
+                        ); })()}
+                        {/* Fall Cleanup */}
+                        {(() => { const sv=getSvcData("fall_cleanup"); return (
+                          <tr>
+                            <td style={{ border:"1px solid #000",padding:"6px",fontWeight:"bold",verticalAlign:"top" }}>Fall Clean up</td>
+                            <td style={{ border:"1px solid #000",padding:"6px",verticalAlign:"top" }}>
+                              {["☐ Final blow / vacuum Driveways","☐ Final clean-up landscaped areas","☐ Late season pruning (if applicable)","☐ Decommission Sprinkler system / clock"].map(t=><div key={t} style={{marginBottom:2}}>{t}</div>)}
+                            </td>
+                            <td style={{ border:"1px solid #000",padding:"6px",textAlign:"center",verticalAlign:"top" }}>☐ Annually</td>
+                            <td style={{ border:"1px solid #000",padding:"6px",textAlign:"right",verticalAlign:"top" }}>
+                              {sv.included&&sv.subPrice>0?<strong>$ {sv.subPrice.toFixed(2)}</strong>:<span style={{color:"#888"}}>$</span>}
+                            </td>
+                          </tr>
+                        ); })()}
+                        {/* Gutter Cleaning */}
+                        {(() => { const sv=getSvcData("gutter_cleaning"); return (
+                          <tr>
+                            <td style={{ border:"1px solid #000",padding:"6px",fontWeight:"bold",verticalAlign:"top" }}>Gutter Cleaning<div style={{fontWeight:"normal",fontSize:9}}>(per specifications provided)</div></td>
+                            <td style={{ border:"1px solid #000",padding:"6px",verticalAlign:"top" }}><div>☐ Spring Service (1)</div><div>☐ Fall Service (2)</div></td>
+                            <td style={{ border:"1px solid #000",padding:"6px",textAlign:"center",verticalAlign:"top" }}>☐ 3 services total</td>
+                            <td style={{ border:"1px solid #000",padding:"6px",textAlign:"right",verticalAlign:"top" }}>
+                              {sv.included&&sv.subPrice>0?<strong>$ {sv.subPrice.toFixed(2)}</strong>:<span style={{color:"#888"}}>$</span>}
+                            </td>
+                          </tr>
+                        ); })()}
+                        {/* Retention Areas */}
+                        {(() => { const sv=getSvcData("retention_areas"); return (
+                          <tr>
+                            <td style={{ border:"1px solid #000",padding:"6px",fontWeight:"bold",verticalAlign:"top" }}>Retention Areas<div style={{fontWeight:"normal",fontSize:9}}>(per specifications provided)</div></td>
+                            <td style={{ border:"1px solid #000",padding:"6px",verticalAlign:"top" }}>☐ Trim monthly / remove trash and debris</td>
+                            <td style={{ border:"1px solid #000",padding:"6px",textAlign:"center",verticalAlign:"top" }}>☐ Monthly</td>
+                            <td style={{ border:"1px solid #000",padding:"6px",textAlign:"right",verticalAlign:"top" }}>
+                              {sv.included&&sv.subPrice>0?<strong>$ {sv.subPrice.toFixed(2)}</strong>:<span style={{color:"#888"}}>$</span>}
+                            </td>
+                          </tr>
+                        ); })()}
+                        {/* Optional Items */}
+                        <tr>
+                          <td style={{ border:"1px solid #000",padding:"6px",fontWeight:"bold",color:"#c8760a",verticalAlign:"top" }}>Optional Items</td>
+                          <td style={{ border:"1px solid #000",padding:"6px",verticalAlign:"top" }}>
+                            <div>N/a</div>
+                            <div style={{marginTop:4}}>☐ Spring Fertilization lawn / plants</div>
+                            <div>☐ Fall Fertilization lawn / plants</div>
+                          </td>
+                          <td style={{ border:"1px solid #000",padding:"6px",fontSize:9,verticalAlign:"top" }}><div>☐ Monthly</div><div>☐ Annually</div><div>☐ Annually</div></td>
+                          <td style={{ border:"1px solid #000",padding:"6px",verticalAlign:"top",fontSize:9 }}>
+                            <div>$ <span style={{display:"inline-block",borderBottom:"1px solid #000",minWidth:40,height:12}}/></div>
+                            <div>$ <span style={{display:"inline-block",borderBottom:"1px solid #000",minWidth:40,height:12}}/></div>
+                            <div style={{marginTop:4,color:"#888"}}>Monthly or Upon Request</div>
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+
+                    {/* Total cost rows */}
+                    <table style={{ width:"100%",borderCollapse:"collapse" }}>
+                      <tbody>
+                        <tr>
+                          <td style={{ border:"1px solid #000",padding:"6px 8px",fontWeight:"bold",width:"40%" }}>Total Contract Cost</td>
+                          <td style={{ border:"1px solid #000",padding:"6px 8px",width:"35%" }}>&nbsp;</td>
+                          <td style={{ border:"1px solid #000",padding:"6px 8px",fontSize:9,width:"17%" }}>
+                            <div>Total Cost (w/o optional items)</div><div>Total Cost (w/ Optional items)</div>
+                          </td>
+                          <td style={{ border:"1px solid #000",padding:"6px 8px",textAlign:"right",width:"8%" }}><div>$</div><div>$</div></td>
+                        </tr>
+                        <tr>
+                          <td colSpan={4} style={{ border:"1px solid #000",padding:"6px 8px" }}>
+                            <strong>Total Cost per (circle one): application / month / quarter / year</strong>
+                            <span style={{float:"right"}}><strong>$</strong></span>
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+
+                    {/* Additional Terms */}
+                    <div style={{ marginTop: 8, fontSize: 9, lineHeight: 1.55 }}>
+                      <div style={{ fontWeight: "bold", fontSize: 10, marginBottom: 4, textTransform: "uppercase" }}>Additional Terms</div>
+                      <ul style={{ listStyle: "disc", paddingLeft: 16 }}>
+                        {[
+                          "All work performed is to be completed in a clean, neat, and professional manner consistent with industry standards. Service Provider shall not use any subcontractors unless Owner's prior written approval is obtained.",
+                          "Service Provider will, within 30 days after Owner's written request, repair and/or replace any damage to the store caused by Service Provider.",
+                          "Service Provider must obtain and maintain, during the Contract Term, the insurance described on Owner's Insurance Requirements Form and deliver a Certificate of Insurance prior to performing any work.",
+                          "Service Provider will indemnify, defend, and hold harmless Owner and Farmer Development, Inc. from any and all claims, losses, costs, injuries, damages, and liabilities arising out of or in connection with any act, omission, or negligence of Service Provider.",
+                          "Each party shall have the right to terminate this Contract if the other party fails to cure a default or breach within 10 days after receipt of written notice thereof.",
+                          "All Fees invoices must be tendered to Agent within thirty (30) days after completion of the Services, after which such Fee invoices will no longer be honored.",
+                          "Receipt by Contractor of funds from Owner so as to permit payment to Subcontractor. This is a pay when paid clause. Subcontractor is not entitled to payment unless and until Contractor has been paid.",
+                          "Service Provider may not assign this Contract without Owner's prior written consent. Owner may assign this Contract at any time to Owner's successor or nominee.",
+                          "The individuals signing this Contract represent and warrant that they are duly authorized to enter into this Agreement and to bind Service Provider and Owner respectively.",
+                        ].map((t,i) => <li key={i} style={{marginBottom:4}}>{t}</li>)}
+                      </ul>
+                    </div>
+
+                    {/* Signatures */}
+                    <table style={{ width:"100%",borderCollapse:"collapse",marginTop:10,fontSize:10 }}>
+                      <tbody>
+                        <tr>
+                          <td style={{ border:"1px solid #000",padding:"6px 8px",width:"65%",verticalAlign:"top" }}>
+                            <div style={{fontWeight:"bold",marginBottom:18}}>Service Provider Signature:</div>
+                            <div style={{borderBottom:"1px solid #000",height:28,marginBottom:4}}/>
+                            <div style={{fontSize:9,color:"#444"}}>Signature / Printed Name</div>
+                          </td>
+                          <td style={{ border:"1px solid #000",padding:"6px 8px",verticalAlign:"top" }}>
+                            <div style={{fontWeight:"bold",marginBottom:4}}>Date:</div>
+                            <div style={{borderBottom:"1px solid #000",height:28,marginBottom:4}}/>
+                          </td>
+                        </tr>
+                        <tr>
+                          <td style={{ border:"1px solid #000",padding:"6px 8px",verticalAlign:"top" }}>
+                            <div style={{fontWeight:"bold",marginBottom:18}}>Owner Signature (by the Authorized Signer of Agent, solely in its capacity as duly authorized agent for Owner):</div>
+                            <div style={{borderBottom:"1px solid #000",height:28,marginBottom:4}}/>
+                            <div style={{fontSize:9,color:"#444"}}>Signature / Printed Name</div>
+                          </td>
+                          <td style={{ border:"1px solid #000",padding:"6px 8px",verticalAlign:"top" }}>
+                            <div style={{fontWeight:"bold",marginBottom:4}}>Date:</div>
+                            <div style={{borderBottom:"1px solid #000",height:28,marginBottom:4}}/>
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                    <div style={{fontSize:8,color:"#888",textAlign:"center",marginTop:8}}>Page 1 of 2</div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         );
