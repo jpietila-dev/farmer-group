@@ -827,6 +827,7 @@ export default function App() {
     { id: "proposed",         label: "Proposed to Owner", color: "#60A5FA" },
     { id: "owner_approved",   label: "Owner Approved",    color: "#4ADE80" },
     { id: "contracted",       label: "Contracted",        color: "#A78BFA" },
+    { id: "not_bidding",      label: "Not Bidding",       color: "#4A5270" },
   ];
 
   const LAWN_SERVICES = [
@@ -848,6 +849,7 @@ export default function App() {
   const [editLawnBidId,  setEditLawnBidId]  = useState(null); // which site row is open
   const [lawnBidDocSiteId, setLawnBidDocSiteId] = useState(null); // site id for bid doc modal
   const [lawnSubcontractSiteId, setLawnSubcontractSiteId] = useState(null); // site id for subcontract modal
+  const [showBidArchive, setShowBidArchive] = useState(false);
 
   const GP_MARGIN = 0.30;
   const calcOurPrice = (subPrice) => subPrice > 0 ? Math.ceil(subPrice / (1 - GP_MARGIN) * 100) / 100 : 0;
@@ -3086,9 +3088,11 @@ Return ONLY valid JSON, no markdown, no extra text:
           {/* ── LAWN BUDGETING ── */}
           {activeNav === "bids" && activeBU === "lawn" && (() => {
             const currentSites = lawnSites;
-            const totalOur = currentSites.reduce((sum, site) => sum + lawnBidAnnualOur(getLawnBid(site.id)), 0);
-            const lockedCount = currentSites.filter(s => { const b = getLawnBid(s.id); return b && b.locked; }).length;
-            const bidCount = currentSites.filter(s => { const b = getLawnBid(s.id); return b && !b.locked; }).length;
+            const activeSites   = currentSites.filter(s => { const b = getLawnBid(s.id); return !b || b.status !== "not_bidding"; });
+            const archivedSites = currentSites.filter(s => { const b = getLawnBid(s.id); return b && b.status === "not_bidding"; });
+            const totalOur = activeSites.reduce((sum, site) => sum + lawnBidAnnualOur(getLawnBid(site.id)), 0);
+            const lockedCount = activeSites.filter(s => { const b = getLawnBid(s.id); return b && b.locked; }).length;
+            const bidCount = activeSites.filter(s => { const b = getLawnBid(s.id); return b && !b.locked; }).length;
 
             return (
               <div className="fade-in" style={{ display: "flex", flexDirection: "column", gap: 22 }}>
@@ -3146,7 +3150,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                   </div>
                 ) : (
                   <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                    {currentSites.map(site => {
+                    {activeSites.map(site => {
                       const bid = getLawnBid(site.id);
                       const isLocked = bid && bid.locked;
                       const isEditing = editLawnBidId === site.id;
@@ -3365,6 +3369,41 @@ Return ONLY valid JSON, no markdown, no extra text:
                         </div>
                       );
                     })}
+                  </div>
+                )}
+
+                {/* ── NOT BIDDING ARCHIVE ── */}
+                {archivedSites.length > 0 && (
+                  <div style={{ marginTop: 8 }}>
+                    {/* Toggle bar */}
+                    <button onClick={() => setShowBidArchive(a => !a)} style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 18px", background: "#0A0D16", border: "1px solid #1E2640", borderRadius: showBidArchive ? "10px 10px 0 0" : 10, cursor: "pointer", fontFamily: "inherit", transition: "border-radius 0.2s" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                        <span style={{ fontSize: 14 }}>🚫</span>
+                        <span style={{ fontSize: 12, fontWeight: 600, color: "#4A5270", textTransform: "uppercase", letterSpacing: "0.07em" }}>Not Bidding — {archivedSites.length} {archivedSites.length === 1 ? "Site" : "Sites"}</span>
+                      </div>
+                      <span style={{ fontSize: 12, color: "#3A4560" }}>{showBidArchive ? "▲ Hide" : "▼ Show"}</span>
+                    </button>
+                    {/* Archived site rows */}
+                    {showBidArchive && (
+                      <div style={{ border: "1px solid #1E2640", borderTop: "none", borderRadius: "0 0 10px 10px", overflow: "hidden" }}>
+                        {archivedSites.map((site, i) => {
+                          const bid = getLawnBid(site.id);
+                          const co = companies.find(c => c.id === site.companyId);
+                          return (
+                            <div key={site.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 18px", background: i % 2 === 0 ? "#0A0D16" : "#0D1020", borderTop: i === 0 ? "none" : "1px solid #1E2640", opacity: 0.7 }}>
+                              <div>
+                                <div style={{ fontSize: 13, fontWeight: 600, color: "#4A5270" }}>{co?.name || "Unknown"} — #{site.storeNumber || site.id}</div>
+                                <div style={{ fontSize: 11, color: "#2A3560" }}>{site.address}</div>
+                              </div>
+                              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                                <span style={{ fontSize: 10, color: "#4A5270", background: "#4A527015", border: "1px solid #4A527030", borderRadius: 4, padding: "2px 8px" }}>Not Bidding</span>
+                                <button onClick={() => upsertLawnBid(site.id, b => ({ ...b, status: "bidding" }))} style={{ fontSize: 10, color: "#60A5FA", background: "#60A5FA10", border: "1px solid #60A5FA30", borderRadius: 4, padding: "3px 10px", cursor: "pointer", fontFamily: "inherit" }}>↩ Restore</button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
