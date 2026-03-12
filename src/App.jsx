@@ -4868,19 +4868,29 @@ Return ONLY valid JSON, no markdown, no extra text:
 
                   {/* Satellite / aerial map */}
                   <div style={{ fontSize: 10, fontWeight: "bold", textTransform: "uppercase", letterSpacing: "0.07em", color: "#333", marginBottom: 6, borderBottom: "1px solid #ddd", paddingBottom: 3 }}>Property Aerial View</div>
-                  <div style={{ width: "100%", height: 240, background: "#e8ecf5", border: "1px solid #ccc", marginBottom: 18, overflow: "hidden", position: "relative", borderRadius: 4 }}>
-                    <img
-                      src={mapUrl}
-                      alt={`Aerial map of ${site.address}`}
-                      style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
-                      onError={e => { e.target.style.display = "none"; document.getElementById("map-fallback-" + site.id).style.display = "flex"; }}
-                    />
-                    <div id={"map-fallback-" + site.id} style={{ display: "none", position: "absolute", inset: 0, alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 8, background: "#eef2fb", color: "#555" }}>
-                      <div style={{ fontSize: 32 }}>🗺️</div>
-                      <div style={{ fontSize: 13, fontWeight: 600 }}>{site.address}</div>
-                      <div style={{ fontSize: 11, color: "#888" }}>Lat {mapLat.toFixed(5)} · Lng {mapLng.toFixed(5)}</div>
-                      <a href={`https://www.google.com/maps?q=${mapLat},${mapLng}`} target="_blank" rel="noreferrer" style={{ fontSize: 10, color: "#3B6FE8", marginTop: 4 }}>Open in Google Maps ↗</a>
-                    </div>
+                  <div style={{ width: "100%", height: 260, background: "#e8ecf5", border: "1px solid #ccc", marginBottom: 18, overflow: "hidden", borderRadius: 4 }}>
+                    {site.lat && site.lng ? (
+                      <iframe
+                        key={site.id + "-aerial"}
+                        style={{ width: "100%", height: "100%", border: "none", display: "block" }}
+                        srcDoc={`<!DOCTYPE html><html><head>
+                          <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+                          <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+                          <style>html,body,#map{margin:0;padding:0;height:100%;width:100%;}</style>
+                        </head><body><div id="map"></div><script>
+                          var map = L.map('map', { zoomControl: false, attributionControl: false, dragging: false, scrollWheelZoom: false }).setView([${site.lat}, ${site.lng}], 19);
+                          L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 20 }).addTo(map);
+                          var icon = L.divIcon({ className: '', html: '<div style="width:14px;height:14px;border-radius:50%;background:#ef4444;border:3px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.6);"></div>', iconSize:[14,14], iconAnchor:[7,7] });
+                          L.marker([${site.lat}, ${site.lng}], { icon: icon }).addTo(map);
+                        </script></body></html>`}
+                      />
+                    ) : (
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 8, height: "100%", color: "#888" }}>
+                        <div style={{ fontSize: 28 }}>🗺️</div>
+                        <div style={{ fontSize: 12, fontWeight: 600, color: "#555" }}>{site.address}</div>
+                        <div style={{ fontSize: 10, color: "#aaa" }}>No coordinates — add address to site for aerial view</div>
+                      </div>
+                    )}
                   </div>
 
                   {/* Services pricing table */}
