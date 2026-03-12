@@ -42,11 +42,11 @@ const supa = {
 const dbToCompany = r => ({ id: r.id, name: r.name, address: r.address||"", website: r.website||"", logo: r.logo||"", notes: r.notes||"" });
 const companyToDB = c => ({ id: c.id, name: c.name, address: c.address||"", website: c.website||"", logo: c.logo||"", notes: c.notes||"" });
 
-const dbToSite = r => ({ id: r.id, companyId: r.company_id||"", contactIds: r.contact_ids||[], storeNumber: r.store_number||"", address: r.address||"", phone: r.phone||"", accessCode: r.access_code||"", notes: r.notes||"" });
-const siteToDB = s => ({ id: s.id, company_id: s.companyId||null, contact_ids: s.contactIds||[], store_number: s.storeNumber||"", address: s.address||"", phone: s.phone||"", access_code: s.accessCode||"", notes: s.notes||"" });
+const dbToSite = r => ({ id: r.id, companyId: r.company_id||"", contactIds: r.contact_ids||[], storeNumber: r.store_number||"", address: r.address||"", phone: r.phone||"", accessCode: r.access_code||"", notes: r.notes||"", lat: r.lat ? parseFloat(r.lat) : null, lng: r.lng ? parseFloat(r.lng) : null, businessUnits: r.business_units||[] });
+const siteToDB = s => ({ id: s.id, company_id: s.companyId||null, contact_ids: s.contactIds||[], store_number: s.storeNumber||"", address: s.address||"", phone: s.phone||"", access_code: s.accessCode||"", notes: s.notes||"", lat: s.lat||null, lng: s.lng||null, business_units: s.businessUnits||[] });
 
-const dbToLsSite = r => ({ id: r.id, companyId: r.company_id||"", storeNumber: r.store_number||"", address: r.address||"", phone: r.phone||"", accessCode: r.access_code||"", notes: r.notes||"", lat: r.lat ? parseFloat(r.lat) : null, lng: r.lng ? parseFloat(r.lng) : null });
-const lsSiteToDB = s => ({ id: s.id, company_id: s.companyId||null, store_number: s.storeNumber||"", address: s.address||"", phone: s.phone||"", access_code: s.accessCode||"", notes: s.notes||"", lat: s.lat||null, lng: s.lng||null });
+const dbToLsSite = r => dbToSite(r); // same structure now
+const lsSiteToDB = s => siteToDB(s);
 
 const dbToSub = r => ({ id: r.id, name: r.name||"", trade: r.trade||"", phone: r.phone||"", email: r.email||"", msaStatus: r.msa_status||"missing", coiExpiry: r.coi_expiry||"", w9: r.w9||false, notes: r.notes||"", services: r.services||[] });
 const subToDB = s => ({ id: s.id, name: s.name||"", trade: s.trade||"", phone: s.phone||"", email: s.email||"", msa_status: s.msaStatus||"missing", coi_expiry: s.coiExpiry||null, w9: s.w9||false, notes: s.notes||"", services: s.services||[] });
@@ -795,19 +795,23 @@ export default function App() {
   const [proposalSections, setProposalSections] = useState([]);
   const [proposalExtras, setProposalExtras] = useState({ laborBurden: 0, salesTax: 0, generalLiability: 0, permitCost: 0 });
 
-  // Sites
-  const [sites,        setSites]        = useState(INIT_SITES);
+  // Sites — unified across all BUs
+  const [sites,        setSites]        = useState([]);
   const [supaReady,    setSupaReady]    = useState(false);
   const [showSiteForm, setShowSiteForm] = useState(false);
   const [editSiteId,   setEditSiteId]   = useState(null);
-  const [siteForm,     setSiteForm]     = useState({ companyId: "", contactIds: [], storeNumber: "", address: "", phone: "", accessCode: "", notes: "" });
+  const [siteForm,     setSiteForm]     = useState({ companyId: "", contactIds: [], storeNumber: "", address: "", phone: "", accessCode: "", notes: "", lat: "", lng: "", businessUnits: [] });
   const [selectedSite, setSelectedSite] = useState(null);
   const [siteSearch,   setSiteSearch]   = useState("");
+  const [siteGeocoding, setSiteGeocoding] = useState(false);
 
-  // Lawn / Snow sites
-  const [lawnSites,        setLawnSites]        = useState(INIT_LAWN_SITES);
-  const [snowSites,        setSnowSites]        = useState(INIT_SNOW_SITES);
-  // Note: lawnSites & snowSites seeded from DB on mount via useEffect below
+  // Lawn / Snow — derived from unified sites
+  const lawnSites = sites.filter(s => (s.businessUnits||[]).includes("lawn"));
+  const snowSites = sites.filter(s => (s.businessUnits||[]).includes("snow"));
+  const lsData    = activeBU === "lawn" ? lawnSites : snowSites;
+  const setLawnSites = () => {}; // no-op, derived
+  const setSnowSites = () => {}; // no-op, derived
+
   const [lsSearch,         setLsSearch]         = useState("");
   const [selectedLsSite,   setSelectedLsSite]   = useState(null);
   const [showLsSiteForm,   setShowLsSiteForm]   = useState(false);
@@ -815,7 +819,7 @@ export default function App() {
   const [lsSiteForm,       setLsSiteForm]       = useState({ companyId: "", storeNumber: "", address: "", phone: "", accessCode: "", notes: "", lat: "", lng: "" });
   const [lsGeocoding,      setLsGeocoding]      = useState(false);
   const [mapLoaded,        setMapLoaded]        = useState(false);
-  const [lsMapFilter,      setLsMapFilter]      = useState("all"); // "all" | "contracted" | "uncontracted"
+  const [lsMapFilter,      setLsMapFilter]      = useState("all");
 
   // Lawn Bids
   const LAWN_BID_STATUSES = [
@@ -966,17 +970,13 @@ export default function App() {
     const load = async () => {
       setDbLoading(l => ({ ...l, companies: true, sites: true, lawnSites: true, subcontractors: true }));
       try {
-        const [coRes, siteRes, lsRes, snRes, subRes] = await Promise.all([
+        const [coRes, siteRes, subRes] = await Promise.all([
           supa.from("companies").select("*"),
           supa.from("sites").select("*"),
-          supa.from("lawn_sites").select("*"),
-          supa.from("snow_sites").select("*"),
           supa.from("subcontractors").select("*"),
         ]);
         if (coRes.data?.length)   setCompanies(coRes.data.map(dbToCompany));
         if (siteRes.data?.length) setSites(siteRes.data.map(dbToSite));
-        if (lsRes.data?.length)   setLawnSites(lsRes.data.map(dbToLsSite));
-        if (snRes.data?.length)   setSnowSites(snRes.data.map(dbToLsSite));
         if (subRes.data?.length)  setSubcontractors(subRes.data.map(dbToSub));
         setSupaReady(true);
       } catch(e) {
@@ -992,15 +992,16 @@ export default function App() {
   const openEditSite = (s) => { setEditSiteId(s.id); setSiteForm({ ...s }); setShowSiteForm(true); };
   const saveSite = async () => {
     if (!siteForm.storeNumber.trim() && !siteForm.address.trim()) return;
+    const entry = { ...siteForm, lat: parseFloat(siteForm.lat)||null, lng: parseFloat(siteForm.lng)||null };
     if (editSiteId) {
-      const updated = { ...siteForm, id: editSiteId };
+      const updated = { ...entry, id: editSiteId };
       setSites(sites.map(s => s.id === editSiteId ? updated : s));
       supa.from("sites").update(siteToDB(updated)).eq("id", editSiteId);
     } else {
       const newId = "s" + Date.now();
-      const entry = { ...siteForm, id: newId };
-      setSites(s => [...s, entry]);
-      supa.from("sites").insert(siteToDB(entry));
+      const newEntry = { ...entry, id: newId };
+      setSites(s => [...s, newEntry]);
+      supa.from("sites").insert(siteToDB(newEntry));
     }
     setShowSiteForm(false);
   };
@@ -1017,25 +1018,26 @@ export default function App() {
   const openEditLsSite = (s) => { setEditLsSiteId(s.id); setLsSiteForm({ ...s, lat: String(s.lat || ""), lng: String(s.lng || "") }); setShowLsSiteForm(true); };
   const saveLsSite = async () => {
     if (!lsSiteForm.address.trim() && !lsSiteForm.storeNumber.trim()) return;
-    const entry = { ...lsSiteForm, lat: parseFloat(lsSiteForm.lat) || null, lng: parseFloat(lsSiteForm.lng) || null };
-    const table = activeBU === "lawn" ? "lawn_sites" : "snow_sites";
+    const buTag = activeBU; // "lawn" or "snow"
+    const entry = { ...lsSiteForm, lat: parseFloat(lsSiteForm.lat)||null, lng: parseFloat(lsSiteForm.lng)||null };
     if (editLsSiteId) {
-      const updated = { ...entry, id: editLsSiteId };
-      setLsData(lsData.map(s => s.id === editLsSiteId ? updated : s));
-      supa.from(table).update(lsSiteToDB(updated)).eq("id", editLsSiteId);
+      const existing = sites.find(s => s.id === editLsSiteId) || {};
+      const bus = existing.businessUnits || [];
+      const updated = { ...existing, ...entry, id: editLsSiteId, businessUnits: bus.includes(buTag) ? bus : [...bus, buTag] };
+      setSites(sites.map(s => s.id === editLsSiteId ? updated : s));
+      supa.from("sites").update(siteToDB(updated)).eq("id", editLsSiteId);
     } else {
       const newId = (activeBU === "lawn" ? "ln" : "sn") + Date.now();
-      const newEntry = { ...entry, id: newId };
-      setLsData(d => [...d, newEntry]);
-      supa.from(table).insert(lsSiteToDB(newEntry));
+      const newEntry = { ...entry, id: newId, contactIds: [], businessUnits: [buTag] };
+      setSites(s => [...s, newEntry]);
+      supa.from("sites").insert(siteToDB(newEntry));
     }
     setShowLsSiteForm(false);
   };
   const deleteLsSite = async (id) => {
-    const table = activeBU === "lawn" ? "lawn_sites" : "snow_sites";
-    setLsData(lsData.filter(s => s.id !== id));
+    setSites(sites.filter(s => s.id !== id));
     setSelectedLsSite(null);
-    supa.from(table).delete().eq("id", id);
+    supa.from("sites").delete().eq("id", id);
   };
 
   // Company color map for pins
@@ -2151,7 +2153,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                           if (!storeNumber && !address) return;
                           let companyId = companyMap[companyName.toLowerCase()];
                           if (!companyId && companyName) { companyId = "c" + Date.now() + Math.random().toString(36).slice(2,6); newCompanies.push({ id: companyId, name: companyName, website: "", address: "", logo: "", notes: "" }); companyMap[companyName.toLowerCase()] = companyId; }
-                          newSites.push({ id: "s" + Date.now() + Math.random().toString(36).slice(2,6), companyId: companyId || "", contactIds: [], storeNumber, address, phone, accessCode, notes: "" });
+                          newSites.push({ id: "s" + Date.now() + Math.random().toString(36).slice(2,6), companyId: companyId || "", contactIds: [], storeNumber, address, phone, accessCode, notes: "", lat: null, lng: null, businessUnits: ["fm"] });
                         });
                         if (newCompanies.length) {
                           setCompanies(prev => [...prev, ...newCompanies]);
@@ -2216,7 +2218,12 @@ Return ONLY valid JSON, no markdown, no extra text:
           {/* ── SITES MAP (Lawn / Snow) ── */}
           {activeNav === "sites" && LAWN_SNOW_SITES_BUS.includes(activeBU) && (() => {
             const currentSites = activeBU === "lawn" ? lawnSites : snowSites;
-            const setCurrentSites = activeBU === "lawn" ? setLawnSites : setSnowSites;
+            const setCurrentSites = (updater) => setSites(prev => {
+              const buTag = activeBU;
+              const others = prev.filter(s => !(s.businessUnits||[]).includes(buTag));
+              const updated = typeof updater === "function" ? updater(currentSites) : updater;
+              return [...others, ...updated];
+            });
             const isContracted = (site) => { const b = getLawnBid(site.id); return b && (b.locked || b.status === "owner_approved" || b.status === "contracted"); };
             const filteredSites = currentSites.filter(site => {
               const co = companies.find(c => c.id === site.companyId);
@@ -2270,16 +2277,15 @@ Return ONLY valid JSON, no markdown, no extra text:
                                 if (geo[0]) { lat = parseFloat(geo[0].lat); lng = parseFloat(geo[0].lon); }
                               } catch(e) {}
                             }
-                            newSites.push({ id: (activeBU === "lawn" ? "ln" : "sn") + Date.now() + Math.random().toString(36).slice(2,6), companyId: companyId || "", storeNumber, address, phone, accessCode, notes: "", lat, lng });
+                            newSites.push({ id: (activeBU === "lawn" ? "ln" : "sn") + Date.now() + Math.random().toString(36).slice(2,6), companyId: companyId || "", contactIds: [], storeNumber, address, phone, accessCode, notes: "", lat, lng, businessUnits: [activeBU] });
                           }
                           if (newCompanies.length) {
                             setCompanies(prev => [...prev, ...newCompanies]);
                             newCompanies.forEach(c => supa.from("companies").insert(companyToDB(c)));
                           }
                           if (newSites.length) {
-                            setCurrentSites(prev => [...prev, ...newSites]);
-                            const table = activeBU === "lawn" ? "lawn_sites" : "snow_sites";
-                            newSites.forEach(s => supa.from(table).insert(lsSiteToDB(s)));
+                            setSites(prev => [...prev, ...newSites]);
+                            newSites.forEach(s => supa.from("sites").insert(siteToDB(s)));
                           }
                           alert("Imported " + newSites.length + " sites" + (newSites.filter(s=>s.lat).length < newSites.length ? " (" + newSites.filter(s=>!s.lat).length + " without coordinates — enter address manually to geocode)" : "") + "!");
                           e.target.value = "";
