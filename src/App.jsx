@@ -758,6 +758,7 @@ export default function App() {
   const [showLsSiteForm,   setShowLsSiteForm]   = useState(false);
   const [editLsSiteId,     setEditLsSiteId]     = useState(null);
   const [lsSiteForm,       setLsSiteForm]       = useState({ companyId: "", storeNumber: "", address: "", phone: "", accessCode: "", notes: "", lat: "", lng: "" });
+  const [lsGeocoding,      setLsGeocoding]      = useState(false);
   const [mapLoaded,        setMapLoaded]        = useState(false);
   const [lsMapFilter,      setLsMapFilter]      = useState("all"); // "all" | "contracted" | "uncontracted"
 
@@ -4449,13 +4450,53 @@ Return ONLY valid JSON, no markdown, no extra text:
                 <div><label className="lbl">Store Number</label><input className="fi" value={lsSiteForm.storeNumber} onChange={e => setLsSiteForm(f => ({ ...f, storeNumber: e.target.value }))} placeholder="e.g. 1042" /></div>
                 <div><label className="lbl">Phone</label><input className="fi" value={lsSiteForm.phone} onChange={e => setLsSiteForm(f => ({ ...f, phone: e.target.value }))} placeholder="(555) 000-0000" /></div>
               </div>
-              <div><label className="lbl">Address</label><input className="fi" value={lsSiteForm.address} onChange={e => setLsSiteForm(f => ({ ...f, address: e.target.value }))} placeholder="123 Main St, City, State" /></div>
-              <div><label className="lbl">Access Code</label><input className="fi" value={lsSiteForm.accessCode} onChange={e => setLsSiteForm(f => ({ ...f, accessCode: e.target.value }))} placeholder="Gate / door code" /></div>
-              <div className="g2">
-                <div><label className="lbl">Latitude</label><input className="fi" type="number" step="0.0001" value={lsSiteForm.lat} onChange={e => setLsSiteForm(f => ({ ...f, lat: e.target.value }))} placeholder="e.g. 39.9526" /></div>
-                <div><label className="lbl">Longitude</label><input className="fi" type="number" step="0.0001" value={lsSiteForm.lng} onChange={e => setLsSiteForm(f => ({ ...f, lng: e.target.value }))} placeholder="e.g. -75.1652" /></div>
+              <div>
+                <label className="lbl">Address</label>
+                <input
+                  className="fi"
+                  value={lsSiteForm.address}
+                  onChange={e => setLsSiteForm(f => ({ ...f, address: e.target.value }))}
+                  onBlur={async e => {
+                    const addr = e.target.value.trim();
+                    if (!addr || lsSiteForm.lat) return; // skip if empty or already has coords
+                    setLsGeocoding(true);
+                    try {
+                      const res = await fetch("https://nominatim.openstreetmap.org/search?format=json&limit=1&q=" + encodeURIComponent(addr));
+                      const geo = await res.json();
+                      if (geo[0]) {
+                        setLsSiteForm(f => ({ ...f, lat: parseFloat(geo[0].lat).toFixed(6), lng: parseFloat(geo[0].lon).toFixed(6) }));
+                      }
+                    } catch(e) {}
+                    setLsGeocoding(false);
+                  }}
+                  placeholder="123 Main St, City, State"
+                />
               </div>
-              <div style={{ fontSize: 10, color: "#3A4560" }}>💡 Tip: Import via CSV to auto-geocode addresses, or look up coordinates at maps.google.com</div>
+              <div><label className="lbl">Access Code</label><input className="fi" value={lsSiteForm.accessCode} onChange={e => setLsSiteForm(f => ({ ...f, accessCode: e.target.value }))} placeholder="Gate / door code" /></div>
+              <div style={{ background: "#0A0D16", border: "1px solid #1E2640", borderRadius: 8, padding: "10px 14px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                  <label className="lbl" style={{ margin: 0 }}>Coordinates</label>
+                  {lsGeocoding && <span style={{ fontSize: 10, color: "#60A5FA", display: "flex", alignItems: "center", gap: 5 }}>⏳ Looking up address…</span>}
+                  {!lsGeocoding && lsSiteForm.lat && lsSiteForm.lng && <span style={{ fontSize: 10, color: "#4ADE80" }}>✓ Coordinates found</span>}
+                  {!lsGeocoding && lsSiteForm.address && (!lsSiteForm.lat || !lsSiteForm.lng) && (
+                    <button onClick={async () => {
+                      const addr = lsSiteForm.address.trim();
+                      if (!addr) return;
+                      setLsGeocoding(true);
+                      try {
+                        const res = await fetch("https://nominatim.openstreetmap.org/search?format=json&limit=1&q=" + encodeURIComponent(addr));
+                        const geo = await res.json();
+                        if (geo[0]) setLsSiteForm(f => ({ ...f, lat: parseFloat(geo[0].lat).toFixed(6), lng: parseFloat(geo[0].lon).toFixed(6) }));
+                      } catch(e) {}
+                      setLsGeocoding(false);
+                    }} style={{ fontSize: 10, color: "#60A5FA", background: "#60A5FA15", border: "1px solid #60A5FA30", borderRadius: 4, padding: "2px 8px", cursor: "pointer", fontFamily: "inherit" }}>🔍 Look up</button>
+                  )}
+                </div>
+                <div className="g2">
+                  <div><label className="lbl">Latitude</label><input className="fi" type="number" step="0.000001" value={lsSiteForm.lat} onChange={e => setLsSiteForm(f => ({ ...f, lat: e.target.value }))} placeholder="Auto-filled from address" /></div>
+                  <div><label className="lbl">Longitude</label><input className="fi" type="number" step="0.000001" value={lsSiteForm.lng} onChange={e => setLsSiteForm(f => ({ ...f, lng: e.target.value }))} placeholder="Auto-filled from address" /></div>
+                </div>
+              </div>
               <div><label className="lbl">Notes</label><textarea className="fi" rows={3} value={lsSiteForm.notes} onChange={e => setLsSiteForm(f => ({ ...f, notes: e.target.value }))} style={{ resize: "vertical" }} /></div>
               <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
                 <button className="btn-ghost" style={{ padding: "8px 16px" }} onClick={() => setShowLsSiteForm(false)}>Cancel</button>
