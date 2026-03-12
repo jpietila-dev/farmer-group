@@ -2118,7 +2118,7 @@ Return ONLY valid JSON, no markdown, no extra text:
           )}
 
           {/* ── SITES (CI / FM) ── */}
-          {activeNav === "sites" && (activeBU === "capital" || activeBU === "facility") && (
+          {activeNav === "sites" && (activeBU === "capital" || activeBU === "facility" || activeBU === "lawn" || activeBU === "snow" || activeBU === "all") && (
             <div className="fade-in" style={{ display: "flex", flexDirection: "column", gap: 22 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div>
@@ -2134,10 +2134,8 @@ Return ONLY valid JSON, no markdown, no extra text:
                     <input type="file" accept=".csv" style={{ display: "none" }} onChange={e => {
                       const file = e.target.files[0]; if (!file) return;
                       const reader = new FileReader();
-                      reader.onload = (evt) => {
-                        // Strip BOM if present
+                      reader.onload = async (evt) => {
                         let text = evt.target.result.replace(/^\uFEFF/, "");
-                        // Parse CSV properly handling quoted fields with commas
                         const parseCSVLine = (line) => {
                           const cells = []; let cur = ""; let inQuote = false;
                           for (let i = 0; i < line.length; i++) {
@@ -2150,7 +2148,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                           return cells;
                         };
                         const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
-                        if (lines.length < 2) return;
+                        if (lines.length < 2) { alert("CSV appears empty"); return; }
                         const headers = parseCSVLine(lines[0]).map(h => h.toLowerCase().replace(/[^a-z]/g, ""));
                         const col = (name) => headers.indexOf(name);
                         const newCompanies = []; const newSites = []; const companyMap = {};
@@ -2160,25 +2158,35 @@ Return ONLY valid JSON, no markdown, no extra text:
                           const companyName = col("company") >= 0 ? cells[col("company")] || "" : "";
                           const storeNumber = col("storenumber") >= 0 ? cells[col("storenumber")] || "" : "";
                           const address = col("address") >= 0 ? cells[col("address")] || "" : "";
-                          // support both "phone" and "site_phone" / "sitephone"
                           const phoneIdx = col("sitephone") >= 0 ? col("sitephone") : col("phone") >= 0 ? col("phone") : -1;
                           const phone = phoneIdx >= 0 ? cells[phoneIdx] || "" : "";
                           const accessCode = col("accesscode") >= 0 ? cells[col("accesscode")] || "" : "";
                           const notes = col("notes") >= 0 ? cells[col("notes")] || "" : "";
+                          // business_units: read from CSV col, or fall back to current BU
+                          const buRaw = col("businessunits") >= 0 ? cells[col("businessunits")] || "" : "";
+                          const businessUnits = buRaw ? buRaw.split(/[,;|]/).map(b => b.trim()).filter(Boolean) : [activeBU === "all" ? "fm" : activeBU];
                           if (!storeNumber && !address) return;
                           let companyId = companyMap[companyName.toLowerCase()];
-                          if (!companyId && companyName) { companyId = "c" + Date.now() + Math.random().toString(36).slice(2,6); newCompanies.push({ id: companyId, name: companyName, website: "", address: "", logo: "", notes: "" }); companyMap[companyName.toLowerCase()] = companyId; }
-                          newSites.push({ id: "s" + Date.now() + Math.random().toString(36).slice(2,6), companyId: companyId || "", contactIds: [], storeNumber, address, phone, accessCode, notes, lat: null, lng: null, businessUnits: ["fm"] });
+                          if (!companyId && companyName) {
+                            companyId = "c" + Date.now() + Math.random().toString(36).slice(2,6);
+                            newCompanies.push({ id: companyId, name: companyName, website: "", address: "", logo: "", notes: "" });
+                            companyMap[companyName.toLowerCase()] = companyId;
+                          }
+                          newSites.push({ id: "s" + Date.now() + Math.random().toString(36).slice(2,6), companyId: companyId || "", contactIds: [], storeNumber, address, phone, accessCode, notes, lat: null, lng: null, businessUnits });
                         });
                         if (newCompanies.length) {
                           setCompanies(prev => [...prev, ...newCompanies]);
-                          newCompanies.forEach(c => supa.from("companies").insert(companyToDB(c)));
+                          // Batch insert companies
+                          supa.from("companies").insert(newCompanies.map(companyToDB));
                         }
                         if (newSites.length) {
                           setSites(prev => [...prev, ...newSites]);
-                          newSites.forEach(s => supa.from("sites").insert(siteToDB(s)));
+                          // Batch insert sites in chunks of 100
+                          for (let i = 0; i < newSites.length; i += 100) {
+                            supa.from("sites").insert(newSites.slice(i, i + 100).map(siteToDB));
+                          }
                         }
-                        alert("Imported " + newSites.length + " sites" + (newCompanies.length ? " + " + newCompanies.length + " companies" : "") + "!");
+                        alert("✓ Imported " + newSites.length + " sites" + (newCompanies.length ? " + " + newCompanies.length + " new companies" : "") + "!");
                         e.target.value = "";
                       };
                       reader.readAsText(file);
