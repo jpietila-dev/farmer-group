@@ -851,6 +851,9 @@ export default function App() {
   const [lawnBidSeason,  setLawnBidSeason]  = useState("2025");
   const [editLawnBidId,  setEditLawnBidId]  = useState(null); // which site row is open
   const [lawnBidDocSiteId, setLawnBidDocSiteId] = useState(null); // site id for bid doc modal
+  const [lawnBidDocSubId,  setLawnBidDocSubId]  = useState(null); // selected sub for bid doc
+  const [showNotBidding,   setShowNotBidding]   = useState(false); // show not-bidding sites
+  const [bidMapColFilter,  setBidMapColFilter]  = useState("all"); // map filter by column
   const [lawnSubcontractSiteId, setLawnSubcontractSiteId] = useState(null); // site id for subcontract modal
   const [showBidArchive, setShowBidArchive] = useState(false);
   const [bidStatFilter,  setBidStatFilter]  = useState(null); // null | "all" | "bidding" | "locked"
@@ -3133,7 +3136,13 @@ Return ONLY valid JSON, no markdown, no extra text:
 
           {/* ── LAWN BUDGETING ── */}
           {activeNav === "bids" && activeBU === "lawn" && (() => {
-            const currentSites = lawnSites;
+            const allLawnSites = lawnSites;
+            const currentSites = allLawnSites.filter(site => {
+              const b = getLawnBid(site.id);
+              const isNotBidding = b?.status === "not_bidding";
+              return showNotBidding ? true : !isNotBidding;
+            });
+            const notBiddingCount = allLawnSites.filter(site => getLawnBid(site.id)?.status === "not_bidding").length;
             // Kanban columns
             const getCol = (site) => {
               const b = getLawnBid(site.id);
@@ -3153,17 +3162,76 @@ Return ONLY valid JSON, no markdown, no extra text:
             const colSites = (colId) => currentSites.filter(s => getCol(s) === colId);
             const totalOur = currentSites.reduce((sum, site) => sum + lawnBidAnnualOur(getLawnBid(site.id)), 0);
 
+            // Map: filter by column
+            const mapSites = bidMapColFilter === "all"
+              ? currentSites
+              : currentSites.filter(s => getCol(s) === bidMapColFilter);
+            const mapSitesWithCoords = mapSites.filter(s => s.lat && s.lng);
+
             return (
               <div className="fade-in" style={{ display: "flex", flexDirection: "column", gap: 18 }}>
                 {/* Header */}
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                   <div>
                     <div style={{ fontSize: 22, fontWeight: 700, color: "#FFFFFF", letterSpacing: "-0.01em", textTransform: "uppercase" }}>Lawn Bids</div>
-                    <div style={{ fontSize: 11, color: "#3A4560", marginTop: 3, letterSpacing: "0.06em" }}>SEASON {lawnBidSeason} · {currentSites.length} SITES · ${Math.round(totalOur).toLocaleString()} BOOK VALUE</div>
+                    <div style={{ fontSize: 11, color: "#3A4560", marginTop: 3, letterSpacing: "0.06em" }}>SEASON {lawnBidSeason} · {currentSites.length} SITES · ${Math.round(totalOur).toLocaleString()} BOOK VALUE{notBiddingCount > 0 && !showNotBidding ? ` · ${notBiddingCount} HIDDEN` : ""}</div>
                   </div>
-                  <select value={lawnBidSeason} onChange={e => setLawnBidSeason(e.target.value)} style={{ background: "#141824", border: "1px solid #1E2640", color: "#B8C4E0", borderRadius: 6, padding: "6px 10px", fontSize: 13 }}>
-                    {["2024","2025","2026","2027"].map(y => <option key={y} value={y}>{y}</option>)}
-                  </select>
+                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                    {notBiddingCount > 0 && (
+                      <button onClick={() => setShowNotBidding(v => !v)} style={{ background: showNotBidding ? "#4A527020" : "transparent", border: "1px solid #4A527050", color: showNotBidding ? "#9CA3C0" : "#4A5270", borderRadius: 6, padding: "6px 12px", fontSize: 11, cursor: "pointer" }}>
+                        {showNotBidding ? "👁 Hiding not-bidding" : `🚫 ${notBiddingCount} not bidding`}
+                      </button>
+                    )}
+                    <select value={lawnBidSeason} onChange={e => setLawnBidSeason(e.target.value)} style={{ background: "#141824", border: "1px solid #1E2640", color: "#B8C4E0", borderRadius: 6, padding: "6px 10px", fontSize: 13 }}>
+                      {["2024","2025","2026","2027"].map(y => <option key={y} value={y}>{y}</option>)}
+                    </select>
+                  </div>
+                </div>
+
+                {/* ── Bid Map ── */}
+                <div style={{ background: "#0A0D16", border: "1px solid #1E2640", borderRadius: 12, overflow: "hidden" }}>
+                  {/* Map filter tabs */}
+                  <div style={{ display: "flex", gap: 0, borderBottom: "1px solid #1E2640", padding: "10px 14px", alignItems: "center", justifyContent: "space-between" }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.08em" }}>📍 Bid Map</div>
+                    <div style={{ display: "flex", gap: 6 }}>
+                      {[{ id: "all", label: "All", color: "#B8C4E0" }, ...COLS].map(col => {
+                        const count = col.id === "all" ? currentSites.length : colSites(col.id).length;
+                        const active = bidMapColFilter === col.id;
+                        return (
+                          <button key={col.id} onClick={() => setBidMapColFilter(col.id)} style={{ background: active ? (col.color || "#B8C4E0") + "20" : "transparent", border: "1px solid " + (active ? (col.color || "#B8C4E0") + "50" : "#1E2640"), color: active ? (col.color || "#B8C4E0") : "#3A4560", borderRadius: 6, padding: "4px 10px", fontSize: 10, cursor: "pointer", fontWeight: active ? 700 : 400 }}>
+                            {col.label} <span style={{ opacity: 0.7 }}>({count})</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                  {/* Map */}
+                  <div style={{ position: "relative", height: 280 }}>
+                    {mapSitesWithCoords.length === 0 ? (
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "#3A4560", fontSize: 13 }}>No sites with coordinates in this filter</div>
+                    ) : (() => {
+                      const lats = mapSitesWithCoords.map(s => s.lat);
+                      const lngs = mapSitesWithCoords.map(s => s.lng);
+                      const centerLat = (Math.min(...lats) + Math.max(...lats)) / 2;
+                      const centerLng = (Math.min(...lngs) + Math.max(...lngs)) / 2;
+                      const colColors = { untouched: "gray", bidding: "yellow", owner_approval: "blue", owner_accepted: "green" };
+                      const markers = mapSitesWithCoords.map(s => {
+                        const col = getCol(s);
+                        const color = colColors[col] || "red";
+                        return `markers=color:${color}%7C${s.lat},${s.lng}`;
+                      }).join("&");
+                      const mapUrl = `https://maps.googleapis.com/maps/api/staticmap?center=${centerLat},${centerLng}&zoom=5&size=800x280&maptype=roadmap&${markers}&key=AIzaSyD-9tSrke72PouQMnMX-a7eZSW0jkFMBWY`;
+                      return <img src={mapUrl} alt="Bid sites map" style={{ width: "100%", height: 280, objectFit: "cover", display: "block" }} />;
+                    })()}
+                    <div style={{ position: "absolute", bottom: 8, left: 12, display: "flex", gap: 6 }}>
+                      {COLS.map(col => (
+                        <div key={col.id} style={{ display: "flex", alignItems: "center", gap: 4, background: "#0A0D16CC", borderRadius: 4, padding: "3px 7px" }}>
+                          <div style={{ width: 7, height: 7, borderRadius: "50%", background: col.color }} />
+                          <span style={{ fontSize: 9, color: col.color }}>{col.label}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 </div>
 
                 {/* Kanban board */}
@@ -3331,7 +3399,7 @@ Return ONLY valid JSON, no markdown, no extra text:
 
                                     {/* Actions */}
                                     <div style={{ display: "flex", gap: 6 }}>
-                                      <button className="btn-ghost" style={{ flex: 1, fontSize: 10, padding: "5px 0" }} onClick={() => setLawnBidDocSiteId(site.id)}>📄 Bid Doc</button>
+                                      <button className="btn-primary" style={{ flex: 1, fontSize: 11, padding: "7px 0", background: "#60A5FA15", color: "#60A5FA", border: "1px solid #60A5FA40", borderRadius: 6, cursor: "pointer", fontWeight: 600 }} onClick={() => { setLawnBidDocSubId(bid?.selectedSubId || (bid?.subcontractorIds?.[0]) || ""); setLawnBidDocSiteId(site.id); }}>📄 Bid Doc</button>
                                       {!bid && <button className="btn-ghost" style={{ flex: 1, fontSize: 10, padding: "5px 0", color: "#4ADE80", borderColor: "#4ADE8030" }} onClick={() => upsertLawnBid(site.id, b => b)}>+ Start Bid</button>}
                                     </div>
                                   </div>
@@ -5116,9 +5184,9 @@ Return ONLY valid JSON, no markdown, no extra text:
         if (!site) { setLawnBidDocSiteId(null); return null; }
         const bid  = getLawnBid(site.id);
         const co   = companies.find(c => c.id === site.companyId);
-        const sub  = bid?.selectedSubId ? subcontractors.find(s => s.id === bid.selectedSubId)
-                   : (bid?.subcontractorIds||[]).length > 0 ? subcontractors.find(s => s.id === bid.subcontractorIds[0])
-                   : null;
+        // Use explicitly chosen sub from picker, fall back to bid's selected sub
+        const chosenSubId = lawnBidDocSubId || bid?.selectedSubId || (bid?.subcontractorIds||[])[0] || "";
+        const sub  = chosenSubId ? subcontractors.find(s => s.id === chosenSubId) : null;
         const mapLat = site.lat || 39.9526;
         const mapLng = site.lng || -75.1652;
         const mapUrl = `https://maps.googleapis.com/maps/api/staticmap?center=${mapLat},${mapLng}&zoom=18&size=640x320&maptype=satellite&markers=color:red%7C${mapLat},${mapLng}&key=AIzaSyD-9tSrke72PouQMnMX-a7eZSW0jkFMBWY`;
@@ -5153,9 +5221,16 @@ Return ONLY valid JSON, no markdown, no extra text:
                   <div style={{ fontSize: 15, fontWeight: 700, color: "#FFFFFF" }}>📄 Lawn Bid Request Document</div>
                   <div style={{ fontSize: 11, color: "#3A4560", marginTop: 2 }}>{site.address} · Season {lawnBidSeason}</div>
                 </div>
-                <div style={{ display: "flex", gap: 8 }}>
-                  <button className="btn-primary" style={{ background: "#4ADE8020", color: "#4ADE80", border: "1px solid #4ADE8040" }} onClick={printBidDoc}>🖨 Print / Send to Sub</button>
-                  <button className="btn-ghost" onClick={() => setLawnBidDocSiteId(null)}>✕ Close</button>
+                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
+                    <span style={{ fontSize: 11, color: "#3A4560", whiteSpace: "nowrap" }}>Make out to:</span>
+                    <select value={chosenSubId} onChange={e => setLawnBidDocSubId(e.target.value)} style={{ background: "#141824", border: "1px solid " + (chosenSubId ? "#60A5FA50" : "#F87171"), color: chosenSubId ? "#B8C4E0" : "#F87171", borderRadius: 6, padding: "6px 10px", fontSize: 12, minWidth: 160 }}>
+                      <option value="">— Select contractor —</option>
+                      {subcontractors.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                    </select>
+                  </div>
+                  <button className="btn-primary" style={{ background: "#4ADE8020", color: "#4ADE80", border: "1px solid #4ADE8040", opacity: chosenSubId ? 1 : 0.4 }} onClick={printBidDoc}>🖨 Print / Send to Sub</button>
+                  <button className="btn-ghost" onClick={() => { setLawnBidDocSiteId(null); setLawnBidDocSubId(null); }}>✕ Close</button>
                 </div>
               </div>
 
