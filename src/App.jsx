@@ -102,6 +102,7 @@ const NAV_ITEMS = {
     { id: "calendar",     label: "Calendar",     icon: "📅" },
     { id: "sites",        label: "Sites",        icon: "📍" },
     { id: "bids",         label: "Bids",         icon: "📋" },
+    { id: "pricing",      label: "Pricing",      icon: "💲" },
     { id: "active-sites", label: "Active Sites", icon: "✅" },
     { id: "team",         label: "Team",         icon: "👥" },
     { id: "subcontractors", label: "Subcontractors", icon: "🔧" },
@@ -3455,6 +3456,185 @@ Return ONLY valid JSON, no markdown, no extra text:
             );
           })()}
 
+          {/* ── PRICING SHEET (lawn) ── */}
+          {activeNav === "pricing" && activeBU === "lawn" && (() => {
+            const [pricingSearch, setPricingSearch] = React.useState("");
+            const [pricingFilter, setPricingFilter] = React.useState("all"); // all | priced | unpriced
+            const [pricingSort, setPricingSort] = React.useState("company"); // company | annual | stage
+            const [showSub, setShowSub] = React.useState(true); // toggle sub vs our prices
+
+            const allSites = lawnSites;
+            const searchQ = pricingSearch.toLowerCase();
+
+            const rows = allSites
+              .map(site => {
+                const bid = getLawnBid(site.id);
+                const co = companies.find(c => c.id === site.companyId);
+                const annual = lawnBidAnnualOur(bid);
+                const annualSub = bid ? LAWN_SERVICES.reduce((sum, s) => {
+                  const sv = bid.services?.[s.id];
+                  if (!sv || !sv.included || !sv.subPrice) return sum;
+                  if (s.unit === "per_cut") return sum + sv.subPrice * 28;
+                  if (s.unit === "monthly") return sum + sv.subPrice * 7;
+                  return sum + sv.subPrice;
+                }, 0) : 0;
+                const statusCol = !bid ? "untouched" : bid.status === "not_bidding" ? "not_bidding" : bid.status === "bidding" ? "bidding" : bid.status === "owner_approved" ? "owner_approval" : bid.status === "owner_accepted" ? "owner_accepted" : "untouched";
+                return { site, co, bid, annual, annualSub, statusCol };
+              })
+              .filter(({ site, co, annual, bid }) => {
+                if (pricingFilter === "priced" && annual === 0) return false;
+                if (pricingFilter === "unpriced" && annual > 0) return false;
+                if (searchQ && !(co?.name||"").toLowerCase().includes(searchQ) && !(site.address||"").toLowerCase().includes(searchQ) && !(site.storeNumber||"").toLowerCase().includes(searchQ)) return false;
+                return true;
+              })
+              .sort((a, b) => {
+                if (pricingSort === "annual") return b.annual - a.annual;
+                if (pricingSort === "stage") return a.statusCol.localeCompare(b.statusCol);
+                return ((a.co?.name||"") + (a.site.storeNumber||"")).localeCompare((b.co?.name||"") + (b.site.storeNumber||""));
+              });
+
+            const grandTotal = rows.reduce((s, r) => s + r.annual, 0);
+            const grandSub = rows.reduce((s, r) => s + r.annualSub, 0);
+            const pricedCount = rows.filter(r => r.annual > 0).length;
+
+            const colColors = { untouched: "#3A4560", bidding: "#FBBF24", owner_approval: "#60A5FA", owner_accepted: "#4ADE80", not_bidding: "#F87171" };
+            const colLabels = { untouched: "Not Touched", bidding: "Bidding", owner_approval: "Owner Appr.", owner_accepted: "Accepted", not_bidding: "Not Bidding" };
+
+            const exportCSV = () => {
+              const svcCols = LAWN_SERVICES.map(s => s.label);
+              const header = ["Company", "Store #", "Address", "Stage", ...svcCols.map(l => l + " (Sub)"), ...svcCols.map(l => l + " (Ours)"), "Annual Sub", "Annual Ours"];
+              const dataRows = rows.map(({ site, co, bid, annual, annualSub, statusCol }) => {
+                const subVals = LAWN_SERVICES.map(s => {
+                  const sv = bid?.services?.[s.id];
+                  if (!sv || !sv.included) return "";
+                  return sv.subPrice || 0;
+                });
+                const ourVals = LAWN_SERVICES.map(s => {
+                  const sv = bid?.services?.[s.id];
+                  if (!sv || !sv.included) return "";
+                  return sv.ourPrice || 0;
+                });
+                return [co?.name||"", site.storeNumber||"", site.address||"", colLabels[statusCol]||"", ...subVals, ...ourVals, Math.round(annualSub), Math.round(annual)];
+              });
+              const csv = [header, ...dataRows].map(r => r.map(v => `"${v}"`).join(",")).join("\n");
+              const blob = new Blob([csv], { type: "text/csv" });
+              const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `lawn_pricing_${lawnBidSeason}.csv`; a.click();
+            };
+
+            return (
+              <div className="fade-in" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                {/* Header */}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12 }}>
+                  <div>
+                    <div style={{ fontSize: 22, fontWeight: 700, color: "#FFFFFF", letterSpacing: "-0.01em", textTransform: "uppercase" }}>Pricing Sheet — {lawnBidSeason}</div>
+                    <div style={{ fontSize: 11, color: "#3A4560", marginTop: 3, letterSpacing: "0.06em" }}>{pricedCount} of {rows.length} sites priced · <span style={{ color: "#4ADE80" }}>Our Total: ${Math.round(grandTotal).toLocaleString()}/yr</span> · <span style={{ color: "#FBBF24" }}>Sub Total: ${Math.round(grandSub).toLocaleString()}/yr</span></div>
+                  </div>
+                  <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                    <input className="fi" style={{ width: 180 }} placeholder="Search…" value={pricingSearch} onChange={e => setPricingSearch(e.target.value)} />
+                    <select value={pricingFilter} onChange={e => setPricingFilter(e.target.value)} style={{ background: "#141824", border: "1px solid #1E2640", color: "#B8C4E0", borderRadius: 6, padding: "6px 10px", fontSize: 12, fontFamily: "inherit" }}>
+                      <option value="all">All Sites</option>
+                      <option value="priced">Priced Only</option>
+                      <option value="unpriced">Unpriced Only</option>
+                    </select>
+                    <select value={pricingSort} onChange={e => setPricingSort(e.target.value)} style={{ background: "#141824", border: "1px solid #1E2640", color: "#B8C4E0", borderRadius: 6, padding: "6px 10px", fontSize: 12, fontFamily: "inherit" }}>
+                      <option value="company">Sort: Company</option>
+                      <option value="annual">Sort: Annual $</option>
+                      <option value="stage">Sort: Stage</option>
+                    </select>
+                    <button className="btn-ghost" style={{ fontSize: 11, color: showSub ? "#FBBF24" : "#4ADE80", borderColor: showSub ? "#FBBF2430" : "#4ADE8030" }} onClick={() => setShowSub(v => !v)}>
+                      {showSub ? "Showing Sub $" : "Showing Our $"}
+                    </button>
+                    <button className="btn-ghost" style={{ fontSize: 11 }} onClick={exportCSV}>⬇ Export CSV</button>
+                  </div>
+                </div>
+
+                {/* Table */}
+                <div style={{ overflowX: "auto", borderRadius: 10, border: "1px solid #1E2640" }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11, tableLayout: "auto" }}>
+                    <thead>
+                      <tr style={{ background: "#0A0D16", position: "sticky", top: 0, zIndex: 2 }}>
+                        <th style={{ padding: "10px 12px", textAlign: "left", color: "#3A4560", fontWeight: 600, whiteSpace: "nowrap", borderBottom: "1px solid #1E2640", fontSize: 10 }}>Company / Site</th>
+                        <th style={{ padding: "10px 8px", textAlign: "left", color: "#3A4560", fontWeight: 600, whiteSpace: "nowrap", borderBottom: "1px solid #1E2640", fontSize: 10 }}>Stage</th>
+                        {LAWN_SERVICES.map(s => (
+                          <th key={s.id} style={{ padding: "10px 8px", textAlign: "right", color: "#3A4560", fontWeight: 600, whiteSpace: "nowrap", borderBottom: "1px solid #1E2640", fontSize: 10, minWidth: 80 }}>
+                            {s.label}<br /><span style={{ color: "#2A3560", fontSize: 9, fontWeight: 400 }}>{s.freq}</span>
+                          </th>
+                        ))}
+                        <th style={{ padding: "10px 12px", textAlign: "right", color: "#4ADE80", fontWeight: 700, whiteSpace: "nowrap", borderBottom: "1px solid #1E2640", fontSize: 10, borderLeft: "1px solid #1E2640" }}>Annual</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {rows.map(({ site, co, bid, annual, annualSub, statusCol }) => {
+                        const hasData = annual > 0 || annualSub > 0;
+                        return (
+                          <tr key={site.id} style={{ borderBottom: "1px solid #1E2640", background: "transparent" }}
+                            onMouseEnter={e => e.currentTarget.style.background = "#161B28"}
+                            onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+                          >
+                            {/* Site info */}
+                            <td style={{ padding: "9px 12px", whiteSpace: "nowrap" }}>
+                              <div style={{ fontWeight: 600, color: "#E8ECF4", fontSize: 11 }}>{co?.name || "—"} <span style={{ color: "#3A4560", fontWeight: 400 }}>#{site.storeNumber || "—"}</span></div>
+                              <div style={{ color: "#3A4560", fontSize: 10, marginTop: 1 }}>{(site.address || "").split(",").slice(-2).join(",").trim()}</div>
+                            </td>
+                            {/* Stage */}
+                            <td style={{ padding: "9px 8px", whiteSpace: "nowrap" }}>
+                              <span style={{ fontSize: 10, color: colColors[statusCol], background: colColors[statusCol] + "15", padding: "2px 7px", borderRadius: 3, border: "1px solid " + colColors[statusCol] + "30" }}>{colLabels[statusCol]}</span>
+                            </td>
+                            {/* Service columns */}
+                            {LAWN_SERVICES.map(svc => {
+                              const sv = bid?.services?.[svc.id];
+                              const included = sv?.included;
+                              const price = showSub ? (sv?.subPrice || 0) : (sv?.ourPrice || 0);
+                              return (
+                                <td key={svc.id} style={{ padding: "9px 8px", textAlign: "right", color: included && price > 0 ? (showSub ? "#FBBF24" : "#4ADE80") : "#2A3560", fontSize: 11 }}>
+                                  {included && price > 0 ? "$" + price.toLocaleString() : "—"}
+                                </td>
+                              );
+                            })}
+                            {/* Annual total */}
+                            <td style={{ padding: "9px 12px", textAlign: "right", borderLeft: "1px solid #1E2640", whiteSpace: "nowrap" }}>
+                              {hasData ? (
+                                <div>
+                                  <div style={{ fontWeight: 700, color: "#4ADE80", fontSize: 12 }}>${Math.round(annual).toLocaleString()}</div>
+                                  <div style={{ fontSize: 9, color: "#FBBF24" }}>sub ${Math.round(annualSub).toLocaleString()}</div>
+                                </div>
+                              ) : (
+                                <span style={{ color: "#2A3560", fontSize: 10 }}>No pricing</span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                    {/* Footer totals */}
+                    <tfoot>
+                      <tr style={{ background: "#0A0D16", borderTop: "2px solid #1E2640" }}>
+                        <td colSpan={2} style={{ padding: "10px 12px", color: "#3A4560", fontSize: 11, fontWeight: 600 }}>TOTALS ({rows.length} sites)</td>
+                        {LAWN_SERVICES.map(svc => {
+                          const total = rows.reduce((sum, { bid }) => {
+                            const sv = bid?.services?.[svc.id];
+                            if (!sv || !sv.included) return sum;
+                            const price = showSub ? (sv.subPrice || 0) : (sv.ourPrice || 0);
+                            return sum + price;
+                          }, 0);
+                          return (
+                            <td key={svc.id} style={{ padding: "10px 8px", textAlign: "right", color: total > 0 ? (showSub ? "#FBBF2490" : "#4ADE8090") : "#2A3560", fontSize: 11, fontWeight: 600 }}>
+                              {total > 0 ? "$" + Math.round(total).toLocaleString() : "—"}
+                            </td>
+                          );
+                        })}
+                        <td style={{ padding: "10px 12px", textAlign: "right", borderLeft: "1px solid #1E2640" }}>
+                          <div style={{ fontWeight: 700, color: "#4ADE80", fontSize: 13 }}>${Math.round(grandTotal).toLocaleString()}</div>
+                          <div style={{ fontSize: 9, color: "#FBBF24" }}>sub ${Math.round(grandSub).toLocaleString()}</div>
+                        </td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              </div>
+            );
+          })()}
+
           {/* ── ACTIVE SITES (lawn / snow) ── */}
           {activeNav === "active-sites" && LAWN_SNOW_SITES_BUS.includes(activeBU) && (() => {
             const currentSites = activeBU === "lawn" ? lawnSites : snowSites;
@@ -3557,7 +3737,7 @@ Return ONLY valid JSON, no markdown, no extra text:
           })()}
 
           {/* ── COMING SOON (other nav items) ── */}
-          {!["dashboard", "customers", "jobs", "pipeline", "budgeting", "finance", "sites", "projects", "team", "subcontractors", "bids", "active-sites"].includes(activeNav) && (
+          {!["dashboard", "customers", "jobs", "pipeline", "budgeting", "finance", "sites", "projects", "team", "subcontractors", "bids", "active-sites", "pricing"].includes(activeNav) && (
             <div className="fade-in">
               <div style={{ marginBottom: 28 }}>
                 <div style={{ fontSize: 22, fontWeight: 700, color: "#FFFFFF", textTransform: "uppercase" }}>{navItems.find(n => n.id === activeNav)?.label}</div>
