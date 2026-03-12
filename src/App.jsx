@@ -728,8 +728,8 @@ export default function App() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   // CRM
-  const [companies,       setCompanies]       = useState(INIT_COMPANIES);
-  const [contacts,        setContacts]        = useState(INIT_CONTACTS);
+  const [companies,       setCompanies]       = useState([]);
+  const [contacts,        setContacts]        = useState([]);
   const [dbLoading,       setDbLoading]       = useState({ companies: false, sites: false, lawnSites: false, subcontractors: false });
   const [dbError,         setDbError]         = useState(null);
   const [selectedCompany, setSelectedCompany] = useState(null);
@@ -748,7 +748,7 @@ export default function App() {
   const [inlineContact, setInlineContact] = useState({ firstName: "", lastName: "", title: "", email: "", phone: "" });
 
   // Pipeline
-  const [pipeline,     setPipeline]     = useState(INIT_PIPELINE);
+  const [pipeline,     setPipeline]     = useState([]);
   const [showForm,     setShowForm]     = useState(false);
   const [editId,       setEditId]       = useState(null);
   const [form,         setForm]         = useState({ name: "", companyId: "", contactId: "", value: "", stage: "Budgeting", closeDate: "", notes: "", bu: "major", budgetDueDate: "", bidDueDate: "", nextSteps: [] });
@@ -759,7 +759,7 @@ export default function App() {
   const [newNextStep,  setNewNextStep]  = useState({ step: "", dueDate: "" });
 
   // Jobs (Major Projects)
-  const [jobs,        setJobs]        = useState(INIT_JOBS);
+  const [jobs,        setJobs]        = useState([]);
   const [showJobForm, setShowJobForm] = useState(false);
   const [editJobId,   setEditJobId]   = useState(null);
   const [jobForm,     setJobForm]     = useState({ name: "", companyId: "", client: "", contractValue: "", startDate: "", endDate: "", pm: "", pct: 0, status: "On Schedule", notes: "", bu: "major" });
@@ -850,6 +850,7 @@ export default function App() {
   const [lawnBidDocSiteId, setLawnBidDocSiteId] = useState(null); // site id for bid doc modal
   const [lawnSubcontractSiteId, setLawnSubcontractSiteId] = useState(null); // site id for subcontract modal
   const [showBidArchive, setShowBidArchive] = useState(false);
+  const [bidStatFilter,  setBidStatFilter]  = useState(null); // null | "all" | "bidding" | "locked"
 
   const GP_MARGIN = 0.30;
   const calcOurPrice = (subPrice) => subPrice > 0 ? Math.ceil(subPrice / (1 - GP_MARGIN) * 100) / 100 : 0;
@@ -1480,6 +1481,17 @@ Return ONLY valid JSON, no markdown, no extra text:
   // Render sub-facing page if subtoken is in URL
   if (urlToken) return <SubPage token={urlToken} fmJobs={fmJobs} setFmJobs={setFmJobs} subcontractors={subcontractors} companies={companies} sites={sites} />;
   if (urlSched) return <SchedPage token={urlSched} fmJobs={fmJobs} setFmJobs={setFmJobs} subcontractors={subcontractors} companies={companies} sites={sites} />;
+
+  // Loading screen while Supabase fetches
+  if (!supaReady && !dbError) return (
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "100vh", background: "#0F1117", color: "#E8ECF4", fontFamily: "'Inter','Segoe UI',sans-serif", gap: 16 }}>
+      <div style={{ width: 44, height: 44, background: "#3B6FE8", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, fontWeight: 700, color: "#fff" }}>FG</div>
+      <div style={{ fontSize: 13, color: "#3A4560", letterSpacing: "0.1em", textTransform: "uppercase" }}>Loading data…</div>
+      <div style={{ width: 180, height: 3, background: "#1E2640", borderRadius: 2, overflow: "hidden" }}>
+        <div style={{ height: "100%", background: "#3B6FE8", borderRadius: 2, animation: "pulse 1.5s ease-in-out infinite", width: "60%" }} />
+      </div>
+    </div>
+  );
 
   return (
     <div style={{ display: "flex", minHeight: "100vh", background: "#0F1117", color: "#E8ECF4", fontFamily: "'Inter','Segoe UI',sans-serif" }}>
@@ -3118,27 +3130,62 @@ Return ONLY valid JSON, no markdown, no extra text:
                   </div>
                 </div>
 
-                {/* Stat cards */}
+                {/* Clickable stat filter cards */}
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 12 }}>
                   {[
-                    { label: "Total Sites",        value: currentSites.length,                          color: "#3B6FE8" },
-                    { label: "Bids in Progress",   value: bidCount,                                     color: "#FCD34D" },
-                    { label: "Contracts Signed",   value: lockedCount,                                  color: "#4ADE80" },
-                    { label: "Annual Book Value",  value: "$" + Math.round(totalOur).toLocaleString(),  color: "#C084FC" },
+                    { id: "all",     label: "Total Sites",       value: currentSites.length,                         color: "#3B6FE8" },
+                    { id: "bidding", label: "Bids in Progress",  value: bidCount,                                    color: "#FCD34D" },
+                    { id: "locked",  label: "Contracts Signed",  value: lockedCount,                                 color: "#4ADE80" },
+                    { id: null,      label: "Annual Book Value", value: "$" + Math.round(totalOur).toLocaleString(), color: "#C084FC" },
                   ].map(s => (
-                    <div key={s.label} className="stat-card" style={{ position: "relative", overflow: "hidden", padding: "14px 18px" }}>
+                    <div key={s.label} onClick={() => s.id !== null && setBidStatFilter(bidStatFilter === s.id ? null : s.id)} className="stat-card" style={{ position: "relative", overflow: "hidden", padding: "14px 18px", cursor: s.id !== null ? "pointer" : "default", border: bidStatFilter === s.id ? "1px solid " + s.color + "60" : "1px solid #1E2640", transition: "all 0.15s", background: bidStatFilter === s.id ? s.color + "08" : "#0F1117" }}>
                       <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: s.color }} />
                       <div style={{ fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "#3A4560", marginBottom: 6 }}>{s.label}</div>
                       <div style={{ fontSize: 22, fontWeight: 700, color: s.color }}>{s.value}</div>
+                      {s.id !== null && <div style={{ fontSize: 9, color: bidStatFilter === s.id ? s.color : "#2A3560", marginTop: 4, letterSpacing: "0.06em" }}>{bidStatFilter === s.id ? "▼ FILTERING" : "CLICK TO FILTER"}</div>}
                     </div>
                   ))}
                 </div>
 
-                {/* Mode label */}
+                {/* Bids Map */}
+                <div style={{ width: "100%", height: 260, borderRadius: 10, overflow: "hidden", border: "1px solid #1E2640" }}>
+                  <iframe
+                    key={"bidsmap-" + activeSites.length + bidStatFilter}
+                    style={{ width: "100%", height: "100%", border: "none", display: "block" }}
+                    srcDoc={(() => {
+                      const mapSites = activeSites.filter(s => s.lat && s.lng).map(s => {
+                        const bid = getLawnBid(s.id);
+                        const co = companies.find(c => c.id === s.companyId);
+                        const isLocked = bid && bid.locked;
+                        const color = isLocked ? "#4ADE80" : bid ? "#FCD34D" : "#60A5FA";
+                        const highlight = bidStatFilter === "bidding" ? (!isLocked && bid) : bidStatFilter === "locked" ? isLocked : true;
+                        return { lat: s.lat, lng: s.lng, label: (co?.name || "") + " #" + (s.storeNumber || ""), color, opacity: highlight ? 1 : 0.25 };
+                      });
+                      const center = mapSites.length > 0 ? [mapSites.reduce((s,p)=>s+p.lat,0)/mapSites.length, mapSites.reduce((s,p)=>s+p.lng,0)/mapSites.length] : [39.95, -75.16];
+                      return `<!DOCTYPE html><html><head>
+                        <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+                        <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+                        <style>html,body,#map{margin:0;padding:0;height:100%;width:100%;}</style>
+                      </head><body><div id="map"></div><script>
+                        var map = L.map('map',{zoomControl:true,attributionControl:false}).setView([${center[0]},${center[1]}],6);
+                        L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:20}).addTo(map);
+                        var sites=${JSON.stringify(mapSites)};
+                        sites.forEach(function(s){
+                          var icon=L.divIcon({className:'',html:'<div style="width:10px;height:10px;border-radius:50%;background:'+s.color+';border:2px solid white;opacity:'+s.opacity+';box-shadow:0 1px 4px rgba(0,0,0,0.6)"></div>',iconSize:[10,10],iconAnchor:[5,5]});
+                          L.marker([s.lat,s.lng],{icon:icon}).addTo(map).bindPopup('<b>'+s.label+'</b>');
+                        });
+                        if(sites.length>1){var g=L.featureGroup(sites.map(s=>L.marker([s.lat,s.lng])));map.fitBounds(g.getBounds().pad(0.1));}
+                      </script></body></html>`;
+                    })()}
+                  />
+                </div>
+
+                {/* Active filter label */}
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                   <div style={{ fontSize: 11, fontWeight: 600, color: lawnBidMode === "bid" ? "#FCD34D" : "#4ADE80", textTransform: "uppercase", letterSpacing: "0.08em", background: lawnBidMode === "bid" ? "#FCD34D15" : "#4ADE8015", border: "1px solid " + (lawnBidMode === "bid" ? "#FCD34D30" : "#4ADE8030"), borderRadius: 6, padding: "4px 10px" }}>
                     {lawnBidMode === "bid" ? "🖊 Bid Mode — Editable" : "📋 Contract Mode — Locked"}
                   </div>
+                  {bidStatFilter && <div style={{ fontSize: 11, color: "#60A5FA", background: "#60A5FA10", border: "1px solid #60A5FA30", borderRadius: 6, padding: "4px 10px", display: "flex", alignItems: "center", gap: 6 }}>🔍 Filtering: {bidStatFilter === "bidding" ? "Bids in Progress" : "Contracts Signed"} <button onClick={() => setBidStatFilter(null)} style={{ background: "none", border: "none", color: "#60A5FA", cursor: "pointer", fontSize: 12, padding: 0, fontFamily: "inherit" }}>✕</button></div>}
                   {lawnBidMode === "contract" && <div style={{ fontSize: 11, color: "#3A4560" }}>Prices are locked. Switch to Bid Mode to make changes.</div>}
                 </div>
 
@@ -3150,7 +3197,13 @@ Return ONLY valid JSON, no markdown, no extra text:
                   </div>
                 ) : (
                   <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                    {activeSites.map(site => {
+                    {activeSites.filter(site => {
+                      if (!bidStatFilter || bidStatFilter === "all") return true;
+                      const bid = getLawnBid(site.id);
+                      if (bidStatFilter === "bidding") return !bid || (!bid.locked && bid.status !== "owner_approved" && bid.status !== "contracted");
+                      if (bidStatFilter === "locked") return bid && (bid.locked || bid.status === "owner_approved" || bid.status === "contracted");
+                      return true;
+                    }).map(site => {
                       const bid = getLawnBid(site.id);
                       const isLocked = bid && bid.locked;
                       const isEditing = editLawnBidId === site.id;
