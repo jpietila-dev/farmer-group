@@ -821,6 +821,8 @@ export default function App() {
   const [lsGeocoding,      setLsGeocoding]      = useState(false);
   const [mapLoaded,        setMapLoaded]        = useState(false);
   const [lsMapFilter,      setLsMapFilter]      = useState("all");
+  const [expandedCompany,  setExpandedCompany]  = useState(null);
+  const [expandedState,    setExpandedState]    = useState(null);
 
   // Lawn Bids
   const LAWN_BID_STATUSES = [
@@ -2257,38 +2259,50 @@ Return ONLY valid JSON, no markdown, no extra text:
             </div>
           )}
 
-          {/* ── SITES MAP (Lawn / Snow) ── */}
+          {/* ── SITES (Lawn / Snow) — Hierarchy View ── */}
           {activeNav === "sites" && LAWN_SNOW_SITES_BUS.includes(activeBU) && (() => {
-            const currentSites = activeBU === "lawn" ? lawnSites : snowSites;
-            const setCurrentSites = (updater) => setSites(prev => {
-              const buTag = activeBU;
-              const others = prev.filter(s => !(s.businessUnits||[]).includes(buTag));
-              const updated = typeof updater === "function" ? updater(currentSites) : updater;
-              return [...others, ...updated];
-            });
-            const isContracted = (site) => { const b = getLawnBid(site.id); return b && (b.locked || b.status === "owner_approved" || b.status === "contracted"); };
+            // Show all sites - fall back to ALL sites if none tagged with this BU yet
+            const buTag = activeBU;
+            const taggedSites = sites.filter(s => (s.businessUnits||[]).includes(buTag));
+            const currentSites = taggedSites.length > 0 ? taggedSites : sites;
+            const isContracted = (site) => { const b = getLawnBid(site.id); return b && (b.locked || b.status === "owner_approved" || b.status === "contracted" || b.status === "owner_accepted"); };
+
+            // Parse state from address — "City, ST XXXXX" → "ST"
+            const getState = (address) => {
+              if (!address) return "Unknown";
+              const m = address.match(/,\s*([A-Z]{2})\s*\d/);
+              return m ? m[1] : "Other";
+            };
+
+            // Build hierarchy: company → state → sites
+            const searchQ = lsSearch.toLowerCase();
             const filteredSites = currentSites.filter(site => {
               const co = companies.find(c => c.id === site.companyId);
-              const q = lsSearch.toLowerCase();
-              const matchSearch = !q || (site.storeNumber||"").toLowerCase().includes(q) || (site.address||"").toLowerCase().includes(q) || (co?.name||"").toLowerCase().includes(q);
-              const matchFilter = lsMapFilter === "all" || (lsMapFilter === "contracted" ? isContracted(site) : !isContracted(site));
-              return matchSearch && matchFilter;
+              return !searchQ || (site.storeNumber||"").toLowerCase().includes(searchQ) || (site.address||"").toLowerCase().includes(searchQ) || (co?.name||"").toLowerCase().includes(searchQ);
             });
+
+            // Group by company
+            const byCompany = {};
+            filteredSites.forEach(site => {
+              const cid = site.companyId || "__none__";
+              if (!byCompany[cid]) byCompany[cid] = [];
+              byCompany[cid].push(site);
+            });
+
             const uniqueCompanyIds = [...new Set(currentSites.map(s => s.companyId).filter(Boolean))];
-            const sitesWithCoords = filteredSites.filter(s => s.lat && s.lng);
+            const sitesWithCoords = currentSites.filter(s => s.lat && s.lng);
             const contractedCount = currentSites.filter(isContracted).length;
-            const uncontractedCount = currentSites.length - contractedCount;
 
             return (
-              <div className="fade-in" style={{ display: "flex", flexDirection: "column", gap: 22 }}>
+              <div className="fade-in" style={{ display: "flex", flexDirection: "column", gap: 18 }}>
                 {/* Header */}
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <div>
                     <div style={{ fontSize: 22, fontWeight: 700, color: "#FFFFFF", letterSpacing: "-0.01em", textTransform: "uppercase" }}>Sites — {activeBU === "lawn" ? "Lawn" : "Snow"}</div>
-                    <div style={{ fontSize: 11, color: "#3A4560", marginTop: 3, letterSpacing: "0.06em" }}>{currentSites.length} SITES · {uniqueCompanyIds.length} COMPANIES</div>
+                    <div style={{ fontSize: 11, color: "#3A4560", marginTop: 3, letterSpacing: "0.06em" }}>{currentSites.length} SITES · {uniqueCompanyIds.length} COMPANIES{taggedSites.length === 0 ? " · ⚠ No BU tags set — showing all sites" : ""}</div>
                   </div>
                   <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                    <input className="fi" style={{ width: 180 }} placeholder="Search sites…" value={lsSearch} onChange={e => setLsSearch(e.target.value)} />
+                    <input className="fi" style={{ width: 200 }} placeholder="Search sites, companies…" value={lsSearch} onChange={e => setLsSearch(e.target.value)} />
                     <label className="btn-ghost" style={{ cursor: "pointer", display: "inline-flex", alignItems: "center", padding: "5px 10px", borderRadius: 5, border: "1px solid #1E2640", color: "#4A5270", fontSize: 11, fontFamily: "inherit" }}>
                       ↑ Import CSV
                       <input type="file" accept=".csv" style={{ display: "none" }} onChange={e => {
@@ -2304,8 +2318,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                               else if (ch === ',' && !inQuote) { cells.push(cur.trim()); cur = ""; }
                               else { cur += ch; }
                             }
-                            cells.push(cur.trim());
-                            return cells;
+                            cells.push(cur.trim()); return cells;
                           };
                           const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
                           if (lines.length < 2) return;
@@ -2325,25 +2338,11 @@ Return ONLY valid JSON, no markdown, no extra text:
                             if (!storeNumber && !address) continue;
                             let companyId = companyMap[companyName.toLowerCase()];
                             if (!companyId && companyName) { companyId = "c" + Date.now() + Math.random().toString(36).slice(2,6); newCompanies.push({ id: companyId, name: companyName, website: "", address: "", logo: "", notes: "" }); companyMap[companyName.toLowerCase()] = companyId; }
-                            let lat = null, lng = null;
-                            if (address) {
-                              try {
-                                const res = await fetch("https://nominatim.openstreetmap.org/search?format=json&limit=1&q=" + encodeURIComponent(address));
-                                const geo = await res.json();
-                                if (geo[0]) { lat = parseFloat(geo[0].lat); lng = parseFloat(geo[0].lon); }
-                              } catch(e) {}
-                            }
-                            newSites.push({ id: (activeBU === "lawn" ? "ln" : "sn") + Date.now() + Math.random().toString(36).slice(2,6), companyId: companyId || "", contactIds: [], storeNumber, address, phone, accessCode, notes, lat, lng, businessUnits: [activeBU] });
+                            newSites.push({ id: (activeBU === "lawn" ? "ln" : "sn") + Date.now() + Math.random().toString(36).slice(2,6), companyId: companyId || "", contactIds: [], storeNumber, address, phone, accessCode, notes, lat: null, lng: null, businessUnits: [activeBU] });
                           }
-                          if (newCompanies.length) {
-                            setCompanies(prev => [...prev, ...newCompanies]);
-                            newCompanies.forEach(c => supa.from("companies").insert(companyToDB(c)));
-                          }
-                          if (newSites.length) {
-                            setSites(prev => [...prev, ...newSites]);
-                            newSites.forEach(s => supa.from("sites").insert(siteToDB(s)));
-                          }
-                          alert("Imported " + newSites.length + " sites" + (newSites.filter(s=>s.lat).length < newSites.length ? " (" + newSites.filter(s=>!s.lat).length + " without coordinates — enter address manually to geocode)" : "") + "!");
+                          if (newCompanies.length) { setCompanies(prev => [...prev, ...newCompanies]); newCompanies.forEach(c => supa.from("companies").insert(companyToDB(c))); }
+                          if (newSites.length) { setSites(prev => [...prev, ...newSites]); for (let i = 0; i < newSites.length; i += 100) supa.from("sites").insert(newSites.slice(i, i+100).map(siteToDB)); }
+                          alert("✓ Imported " + newSites.length + " sites!");
                           e.target.value = "";
                         };
                         reader.readAsText(file);
@@ -2356,10 +2355,10 @@ Return ONLY valid JSON, no markdown, no extra text:
                 {/* Stats */}
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 12 }}>
                   {[
-                    { label: "Total Sites",        value: currentSites.length,       color: buColor.accent },
-                    { label: "Companies",           value: uniqueCompanyIds.length,   color: "#A78BFA" },
-                    { label: "Contracts Signed",    value: activeBU === "lawn" ? currentSites.filter(s => { const b = getLawnBid(s.id); return b && b.status === "owner_approved" || (b && b.locked); }).length : sitesWithCoords.length, color: "#4ADE80" },
-                    { label: "Mapped",              value: sitesWithCoords.length,    color: "#60A5FA" },
+                    { label: "Total Sites",      value: currentSites.length,       color: "#3B6FE8" },
+                    { label: "Companies",         value: uniqueCompanyIds.length,   color: "#A78BFA" },
+                    { label: "Contracted",        value: contractedCount,           color: "#4ADE80" },
+                    { label: "Mapped",            value: sitesWithCoords.length,    color: "#60A5FA" },
                   ].map(s => (
                     <div key={s.label} className="stat-card" style={{ position: "relative", overflow: "hidden", padding: "14px 18px" }}>
                       <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: s.color }} />
@@ -2369,142 +2368,154 @@ Return ONLY valid JSON, no markdown, no extra text:
                   ))}
                 </div>
 
-                {/* MAP */}
+                {/* Map */}
                 <div style={{ background: "#161B28", border: "1px solid #1E2640", borderRadius: 12, overflow: "hidden" }}>
-                  <div style={{ padding: "12px 16px", borderBottom: "1px solid #1E2640", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-                      <div style={{ fontSize: 11, color: "#3A4560", letterSpacing: "0.08em", textTransform: "uppercase", fontWeight: 600 }}>Service Area Map</div>
-                      {/* Contract status filter */}
-                      {activeBU === "lawn" && (
-                        <div style={{ display: "flex", background: "#0A0D16", border: "1px solid #1E2640", borderRadius: 7, overflow: "hidden" }}>
-                          {[["all","All","#B8C4E0"],["contracted","✓ Contracted","#4ADE80"],["uncontracted","⚠ Needs Contract","#F87171"]].map(([val,lbl,col]) => (
-                            <button key={val} onClick={() => setLsMapFilter(val)} style={{ padding: "5px 12px", fontSize: 10, fontWeight: 600, border: "none", cursor: "pointer", background: lsMapFilter === val ? col + "25" : "transparent", color: lsMapFilter === val ? col : "#3A4560", borderRight: val !== "uncontracted" ? "1px solid #1E2640" : "none", transition: "all 0.15s", fontFamily: "inherit", letterSpacing: "0.04em" }}>{lbl}</button>
-                          ))}
-                        </div>
-                      )}
+                  <div style={{ padding: "10px 16px", borderBottom: "1px solid #1E2640", display: "flex", alignItems: "center", gap: 8 }}>
+                    <div style={{ fontSize: 11, color: "#3A4560", letterSpacing: "0.08em", textTransform: "uppercase", fontWeight: 600 }}>Service Area Map</div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 5, marginLeft: 8 }}>
+                      <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#4ADE80" }} /><span style={{ fontSize: 10, color: "#B8C4E0" }}>Contracted ({contractedCount})</span>
                     </div>
-                    <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
-                      {activeBU === "lawn" && (
-                        <>
-                          <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                            <div style={{ width: 10, height: 10, borderRadius: "50%", background: "#4ADE80", flexShrink: 0 }} />
-                            <span style={{ fontSize: 10, color: "#B8C4E0" }}>Contracted ({contractedCount})</span>
-                          </div>
-                          <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                            <div style={{ width: 10, height: 10, borderRadius: "50%", background: "#F87171", flexShrink: 0 }} />
-                            <span style={{ fontSize: 10, color: "#B8C4E0" }}>Needs Contract ({uncontractedCount})</span>
-                          </div>
-                        </>
-                      )}
-                      {activeBU !== "lawn" && uniqueCompanyIds.map(cid => {
-                        const co = companies.find(c => c.id === cid);
-                        return co ? (
-                          <div key={cid} style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                            <div style={{ width: 10, height: 10, borderRadius: "50%", background: companyColorMap[cid], flexShrink: 0 }} />
-                            <span style={{ fontSize: 10, color: "#B8C4E0" }}>{co.name}</span>
-                          </div>
-                        ) : null;
-                      })}
+                    <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                      <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#FCD34D" }} /><span style={{ fontSize: 10, color: "#B8C4E0" }}>In Progress ({currentSites.length - contractedCount})</span>
                     </div>
                   </div>
-                  <div style={{ position: "relative", height: 460 }}>
-                    <iframe
-                      key={activeBU + currentSites.length + lsMapFilter}
-                      style={{ width: "100%", height: "100%", border: "none" }}
+                  <div style={{ height: 340, position: "relative" }}>
+                    <iframe key={activeBU + currentSites.length} style={{ width: "100%", height: "100%", border: "none" }}
                       srcDoc={`<!DOCTYPE html><html><head>
                         <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
                         <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
                         <style>html,body,#map{margin:0;padding:0;height:100%;background:#0F1117;}</style>
-                      </head><body>
-                        <div id="map"></div>
-                        <script>
-                          var map = L.map('map', { zoomControl: true, attributionControl: false }).setView([39.5, -78.5], 6);
-                          L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { maxZoom: 19 }).addTo(map);
-                          var sites = ${JSON.stringify(sitesWithCoords.map(s => {
-                            const contracted = isContracted(s);
-                            const markerColor = activeBU === "lawn" ? (contracted ? "#4ADE80" : "#F87171") : (companyColorMap[s.companyId] || "#3B6FE8");
-                            const bid = activeBU === "lawn" ? getLawnBid(s.id) : null;
-                            const subName = bid?.selectedSubId ? (subcontractors.find(x => x.id === bid.selectedSubId)?.name || "") : (bid?.subcontractorIds||[])[0] ? (subcontractors.find(x => x.id === (bid.subcontractorIds||[])[0])?.name || "") : "";
-                            return { lat: s.lat, lng: s.lng, label: (s.storeNumber ? "#" + s.storeNumber + " " : "") + s.address, company: companies.find(c => c.id === s.companyId)?.name || "", color: markerColor, contracted, subName };
-                          }))};
-                          var bounds = [];
-                          sites.forEach(function(s) {
-                            var ring = s.contracted ? 'border:2.5px solid #4ADE80' : 'border:2px solid white';
-                            var icon = L.divIcon({ className: '', html: '<div style="width:14px;height:14px;border-radius:50%;background:' + s.color + ';' + ring + ';box-shadow:0 2px 6px rgba(0,0,0,0.5);cursor:pointer;"></div>', iconSize:[14,14], iconAnchor:[7,7] });
-                            var popupContent = '<div style="font-family:sans-serif;font-size:12px;color:#111;min-width:180px"><b>' + (s.label||'Site') + '</b><br/><span style="color:#555">' + s.company + '</span>';
-                            if (s.subName) popupContent += '<br/><span style="color:#7c3aed;font-size:11px">🔧 ' + s.subName + '</span>';
-                            popupContent += '<br/><span style="font-size:10px;font-weight:600;color:' + (s.contracted ? '#16a34a' : '#dc2626') + '">' + (s.contracted ? '✓ Contracted' : '⚠ Needs Contract') + '</span></div>';
-                            L.marker([s.lat, s.lng], { icon: icon }).addTo(map).bindPopup(popupContent);
-                            bounds.push([s.lat, s.lng]);
-                          });
-                          if (bounds.length > 1) map.fitBounds(bounds, { padding: [40,40] });
-                          else if (bounds.length === 1) map.setView(bounds[0], 10);
-                        </script>
-                      </body></html>`}
+                      </head><body><div id="map"></div><script>
+                        var map = L.map('map', { zoomControl: true, attributionControl: false }).setView([39.5, -98.5], 4);
+                        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { maxZoom: 19 }).addTo(map);
+                        var sites = ${JSON.stringify(sitesWithCoords.map(s => {
+                          const contracted = isContracted(s);
+                          const co = companies.find(c => c.id === s.companyId);
+                          return { lat: s.lat, lng: s.lng, label: (co?.name||"") + " #" + (s.storeNumber||""), color: contracted ? "#4ADE80" : "#FCD34D" };
+                        }))};
+                        var bounds = [];
+                        sites.forEach(function(s) {
+                          var icon = L.divIcon({ className: '', html: '<div style="width:10px;height:10px;border-radius:50%;background:' + s.color + ';border:2px solid white;box-shadow:0 1px 4px rgba(0,0,0,0.5)"></div>', iconSize:[10,10], iconAnchor:[5,5] });
+                          L.marker([s.lat,s.lng],{icon:icon}).addTo(map).bindPopup(s.label);
+                          bounds.push([s.lat,s.lng]);
+                        });
+                        if(bounds.length > 1) map.fitBounds(bounds, {padding:[20,20]});
+                        if(bounds.length === 0) { var el=document.getElementById('map'); el.innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#3A4560;font-family:sans-serif;font-size:13px">No geocoded sites yet</div>'; }
+                      </script></body></html>`}
                     />
-                    {sitesWithCoords.length === 0 && (
-                      <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "#0F111780", pointerEvents: "none" }}>
-                        <div style={{ textAlign: "center", color: "#3A4560" }}>
-                          <div style={{ fontSize: 32, marginBottom: 8 }}>🗺️</div>
-                          <div style={{ fontSize: 13 }}>No sites with coordinates yet</div>
-                          <div style={{ fontSize: 11, marginTop: 4 }}>Add sites with addresses to see them on the map</div>
-                        </div>
-                      </div>
-                    )}
                   </div>
                 </div>
 
-                {/* Excel-style sites table */}
-                <div style={{ background: "#0A0D16", border: "1px solid #1E2640", borderRadius: 10, overflow: "hidden" }}>
-                  {/* Column headers */}
-                  <div style={{ display: "grid", gridTemplateColumns: "28px 140px 1fr 120px 110px 90px 80px 70px", gap: 0, padding: "8px 12px", borderBottom: "2px solid #1E2640", background: "#080B14" }}>
-                    {["", "Company", "Address", "Phone", "Contractor", "Bid Status", "Annual", ""].map((h, i) => (
-                      <div key={i} style={{ fontSize: 9, color: "#3A4560", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", paddingRight: 8 }}>{h}</div>
-                    ))}
+                {/* ── Company → State → Sites Hierarchy ── */}
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  {/* Column header */}
+                  <div style={{ display: "grid", gridTemplateColumns: "28px 1fr 80px 90px 80px", padding: "6px 14px", fontSize: 9, color: "#2A3560", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", borderBottom: "1px solid #1E2640" }}>
+                    <div></div><div>Company / Location</div><div style={{ textAlign: "right" }}>Sites</div><div style={{ textAlign: "right" }}>Contracted</div><div style={{ textAlign: "right" }}>Annual</div>
                   </div>
-                  {/* Rows */}
-                  {filteredSites.length === 0 ? (
-                    <div style={{ textAlign: "center", padding: "40px", color: "#2A3560", fontSize: 12 }}>No sites yet — add your first one</div>
-                  ) : filteredSites.map((site, idx) => {
-                    const co = companies.find(c => c.id === site.companyId);
-                    const bid = activeBU === "lawn" ? getLawnBid(site.id) : null;
-                    const bidStatus = bid ? LAWN_BID_STATUSES.find(s => s.id === bid.status) : null;
-                    const sub = bid?.selectedSubId ? subcontractors.find(s => s.id === bid.selectedSubId)
-                             : (bid?.subcontractorIds||[]).length > 0 ? subcontractors.find(s => s.id === bid.subcontractorIds[0]) : null;
-                    const annualVal = bid ? lawnBidAnnualOur(bid) : 0;
-                    const contracted = isContracted(site);
-                    const dotColor = activeBU === "lawn" ? (contracted ? "#4ADE80" : bid ? "#FCD34D" : "#3A4560") : (companyColorMap[site.companyId] || "#3A4560");
+
+                  {Object.keys(byCompany).length === 0 && (
+                    <div style={{ textAlign: "center", padding: "40px", color: "#2A3560", fontSize: 12, background: "#161B28", borderRadius: 8, border: "1px solid #1E2640" }}>
+                      No sites yet — import a CSV or add sites manually
+                    </div>
+                  )}
+
+                  {Object.entries(byCompany).map(([cid, companySites]) => {
+                    const co = companies.find(c => c.id === cid);
+                    const coName = co?.name || "Unknown";
+                    const coExpanded = expandedCompany === cid;
+                    const coContracted = companySites.filter(isContracted).length;
+                    const coAnnual = companySites.reduce((sum, s) => sum + lawnBidAnnualOur(getLawnBid(s.id)), 0);
+
+                    // Group by state within this company
+                    const byState = {};
+                    companySites.forEach(site => {
+                      const st = getState(site.address);
+                      if (!byState[st]) byState[st] = [];
+                      byState[st].push(site);
+                    });
+                    const stateKeys = Object.keys(byState).sort();
+
                     return (
-                      <div key={site.id} onClick={() => setSelectedLsSite(site)} style={{ display: "grid", gridTemplateColumns: "28px 140px 1fr 120px 110px 90px 80px 70px", gap: 0, padding: "9px 12px", borderBottom: "1px solid #1E264060", background: idx % 2 === 0 ? "#0A0D16" : "#0D1020", cursor: "pointer", transition: "background 0.1s" }}
-                        onMouseEnter={e => e.currentTarget.style.background = "#141824"}
-                        onMouseLeave={e => e.currentTarget.style.background = idx % 2 === 0 ? "#0A0D16" : "#0D1020"}
-                      >
-                        <div style={{ display: "flex", alignItems: "center" }}>
-                          <div style={{ width: 8, height: 8, borderRadius: "50%", background: dotColor, flexShrink: 0 }} />
+                      <div key={cid} style={{ background: "#0A0D16", border: "1px solid #1E2640", borderRadius: 8, overflow: "hidden" }}>
+                        {/* Company row */}
+                        <div onClick={() => { setExpandedCompany(coExpanded ? null : cid); setExpandedState(null); }}
+                          style={{ display: "grid", gridTemplateColumns: "28px 1fr 80px 90px 80px", padding: "11px 14px", cursor: "pointer", alignItems: "center", background: coExpanded ? "#141824" : "transparent", transition: "background 0.15s" }}
+                          onMouseEnter={e => { if (!coExpanded) e.currentTarget.style.background = "#0D1020"; }}
+                          onMouseLeave={e => { if (!coExpanded) e.currentTarget.style.background = "transparent"; }}>
+                          <div style={{ fontSize: 12, color: "#3A4560" }}>{coExpanded ? "▼" : "▶"}</div>
+                          <div>
+                            <div style={{ fontSize: 13, fontWeight: 700, color: "#E8ECF4" }}>{coName}</div>
+                            <div style={{ fontSize: 10, color: "#3A4560", marginTop: 2 }}>{stateKeys.length} {stateKeys.length === 1 ? "state" : "states"}</div>
+                          </div>
+                          <div style={{ fontSize: 12, fontWeight: 600, color: "#B8C4E0", textAlign: "right" }}>{companySites.length}</div>
+                          <div style={{ fontSize: 11, color: coContracted > 0 ? "#4ADE80" : "#3A4560", textAlign: "right" }}>{coContracted > 0 ? coContracted + " ✓" : "—"}</div>
+                          <div style={{ fontSize: 11, fontWeight: coAnnual > 0 ? 700 : 400, color: coAnnual > 0 ? "#4ADE80" : "#2A3560", textAlign: "right" }}>{coAnnual > 0 ? "$" + Math.round(coAnnual/1000) + "k" : "—"}</div>
                         </div>
-                        <div style={{ fontSize: 12, color: "#B8C4E0", fontWeight: 500, paddingRight: 8, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={co?.name}>{co?.name || "—"}</div>
-                        <div style={{ fontSize: 11, color: "#6B7694", paddingRight: 8, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={site.address}>{site.storeNumber ? <span style={{ color: "#E8ECF4", fontWeight: 600 }}>#{site.storeNumber} </span> : null}{site.address || "—"}</div>
-                        <div style={{ fontSize: 11, color: "#4A5270", paddingRight: 8 }}>{site.phone || "—"}</div>
-                        <div style={{ fontSize: 10, paddingRight: 8, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                          {sub ? <span style={{ color: "#A78BFA" }}>{sub.name}</span> : <span style={{ color: "#2A3560" }}>None</span>}
-                        </div>
-                        <div style={{ fontSize: 10, paddingRight: 8 }}>
-                          {activeBU === "lawn"
-                            ? contracted
-                              ? <span style={{ color: "#4ADE80", fontWeight: 600 }}>Contracted</span>
-                              : bidStatus
-                                ? <span style={{ color: bidStatus.color }}>{bidStatus.label}</span>
-                                : <span style={{ color: "#2A3560" }}>No Bid</span>
-                            : null
-                          }
-                        </div>
-                        <div style={{ fontSize: 11, color: annualVal > 0 ? "#4ADE80" : "#2A3560", fontWeight: annualVal > 0 ? 700 : 400, paddingRight: 8 }}>
-                          {annualVal > 0 ? "$" + Math.round(annualVal / 1000) + "k" : "—"}
-                        </div>
-                        <div style={{ display: "flex", gap: 4 }} onClick={e => e.stopPropagation()}>
-                          <button className="btn-ghost" style={{ fontSize: 10, padding: "2px 6px" }} onClick={() => openEditLsSite(site)}>✎</button>
-                          <button className="btn-ghost" style={{ fontSize: 10, padding: "2px 6px", color: "#F87171", borderColor: "#F8717120" }} onClick={() => deleteLsSite(site.id)}>✕</button>
-                        </div>
+
+                        {/* States within company */}
+                        {coExpanded && stateKeys.map(stKey => {
+                          const stateSites = byState[stKey];
+                          const stExpanded = expandedState === (cid + stKey);
+                          const stContracted = stateSites.filter(isContracted).length;
+                          const stAnnual = stateSites.reduce((sum, s) => sum + lawnBidAnnualOur(getLawnBid(s.id)), 0);
+                          return (
+                            <div key={stKey} style={{ borderTop: "1px solid #1E2640" }}>
+                              {/* State row */}
+                              <div onClick={() => setExpandedState(stExpanded ? null : (cid + stKey))}
+                                style={{ display: "grid", gridTemplateColumns: "28px 1fr 80px 90px 80px", padding: "9px 14px 9px 36px", cursor: "pointer", alignItems: "center", background: stExpanded ? "#111520" : "#0D1020", transition: "background 0.15s" }}>
+                                <div style={{ fontSize: 11, color: "#3A4560" }}>{stExpanded ? "▼" : "▶"}</div>
+                                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                  <div style={{ fontSize: 11, fontWeight: 600, color: "#B8C4E0" }}>{stKey}</div>
+                                  <div style={{ fontSize: 10, color: "#3A4560" }}>{stateSites.length} sites</div>
+                                </div>
+                                <div style={{ fontSize: 11, color: "#6B7694", textAlign: "right" }}>{stateSites.length}</div>
+                                <div style={{ fontSize: 11, color: stContracted > 0 ? "#4ADE80" : "#3A4560", textAlign: "right" }}>{stContracted > 0 ? stContracted + " ✓" : "—"}</div>
+                                <div style={{ fontSize: 11, fontWeight: stAnnual > 0 ? 700 : 400, color: stAnnual > 0 ? "#4ADE80" : "#2A3560", textAlign: "right" }}>{stAnnual > 0 ? "$" + Math.round(stAnnual/1000) + "k" : "—"}</div>
+                              </div>
+
+                              {/* Site rows within state */}
+                              {stExpanded && stateSites.map((site, idx) => {
+                                const bid = getLawnBid(site.id);
+                                const contracted = isContracted(site);
+                                const bidStatus = bid ? LAWN_BID_STATUSES.find(s => s.id === bid.status) : null;
+                                const sub = bid?.selectedSubId ? subcontractors.find(s => s.id === bid.selectedSubId) : null;
+                                const annualVal = lawnBidAnnualOur(bid);
+                                const dotColor = contracted ? "#4ADE80" : bid ? "#FCD34D" : "#2A3560";
+                                return (
+                                  <div key={site.id} onClick={() => setSelectedLsSite(site)}
+                                    style={{ display: "grid", gridTemplateColumns: "28px 1fr 80px 90px 80px", padding: "8px 14px 8px 54px", alignItems: "center", borderTop: "1px solid #1E264040", background: idx % 2 === 0 ? "#080B14" : "#0A0D16", cursor: "pointer" }}
+                                    onMouseEnter={e => e.currentTarget.style.background = "#141824"}
+                                    onMouseLeave={e => e.currentTarget.style.background = idx % 2 === 0 ? "#080B14" : "#0A0D16"}>
+                                    <div style={{ display: "flex", alignItems: "center" }}>
+                                      <div style={{ width: 7, height: 7, borderRadius: "50%", background: dotColor }} />
+                                    </div>
+                                    <div>
+                                      <div style={{ fontSize: 12, color: "#E8ECF4", fontWeight: 500 }}>
+                                        {site.storeNumber ? <span style={{ fontWeight: 700 }}>#{site.storeNumber} </span> : null}
+                                        <span style={{ color: "#6B7694", fontWeight: 400 }}>{site.address}</span>
+                                      </div>
+                                      {sub && <div style={{ fontSize: 10, color: "#A78BFA", marginTop: 1 }}>🔧 {sub.name}</div>}
+                                    </div>
+                                    <div style={{ fontSize: 10, color: "#3A4560", textAlign: "right" }}>
+                                      {site.phone || ""}
+                                    </div>
+                                    <div style={{ fontSize: 10, textAlign: "right" }}>
+                                      {contracted
+                                        ? <span style={{ color: "#4ADE80" }}>✓ Contracted</span>
+                                        : bidStatus
+                                          ? <span style={{ color: bidStatus.color }}>{bidStatus.label}</span>
+                                          : <span style={{ color: "#2A3560" }}>No Bid</span>
+                                      }
+                                    </div>
+                                    <div style={{ fontSize: 11, fontWeight: annualVal > 0 ? 700 : 400, color: annualVal > 0 ? "#4ADE80" : "#2A3560", textAlign: "right" }}>
+                                      {annualVal > 0 ? "$" + Math.round(annualVal/1000) + "k" : "—"}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          );
+                        })}
                       </div>
                     );
                   })}
