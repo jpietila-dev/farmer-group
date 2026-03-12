@@ -1012,8 +1012,6 @@ export default function App() {
   };
 
   // Lawn/Snow site helpers
-  const lsData     = activeBU === "lawn" ? lawnSites : snowSites;
-  const setLsData  = activeBU === "lawn" ? setLawnSites : setSnowSites;
   const openAddLsSite  = () => { setEditLsSiteId(null); setLsSiteForm({ companyId: "", storeNumber: "", address: "", phone: "", accessCode: "", notes: "", lat: "", lng: "" }); setShowLsSiteForm(true); };
   const openEditLsSite = (s) => { setEditLsSiteId(s.id); setLsSiteForm({ ...s, lat: String(s.lat || ""), lng: String(s.lng || "") }); setShowLsSiteForm(true); };
   const saveLsSite = async () => {
