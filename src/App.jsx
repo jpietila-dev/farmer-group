@@ -1341,7 +1341,7 @@ Return ONLY valid JSON, no markdown, no extra text:
     .pill{display:inline-flex;align-items:center;padding:3px 9px;border-radius:20px;font-size:10px;letter-spacing:0.05em;white-space:nowrap;font-weight:500}
     .opp-row{background:#161B28;border:1px solid #1E2640;border-radius:8px;padding:14px 16px;transition:all 0.15s;cursor:pointer}
     .opp-row:hover{border-color:#2A3560;background:#1A1F30}
-    .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,0.8);display:flex;align-items:center;justify-content:center;z-index:100;backdrop-filter:blur(4px)}
+    .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,0.8);display:flex;align-items:flex-start;justify-content:center;z-index:100;backdrop-filter:blur(4px);overflow-y:auto;padding:40px 16px}
     .modal{background:#0F1117;border:1px solid #2A3560;border-radius:12px;padding:28px;width:540px;max-height:90vh;overflow-y:auto}
     .g2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
     .side-panel{position:fixed;right:0;top:52px;bottom:0;width:400px;background:#0B0E18;border-left:1px solid #1E2640;padding:24px;overflow-y:auto;z-index:40}
@@ -2640,7 +2640,7 @@ Return ONLY valid JSON, no markdown, no extra text:
               </div>
 
               {showTeamForm && (
-                <div style={{ position: "fixed", inset: 0, background: "#00000080", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <div style={{ position: "fixed", inset: 0, background: "#00000080", zIndex: 200, display: "flex", alignItems: "flex-start", justifyContent: "center", overflowY: "auto", padding: "40px 16px" }}>
                   <div style={{ background: "#161B28", border: "1px solid #1E2640", borderRadius: 12, padding: 28, width: 400 }}>
                     <div style={{ fontSize: 14, fontWeight: 600, color: "#FFFFFF", marginBottom: 20 }}>{editTeamId ? "Edit" : "Add"} Team Member</div>
                     <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
@@ -2930,8 +2930,8 @@ Return ONLY valid JSON, no markdown, no extra text:
                 </div>
 
                 {showSubForm && (
-                  <div style={{ position: "fixed", inset: 0, background: "#00000080", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    <div style={{ background: "#161B28", border: "1px solid #1E2640", borderRadius: 12, padding: 28, width: 480, maxHeight: "90vh", overflowY: "auto" }}>
+                  <div style={{ position: "fixed", inset: 0, background: "#00000080", zIndex: 200, display: "flex", alignItems: "flex-start", justifyContent: "center", overflowY: "auto", padding: "40px 16px" }}>
+                    <div style={{ background: "#161B28", border: "1px solid #1E2640", borderRadius: 12, padding: 28, width: 480 }}>
                       <div style={{ fontSize: 14, fontWeight: 600, color: "#FFFFFF", marginBottom: 20 }}>{editSubId ? "Edit" : "Add"} Subcontractor</div>
                       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                         {[["Name", "name"], ["Trade / Specialty", "trade"], ["Phone", "phone"], ["Email", "email"]].map(([label, key]) => (
@@ -5087,12 +5087,6 @@ Return ONLY valid JSON, no markdown, no extra text:
                           <td colSpan={2} style={{ border: "1px solid #000", padding: "5px 8px", fontSize: 10 }}>
                             <strong>Address:</strong> {site.address}
                           </td>
-                        </tr>
-                        <tr>
-                          <td style={{ border: "1px solid #000", padding: "5px 8px", fontSize: 10 }}>
-                            <strong>City:</strong> ________________________ &nbsp;&nbsp; <strong>State:</strong> ______
-                          </td>
-                          <td style={{ border: "1px solid #000", padding: "5px 8px", fontSize: 10 }}><strong>Zip Code:</strong> ____________</td>
                         </tr>
                         <tr>
                           <td colSpan={2} style={{ border: "1px solid #000", padding: "6px 8px", fontSize: 10, lineHeight: 1.7 }}>
