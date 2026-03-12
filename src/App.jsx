@@ -50,8 +50,10 @@ const NAV_ITEMS = {
     { id: "dashboard", label: "Dashboard", icon: "⊞" },
     { id: "calendar", label: "Calendar", icon: "📅" },
     { id: "sites", label: "Sites", icon: "📍" },
+    { id: "bids", label: "Bids", icon: "📋" },
     { id: "budgeting", label: "Budgeting", icon: "💲" },
     { id: "team", label: "Team", icon: "👥" },
+    { id: "subcontractors", label: "Subcontractors", icon: "🔧" },
     { id: "customers", label: "Customers", icon: "🤝" },
   ],
   snow: [
@@ -60,6 +62,7 @@ const NAV_ITEMS = {
     { id: "sites", label: "Sites", icon: "📍" },
     { id: "budgeting", label: "Budgeting", icon: "💲" },
     { id: "team", label: "Team", icon: "👥" },
+    { id: "subcontractors", label: "Subcontractors", icon: "🔧" },
     { id: "customers", label: "Customers", icon: "🤝" },
   ],
 };
@@ -756,6 +759,7 @@ export default function App() {
   const [editLsSiteId,     setEditLsSiteId]     = useState(null);
   const [lsSiteForm,       setLsSiteForm]       = useState({ companyId: "", storeNumber: "", address: "", phone: "", accessCode: "", notes: "", lat: "", lng: "" });
   const [mapLoaded,        setMapLoaded]        = useState(false);
+  const [lsMapFilter,      setLsMapFilter]      = useState("all"); // "all" | "contracted" | "uncontracted"
 
   // Lawn Bids
   const LAWN_BID_STATUSES = [
@@ -782,6 +786,7 @@ export default function App() {
   const [lawnBidMode,    setLawnBidMode]    = useState("bid"); // "bid" | "contract"
   const [lawnBidSeason,  setLawnBidSeason]  = useState("2025");
   const [editLawnBidId,  setEditLawnBidId]  = useState(null); // which site row is open
+  const [lawnBidDocSiteId, setLawnBidDocSiteId] = useState(null); // site id for bid doc modal
 
   const GP_MARGIN = 0.30;
   const calcOurPrice = (subPrice) => subPrice > 0 ? Math.ceil(subPrice / (1 - GP_MARGIN) * 100) / 100 : 0;
@@ -824,7 +829,7 @@ export default function App() {
   const [subcontractors,    setSubcontractors]    = useState([]);
   const [showSubForm,       setShowSubForm]       = useState(false);
   const [editSubId,         setEditSubId]         = useState(null);
-  const [subForm,           setSubForm]           = useState({ name: "", trade: "", phone: "", email: "", msaStatus: "missing", coiExpiry: "", w9: false, notes: "" });
+  const [subForm,           setSubForm]           = useState({ name: "", trade: "", phone: "", email: "", msaStatus: "missing", coiExpiry: "", w9: false, notes: "", services: [] });
 
   const navItems = NAV_ITEMS[activeBU] || NAV_ITEMS.all;
   const buColor  = BU_COLORS[activeBU];
@@ -2089,13 +2094,18 @@ Return ONLY valid JSON, no markdown, no extra text:
           {activeNav === "sites" && LAWN_SNOW_SITES_BUS.includes(activeBU) && (() => {
             const currentSites = activeBU === "lawn" ? lawnSites : snowSites;
             const setCurrentSites = activeBU === "lawn" ? setLawnSites : setSnowSites;
+            const isContracted = (site) => { const b = getLawnBid(site.id); return b && (b.locked || b.status === "owner_approved" || b.status === "contracted"); };
             const filteredSites = currentSites.filter(site => {
               const co = companies.find(c => c.id === site.companyId);
               const q = lsSearch.toLowerCase();
-              return !q || (site.storeNumber||"").toLowerCase().includes(q) || (site.address||"").toLowerCase().includes(q) || (co?.name||"").toLowerCase().includes(q);
+              const matchSearch = !q || (site.storeNumber||"").toLowerCase().includes(q) || (site.address||"").toLowerCase().includes(q) || (co?.name||"").toLowerCase().includes(q);
+              const matchFilter = lsMapFilter === "all" || (lsMapFilter === "contracted" ? isContracted(site) : !isContracted(site));
+              return matchSearch && matchFilter;
             });
             const uniqueCompanyIds = [...new Set(currentSites.map(s => s.companyId).filter(Boolean))];
             const sitesWithCoords = filteredSites.filter(s => s.lat && s.lng);
+            const contractedCount = currentSites.filter(isContracted).length;
+            const uncontractedCount = currentSites.length - contractedCount;
 
             return (
               <div className="fade-in" style={{ display: "flex", flexDirection: "column", gap: 22 }}>
@@ -2169,10 +2179,32 @@ Return ONLY valid JSON, no markdown, no extra text:
 
                 {/* MAP */}
                 <div style={{ background: "#161B28", border: "1px solid #1E2640", borderRadius: 12, overflow: "hidden" }}>
-                  <div style={{ padding: "12px 16px", borderBottom: "1px solid #1E2640", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <div style={{ fontSize: 11, color: "#3A4560", letterSpacing: "0.08em", textTransform: "uppercase", fontWeight: 600 }}>Service Area Map</div>
-                    <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-                      {uniqueCompanyIds.map(cid => {
+                  <div style={{ padding: "12px 16px", borderBottom: "1px solid #1E2640", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                      <div style={{ fontSize: 11, color: "#3A4560", letterSpacing: "0.08em", textTransform: "uppercase", fontWeight: 600 }}>Service Area Map</div>
+                      {/* Contract status filter */}
+                      {activeBU === "lawn" && (
+                        <div style={{ display: "flex", background: "#0A0D16", border: "1px solid #1E2640", borderRadius: 7, overflow: "hidden" }}>
+                          {[["all","All","#B8C4E0"],["contracted","✓ Contracted","#4ADE80"],["uncontracted","⚠ Needs Contract","#F87171"]].map(([val,lbl,col]) => (
+                            <button key={val} onClick={() => setLsMapFilter(val)} style={{ padding: "5px 12px", fontSize: 10, fontWeight: 600, border: "none", cursor: "pointer", background: lsMapFilter === val ? col + "25" : "transparent", color: lsMapFilter === val ? col : "#3A4560", borderRight: val !== "uncontracted" ? "1px solid #1E2640" : "none", transition: "all 0.15s", fontFamily: "inherit", letterSpacing: "0.04em" }}>{lbl}</button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
+                      {activeBU === "lawn" && (
+                        <>
+                          <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                            <div style={{ width: 10, height: 10, borderRadius: "50%", background: "#4ADE80", flexShrink: 0 }} />
+                            <span style={{ fontSize: 10, color: "#B8C4E0" }}>Contracted ({contractedCount})</span>
+                          </div>
+                          <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                            <div style={{ width: 10, height: 10, borderRadius: "50%", background: "#F87171", flexShrink: 0 }} />
+                            <span style={{ fontSize: 10, color: "#B8C4E0" }}>Needs Contract ({uncontractedCount})</span>
+                          </div>
+                        </>
+                      )}
+                      {activeBU !== "lawn" && uniqueCompanyIds.map(cid => {
                         const co = companies.find(c => c.id === cid);
                         return co ? (
                           <div key={cid} style={{ display: "flex", alignItems: "center", gap: 5 }}>
@@ -2185,7 +2217,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                   </div>
                   <div style={{ position: "relative", height: 460 }}>
                     <iframe
-                      key={activeBU + currentSites.length}
+                      key={activeBU + currentSites.length + lsMapFilter}
                       style={{ width: "100%", height: "100%", border: "none" }}
                       srcDoc={`<!DOCTYPE html><html><head>
                         <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
@@ -2196,11 +2228,21 @@ Return ONLY valid JSON, no markdown, no extra text:
                         <script>
                           var map = L.map('map', { zoomControl: true, attributionControl: false }).setView([39.5, -78.5], 6);
                           L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { maxZoom: 19 }).addTo(map);
-                          var sites = ${JSON.stringify(sitesWithCoords.map(s => ({ lat: s.lat, lng: s.lng, label: (s.storeNumber ? "#" + s.storeNumber + " " : "") + s.address, company: companies.find(c => c.id === s.companyId)?.name || "", color: companyColorMap[s.companyId] || "#3B6FE8" })))};
+                          var sites = ${JSON.stringify(sitesWithCoords.map(s => {
+                            const contracted = isContracted(s);
+                            const markerColor = activeBU === "lawn" ? (contracted ? "#4ADE80" : "#F87171") : (companyColorMap[s.companyId] || "#3B6FE8");
+                            const bid = activeBU === "lawn" ? getLawnBid(s.id) : null;
+                            const subName = bid?.subcontractorId ? (subcontractors.find(x => x.id === bid.subcontractorId)?.name || "") : "";
+                            return { lat: s.lat, lng: s.lng, label: (s.storeNumber ? "#" + s.storeNumber + " " : "") + s.address, company: companies.find(c => c.id === s.companyId)?.name || "", color: markerColor, contracted, subName };
+                          }))};
                           var bounds = [];
                           sites.forEach(function(s) {
-                            var icon = L.divIcon({ className: '', html: '<div style="width:14px;height:14px;border-radius:50%;background:' + s.color + ';border:2px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.5);cursor:pointer;"></div>', iconSize:[14,14], iconAnchor:[7,7] });
-                            L.marker([s.lat, s.lng], { icon: icon }).addTo(map).bindPopup('<div style="font-family:sans-serif;font-size:12px;color:#111;min-width:160px"><b>' + (s.label||'Site') + '</b><br/><span style="color:#555">' + s.company + '</span></div>');
+                            var ring = s.contracted ? 'border:2.5px solid #4ADE80' : 'border:2px solid white';
+                            var icon = L.divIcon({ className: '', html: '<div style="width:14px;height:14px;border-radius:50%;background:' + s.color + ';' + ring + ';box-shadow:0 2px 6px rgba(0,0,0,0.5);cursor:pointer;"></div>', iconSize:[14,14], iconAnchor:[7,7] });
+                            var popupContent = '<div style="font-family:sans-serif;font-size:12px;color:#111;min-width:180px"><b>' + (s.label||'Site') + '</b><br/><span style="color:#555">' + s.company + '</span>';
+                            if (s.subName) popupContent += '<br/><span style="color:#7c3aed;font-size:11px">🔧 ' + s.subName + '</span>';
+                            popupContent += '<br/><span style="font-size:10px;font-weight:600;color:' + (s.contracted ? '#16a34a' : '#dc2626') + '">' + (s.contracted ? '✓ Contracted' : '⚠ Needs Contract') + '</span></div>';
+                            L.marker([s.lat, s.lng], { icon: icon }).addTo(map).bindPopup(popupContent);
                             bounds.push([s.lat, s.lng]);
                           });
                           if (bounds.length > 1) map.fitBounds(bounds, { padding: [40,40] });
@@ -2224,28 +2266,42 @@ Return ONLY valid JSON, no markdown, no extra text:
                 <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                   {filteredSites.map(site => {
                     const co = companies.find(c => c.id === site.companyId);
-                    const pinColor = companyColorMap[site.companyId] || "#3A4560";
                     const bid = activeBU === "lawn" ? getLawnBid(site.id) : null;
                     const bidStatus = bid ? LAWN_BID_STATUSES.find(s => s.id === bid.status) : null;
                     const sub = bid?.subcontractorId ? subcontractors.find(s => s.id === bid.subcontractorId) : null;
                     const annualVal = bid ? lawnBidAnnualOur(bid) : 0;
+                    const contracted = isContracted(site);
+                    const statusDotColor = activeBU === "lawn" ? (contracted ? "#4ADE80" : "#F87171") : (companyColorMap[site.companyId] || "#3A4560");
                     return (
-                      <div key={site.id} className="opp-row" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }} onClick={() => setSelectedLsSite(site)}>
+                      <div key={site.id} className="opp-row" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderLeft: activeBU === "lawn" ? "3px solid " + statusDotColor : undefined }} onClick={() => setSelectedLsSite(site)}>
                         <div style={{ display: "flex", alignItems: "center", gap: 12, flex: 1, minWidth: 0 }}>
-                          <div style={{ width: 10, height: 10, borderRadius: "50%", background: pinColor, flexShrink: 0 }} />
-                          <div>
+                          <div style={{ width: 10, height: 10, borderRadius: "50%", background: statusDotColor, flexShrink: 0 }} />
+                          <div style={{ flex: 1, minWidth: 0 }}>
                             <div style={{ fontSize: 13, color: "#E8ECF4", fontWeight: 600 }}>{site.storeNumber ? "Store #" + site.storeNumber : site.address}</div>
                             <div style={{ display: "flex", gap: 10, marginTop: 2, alignItems: "center", flexWrap: "wrap" }}>
-                              {co      && <span style={{ fontSize: 11, color: "#3B6FE8" }}>{co.name}</span>}
+                              {co && <span style={{ fontSize: 11, color: "#3B6FE8" }}>{co.name}</span>}
                               {site.address && site.storeNumber && <span style={{ fontSize: 11, color: "#3A4560" }}>📍 {site.address}</span>}
-                              {site.phone   && <span style={{ fontSize: 11, color: "#3A4560" }}>📞 {site.phone}</span>}
-                              {sub && <span style={{ fontSize: 10, color: "#A78BFA", background: "#A78BFA15", border: "1px solid #A78BFA30", borderRadius: 4, padding: "1px 6px" }}>🔧 {sub.name}</span>}
-                              {!site.lat    && <span style={{ fontSize: 10, color: "#F87171" }}>⚠ No coordinates</span>}
+                              {site.phone && <span style={{ fontSize: 11, color: "#3A4560" }}>📞 {site.phone}</span>}
+                              {!site.lat && <span style={{ fontSize: 10, color: "#F87171" }}>⚠ No coordinates</span>}
                             </div>
+                            {/* Contractor + coverage row — lawn only */}
+                            {activeBU === "lawn" && (
+                              <div style={{ display: "flex", gap: 8, marginTop: 4, alignItems: "center", flexWrap: "wrap" }}>
+                                {sub
+                                  ? <span style={{ fontSize: 10, color: "#A78BFA", background: "#A78BFA15", border: "1px solid #A78BFA30", borderRadius: 4, padding: "2px 8px", fontWeight: 600 }}>🔧 {sub.name}</span>
+                                  : <span style={{ fontSize: 10, color: "#F87171", background: "#F8717115", border: "1px solid #F8717130", borderRadius: 4, padding: "2px 8px" }}>⚠ No contractor assigned</span>
+                                }
+                                {bid?.subSentAt && <span style={{ fontSize: 10, color: "#3A4560" }}>Sent {new Date(bid.subSentAt).toLocaleDateString()}</span>}
+                              </div>
+                            )}
                           </div>
                         </div>
-                        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-                          {bidStatus && <span style={{ fontSize: 10, fontWeight: 600, color: bidStatus.color, background: bidStatus.color + "15", border: "1px solid " + bidStatus.color + "30", borderRadius: 5, padding: "3px 8px", whiteSpace: "nowrap" }}>{bidStatus.label}</span>}
+                        <div style={{ display: "flex", gap: 8, alignItems: "center", flexShrink: 0 }}>
+                          {activeBU === "lawn" && (
+                            <span style={{ fontSize: 10, fontWeight: 600, color: contracted ? "#4ADE80" : "#F87171", background: (contracted ? "#4ADE80" : "#F87171") + "15", border: "1px solid " + (contracted ? "#4ADE80" : "#F87171") + "30", borderRadius: 5, padding: "3px 8px", whiteSpace: "nowrap" }}>
+                              {contracted ? "✓ Contracted" : bidStatus ? bidStatus.label : "⚠ No Bid"}
+                            </span>
+                          )}
                           {annualVal > 0 && <span style={{ fontSize: 12, fontWeight: 700, color: "#4ADE80", whiteSpace: "nowrap" }}>${Math.round(annualVal).toLocaleString()}/yr</span>}
                           <div style={{ display: "flex", gap: 5 }} onClick={e => e.stopPropagation()}>
                             <button className="btn-ghost" style={{ fontSize: 11 }} onClick={() => openEditLsSite(site)}>✎</button>
@@ -2773,125 +2829,171 @@ Return ONLY valid JSON, no markdown, no extra text:
             );
           })()}
 
-          {/* ── SUBCONTRACTORS (FM only) ── */}
-          {activeNav === "subcontractors" && activeBU === "facility" && (
-            <div className="fade-in" style={{ display: "flex", flexDirection: "column", gap: 22 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <div>
-                  <div style={{ fontSize: 22, fontWeight: 700, color: "#FFFFFF", letterSpacing: "-0.01em", textTransform: "uppercase" }}>Subcontractors</div>
-                  <div style={{ fontSize: 11, color: "#3A4560", marginTop: 3, letterSpacing: "0.06em" }}>FACILITY MAINTENANCE · {subcontractors.length} SUBS</div>
-                </div>
-                <button className="btn-primary" onClick={() => { setEditSubId(null); setSubForm({ name: "", trade: "", phone: "", email: "", msaStatus: "missing", coiExpiry: "", w9: false, notes: "" }); setShowSubForm(true); }}>+ Add Subcontractor</button>
-              </div>
-
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 12 }}>
-                {[
-                  { label: "Total Subs",    value: subcontractors.length,                                                                                                                    color: buColor.accent },
-                  { label: "MSA Signed",    value: subcontractors.filter(s => s.msaStatus === "signed").length,                                                                              color: "#4ADE80" },
-                  { label: "COI Expiring",  value: subcontractors.filter(s => { if (!s.coiExpiry) return false; const d = new Date(s.coiExpiry); return d > new Date() && d <= new Date(Date.now() + 30*86400000); }).length, color: "#FCD34D" },
-                  { label: "Missing Docs",  value: subcontractors.filter(s => s.msaStatus !== "signed" || !s.w9 || !s.coiExpiry).length,                                                    color: "#F87171" },
-                ].map(s => (
-                  <div key={s.label} className="stat-card" style={{ position: "relative", overflow: "hidden", padding: "14px 18px" }}>
-                    <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: s.color }} />
-                    <div style={{ fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "#3A4560", marginBottom: 6 }}>{s.label}</div>
-                    <div style={{ fontSize: 22, fontWeight: 700, color: s.color }}>{s.value}</div>
+          {/* ── SUBCONTRACTORS (master list — FM, Lawn, Snow) ── */}
+          {activeNav === "subcontractors" && ["facility","lawn","snow"].includes(activeBU) && (() => {
+            const SUB_SERVICE_OPTIONS = [
+              { id: "fm",   label: "Facility Maint.", color: "#7BA7F5" },
+              { id: "lawn", label: "Lawn",            color: "#4CAF82" },
+              { id: "snow", label: "Snow",            color: "#A8C4F8" },
+            ];
+            // filter list by current BU for relevance highlight, but show all
+            const visibleSubs = subcontractors.filter(s => {
+              if (!s.services || s.services.length === 0) return true;
+              return activeBU === "facility" ? s.services.includes("fm")
+                   : activeBU === "lawn"     ? s.services.includes("lawn")
+                   : s.services.includes("snow");
+            });
+            const allCount = subcontractors.length;
+            return (
+              <div className="fade-in" style={{ display: "flex", flexDirection: "column", gap: 22 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                  <div>
+                    <div style={{ fontSize: 22, fontWeight: 700, color: "#FFFFFF", letterSpacing: "-0.01em", textTransform: "uppercase" }}>Subcontractors</div>
+                    <div style={{ fontSize: 11, color: "#3A4560", marginTop: 3, letterSpacing: "0.06em" }}>MASTER LIST · {allCount} TOTAL · showing {visibleSubs.length} for {activeBU.toUpperCase()}</div>
                   </div>
-                ))}
-              </div>
+                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                    <button className="btn-ghost" style={{ fontSize: 11, color: "#3A4560" }} onClick={() => { /* show all toggle handled by rendering all */ }}>
+                      {visibleSubs.length < allCount ? `+ ${allCount - visibleSubs.length} hidden (other BUs)` : ""}
+                    </button>
+                    <button className="btn-primary" onClick={() => { setEditSubId(null); setSubForm({ name: "", trade: "", phone: "", email: "", msaStatus: "missing", coiExpiry: "", w9: false, notes: "", services: [activeBU === "facility" ? "fm" : activeBU] }); setShowSubForm(true); }}>+ Add Subcontractor</button>
+                  </div>
+                </div>
 
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                {subcontractors.length === 0 && (
-                  <div style={{ textAlign: "center", padding: "48px", color: "#2A3560", fontSize: 12, background: "#161B28", borderRadius: 10, border: "1px solid #1E2640" }}>No subcontractors yet — add your first one</div>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 12 }}>
+                  {[
+                    { label: "Total Subs",    value: allCount,                                                                                                                                color: buColor.accent },
+                    { label: "MSA Signed",    value: subcontractors.filter(s => s.msaStatus === "signed").length,                                                                             color: "#4ADE80" },
+                    { label: "COI Expiring",  value: subcontractors.filter(s => { if (!s.coiExpiry) return false; const d = new Date(s.coiExpiry); return d > new Date() && d <= new Date(Date.now() + 30*86400000); }).length, color: "#FCD34D" },
+                    { label: "Missing Docs",  value: subcontractors.filter(s => s.msaStatus !== "signed" || !s.w9 || !s.coiExpiry).length,                                                   color: "#F87171" },
+                  ].map(s => (
+                    <div key={s.label} className="stat-card" style={{ position: "relative", overflow: "hidden", padding: "14px 18px" }}>
+                      <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: s.color }} />
+                      <div style={{ fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "#3A4560", marginBottom: 6 }}>{s.label}</div>
+                      <div style={{ fontSize: 22, fontWeight: 700, color: s.color }}>{s.value}</div>
+                    </div>
+                  ))}
+                </div>
+
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {subcontractors.length === 0 && (
+                    <div style={{ textAlign: "center", padding: "48px", color: "#2A3560", fontSize: 12, background: "#161B28", borderRadius: 10, border: "1px solid #1E2640" }}>No subcontractors yet — add your first one</div>
+                  )}
+                  {subcontractors.map(s => {
+                    const msaColor   = s.msaStatus === "signed" ? "#4ADE80" : s.msaStatus === "expired" ? "#F87171" : "#FCD34D";
+                    const msaLabel   = s.msaStatus === "signed" ? "MSA ✓" : s.msaStatus === "expired" ? "MSA Expired" : "MSA Missing";
+                    const coiDate    = s.coiExpiry ? new Date(s.coiExpiry) : null;
+                    const coiExpired = coiDate && coiDate < new Date();
+                    const coiSoon    = coiDate && !coiExpired && coiDate <= new Date(Date.now() + 30*86400000);
+                    const coiColor   = !coiDate ? "#F87171" : coiExpired ? "#F87171" : coiSoon ? "#FCD34D" : "#4ADE80";
+                    const coiLabel   = !coiDate ? "COI Missing" : coiExpired ? "COI Expired" : coiSoon ? "COI Expiring " + s.coiExpiry : "COI ✓ " + s.coiExpiry;
+                    const w9Color    = s.w9 ? "#4ADE80" : "#F87171";
+                    const assignedFmJobs   = fmJobs.filter(j => j.subcontractorId === s.id);
+                    const assignedLawnBids = lawnBids.filter(b => b.subcontractorId === s.id);
+                    const svcTags = (s.services || []).map(sv => SUB_SERVICE_OPTIONS.find(o => o.id === sv)).filter(Boolean);
+                    const isCurrentBU = !s.services || s.services.length === 0 || (activeBU === "facility" ? s.services.includes("fm") : s.services.includes(activeBU));
+                    return (
+                      <div key={s.id} className="opp-row" style={{ opacity: isCurrentBU ? 1 : 0.5 }}>
+                        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6, flexWrap: "wrap" }}>
+                              <div style={{ fontSize: 14, color: "#E8ECF4", fontWeight: 600 }}>{s.name}</div>
+                              {s.trade && <span style={{ fontSize: 10, color: buColor.accent, background: buColor.light, padding: "2px 8px", borderRadius: 10, textTransform: "uppercase", letterSpacing: "0.06em" }}>{s.trade}</span>}
+                              {svcTags.map(sv => (
+                                <span key={sv.id} style={{ fontSize: 10, color: sv.color, background: sv.color + "20", border: "1px solid " + sv.color + "40", padding: "2px 8px", borderRadius: 10, fontWeight: 600 }}>{sv.label}</span>
+                              ))}
+                              {(!s.services || s.services.length === 0) && <span style={{ fontSize: 10, color: "#3A4560", fontStyle: "italic" }}>All divisions</span>}
+                            </div>
+                            <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginBottom: 8 }}>
+                              {s.phone && <span style={{ fontSize: 11, color: "#3A4560" }}>📞 {s.phone}</span>}
+                              {s.email && <span style={{ fontSize: 11, color: "#3A4560" }}>✉ {s.email}</span>}
+                              {assignedFmJobs.length > 0 && <span style={{ fontSize: 11, color: "#7BA7F5" }}>🔨 {assignedFmJobs.length} FM job{assignedFmJobs.length !== 1 ? "s" : ""}</span>}
+                              {assignedLawnBids.length > 0 && <span style={{ fontSize: 11, color: "#4CAF82" }}>🌿 {assignedLawnBids.length} lawn site{assignedLawnBids.length !== 1 ? "s" : ""}</span>}
+                            </div>
+                            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                              <span style={{ fontSize: 10, fontWeight: 600, color: msaColor, background: msaColor + "15", border: "1px solid " + msaColor + "30", padding: "3px 10px", borderRadius: 10 }}>{msaLabel}</span>
+                              <span style={{ fontSize: 10, fontWeight: 600, color: coiColor, background: coiColor + "15", border: "1px solid " + coiColor + "30", padding: "3px 10px", borderRadius: 10 }}>{coiLabel}</span>
+                              <span style={{ fontSize: 10, fontWeight: 600, color: w9Color, background: w9Color + "15", border: "1px solid " + w9Color + "30", padding: "3px 10px", borderRadius: 10 }}>{s.w9 ? "W9 ✓" : "W9 Missing"}</span>
+                            </div>
+                            {s.notes && <div style={{ fontSize: 11, color: "#3A4560", marginTop: 8, fontStyle: "italic" }}>{s.notes}</div>}
+                          </div>
+                          <div style={{ display: "flex", gap: 5, flexShrink: 0 }}>
+                            <button className="btn-ghost" style={{ fontSize: 11 }} onClick={() => { setEditSubId(s.id); setSubForm({ name: s.name, trade: s.trade||"", phone: s.phone||"", email: s.email||"", msaStatus: s.msaStatus||"missing", coiExpiry: s.coiExpiry||"", w9: !!s.w9, notes: s.notes||"", services: s.services||[] }); setShowSubForm(true); }}>✎</button>
+                            <button className="btn-ghost" style={{ fontSize: 11, color: "#F87171", borderColor: "#F8717120" }} onClick={() => setSubcontractors(subcontractors.filter(x => x.id !== s.id))}>✕</button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {showSubForm && (
+                  <div style={{ position: "fixed", inset: 0, background: "#00000080", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                    <div style={{ background: "#161B28", border: "1px solid #1E2640", borderRadius: 12, padding: 28, width: 480, maxHeight: "90vh", overflowY: "auto" }}>
+                      <div style={{ fontSize: 14, fontWeight: 600, color: "#FFFFFF", marginBottom: 20 }}>{editSubId ? "Edit" : "Add"} Subcontractor</div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                        {[["Name", "name"], ["Trade / Specialty", "trade"], ["Phone", "phone"], ["Email", "email"]].map(([label, key]) => (
+                          <div key={key}>
+                            <div style={{ fontSize: 10, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5 }}>{label}</div>
+                            <input className="fi" style={{ width: "100%", boxSizing: "border-box" }} value={subForm[key]} onChange={e => setSubForm({ ...subForm, [key]: e.target.value })} />
+                          </div>
+                        ))}
+                        {/* Services / divisions */}
+                        <div>
+                          <div style={{ fontSize: 10, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 8 }}>Works for Division(s)</div>
+                          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                            {[{ id: "fm", label: "Facility Maint.", color: "#7BA7F5" }, { id: "lawn", label: "Lawn", color: "#4CAF82" }, { id: "snow", label: "Snow", color: "#A8C4F8" }].map(sv => {
+                              const checked = (subForm.services || []).includes(sv.id);
+                              return (
+                                <button key={sv.id} onClick={() => {
+                                  const cur = subForm.services || [];
+                                  setSubForm({ ...subForm, services: checked ? cur.filter(x => x !== sv.id) : [...cur, sv.id] });
+                                }} style={{ padding: "6px 14px", borderRadius: 20, border: "1px solid " + (checked ? sv.color : "#1E2640"), background: checked ? sv.color + "25" : "transparent", color: checked ? sv.color : "#3A4560", fontSize: 11, fontWeight: checked ? 600 : 400, cursor: "pointer", fontFamily: "inherit", transition: "all 0.15s" }}>
+                                  {sv.label}
+                                </button>
+                              );
+                            })}
+                          </div>
+                          <div style={{ fontSize: 10, color: "#2A3560", marginTop: 5 }}>Leave blank to include in all divisions</div>
+                        </div>
+                        <div>
+                          <div style={{ fontSize: 10, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5 }}>MSA Status</div>
+                          <select className="fi" style={{ width: "100%" }} value={subForm.msaStatus} onChange={e => setSubForm({ ...subForm, msaStatus: e.target.value })}>
+                            <option value="missing">Missing</option>
+                            <option value="signed">Signed</option>
+                            <option value="expired">Expired</option>
+                          </select>
+                        </div>
+                        <div>
+                          <div style={{ fontSize: 10, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5 }}>COI Expiry Date</div>
+                          <input className="fi" type="date" style={{ width: "100%", boxSizing: "border-box" }} value={subForm.coiExpiry} onChange={e => setSubForm({ ...subForm, coiExpiry: e.target.value })} />
+                        </div>
+                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                          <input type="checkbox" id="w9check" checked={subForm.w9} onChange={e => setSubForm({ ...subForm, w9: e.target.checked })} style={{ width: 16, height: 16, accentColor: buColor.accent }} />
+                          <label htmlFor="w9check" style={{ fontSize: 12, color: "#B8C4E0", cursor: "pointer" }}>W9 on file</label>
+                        </div>
+                        <div>
+                          <div style={{ fontSize: 10, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5 }}>Notes</div>
+                          <textarea className="fi" rows={3} style={{ width: "100%", boxSizing: "border-box", resize: "vertical" }} value={subForm.notes} onChange={e => setSubForm({ ...subForm, notes: e.target.value })} />
+                        </div>
+                      </div>
+                      <div style={{ display: "flex", gap: 8, marginTop: 20 }}>
+                        <button className="btn-ghost" style={{ flex: 1 }} onClick={() => setShowSubForm(false)}>Cancel</button>
+                        <button className="btn-primary" style={{ flex: 1 }} onClick={() => {
+                          if (!subForm.name) return;
+                          if (editSubId) setSubcontractors(subcontractors.map(s => s.id === editSubId ? { ...s, ...subForm } : s));
+                          else setSubcontractors([...subcontractors, { id: "sub" + Date.now(), ...subForm }]);
+                          setShowSubForm(false);
+                        }}>Save</button>
+                      </div>
+                    </div>
+                  </div>
                 )}
-                {subcontractors.map(s => {
-                  const msaColor   = s.msaStatus === "signed" ? "#4ADE80" : s.msaStatus === "expired" ? "#F87171" : "#FCD34D";
-                  const msaLabel   = s.msaStatus === "signed" ? "MSA ✓" : s.msaStatus === "expired" ? "MSA Expired" : "MSA Missing";
-                  const coiDate    = s.coiExpiry ? new Date(s.coiExpiry) : null;
-                  const coiExpired = coiDate && coiDate < new Date();
-                  const coiSoon    = coiDate && !coiExpired && coiDate <= new Date(Date.now() + 30*86400000);
-                  const coiColor   = !coiDate ? "#F87171" : coiExpired ? "#F87171" : coiSoon ? "#FCD34D" : "#4ADE80";
-                  const coiLabel   = !coiDate ? "COI Missing" : coiExpired ? "COI Expired" : coiSoon ? "COI Expiring " + s.coiExpiry : "COI ✓ " + s.coiExpiry;
-                  const w9Color    = s.w9 ? "#4ADE80" : "#F87171";
-                  const assignedJobs = fmJobs.filter(j => j.subcontractorId === s.id);
-                  return (
-                    <div key={s.id} className="opp-row">
-                      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
-                            <div style={{ fontSize: 14, color: "#E8ECF4", fontWeight: 600 }}>{s.name}</div>
-                            {s.trade && <span style={{ fontSize: 10, color: buColor.accent, background: buColor.light, padding: "2px 8px", borderRadius: 10, textTransform: "uppercase", letterSpacing: "0.06em" }}>{s.trade}</span>}
-                          </div>
-                          <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginBottom: 10 }}>
-                            {s.phone && <span style={{ fontSize: 11, color: "#3A4560" }}>📞 {s.phone}</span>}
-                            {s.email && <span style={{ fontSize: 11, color: "#3A4560" }}>✉ {s.email}</span>}
-                            {assignedJobs.length > 0 && <span style={{ fontSize: 11, color: buColor.accent }}>🔨 {assignedJobs.length} active job{assignedJobs.length !== 1 ? "s" : ""}</span>}
-                          </div>
-                          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                            <span style={{ fontSize: 10, fontWeight: 600, color: msaColor, background: msaColor + "15", border: "1px solid " + msaColor + "30", padding: "3px 10px", borderRadius: 10 }}>{msaLabel}</span>
-                            <span style={{ fontSize: 10, fontWeight: 600, color: coiColor, background: coiColor + "15", border: "1px solid " + coiColor + "30", padding: "3px 10px", borderRadius: 10 }}>{coiLabel}</span>
-                            <span style={{ fontSize: 10, fontWeight: 600, color: w9Color, background: w9Color + "15", border: "1px solid " + w9Color + "30", padding: "3px 10px", borderRadius: 10 }}>{s.w9 ? "W9 ✓" : "W9 Missing"}</span>
-                          </div>
-                          {s.notes && <div style={{ fontSize: 11, color: "#3A4560", marginTop: 8, fontStyle: "italic" }}>{s.notes}</div>}
-                        </div>
-                        <div style={{ display: "flex", gap: 5, flexShrink: 0 }}>
-                          <button className="btn-ghost" style={{ fontSize: 11 }} onClick={() => { setEditSubId(s.id); setSubForm({ name: s.name, trade: s.trade, phone: s.phone, email: s.email, msaStatus: s.msaStatus, coiExpiry: s.coiExpiry, w9: s.w9, notes: s.notes }); setShowSubForm(true); }}>✎</button>
-                          <button className="btn-ghost" style={{ fontSize: 11, color: "#F87171", borderColor: "#F8717120" }} onClick={() => setSubcontractors(subcontractors.filter(x => x.id !== s.id))}>✕</button>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
               </div>
-
-              {showSubForm && (
-                <div style={{ position: "fixed", inset: 0, background: "#00000080", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  <div style={{ background: "#161B28", border: "1px solid #1E2640", borderRadius: 12, padding: 28, width: 460, maxHeight: "90vh", overflowY: "auto" }}>
-                    <div style={{ fontSize: 14, fontWeight: 600, color: "#FFFFFF", marginBottom: 20 }}>{editSubId ? "Edit" : "Add"} Subcontractor</div>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                      {[["Name", "name"], ["Trade / Company", "trade"], ["Phone", "phone"], ["Email", "email"]].map(([label, key]) => (
-                        <div key={key}>
-                          <div style={{ fontSize: 10, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5 }}>{label}</div>
-                          <input className="fi" style={{ width: "100%", boxSizing: "border-box" }} value={subForm[key]} onChange={e => setSubForm({ ...subForm, [key]: e.target.value })} />
-                        </div>
-                      ))}
-                      <div>
-                        <div style={{ fontSize: 10, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5 }}>MSA Status</div>
-                        <select className="fi" style={{ width: "100%" }} value={subForm.msaStatus} onChange={e => setSubForm({ ...subForm, msaStatus: e.target.value })}>
-                          <option value="missing">Missing</option>
-                          <option value="signed">Signed</option>
-                          <option value="expired">Expired</option>
-                        </select>
-                      </div>
-                      <div>
-                        <div style={{ fontSize: 10, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5 }}>COI Expiry Date</div>
-                        <input className="fi" type="date" style={{ width: "100%", boxSizing: "border-box" }} value={subForm.coiExpiry} onChange={e => setSubForm({ ...subForm, coiExpiry: e.target.value })} />
-                      </div>
-                      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                        <input type="checkbox" id="w9check" checked={subForm.w9} onChange={e => setSubForm({ ...subForm, w9: e.target.checked })} style={{ width: 16, height: 16, accentColor: buColor.accent }} />
-                        <label htmlFor="w9check" style={{ fontSize: 12, color: "#B8C4E0", cursor: "pointer" }}>W9 on file</label>
-                      </div>
-                      <div>
-                        <div style={{ fontSize: 10, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5 }}>Notes</div>
-                        <textarea className="fi" rows={3} style={{ width: "100%", boxSizing: "border-box", resize: "vertical" }} value={subForm.notes} onChange={e => setSubForm({ ...subForm, notes: e.target.value })} />
-                      </div>
-                    </div>
-                    <div style={{ display: "flex", gap: 8, marginTop: 20 }}>
-                      <button className="btn-ghost" style={{ flex: 1 }} onClick={() => setShowSubForm(false)}>Cancel</button>
-                      <button className="btn-primary" style={{ flex: 1 }} onClick={() => {
-                        if (!subForm.name) return;
-                        if (editSubId) setSubcontractors(subcontractors.map(s => s.id === editSubId ? { ...s, ...subForm } : s));
-                        else setSubcontractors([...subcontractors, { id: "sub" + Date.now(), ...subForm }]);
-                        setShowSubForm(false);
-                      }}>Save</button>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
+            );
+          })()}
 
           {/* ── LAWN BUDGETING ── */}
-          {activeNav === "budgeting" && activeBU === "lawn" && (() => {
+          {activeNav === "bids" && activeBU === "lawn" && (() => {
             const currentSites = lawnSites;
             const totalOur = currentSites.reduce((sum, site) => sum + lawnBidAnnualOur(getLawnBid(site.id)), 0);
             const lockedCount = currentSites.filter(s => { const b = getLawnBid(s.id); return b && b.locked; }).length;
@@ -3129,6 +3231,7 @@ Return ONLY valid JSON, no markdown, no extra text:
 
                               {/* Actions */}
                               <div style={{ display: "flex", gap: 10, marginTop: 16, justifyContent: "flex-end", alignItems: "center" }}>
+                                <button className="btn-ghost" style={{ color: "#60A5FA", borderColor: "#60A5FA20" }} onClick={() => setLawnBidDocSiteId(site.id)}>📄 Generate Bid Doc</button>
                                 {lawnBidMode === "bid" && !isLocked && (
                                   <button className="btn-primary" style={{ background: "#4ADE8020", color: "#4ADE80", border: "1px solid #4ADE8040" }} onClick={() => {
                                     if (!bid) return;
@@ -3157,7 +3260,7 @@ Return ONLY valid JSON, no markdown, no extra text:
           })()}
 
           {/* ── COMING SOON (other nav items) ── */}
-          {!["dashboard", "customers", "jobs", "pipeline", "budgeting", "finance", "sites", "projects", "team", "subcontractors"].includes(activeNav) && (
+          {!["dashboard", "customers", "jobs", "pipeline", "budgeting", "finance", "sites", "projects", "team", "subcontractors", "bids"].includes(activeNav) && (
             <div className="fade-in">
               <div style={{ marginBottom: 28 }}>
                 <div style={{ fontSize: 22, fontWeight: 700, color: "#FFFFFF", textTransform: "uppercase" }}>{navItems.find(n => n.id === activeNav)?.label}</div>
@@ -4679,6 +4782,199 @@ Return ONLY valid JSON, no markdown, no extra text:
                 <div style={{ display: "flex", gap: 8 }}>
                   <button className="btn-ghost" onClick={() => setShowProposal(false)}>Close</button>
                   <button className="btn-primary" onClick={printProposal}>🖨 Print / Save PDF</button>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* ── LAWN BID DOCUMENT MODAL ── */}
+      {lawnBidDocSiteId && (() => {
+        const site = lawnSites.find(s => s.id === lawnBidDocSiteId);
+        if (!site) { setLawnBidDocSiteId(null); return null; }
+        const bid  = getLawnBid(site.id);
+        const co   = companies.find(c => c.id === site.companyId);
+        const sub  = bid?.subcontractorId ? subcontractors.find(s => s.id === bid.subcontractorId) : null;
+        const mapLat = site.lat || 39.9526;
+        const mapLng = site.lng || -75.1652;
+        const mapUrl = `https://maps.googleapis.com/maps/api/staticmap?center=${mapLat},${mapLng}&zoom=18&size=640x320&maptype=satellite&markers=color:red%7C${mapLat},${mapLng}&key=AIzaSyD-9tSrke72PouQMnMX-a7eZSW0jkFMBWY`;
+        const today = new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+
+        const printBidDoc = () => {
+          const el = document.getElementById("lawn-bid-doc-content");
+          if (!el) return;
+          const w = window.open("", "_blank");
+          w.document.write(`<!DOCTYPE html><html><head><title>Lawn Bid Request — ${site.address}</title><style>
+            * { box-sizing: border-box; margin: 0; padding: 0; }
+            body { font-family: Arial, sans-serif; font-size: 11px; color: #000; padding: 28px 36px; }
+            .header { display: flex; justify-content: space-between; align-items: flex-start; padding-bottom: 10px; border-bottom: 2px solid #222; margin-bottom: 16px; }
+            img { max-width: 100%; }
+            table { width: 100%; border-collapse: collapse; font-size: 11px; margin-bottom: 18px; }
+            thead tr { background: #222 !important; color: #fff !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            th { padding: 6px 8px; text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; }
+            td { padding: 8px 8px; border-bottom: 1px solid #e8e8e8; vertical-align: middle; }
+            @media print { body { padding: 14px 24px; } @page { margin: 1cm; } }
+          </style></head><body>${el.innerHTML}</body></html>`);
+          w.document.close();
+          setTimeout(() => w.print(), 400);
+        };
+
+        return (
+          <div style={{ position: "fixed", inset: 0, background: "#00000090", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center" }} onClick={e => { if (e.target === e.currentTarget) setLawnBidDocSiteId(null); }}>
+            <div style={{ background: "#0F1117", border: "1px solid #1E2640", borderRadius: 14, width: "min(820px, 96vw)", maxHeight: "92vh", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+
+              {/* Modal header */}
+              <div style={{ padding: "16px 22px", borderBottom: "1px solid #1E2640", display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>
+                <div>
+                  <div style={{ fontSize: 15, fontWeight: 700, color: "#FFFFFF" }}>📄 Lawn Bid Request Document</div>
+                  <div style={{ fontSize: 11, color: "#3A4560", marginTop: 2 }}>{site.address} · Season {lawnBidSeason}</div>
+                </div>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button className="btn-primary" style={{ background: "#4ADE8020", color: "#4ADE80", border: "1px solid #4ADE8040" }} onClick={printBidDoc}>🖨 Print / Send to Sub</button>
+                  <button className="btn-ghost" onClick={() => setLawnBidDocSiteId(null)}>✕ Close</button>
+                </div>
+              </div>
+
+              {/* Scrollable document preview */}
+              <div style={{ overflowY: "auto", padding: "24px 28px", flex: 1 }}>
+                <div id="lawn-bid-doc-content" style={{ background: "#fff", color: "#000", fontFamily: "Arial, sans-serif", fontSize: 11, padding: "28px 36px", borderRadius: 8, maxWidth: 760, margin: "0 auto" }}>
+
+                  {/* Doc header */}
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", paddingBottom: 10, borderBottom: "2px solid #222", marginBottom: 16 }}>
+                    <div>
+                      <div style={{ fontSize: 18, fontWeight: "bold", textTransform: "uppercase", letterSpacing: "0.04em" }}>Lawn Services Bid Request</div>
+                      <div style={{ fontSize: 11, color: "#555", marginTop: 3 }}>Please complete all applicable service pricing below and return.</div>
+                    </div>
+                    <div style={{ textAlign: "right", fontSize: 10, color: "#444", lineHeight: 1.7 }}>
+                      <div><strong>Date:</strong> {today}</div>
+                      <div><strong>Season:</strong> {lawnBidSeason}</div>
+                      <div><strong>Ref #:</strong> {site.storeNumber || site.id}</div>
+                    </div>
+                  </div>
+
+                  {/* Property info */}
+                  <div style={{ fontSize: 10, fontWeight: "bold", textTransform: "uppercase", letterSpacing: "0.07em", color: "#333", marginBottom: 6, borderBottom: "1px solid #ddd", paddingBottom: 3 }}>Property Information</div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px 24px", marginBottom: 18, fontSize: 11 }}>
+                    <div><span style={{ fontWeight: "bold", color: "#444" }}>Client: </span>{co?.name || "—"}</div>
+                    <div><span style={{ fontWeight: "bold", color: "#444" }}>Store #: </span>{site.storeNumber || "—"}</div>
+                    <div><span style={{ fontWeight: "bold", color: "#444" }}>Address: </span>{site.address || "—"}</div>
+                    <div><span style={{ fontWeight: "bold", color: "#444" }}>Phone: </span>{site.phone || "—"}</div>
+                    <div><span style={{ fontWeight: "bold", color: "#444" }}>Access Code: </span>{site.accessCode || "—"}</div>
+                    <div><span style={{ fontWeight: "bold", color: "#444" }}>Site Notes: </span>{site.notes || "—"}</div>
+                  </div>
+
+                  {/* Subcontractor / vendor fillable section */}
+                  <div style={{ fontSize: 10, fontWeight: "bold", textTransform: "uppercase", letterSpacing: "0.07em", color: "#333", marginBottom: 6, borderBottom: "1px solid #ddd", paddingBottom: 3 }}>Subcontractor / Vendor Information</div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px 24px", marginBottom: 18, fontSize: 11 }}>
+                    {[
+                      ["Company",       sub?.name  || ""],
+                      ["Contact Name",  ""],
+                      ["Phone",         sub?.phone || ""],
+                      ["Email",         sub?.email || ""],
+                      ["Bid Due Date",  ""],
+                      ["Valid Through", ""],
+                    ].map(([label, val]) => (
+                      <div key={label} style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
+                        <span style={{ fontWeight: "bold", color: "#444", whiteSpace: "nowrap" }}>{label}:</span>
+                        <span style={{ flex: 1, borderBottom: "1px solid #bbb", minWidth: 100, paddingBottom: 1, color: val ? "#000" : "transparent" }}>{val || "."}</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Satellite / aerial map */}
+                  <div style={{ fontSize: 10, fontWeight: "bold", textTransform: "uppercase", letterSpacing: "0.07em", color: "#333", marginBottom: 6, borderBottom: "1px solid #ddd", paddingBottom: 3 }}>Property Aerial View</div>
+                  <div style={{ width: "100%", height: 240, background: "#e8ecf5", border: "1px solid #ccc", marginBottom: 18, overflow: "hidden", position: "relative", borderRadius: 4 }}>
+                    <img
+                      src={mapUrl}
+                      alt={`Aerial map of ${site.address}`}
+                      style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+                      onError={e => { e.target.style.display = "none"; document.getElementById("map-fallback-" + site.id).style.display = "flex"; }}
+                    />
+                    <div id={"map-fallback-" + site.id} style={{ display: "none", position: "absolute", inset: 0, alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 8, background: "#eef2fb", color: "#555" }}>
+                      <div style={{ fontSize: 32 }}>🗺️</div>
+                      <div style={{ fontSize: 13, fontWeight: 600 }}>{site.address}</div>
+                      <div style={{ fontSize: 11, color: "#888" }}>Lat {mapLat.toFixed(5)} · Lng {mapLng.toFixed(5)}</div>
+                      <a href={`https://www.google.com/maps?q=${mapLat},${mapLng}`} target="_blank" rel="noreferrer" style={{ fontSize: 10, color: "#3B6FE8", marginTop: 4 }}>Open in Google Maps ↗</a>
+                    </div>
+                  </div>
+
+                  {/* Services pricing table */}
+                  <div style={{ fontSize: 10, fontWeight: "bold", textTransform: "uppercase", letterSpacing: "0.07em", color: "#333", marginBottom: 4, borderBottom: "1px solid #ddd", paddingBottom: 3 }}>Services &amp; Pricing</div>
+                  <div style={{ fontSize: 10, color: "#777", marginBottom: 10, fontStyle: "italic" }}>Enter your price for each applicable service. Leave blank if not offering that service.</div>
+                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11, marginBottom: 18 }}>
+                    <thead>
+                      <tr style={{ background: "#222", color: "#fff" }}>
+                        {["Service", "Frequency", "Billing Unit", "Unit Price ($)", "Est. Annual ($)", "Notes"].map((h, i) => (
+                          <th key={h} style={{ padding: "7px 8px", textAlign: i >= 3 ? "right" : "left", fontSize: 10, textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600, color: "#fff" }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {LAWN_SERVICES.map((svc, i) => {
+                        const sv = bid?.services?.[svc.id];
+                        const unitLabel = svc.unit === "per_cut" ? "Per Cut" : svc.unit === "monthly" ? "Per Month" : "Flat / Season";
+                        return (
+                          <tr key={svc.id} style={{ borderBottom: "1px solid #e0e0e0", background: i % 2 === 0 ? "#fff" : "#f9fafb" }}>
+                            <td style={{ padding: "9px 8px", fontWeight: 500, color: "#111" }}>{svc.label}</td>
+                            <td style={{ padding: "9px 8px" }}>
+                              <span style={{ display: "inline-block", background: "#eee", borderRadius: 3, padding: "1px 7px", fontSize: 10, color: "#555" }}>{svc.freq}</span>
+                            </td>
+                            <td style={{ padding: "9px 8px", fontSize: 10, color: "#666" }}>{unitLabel}</td>
+                            {/* Unit price — blank writeable line */}
+                            <td style={{ padding: "9px 8px", textAlign: "right" }}>
+                              <span style={{ display: "inline-block", borderBottom: "1.5px solid #aaa", width: 85, minHeight: 15 }}>&nbsp;</span>
+                            </td>
+                            {/* Est. annual — blank writeable line */}
+                            <td style={{ padding: "9px 8px", textAlign: "right" }}>
+                              <span style={{ display: "inline-block", borderBottom: "1.5px solid #aaa", width: 85, minHeight: 15 }}>&nbsp;</span>
+                            </td>
+                            {/* Notes — blank writeable line */}
+                            <td style={{ padding: "9px 8px" }}>
+                              <span style={{ display: "inline-block", borderBottom: "1px solid #ccc", width: "100%", minHeight: 15 }}>&nbsp;</span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                      {/* Total row */}
+                      <tr style={{ background: "#f0f0f0", borderTop: "2px solid #888" }}>
+                        <td colSpan={3} style={{ padding: "9px 8px", fontWeight: "bold", fontSize: 11 }}>Total Estimated Annual Cost</td>
+                        <td style={{ padding: "9px 8px", textAlign: "right" }}>&nbsp;</td>
+                        <td style={{ padding: "9px 8px", textAlign: "right" }}>
+                          <span style={{ display: "inline-block", borderBottom: "2px solid #555", width: 85, fontWeight: "bold", minHeight: 15 }}>&nbsp;</span>
+                        </td>
+                        <td />
+                      </tr>
+                    </tbody>
+                  </table>
+
+                  {/* Notes box */}
+                  <div style={{ fontSize: 10, fontWeight: "bold", textTransform: "uppercase", letterSpacing: "0.07em", color: "#333", marginBottom: 6, borderBottom: "1px solid #ddd", paddingBottom: 3 }}>Additional Notes / Scope Clarifications</div>
+                  <div style={{ border: "1px solid #ddd", borderRadius: 3, minHeight: 64, padding: "8px 10px", fontSize: 11, color: bid?.notes ? "#111" : "#bbb", marginBottom: 20, lineHeight: 1.6 }}>
+                    {bid?.notes || "Enter any site-specific conditions, access notes, or scope questions here…"}
+                  </div>
+
+                  {/* Signature block */}
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 48, marginTop: 28 }}>
+                    {[["Submitted by (Subcontractor)", "Printed Name / Title"], ["Reviewed by (Our Company)", "Printed Name / Title"]].map(([sig, name]) => (
+                      <div key={sig}>
+                        <div style={{ borderBottom: "1px solid #888", marginBottom: 4, height: 32 }} />
+                        <div style={{ fontSize: 9, color: "#666", textTransform: "uppercase", letterSpacing: "0.06em" }}>{sig}</div>
+                        <div style={{ borderBottom: "1px solid #ccc", marginTop: 14, marginBottom: 4, height: 24 }} />
+                        <div style={{ fontSize: 9, color: "#666", textTransform: "uppercase", letterSpacing: "0.06em" }}>{name}</div>
+                        <div style={{ borderBottom: "1px solid #ccc", marginTop: 14, marginBottom: 4, height: 24 }} />
+                        <div style={{ fontSize: 9, color: "#666", textTransform: "uppercase", letterSpacing: "0.06em" }}>Date</div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Footer */}
+                  <div style={{ marginTop: 28, borderTop: "1px solid #ddd", paddingTop: 10, display: "flex", justifyContent: "space-between", fontSize: 9, color: "#999" }}>
+                    <span>Confidential — For Bidding Purposes Only</span>
+                    <span>Season {lawnBidSeason} · Ref #{site.storeNumber || site.id} · Generated {today}</span>
+                  </div>
+
                 </div>
               </div>
 
