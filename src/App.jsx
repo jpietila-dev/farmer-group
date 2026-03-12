@@ -3422,58 +3422,6 @@ Return ONLY valid JSON, no markdown, no extra text:
             );
           })()}
 
-                              {/* Multi-vendor picker */}
-                              <div style={{ marginBottom: 18 }}>
-                                <div style={{ fontSize: 10, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 8 }}>Vendors Sent Bid To</div>
-                                {/* Add vendor dropdown */}
-                                {canEdit && (
-                                  <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
-                                    <select defaultValue="" onChange={e => {
-                                      const subId = e.target.value;
-                                      if (!subId) return;
-                                      const cur = bid?.subcontractorIds || [];
-                                      if (!cur.includes(subId)) upsertLawnBid(site.id, b => ({ ...b, subcontractorIds: [...(b.subcontractorIds||[]), subId] }));
-                                      e.target.value = "";
-                                    }} style={{ flex: 1, background: "#141824", border: "1px solid #1E2640", borderRadius: 6, padding: "7px 10px", fontSize: 12, color: "#E8ECF4", boxSizing: "border-box" }}>
-                                      <option value="">+ Add vendor…</option>
-                                      {subcontractors.filter(s => !(bid?.subcontractorIds||[]).includes(s.id)).map(s => <option key={s.id} value={s.id}>{s.name}{s.trade ? " — " + s.trade : ""}</option>)}
-                                    </select>
-                                  </div>
-                                )}
-                                {/* Vendor tag list */}
-                                {(bid?.subcontractorIds || []).length === 0 && (
-                                  <div style={{ fontSize: 11, color: "#3A4560", fontStyle: "italic" }}>No vendors assigned yet</div>
-                                )}
-                                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                                  {(bid?.subcontractorIds || []).map(subId => {
-                                    const s = subcontractors.find(x => x.id === subId);
-                                    if (!s) return null;
-                                    const isSelected = bid?.selectedSubId === subId;
-                                    return (
-                                      <div key={subId} style={{ display: "flex", alignItems: "center", gap: 8, background: isSelected ? "#4ADE8015" : "#141824", border: "1px solid " + (isSelected ? "#4ADE8040" : "#1E2640"), borderRadius: 8, padding: "8px 12px" }}>
-                                        <div style={{ flex: 1, minWidth: 0 }}>
-                                          <div style={{ fontSize: 12, color: "#E8ECF4", fontWeight: isSelected ? 600 : 400 }}>🔧 {s.name}{s.trade ? <span style={{ color: "#3A4560", fontWeight: 400 }}> — {s.trade}</span> : ""}</div>
-                                          {s.phone && <div style={{ fontSize: 10, color: "#3A4560", marginTop: 2 }}>{s.phone}{s.email ? " · " + s.email : ""}</div>}
-                                        </div>
-                                        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                                          {isSelected
-                                            ? <span style={{ fontSize: 10, color: "#4ADE80", background: "#4ADE8015", border: "1px solid #4ADE8030", borderRadius: 4, padding: "2px 8px", fontWeight: 600 }}>✓ Contracted Sub</span>
-                                            : canEdit && <button onClick={() => upsertLawnBid(site.id, b => ({ ...b, selectedSubId: subId }))} style={{ fontSize: 10, color: "#60A5FA", background: "#60A5FA10", border: "1px solid #60A5FA30", borderRadius: 4, padding: "2px 8px", cursor: "pointer", fontFamily: "inherit" }}>Select as Sub</button>
-                                          }
-                                          {canEdit && (
-                                            <button onClick={() => upsertLawnBid(site.id, b => ({ ...b, subcontractorIds: (b.subcontractorIds||[]).filter(x => x !== subId), selectedSubId: b.selectedSubId === subId ? "" : b.selectedSubId }))} style={{ fontSize: 10, color: "#F87171", background: "none", border: "none", cursor: "pointer", padding: "2px 4px" }}>✕</button>
-                                          )}
-                                        </div>
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-                                {(bid?.subcontractorIds||[]).length > 0 && !bid?.selectedSubId && (
-                                  <div style={{ fontSize: 10, color: "#FCD34D", marginTop: 6, display: "flex", alignItems: "center", gap: 4 }}>⚠ Select a contracted sub above before moving to "Contracted" status</div>
-                                )}
-                              </div>
-
-
           {/* ── COMING SOON (other nav items) ── */}
           {!["dashboard", "customers", "jobs", "pipeline", "budgeting", "finance", "sites", "projects", "team", "subcontractors", "bids", "active-sites"].includes(activeNav) && (
             <div className="fade-in">
