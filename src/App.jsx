@@ -858,7 +858,7 @@ export default function App() {
   const initLawnBid = (siteId) => {
     const services = {};
     LAWN_SERVICES.forEach(s => { services[s.id] = { subPrice: 0, ourPrice: 0, included: false }; });
-    return { id: "lb_" + siteId + "_" + Date.now(), siteId, season: lawnBidSeason, services, locked: false, lockedDate: null, subcontractorIds: [], selectedSubId: "", notes: "", status: "bidding", subToken: null, subSentAt: null, ownerApprovedDate: null };
+    return { id: "lb_" + siteId + "_" + Date.now(), siteId, season: lawnBidSeason, services, locked: false, lockedDate: null, subcontractorIds: [], selectedSubId: "", notes: "", status: "bidding", subToken: null, subSentAt: null, ownerApprovedDate: null, subcontractUrl: "", ownerContractUrl: "" };
   };
 
   const getLawnBid = (siteId) => lawnBids.find(b => b.siteId === siteId && b.season === lawnBidSeason) || null;
@@ -2132,7 +2132,7 @@ Return ONLY valid JSON, no markdown, no extra text:
           )}
 
           {/* ── SITES (CI / FM) ── */}
-          {activeNav === "sites" && (activeBU === "capital" || activeBU === "facility" || activeBU === "lawn" || activeBU === "snow" || activeBU === "all") && (
+          {activeNav === "sites" && (activeBU === "capital" || activeBU === "facility" || activeBU === "all") && (
             <div className="fade-in" style={{ display: "flex", flexDirection: "column", gap: 22 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div>
@@ -3263,6 +3263,14 @@ Return ONLY valid JSON, no markdown, no extra text:
                                 <div>
                                   <div style={{ fontSize: 10, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5 }}>Notes</div>
                                   <input disabled={!canEdit} value={bid?.notes || ""} onChange={e => upsertLawnBid(site.id, b => ({ ...b, notes: e.target.value }))} placeholder="Any site-specific notes…" style={{ width: "100%", background: canEdit ? "#141824" : "#0A0D16", border: "1px solid #1E2640", borderRadius: 6, padding: "7px 10px", fontSize: 12, color: "#E8ECF4", opacity: canEdit ? 1 : 0.6, boxSizing: "border-box" }} />
+                                </div>
+                                <div>
+                                  <div style={{ fontSize: 10, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5 }}>📄 Subcontract URL</div>
+                                  <input value={bid?.subcontractUrl || ""} onChange={e => upsertLawnBid(site.id, b => ({ ...b, subcontractUrl: e.target.value }))} placeholder="https://…" style={{ width: "100%", background: "#141824", border: "1px solid #1E2640", borderRadius: 6, padding: "7px 10px", fontSize: 12, color: "#60A5FA", boxSizing: "border-box" }} />
+                                </div>
+                                <div>
+                                  <div style={{ fontSize: 10, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5 }}>📋 Owner Contract URL</div>
+                                  <input value={bid?.ownerContractUrl || ""} onChange={e => upsertLawnBid(site.id, b => ({ ...b, ownerContractUrl: e.target.value }))} placeholder="https://…" style={{ width: "100%", background: "#141824", border: "1px solid #1E2640", borderRadius: 6, padding: "7px 10px", fontSize: 12, color: "#A78BFA", boxSizing: "border-box" }} />
                                 </div>
                               </div>
 
@@ -4656,46 +4664,136 @@ Return ONLY valid JSON, no markdown, no extra text:
       )}
 
       {/* ── LAWN/SNOW SITE SIDE PANEL ── */}
-      {selectedLsSite && (
-        <div className="side-panel slide-in">
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-            <div style={{ fontSize: 13, fontWeight: 600, color: "#FFFFFF", textTransform: "uppercase", letterSpacing: "0.06em" }}>{activeBU === "lawn" ? "🌿 Lawn Site" : "❄️ Snow Site"}</div>
-            <button className="btn-ghost" onClick={() => setSelectedLsSite(null)}>✕</button>
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <div style={{ width: 12, height: 12, borderRadius: "50%", background: companyColorMap[selectedLsSite.companyId] || "#3A4560", flexShrink: 0 }} />
-              <div>
-                <div style={{ fontSize: 15, color: "#E8ECF4", fontWeight: 600 }}>{selectedLsSite.storeNumber ? "Store #" + selectedLsSite.storeNumber : selectedLsSite.address}</div>
-                {(() => { const co = companies.find(c => c.id === selectedLsSite.companyId); return co ? <div style={{ fontSize: 11, color: "#3B6FE8" }}>{co.name}</div> : null; })()}
-              </div>
+      {selectedLsSite && (() => {
+        const slCo  = companies.find(c => c.id === selectedLsSite.companyId);
+        const slBid = getLawnBid(selectedLsSite.id);
+        const slSub = slBid?.selectedSubId ? subcontractors.find(x => x.id === slBid.selectedSubId) : slBid?.subcontractorIds?.[0] ? subcontractors.find(x => x.id === slBid.subcontractorIds[0]) : null;
+        const slStatus = slBid?.status || "bidding";
+        const slStatusMeta = LAWN_BID_STATUSES.find(s => s.id === slStatus) || LAWN_BID_STATUSES[0];
+        const STAGES = [
+          { id: "bidding",        label: "Bidding",        color: "#FCD34D" },
+          { id: "proposed",       label: "Proposed",       color: "#60A5FA" },
+          { id: "owner_approved", label: "Owner Approved", color: "#4ADE80" },
+          { id: "contracted",     label: "Contracted",     color: "#A78BFA" },
+        ];
+        const stageIdx = STAGES.findIndex(s => s.id === slStatus);
+        return (
+          <div className="side-panel slide-in">
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: "#FFFFFF", textTransform: "uppercase", letterSpacing: "0.06em" }}>{activeBU === "lawn" ? "🌿 Lawn Site" : "❄️ Snow Site"}</div>
+              <button className="btn-ghost" onClick={() => setSelectedLsSite(null)}>✕</button>
             </div>
-            <div style={{ background: "#0A0D16", borderRadius: 8, padding: "14px", border: "1px solid #1E2640", display: "flex", flexDirection: "column", gap: 10 }}>
-              {[
-                { label: "Address",     value: selectedLsSite.address     || "—" },
-                { label: "Phone",       value: selectedLsSite.phone        || "—" },
-                { label: "Coordinates", value: selectedLsSite.lat ? selectedLsSite.lat.toFixed(4) + ", " + selectedLsSite.lng.toFixed(4) : "Not geocoded" },
-              ].map(r => (
-                <div key={r.label} style={{ display: "flex", justifyContent: "space-between" }}>
-                  <span style={{ fontSize: 11, color: "#3A4560" }}>{r.label}</span>
-                  <span style={{ fontSize: 11, color: "#B8C4E0" }}>{r.value}</span>
+            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+
+              {/* Site identity */}
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <div style={{ width: 12, height: 12, borderRadius: "50%", background: companyColorMap[selectedLsSite.companyId] || "#3A4560", flexShrink: 0 }} />
+                <div>
+                  <div style={{ fontSize: 15, color: "#E8ECF4", fontWeight: 600 }}>{selectedLsSite.storeNumber ? "Store #" + selectedLsSite.storeNumber : selectedLsSite.address}</div>
+                  {slCo && <div style={{ fontSize: 11, color: "#3B6FE8" }}>{slCo.name}</div>}
                 </div>
-              ))}
-            </div>
-            {selectedLsSite.accessCode && (
-              <div style={{ background: "#FCD34D15", border: "1px solid #FCD34D40", borderRadius: 8, padding: "12px 14px" }}>
-                <div style={{ fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "#3A4560", marginBottom: 4 }}>Access Code</div>
-                <div style={{ fontSize: 18, fontWeight: 700, color: "#FCD34D", letterSpacing: "0.15em" }}>{selectedLsSite.accessCode}</div>
               </div>
-            )}
-            {selectedLsSite.notes && <div style={{ fontSize: 12, color: "#6B7694", lineHeight: 1.6, background: "#0A0D16", padding: "10px 12px", borderRadius: 6, border: "1px solid #1E2640" }}>{selectedLsSite.notes}</div>}
-            <div style={{ display: "flex", gap: 8 }}>
-              <button className="btn-ghost" style={{ flex: 1 }} onClick={() => { openEditLsSite(selectedLsSite); setSelectedLsSite(null); }}>✎ Edit</button>
-              <button className="btn-ghost" style={{ color: "#F87171", borderColor: "#F8717120" }} onClick={() => deleteLsSite(selectedLsSite.id)}>✕</button>
+
+              {/* Site details */}
+              <div style={{ background: "#0A0D16", borderRadius: 8, padding: "12px 14px", border: "1px solid #1E2640", display: "flex", flexDirection: "column", gap: 8 }}>
+                {[
+                  { label: "Address",     value: selectedLsSite.address || "—" },
+                  { label: "Phone",       value: selectedLsSite.phone   || "—" },
+                  { label: "Coordinates", value: selectedLsSite.lat ? selectedLsSite.lat.toFixed(4) + ", " + selectedLsSite.lng.toFixed(4) : "Not geocoded" },
+                ].map(r => (
+                  <div key={r.label} style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+                    <span style={{ fontSize: 11, color: "#3A4560", flexShrink: 0 }}>{r.label}</span>
+                    <span style={{ fontSize: 11, color: "#B8C4E0", textAlign: "right", wordBreak: "break-all" }}>{r.value}</span>
+                  </div>
+                ))}
+              </div>
+
+              {/* Bid stage pipeline */}
+              {slBid && (
+                <div style={{ background: "#0A0D16", borderRadius: 8, padding: "12px 14px", border: "1px solid #1E2640" }}>
+                  <div style={{ fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "#3A4560", marginBottom: 10 }}>Bid Stage</div>
+                  <div style={{ display: "flex", gap: 0, alignItems: "center" }}>
+                    {STAGES.map((st, i) => {
+                      const active = i <= stageIdx;
+                      return (
+                        <div key={st.id} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
+                          <div style={{ display: "flex", alignItems: "center", width: "100%" }}>
+                            {i > 0 && <div style={{ flex: 1, height: 2, background: active ? st.color : "#1E2640" }} />}
+                            <div style={{ width: 10, height: 10, borderRadius: "50%", background: i <= stageIdx ? STAGES[Math.min(stageIdx, i)].color : "#1E2640", border: "2px solid " + (i === stageIdx ? STAGES[stageIdx].color : "#1E2640"), flexShrink: 0 }} />
+                            {i < STAGES.length - 1 && <div style={{ flex: 1, height: 2, background: i < stageIdx ? STAGES[stageIdx].color : "#1E2640" }} />}
+                          </div>
+                          <div style={{ fontSize: 8, color: i === stageIdx ? STAGES[stageIdx].color : "#2A3560", letterSpacing: "0.06em", textAlign: "center", lineHeight: 1.2 }}>{st.label.toUpperCase()}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div style={{ marginTop: 10, display: "flex", alignItems: "center", gap: 6 }}>
+                    <span style={{ fontSize: 10, padding: "3px 8px", borderRadius: 4, background: slStatusMeta.color + "20", color: slStatusMeta.color, fontWeight: 600 }}>{slStatusMeta.label}</span>
+                    {slBid.locked && <span style={{ fontSize: 10, color: "#A78BFA", background: "#A78BFA15", padding: "3px 8px", borderRadius: 4 }}>🔒 Locked</span>}
+                  </div>
+                </div>
+              )}
+              {!slBid && (
+                <div style={{ background: "#0A0D16", borderRadius: 8, padding: "10px 14px", border: "1px solid #1E2640", fontSize: 11, color: "#3A4560", textAlign: "center" }}>No bid started — go to Bids tab to create one</div>
+              )}
+
+              {/* Subcontractor */}
+              <div style={{ background: "#0A0D16", borderRadius: 8, padding: "12px 14px", border: "1px solid #1E2640" }}>
+                <div style={{ fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "#3A4560", marginBottom: 8 }}>Subcontractor</div>
+                {slSub ? (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: "#E8ECF4" }}>{slSub.name}</div>
+                    {slSub.phone && <div style={{ fontSize: 11, color: "#3A4560" }}>📞 {slSub.phone}</div>}
+                    {slSub.email && <div style={{ fontSize: 11, color: "#3B6FE8" }}>✉ {slSub.email}</div>}
+                    <div style={{ display: "flex", gap: 6, marginTop: 2 }}>
+                      {slSub.msaStatus && <span style={{ fontSize: 9, padding: "2px 7px", borderRadius: 3, background: slSub.msaStatus === "signed" ? "#4ADE8020" : "#FCD34D20", color: slSub.msaStatus === "signed" ? "#4ADE80" : "#FCD34D" }}>MSA: {slSub.msaStatus}</span>}
+                      {slSub.coiExpiry && <span style={{ fontSize: 9, padding: "2px 7px", borderRadius: 3, background: "#60A5FA15", color: "#60A5FA" }}>COI: {slSub.coiExpiry}</span>}
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ fontSize: 11, color: "#3A4560" }}>No contractor assigned</div>
+                )}
+              </div>
+
+              {/* Contract links */}
+              {slBid && (
+                <div style={{ background: "#0A0D16", borderRadius: 8, padding: "12px 14px", border: "1px solid #1E2640" }}>
+                  <div style={{ fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "#3A4560", marginBottom: 8 }}>Contracts</div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+                    {slBid.subcontractUrl ? (
+                      <a href={slBid.subcontractUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, color: "#60A5FA", textDecoration: "none", display: "flex", alignItems: "center", gap: 5 }}>
+                        📄 Subcontract <span style={{ fontSize: 10, color: "#3A4560" }}>→</span>
+                      </a>
+                    ) : (
+                      <div style={{ fontSize: 11, color: "#3A4560" }}>📄 Subcontract — not uploaded</div>
+                    )}
+                    {slBid.ownerContractUrl ? (
+                      <a href={slBid.ownerContractUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, color: "#A78BFA", textDecoration: "none", display: "flex", alignItems: "center", gap: 5 }}>
+                        📋 Owner Contract <span style={{ fontSize: 10, color: "#3A4560" }}>→</span>
+                      </a>
+                    ) : (
+                      <div style={{ fontSize: 11, color: "#3A4560" }}>📋 Owner Contract — not uploaded</div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {selectedLsSite.accessCode && (
+                <div style={{ background: "#FCD34D15", border: "1px solid #FCD34D40", borderRadius: 8, padding: "12px 14px" }}>
+                  <div style={{ fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "#3A4560", marginBottom: 4 }}>Access Code</div>
+                  <div style={{ fontSize: 18, fontWeight: 700, color: "#FCD34D", letterSpacing: "0.15em" }}>{selectedLsSite.accessCode}</div>
+                </div>
+              )}
+              {selectedLsSite.notes && <div style={{ fontSize: 12, color: "#6B7694", lineHeight: 1.6, background: "#0A0D16", padding: "10px 12px", borderRadius: 6, border: "1px solid #1E2640" }}>{selectedLsSite.notes}</div>}
+
+              <div style={{ display: "flex", gap: 8 }}>
+                <button className="btn-ghost" style={{ flex: 1 }} onClick={() => { openEditLsSite(selectedLsSite); setSelectedLsSite(null); }}>✎ Edit</button>
+                <button className="btn-ghost" style={{ color: "#F87171", borderColor: "#F8717120" }} onClick={() => deleteLsSite(selectedLsSite.id)}>✕</button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* ── LAWN/SNOW SITE FORM ── */}
       {showLsSiteForm && (
