@@ -2450,58 +2450,60 @@ Return ONLY valid JSON, no markdown, no extra text:
                   </div>
                 </div>
 
-                {/* Sites list */}
-                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                  {filteredSites.map(site => {
+                {/* Excel-style sites table */}
+                <div style={{ background: "#0A0D16", border: "1px solid #1E2640", borderRadius: 10, overflow: "hidden" }}>
+                  {/* Column headers */}
+                  <div style={{ display: "grid", gridTemplateColumns: "28px 140px 1fr 120px 110px 90px 80px 70px", gap: 0, padding: "8px 12px", borderBottom: "2px solid #1E2640", background: "#080B14" }}>
+                    {["", "Company", "Address", "Phone", "Contractor", "Bid Status", "Annual", ""].map((h, i) => (
+                      <div key={i} style={{ fontSize: 9, color: "#3A4560", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", paddingRight: 8 }}>{h}</div>
+                    ))}
+                  </div>
+                  {/* Rows */}
+                  {filteredSites.length === 0 ? (
+                    <div style={{ textAlign: "center", padding: "40px", color: "#2A3560", fontSize: 12 }}>No sites yet — add your first one</div>
+                  ) : filteredSites.map((site, idx) => {
                     const co = companies.find(c => c.id === site.companyId);
                     const bid = activeBU === "lawn" ? getLawnBid(site.id) : null;
                     const bidStatus = bid ? LAWN_BID_STATUSES.find(s => s.id === bid.status) : null;
                     const sub = bid?.selectedSubId ? subcontractors.find(s => s.id === bid.selectedSubId)
-                             : (bid?.subcontractorIds||[]).length > 0 ? subcontractors.find(s => s.id === bid.subcontractorIds[0])
-                             : null;
+                             : (bid?.subcontractorIds||[]).length > 0 ? subcontractors.find(s => s.id === bid.subcontractorIds[0]) : null;
                     const annualVal = bid ? lawnBidAnnualOur(bid) : 0;
                     const contracted = isContracted(site);
-                    const statusDotColor = activeBU === "lawn" ? (contracted ? "#4ADE80" : "#F87171") : (companyColorMap[site.companyId] || "#3A4560");
+                    const dotColor = activeBU === "lawn" ? (contracted ? "#4ADE80" : bid ? "#FCD34D" : "#3A4560") : (companyColorMap[site.companyId] || "#3A4560");
                     return (
-                      <div key={site.id} className="opp-row" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderLeft: activeBU === "lawn" ? "3px solid " + statusDotColor : undefined }} onClick={() => setSelectedLsSite(site)}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 12, flex: 1, minWidth: 0 }}>
-                          <div style={{ width: 10, height: 10, borderRadius: "50%", background: statusDotColor, flexShrink: 0 }} />
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontSize: 13, color: "#E8ECF4", fontWeight: 600 }}>{site.storeNumber ? "Store #" + site.storeNumber : site.address}</div>
-                            <div style={{ display: "flex", gap: 10, marginTop: 2, alignItems: "center", flexWrap: "wrap" }}>
-                              {co && <span style={{ fontSize: 11, color: "#3B6FE8" }}>{co.name}</span>}
-                              {site.address && site.storeNumber && <span style={{ fontSize: 11, color: "#3A4560" }}>📍 {site.address}</span>}
-                              {site.phone && <span style={{ fontSize: 11, color: "#3A4560" }}>📞 {site.phone}</span>}
-                              {!site.lat && <span style={{ fontSize: 10, color: "#F87171" }}>⚠ No coordinates</span>}
-                            </div>
-                            {/* Contractor + coverage row — lawn only */}
-                            {activeBU === "lawn" && (
-                              <div style={{ display: "flex", gap: 8, marginTop: 4, alignItems: "center", flexWrap: "wrap" }}>
-                                {sub
-                                  ? <span style={{ fontSize: 10, color: "#A78BFA", background: "#A78BFA15", border: "1px solid #A78BFA30", borderRadius: 4, padding: "2px 8px", fontWeight: 600 }}>🔧 {sub.name}</span>
-                                  : <span style={{ fontSize: 10, color: "#F87171", background: "#F8717115", border: "1px solid #F8717130", borderRadius: 4, padding: "2px 8px" }}>⚠ No contractor assigned</span>
-                                }
-                                {bid?.subSentAt && <span style={{ fontSize: 10, color: "#3A4560" }}>Sent {new Date(bid.subSentAt).toLocaleDateString()}</span>}
-                              </div>
-                            )}
-                          </div>
+                      <div key={site.id} onClick={() => setSelectedLsSite(site)} style={{ display: "grid", gridTemplateColumns: "28px 140px 1fr 120px 110px 90px 80px 70px", gap: 0, padding: "9px 12px", borderBottom: "1px solid #1E264060", background: idx % 2 === 0 ? "#0A0D16" : "#0D1020", cursor: "pointer", transition: "background 0.1s" }}
+                        onMouseEnter={e => e.currentTarget.style.background = "#141824"}
+                        onMouseLeave={e => e.currentTarget.style.background = idx % 2 === 0 ? "#0A0D16" : "#0D1020"}
+                      >
+                        <div style={{ display: "flex", alignItems: "center" }}>
+                          <div style={{ width: 8, height: 8, borderRadius: "50%", background: dotColor, flexShrink: 0 }} />
                         </div>
-                        <div style={{ display: "flex", gap: 8, alignItems: "center", flexShrink: 0 }}>
-                          {activeBU === "lawn" && (
-                            <span style={{ fontSize: 10, fontWeight: 600, color: contracted ? "#4ADE80" : "#F87171", background: (contracted ? "#4ADE80" : "#F87171") + "15", border: "1px solid " + (contracted ? "#4ADE80" : "#F87171") + "30", borderRadius: 5, padding: "3px 8px", whiteSpace: "nowrap" }}>
-                              {contracted ? "✓ Contracted" : bidStatus ? bidStatus.label : "⚠ No Bid"}
-                            </span>
-                          )}
-                          {annualVal > 0 && <span style={{ fontSize: 12, fontWeight: 700, color: "#4ADE80", whiteSpace: "nowrap" }}>${Math.round(annualVal).toLocaleString()}/yr</span>}
-                          <div style={{ display: "flex", gap: 5 }} onClick={e => e.stopPropagation()}>
-                            <button className="btn-ghost" style={{ fontSize: 11 }} onClick={() => openEditLsSite(site)}>✎</button>
-                            <button className="btn-ghost" style={{ fontSize: 11, color: "#F87171", borderColor: "#F8717120" }} onClick={() => deleteLsSite(site.id)}>✕</button>
-                          </div>
+                        <div style={{ fontSize: 12, color: "#B8C4E0", fontWeight: 500, paddingRight: 8, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={co?.name}>{co?.name || "—"}</div>
+                        <div style={{ fontSize: 11, color: "#6B7694", paddingRight: 8, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={site.address}>{site.storeNumber ? <span style={{ color: "#E8ECF4", fontWeight: 600 }}>#{site.storeNumber} </span> : null}{site.address || "—"}</div>
+                        <div style={{ fontSize: 11, color: "#4A5270", paddingRight: 8 }}>{site.phone || "—"}</div>
+                        <div style={{ fontSize: 10, paddingRight: 8, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {sub ? <span style={{ color: "#A78BFA" }}>{sub.name}</span> : <span style={{ color: "#2A3560" }}>None</span>}
+                        </div>
+                        <div style={{ fontSize: 10, paddingRight: 8 }}>
+                          {activeBU === "lawn"
+                            ? contracted
+                              ? <span style={{ color: "#4ADE80", fontWeight: 600 }}>Contracted</span>
+                              : bidStatus
+                                ? <span style={{ color: bidStatus.color }}>{bidStatus.label}</span>
+                                : <span style={{ color: "#2A3560" }}>No Bid</span>
+                            : null
+                          }
+                        </div>
+                        <div style={{ fontSize: 11, color: annualVal > 0 ? "#4ADE80" : "#2A3560", fontWeight: annualVal > 0 ? 700 : 400, paddingRight: 8 }}>
+                          {annualVal > 0 ? "$" + Math.round(annualVal / 1000) + "k" : "—"}
+                        </div>
+                        <div style={{ display: "flex", gap: 4 }} onClick={e => e.stopPropagation()}>
+                          <button className="btn-ghost" style={{ fontSize: 10, padding: "2px 6px" }} onClick={() => openEditLsSite(site)}>✎</button>
+                          <button className="btn-ghost" style={{ fontSize: 10, padding: "2px 6px", color: "#F87171", borderColor: "#F8717120" }} onClick={() => deleteLsSite(site.id)}>✕</button>
                         </div>
                       </div>
                     );
                   })}
-                  {filteredSites.length === 0 && <div style={{ textAlign: "center", padding: "48px", color: "#2A3560", fontSize: 12, background: "#161B28", borderRadius: 10, border: "1px solid #1E2640" }}>No sites yet — add your first one</div>}
                 </div>
               </div>
             );
