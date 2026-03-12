@@ -819,6 +819,7 @@ export default function App() {
   const [editLsSiteId,     setEditLsSiteId]     = useState(null);
   const [lsSiteForm,       setLsSiteForm]       = useState({ companyId: "", storeNumber: "", address: "", phone: "", accessCode: "", notes: "", lat: "", lng: "" });
   const [lsGeocoding,      setLsGeocoding]      = useState(false);
+  const [geocodeAllProgress, setGeocodeAllProgress] = useState(null); // { done, total } or null
   const [mapLoaded,        setMapLoaded]        = useState(false);
   const [lsMapFilter,      setLsMapFilter]      = useState("all");
   const [expandedCompany,  setExpandedCompany]  = useState(null);
@@ -1019,6 +1020,29 @@ export default function App() {
     setShowSiteForm(false);
   };
   const deleteSite = async (id) => { setSites(sites.filter(s => s.id !== id)); setSelectedSite(null); supa.from("sites").delete().eq("id", id); };
+
+  const geocodeAllSites = async (siteList) => {
+    const ungeocoded = siteList.filter(s => !s.lat || !s.lng);
+    if (!ungeocoded.length) return;
+    setGeocodeAllProgress({ done: 0, total: ungeocoded.length });
+    for (let i = 0; i < ungeocoded.length; i++) {
+      const site = ungeocoded[i];
+      if (!site.address) continue;
+      try {
+        const res = await fetch("https://nominatim.openstreetmap.org/search?format=json&limit=1&q=" + encodeURIComponent(site.address));
+        const geo = await res.json();
+        if (geo[0]) {
+          const lat = parseFloat(geo[0].lat);
+          const lng = parseFloat(geo[0].lon);
+          setSites(prev => prev.map(s => s.id === site.id ? { ...s, lat, lng } : s));
+          await supa.from("sites").update({ lat, lng }).eq("id", site.id);
+        }
+      } catch(e) {}
+      setGeocodeAllProgress({ done: i + 1, total: ungeocoded.length });
+      await new Promise(r => setTimeout(r, 1100)); // Nominatim rate limit: 1 req/sec
+    }
+    setGeocodeAllProgress(null);
+  };
   const toggleSiteContact = (contactId) => {
     const ids = siteForm.contactIds || [];
     setSiteForm(f => ({ ...f, contactIds: ids.includes(contactId) ? ids.filter(i => i !== contactId) : [...ids, contactId] }));
@@ -2322,6 +2346,20 @@ Return ONLY valid JSON, no markdown, no extra text:
                   </div>
                   <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                     <input className="fi" style={{ width: 200 }} placeholder="Search sites, companies…" value={lsSearch} onChange={e => setLsSearch(e.target.value)} />
+                    {(() => {
+                      const ungeocoded = currentSites.filter(s => !s.lat || !s.lng);
+                      if (geocodeAllProgress) return (
+                        <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: "#60A5FA", background: "#60A5FA10", border: "1px solid #60A5FA30", borderRadius: 6, padding: "5px 10px" }}>
+                          <span>⏳ Geocoding {geocodeAllProgress.done}/{geocodeAllProgress.total}…</span>
+                        </div>
+                      );
+                      if (ungeocoded.length > 0) return (
+                        <button className="btn-ghost" style={{ fontSize: 11, color: "#FBBF24", borderColor: "#FBBF2430", whiteSpace: "nowrap" }} onClick={() => geocodeAllSites(currentSites)}>
+                          📍 Geocode {ungeocoded.length} sites
+                        </button>
+                      );
+                      return null;
+                    })()}
                     <label className="btn-ghost" style={{ cursor: "pointer", display: "inline-flex", alignItems: "center", padding: "5px 10px", borderRadius: 5, border: "1px solid #1E2640", color: "#4A5270", fontSize: 11, fontFamily: "inherit" }}>
                       ↑ Import CSV
                       <input type="file" accept=".csv" style={{ display: "none" }} onChange={e => {
@@ -3399,7 +3437,8 @@ Return ONLY valid JSON, no markdown, no extra text:
 
                                     {/* Actions */}
                                     <div style={{ display: "flex", gap: 6 }}>
-                                      <button className="btn-primary" style={{ flex: 1, fontSize: 11, padding: "7px 0", background: "#60A5FA15", color: "#60A5FA", border: "1px solid #60A5FA40", borderRadius: 6, cursor: "pointer", fontWeight: 600 }} onClick={() => { setLawnBidDocSubId(bid?.selectedSubId || (bid?.subcontractorIds?.[0]) || ""); setLawnBidDocSiteId(site.id); }}>📄 Bid Doc</button>
+                                      <button className="btn-primary" style={{ flex: 1, fontSize: 11, padding: "7px 0", background: "#60A5FA15", color: "#60A5FA", border: "1px solid #60A5FA40", borderRadius: 6, cursor: "pointer", fontWeight: 600 }} onClick={() => { setLawnBidDocSubId(null); setLawnBidDocSiteId(site.id); }}>📄 Bid Doc</button>
+                                      <button className="btn-ghost" style={{ flex: 1, fontSize: 10, padding: "5px 0", color: "#A78BFA", borderColor: "#A78BFA30" }} onClick={() => { setEditLawnBidId(null); setSelectedSite(site); }}>🔍 Full Details</button>
                                       {!bid && <button className="btn-ghost" style={{ flex: 1, fontSize: 10, padding: "5px 0", color: "#4ADE80", borderColor: "#4ADE8030" }} onClick={() => upsertLawnBid(site.id, b => b)}>+ Start Bid</button>}
                                     </div>
                                   </div>
@@ -3585,6 +3624,66 @@ Return ONLY valid JSON, no markdown, no extra text:
                 )}
 
                 {selectedSite.notes && <div style={{ fontSize: 12, color: "#6B7694", lineHeight: 1.6, background: "#0A0D16", padding: "10px 12px", borderRadius: 6, border: "1px solid #1E2640" }}>{selectedSite.notes}</div>}
+
+                {/* Lawn bid pricing section — shown when this site has a lawn bid */}
+                {(() => {
+                  const bid = getLawnBid ? getLawnBid(selectedSite.id) : null;
+                  if (!bid) return null;
+                  const assignedSubs = (bid.subcontractorIds || []).map(id => subcontractors.find(s => s.id === id)).filter(Boolean);
+                  const selectedSub = bid.selectedSubId ? subcontractors.find(s => s.id === bid.selectedSubId) : null;
+                  const annualOur = lawnBidAnnualOur ? lawnBidAnnualOur(bid) : 0;
+                  const COLS_LABELS = { untouched: "Not Touched", bidding: "Bidding", owner_approval: "Owner Approval", owner_accepted: "Owner Accepted", not_bidding: "Not Bidding" };
+                  const statusCol = bid.status === "bidding" ? "bidding" : bid.status === "owner_approved" ? "owner_approval" : bid.status === "owner_accepted" ? "owner_accepted" : bid.status === "not_bidding" ? "not_bidding" : "untouched";
+                  const colColors = { untouched: "#3A4560", bidding: "#FBBF24", owner_approval: "#60A5FA", owner_accepted: "#4ADE80", not_bidding: "#F87171" };
+                  return (
+                    <div>
+                      <div style={{ fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "#3A4560", marginBottom: 10, fontWeight: 600 }}>Lawn Bid — {lawnBidSeason}</div>
+                      <div style={{ background: "#0A0D16", borderRadius: 8, padding: 14, border: "1px solid #1E2640", display: "flex", flexDirection: "column", gap: 10 }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                          <span style={{ fontSize: 11, color: "#3A4560" }}>Stage</span>
+                          <span style={{ fontSize: 11, fontWeight: 600, color: colColors[statusCol] }}>{COLS_LABELS[statusCol]}</span>
+                        </div>
+                        {annualOur > 0 && (
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                            <span style={{ fontSize: 11, color: "#3A4560" }}>Annual Our Price</span>
+                            <span style={{ fontSize: 13, fontWeight: 700, color: "#4ADE80" }}>${Math.round(annualOur).toLocaleString()}/yr</span>
+                          </div>
+                        )}
+                        {assignedSubs.length > 0 && (
+                          <div>
+                            <div style={{ fontSize: 10, color: "#3A4560", marginBottom: 6 }}>Contractors</div>
+                            <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
+                              {assignedSubs.map(s => (
+                                <span key={s.id} style={{ fontSize: 10, padding: "2px 8px", borderRadius: 4, background: s.id === bid.selectedSubId ? "#4ADE8020" : "#A78BFA15", color: s.id === bid.selectedSubId ? "#4ADE80" : "#A78BFA", border: "1px solid " + (s.id === bid.selectedSubId ? "#4ADE8030" : "#A78BFA30") }}>
+                                  {s.id === bid.selectedSubId ? "✓ " : ""}{s.name}
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                        {/* Service line items */}
+                        {LAWN_SERVICES && bid.services && Object.entries(bid.services).filter(([,v]) => v?.subPrice > 0).length > 0 && (
+                          <div>
+                            <div style={{ fontSize: 10, color: "#3A4560", marginBottom: 6 }}>Services</div>
+                            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                              {Object.entries(bid.services).filter(([,v]) => v?.subPrice > 0).map(([key, val]) => {
+                                const svc = LAWN_SERVICES.find(s => s.id === key);
+                                return (
+                                  <div key={key} style={{ display: "flex", justifyContent: "space-between", fontSize: 10 }}>
+                                    <span style={{ color: "#6A7590" }}>{svc?.label || key}</span>
+                                    <span style={{ color: "#B8C4E0" }}>${(val.subPrice || 0).toLocaleString()} sub · ${(val.ourPrice || 0).toLocaleString()} ours</span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+                        {bid.notes && <div style={{ fontSize: 11, color: "#6A7590", fontStyle: "italic" }}>{bid.notes}</div>}
+                        <button className="btn-ghost" style={{ fontSize: 10, padding: "5px 0", color: "#60A5FA", borderColor: "#60A5FA30" }} onClick={() => { setSelectedSite(null); setEditLawnBidId(selectedSite.id); }}>Open in Bids →</button>
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 <div style={{ display: "flex", gap: 8 }}>
                   <button className="btn-ghost" style={{ flex: 1 }} onClick={() => { openEditSite(selectedSite); setSelectedSite(null); }}>✎ Edit</button>
@@ -5184,8 +5283,12 @@ Return ONLY valid JSON, no markdown, no extra text:
         if (!site) { setLawnBidDocSiteId(null); return null; }
         const bid  = getLawnBid(site.id);
         const co   = companies.find(c => c.id === site.companyId);
-        // Use explicitly chosen sub from picker, fall back to bid's selected sub
-        const chosenSubId = lawnBidDocSubId || bid?.selectedSubId || (bid?.subcontractorIds||[])[0] || "";
+        // Only subs assigned to this bid
+        const assignedSubIds = bid?.subcontractorIds || [];
+        const assignedSubs = assignedSubIds.map(id => subcontractors.find(s => s.id === id)).filter(Boolean);
+        // If exactly one sub assigned, auto-select it. If multiple, require user to pick.
+        const autoSub = assignedSubs.length === 1 ? assignedSubs[0].id : "";
+        const chosenSubId = lawnBidDocSubId !== null ? lawnBidDocSubId : (bid?.selectedSubId && assignedSubIds.includes(bid.selectedSubId) ? bid.selectedSubId : autoSub);
         const sub  = chosenSubId ? subcontractors.find(s => s.id === chosenSubId) : null;
         const mapLat = site.lat || 39.9526;
         const mapLng = site.lng || -75.1652;
@@ -5226,7 +5329,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                     <span style={{ fontSize: 11, color: "#3A4560", whiteSpace: "nowrap" }}>Make out to:</span>
                     <select value={chosenSubId} onChange={e => setLawnBidDocSubId(e.target.value)} style={{ background: "#141824", border: "1px solid " + (chosenSubId ? "#60A5FA50" : "#F87171"), color: chosenSubId ? "#B8C4E0" : "#F87171", borderRadius: 6, padding: "6px 10px", fontSize: 12, minWidth: 160 }}>
                       <option value="">— Select contractor —</option>
-                      {subcontractors.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                      {(assignedSubs.length > 0 ? assignedSubs : subcontractors).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                     </select>
                   </div>
                   <button className="btn-primary" style={{ background: "#4ADE8020", color: "#4ADE80", border: "1px solid #4ADE8040", opacity: chosenSubId ? 1 : 0.4 }} onClick={printBidDoc}>🖨 Print / Send to Sub</button>
