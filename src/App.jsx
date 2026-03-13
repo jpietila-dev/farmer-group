@@ -821,6 +821,10 @@ export default function App() {
   const [lsSiteForm,       setLsSiteForm]       = useState({ companyId: "", storeNumber: "", address: "", phone: "", accessCode: "", notes: "", lat: "", lng: "" });
   const [lsGeocoding,      setLsGeocoding]      = useState(false);
   const [geocodeAllProgress, setGeocodeAllProgress] = useState(null); // { done, total } or null
+  const [pricingSearch,  setPricingSearch]  = useState("");
+  const [pricingFilter,  setPricingFilter]  = useState("all");
+  const [pricingSort,    setPricingSort]    = useState("company");
+  const [pricingShowSub, setPricingShowSub] = useState(true);
   const [mapLoaded,        setMapLoaded]        = useState(false);
   const [lsMapFilter,      setLsMapFilter]      = useState("all");
   const [expandedCompany,  setExpandedCompany]  = useState(null);
@@ -3458,13 +3462,9 @@ Return ONLY valid JSON, no markdown, no extra text:
 
           {/* ── PRICING SHEET (lawn) ── */}
           {activeNav === "pricing" && activeBU === "lawn" && (() => {
-            const [pricingSearch, setPricingSearch] = React.useState("");
-            const [pricingFilter, setPricingFilter] = React.useState("all"); // all | priced | unpriced
-            const [pricingSort, setPricingSort] = React.useState("company"); // company | annual | stage
-            const [showSub, setShowSub] = React.useState(true); // toggle sub vs our prices
-
             const allSites = lawnSites;
             const searchQ = pricingSearch.toLowerCase();
+            const showSub = pricingShowSub;
 
             const rows = allSites
               .map(site => {
@@ -3541,7 +3541,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                       <option value="annual">Sort: Annual $</option>
                       <option value="stage">Sort: Stage</option>
                     </select>
-                    <button className="btn-ghost" style={{ fontSize: 11, color: showSub ? "#FBBF24" : "#4ADE80", borderColor: showSub ? "#FBBF2430" : "#4ADE8030" }} onClick={() => setShowSub(v => !v)}>
+                    <button className="btn-ghost" style={{ fontSize: 11, color: showSub ? "#FBBF24" : "#4ADE80", borderColor: showSub ? "#FBBF2430" : "#4ADE8030" }} onClick={() => setPricingShowSub(v => !v)}>
                       {showSub ? "Showing Sub $" : "Showing Our $"}
                     </button>
                     <button className="btn-ghost" style={{ fontSize: 11 }} onClick={exportCSV}>⬇ Export CSV</button>
