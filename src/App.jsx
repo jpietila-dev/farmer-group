@@ -343,41 +343,41 @@ function SubPage({ token, fmJobs, setFmJobs, subcontractors, companies, sites })
   const update = (patch) => setFmJobs(prev => prev.map(j => j.id === job.id ? { ...j, ...patch } : j));
 
   if (!job) return (
-    <div style={{ minHeight: "100vh", background: "#0F1117", display: "flex", alignItems: "center", justifyContent: "center" }}>
-      <div style={{ textAlign: "center", color: "#3A4560" }}>
+    <div style={{ minHeight: "100vh", background: "#1A2240", display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <div style={{ textAlign: "center", color: "#4A5278" }}>
         <div style={{ fontSize: 48, marginBottom: 16 }}>🔗</div>
-        <div style={{ fontSize: 18, color: "#E8ECF4", marginBottom: 8 }}>Link not found</div>
+        <div style={{ fontSize: 18, color: "#1A2240", marginBottom: 8 }}>Link not found</div>
         <div style={{ fontSize: 13 }}>This link may have expired or already been responded to.</div>
       </div>
     </div>
   );
 
   if (view === "done" || job.subResponse) return (
-    <div style={{ minHeight: "100vh", background: "#0F1117", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+    <div style={{ minHeight: "100vh", background: "#1A2240", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
       <div style={{ maxWidth: 480, width: "100%", textAlign: "center" }}>
         <div style={{ fontSize: 56, marginBottom: 16 }}>
           {job.subResponse === "accepted" ? "✅" : job.subResponse === "quoted" ? "📋" : "❌"}
         </div>
-        <div style={{ fontSize: 22, fontWeight: 700, color: "#E8ECF4", marginBottom: 8 }}>
+        <div style={{ fontSize: 22, fontWeight: 700, color: "#1A2240", marginBottom: 8 }}>
           {job.subResponse === "accepted" ? "Accepted!" : job.subResponse === "quoted" ? "Quote Submitted!" : "Declined"}
         </div>
-        <div style={{ fontSize: 14, color: "#3A4560" }}>
+        <div style={{ fontSize: 14, color: "#4A5278" }}>
           {job.subResponse === "accepted" && "We'll be in touch shortly with next steps."}
           {job.subResponse === "quoted"   && "Your quote has been sent to the team for review."}
           {job.subResponse === "declined" && "Thank you for letting us know. We'll find another vendor."}
         </div>
-        <div style={{ marginTop: 32, fontSize: 12, color: "#2A3560" }}>Farmer Development Inc. · farmerdevelopment.com</div>
+        <div style={{ marginTop: 32, fontSize: 12, color: "#3D4570" }}>Farmer Development Inc. · farmerdevelopment.com</div>
       </div>
     </div>
   );
 
   if (view === "declined") return (
-    <div style={{ minHeight: "100vh", background: "#0F1117", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
-      <div style={{ maxWidth: 480, width: "100%", background: "#161B28", borderRadius: 16, padding: 32, border: "1px solid #1E2640" }}>
+    <div style={{ minHeight: "100vh", background: "#1A2240", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+      <div style={{ maxWidth: 480, width: "100%", background: "#ECEEF8", borderRadius: 16, padding: 32, border: "1px solid #CBD1E8" }}>
         <div style={{ fontSize: 14, fontWeight: 700, color: "#F87171", marginBottom: 16 }}>Decline this job?</div>
-        <div style={{ fontSize: 13, color: "#6A7590", marginBottom: 24 }}>Please confirm you are unable to take <strong style={{ color: "#E8ECF4" }}>{job.name}</strong>. The team will be notified.</div>
+        <div style={{ fontSize: 13, color: "#4A5278", marginBottom: 24 }}>Please confirm you are unable to take <strong style={{ color: "#1A2240" }}>{job.name}</strong>. The team will be notified.</div>
         <div style={{ display: "flex", gap: 10 }}>
-          <button onClick={() => setView("main")} style={{ flex: 1, padding: "12px", borderRadius: 8, border: "1px solid #2A3560", background: "transparent", color: "#6A7590", fontSize: 14, cursor: "pointer", fontFamily: "inherit" }}>Go Back</button>
+          <button onClick={() => setView("main")} style={{ flex: 1, padding: "12px", borderRadius: 8, border: "1px solid #3D4570", background: "transparent", color: "#4A5278", fontSize: 14, cursor: "pointer", fontFamily: "inherit" }}>Go Back</button>
           <button onClick={() => { update({ subResponse: "declined", stage: "estimating", subSentAt: null }); setView("done"); }}
             style={{ flex: 1, padding: "12px", borderRadius: 8, border: "none", background: "#F87171", color: "#FFF", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
             Confirm Decline
@@ -388,12 +388,12 @@ function SubPage({ token, fmJobs, setFmJobs, subcontractors, companies, sites })
   );
 
   if (view === "quote") return (
-    <div style={{ minHeight: "100vh", background: "#0F1117", padding: 24, fontFamily: "inherit" }}>
+    <div style={{ minHeight: "100vh", background: "#1A2240", padding: 24, fontFamily: "inherit" }}>
       <div style={{ maxWidth: 520, margin: "0 auto" }}>
         <div style={{ marginBottom: 24 }}>
           <div style={{ fontSize: 11, color: "#3B6FE8", fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 4 }}>FARMER DEVELOPMENT INC.</div>
-          <div style={{ fontSize: 20, fontWeight: 700, color: "#E8ECF4" }}>Submit Your Quote</div>
-          <div style={{ fontSize: 13, color: "#6A7590", marginTop: 4 }}>{job.name}</div>
+          <div style={{ fontSize: 20, fontWeight: 700, color: "#1A2240" }}>Submit Your Quote</div>
+          <div style={{ fontSize: 13, color: "#4A5278", marginTop: 4 }}>{job.name}</div>
         </div>
 
         <div style={{ background: "#FCD34D10", border: "1px solid #FCD34D30", borderRadius: 10, padding: "14px 16px", marginBottom: 20, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -401,13 +401,13 @@ function SubPage({ token, fmJobs, setFmJobs, subcontractors, companies, sites })
           <div style={{ fontSize: 20, fontWeight: 700, color: "#FCD34D" }}>{fmt(vendorNTE)}</div>
         </div>
 
-        <div style={{ background: "#161B28", borderRadius: 12, padding: 24, border: "1px solid #1E2640", display: "flex", flexDirection: "column", gap: 18 }}>
+        <div style={{ background: "#ECEEF8", borderRadius: 12, padding: 24, border: "1px solid #CBD1E8", display: "flex", flexDirection: "column", gap: 18 }}>
           <div>
-            <label style={{ display: "block", fontSize: 11, color: "#6A7590", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.07em" }}>Your Price *</label>
+            <label style={{ display: "block", fontSize: 11, color: "#4A5278", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.07em" }}>Your Price *</label>
             <div style={{ position: "relative" }}>
-              <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "#6A7590", fontSize: 14 }}>$</span>
+              <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "#4A5278", fontSize: 14 }}>$</span>
               <input value={quotePrice} onChange={e => setQuotePrice(e.target.value)} type="number" placeholder="0.00"
-                style={{ width: "100%", boxSizing: "border-box", padding: "12px 12px 12px 28px", background: "#0F1117", border: "1px solid #2A3560", borderRadius: 8, color: "#E8ECF4", fontSize: 16, fontFamily: "inherit", outline: "none" }} />
+                style={{ width: "100%", boxSizing: "border-box", padding: "12px 12px 12px 28px", background: "#1A2240", border: "1px solid #3D4570", borderRadius: 8, color: "#1A2240", fontSize: 16, fontFamily: "inherit", outline: "none" }} />
             </div>
             {quotePrice && (
               <div style={{ marginTop: 6, fontSize: 12, fontWeight: 600, color: Number(quotePrice) <= vendorNTE ? "#4ADE80" : "#F87171" }}>
@@ -416,20 +416,20 @@ function SubPage({ token, fmJobs, setFmJobs, subcontractors, companies, sites })
             )}
           </div>
           <div>
-            <label style={{ display: "block", fontSize: 11, color: "#6A7590", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.07em" }}>Scope of Work You're Quoting</label>
+            <label style={{ display: "block", fontSize: 11, color: "#4A5278", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.07em" }}>Scope of Work You're Quoting</label>
             <textarea value={quoteScope} onChange={e => setQuoteScope(e.target.value)} rows={3} placeholder="Describe the work you are quoting for…"
-              style={{ width: "100%", boxSizing: "border-box", padding: "10px 12px", background: "#0F1117", border: "1px solid #2A3560", borderRadius: 8, color: "#E8ECF4", fontSize: 14, fontFamily: "inherit", outline: "none", resize: "vertical" }} />
+              style={{ width: "100%", boxSizing: "border-box", padding: "10px 12px", background: "#1A2240", border: "1px solid #3D4570", borderRadius: 8, color: "#1A2240", fontSize: 14, fontFamily: "inherit", outline: "none", resize: "vertical" }} />
           </div>
           <div>
-            <label style={{ display: "block", fontSize: 11, color: "#6A7590", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.07em" }}>Notes (optional)</label>
+            <label style={{ display: "block", fontSize: 11, color: "#4A5278", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.07em" }}>Notes (optional)</label>
             <textarea value={quoteNote} onChange={e => setQuoteNote(e.target.value)} rows={2} placeholder="Any conditions, exclusions, or comments…"
-              style={{ width: "100%", boxSizing: "border-box", padding: "10px 12px", background: "#0F1117", border: "1px solid #2A3560", borderRadius: 8, color: "#E8ECF4", fontSize: 14, fontFamily: "inherit", outline: "none", resize: "vertical" }} />
+              style={{ width: "100%", boxSizing: "border-box", padding: "10px 12px", background: "#1A2240", border: "1px solid #3D4570", borderRadius: 8, color: "#1A2240", fontSize: 14, fontFamily: "inherit", outline: "none", resize: "vertical" }} />
           </div>
           <div style={{ display: "flex", gap: 10, paddingTop: 4 }}>
-            <button onClick={() => setView("main")} style={{ flex: 0, padding: "12px 20px", borderRadius: 8, border: "1px solid #2A3560", background: "transparent", color: "#6A7590", fontSize: 14, cursor: "pointer", fontFamily: "inherit" }}>← Back</button>
+            <button onClick={() => setView("main")} style={{ flex: 0, padding: "12px 20px", borderRadius: 8, border: "1px solid #3D4570", background: "transparent", color: "#4A5278", fontSize: 14, cursor: "pointer", fontFamily: "inherit" }}>← Back</button>
             <button disabled={!quotePrice}
               onClick={() => { update({ vendorQuotePrice: quotePrice, vendorQuoteScope: quoteScope, vendorQuoteNotes: quoteNote, subResponse: "quoted", stage: "generate_proposal" }); setView("done"); }}
-              style={{ flex: 1, padding: "12px", borderRadius: 8, border: "none", background: !quotePrice ? "#2A3560" : "#3B6FE8", color: !quotePrice ? "#4A5270" : "#FFF", fontSize: 15, fontWeight: 700, cursor: quotePrice ? "pointer" : "not-allowed", fontFamily: "inherit" }}>
+              style={{ flex: 1, padding: "12px", borderRadius: 8, border: "none", background: !quotePrice ? "#3D4570" : "#3B6FE8", color: !quotePrice ? "#353C62" : "#FFF", fontSize: 15, fontWeight: 700, cursor: quotePrice ? "pointer" : "not-allowed", fontFamily: "inherit" }}>
               Submit Quote
             </button>
           </div>
@@ -440,42 +440,42 @@ function SubPage({ token, fmJobs, setFmJobs, subcontractors, companies, sites })
 
   // Main view
   return (
-    <div style={{ minHeight: "100vh", background: "#0F1117", padding: 24, fontFamily: "inherit" }}>
+    <div style={{ minHeight: "100vh", background: "#1A2240", padding: 24, fontFamily: "inherit" }}>
       <div style={{ maxWidth: 520, margin: "0 auto" }}>
         {/* Header */}
         <div style={{ marginBottom: 28 }}>
           <div style={{ fontSize: 11, color: "#3B6FE8", fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 6 }}>FARMER DEVELOPMENT INC.</div>
-          <div style={{ fontSize: 22, fontWeight: 700, color: "#E8ECF4", lineHeight: 1.2 }}>Quote Request</div>
-          {sub && <div style={{ fontSize: 14, color: "#6A7590", marginTop: 4 }}>Hi {sub.name} — please review and respond below.</div>}
+          <div style={{ fontSize: 22, fontWeight: 700, color: "#1A2240", lineHeight: 1.2 }}>Quote Request</div>
+          {sub && <div style={{ fontSize: 14, color: "#4A5278", marginTop: 4 }}>Hi {sub.name} — please review and respond below.</div>}
         </div>
 
         {/* Job card */}
-        <div style={{ background: "#161B28", borderRadius: 12, padding: 24, border: "1px solid #1E2640", marginBottom: 16 }}>
-          <div style={{ fontSize: 11, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 10 }}>Job Details</div>
-          <div style={{ fontSize: 18, fontWeight: 700, color: "#E8ECF4", marginBottom: 12 }}>{job.name}</div>
+        <div style={{ background: "#ECEEF8", borderRadius: 12, padding: 24, border: "1px solid #CBD1E8", marginBottom: 16 }}>
+          <div style={{ fontSize: 11, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 10 }}>Job Details</div>
+          <div style={{ fontSize: 18, fontWeight: 700, color: "#1A2240", marginBottom: 12 }}>{job.name}</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {co && <div style={{ display: "flex", gap: 10 }}><span style={{ fontSize: 12, color: "#3A4560", width: 80, flexShrink: 0 }}>Client</span><span style={{ fontSize: 12, color: "#E8ECF4" }}>{co.name}</span></div>}
-            {(site?.address || job.storeCode) && <div style={{ display: "flex", gap: 10 }}><span style={{ fontSize: 12, color: "#3A4560", width: 80, flexShrink: 0 }}>Location</span><span style={{ fontSize: 12, color: "#E8ECF4" }}>{site?.address || "Store " + job.storeCode}</span></div>}
-            {job.ownersProjectNo && <div style={{ display: "flex", gap: 10 }}><span style={{ fontSize: 12, color: "#3A4560", width: 80, flexShrink: 0 }}>WO #</span><span style={{ fontSize: 12, color: "#E8ECF4" }}>{job.ownersProjectNo}</span></div>}
-            {job.bidDueDate && <div style={{ display: "flex", gap: 10 }}><span style={{ fontSize: 12, color: "#3A4560", width: 80, flexShrink: 0 }}>Bid Due</span><span style={{ fontSize: 12, color: "#FCD34D" }}>{new Date(job.bidDueDate + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}</span></div>}
-            {site?.phone && <div style={{ display: "flex", gap: 10 }}><span style={{ fontSize: 12, color: "#3A4560", width: 80, flexShrink: 0 }}>Site Phone</span><span style={{ fontSize: 12, color: "#E8ECF4" }}>{site.phone}</span></div>}
+            {co && <div style={{ display: "flex", gap: 10 }}><span style={{ fontSize: 12, color: "#4A5278", width: 80, flexShrink: 0 }}>Client</span><span style={{ fontSize: 12, color: "#1A2240" }}>{co.name}</span></div>}
+            {(site?.address || job.storeCode) && <div style={{ display: "flex", gap: 10 }}><span style={{ fontSize: 12, color: "#4A5278", width: 80, flexShrink: 0 }}>Location</span><span style={{ fontSize: 12, color: "#1A2240" }}>{site?.address || "Store " + job.storeCode}</span></div>}
+            {job.ownersProjectNo && <div style={{ display: "flex", gap: 10 }}><span style={{ fontSize: 12, color: "#4A5278", width: 80, flexShrink: 0 }}>WO #</span><span style={{ fontSize: 12, color: "#1A2240" }}>{job.ownersProjectNo}</span></div>}
+            {job.bidDueDate && <div style={{ display: "flex", gap: 10 }}><span style={{ fontSize: 12, color: "#4A5278", width: 80, flexShrink: 0 }}>Bid Due</span><span style={{ fontSize: 12, color: "#FCD34D" }}>{new Date(job.bidDueDate + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}</span></div>}
+            {site?.phone && <div style={{ display: "flex", gap: 10 }}><span style={{ fontSize: 12, color: "#4A5278", width: 80, flexShrink: 0 }}>Site Phone</span><span style={{ fontSize: 12, color: "#1A2240" }}>{site.phone}</span></div>}
           </div>
           {job.scopeOfWork && (
-            <div style={{ marginTop: 14, paddingTop: 14, borderTop: "1px solid #1E2640" }}>
-              <div style={{ fontSize: 11, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 6 }}>Scope of Work</div>
+            <div style={{ marginTop: 14, paddingTop: 14, borderTop: "1px solid #CBD1E8" }}>
+              <div style={{ fontSize: 11, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 6 }}>Scope of Work</div>
               <div style={{ fontSize: 13, color: "#BCC6D8", lineHeight: 1.6 }}>{job.scopeOfWork}</div>
             </div>
           )}
           {job.notes && (
-            <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid #1E2640" }}>
-              <div style={{ fontSize: 11, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 4 }}>Additional Notes</div>
+            <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid #CBD1E8" }}>
+              <div style={{ fontSize: 11, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 4 }}>Additional Notes</div>
               <div style={{ fontSize: 13, color: "#BCC6D8", lineHeight: 1.6 }}>{job.notes}</div>
             </div>
           )}
 
           {/* Access code — shown only after accept */}
           {subAccepted && site?.accessCode && (
-            <div style={{ marginTop: 14, paddingTop: 14, borderTop: "1px solid #1E2640" }}>
+            <div style={{ marginTop: 14, paddingTop: 14, borderTop: "1px solid #CBD1E8" }}>
               <div style={{ background: "#4ADE8010", border: "1px solid #4ADE8030", borderRadius: 8, padding: "12px 14px" }}>
                 <div style={{ fontSize: 11, color: "#4ADE80", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 4 }}>🔐 Site Access Code</div>
                 <div style={{ fontSize: 22, fontWeight: 800, color: "#4ADE80", letterSpacing: "0.15em", fontFamily: "monospace" }}>{site.accessCode}</div>
@@ -483,21 +483,21 @@ function SubPage({ token, fmJobs, setFmJobs, subcontractors, companies, sites })
             </div>
           )}
           {subAccepted && !site?.accessCode && (
-            <div style={{ marginTop: 14, paddingTop: 14, borderTop: "1px solid #1E2640" }}>
-              <div style={{ fontSize: 12, color: "#3A4560", fontStyle: "italic" }}>No access code on file — contact coordinator if needed.</div>
+            <div style={{ marginTop: 14, paddingTop: 14, borderTop: "1px solid #CBD1E8" }}>
+              <div style={{ fontSize: 12, color: "#4A5278", fontStyle: "italic" }}>No access code on file — contact coordinator if needed.</div>
             </div>
           )}
         </div>
 
         {/* Job photos — shown only after accept */}
         {subAccepted && job.photos && job.photos.length > 0 && (
-          <div style={{ background: "#161B28", borderRadius: 12, padding: 20, border: "1px solid #1E2640", marginBottom: 16 }}>
-            <div style={{ fontSize: 11, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 12 }}>📸 Site Photos</div>
+          <div style={{ background: "#ECEEF8", borderRadius: 12, padding: 20, border: "1px solid #CBD1E8", marginBottom: 16 }}>
+            <div style={{ fontSize: 11, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 12 }}>📸 Site Photos</div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 8 }}>
               {job.photos.map((p, i) => (
                 <a key={i} href={p.data} target="_blank" rel="noreferrer">
                   <img src={p.data} alt={p.name || "Photo " + (i+1)} style={{ width: "100%", borderRadius: 8, objectFit: "cover", aspectRatio: "4/3", display: "block" }} />
-                  {p.caption && <div style={{ fontSize: 11, color: "#6A7590", marginTop: 4 }}>{p.caption}</div>}
+                  {p.caption && <div style={{ fontSize: 11, color: "#4A5278", marginTop: 4 }}>{p.caption}</div>}
                 </a>
               ))}
             </div>
@@ -522,12 +522,12 @@ function SubPage({ token, fmJobs, setFmJobs, subcontractors, companies, sites })
             📋 Provide a Quote
           </button>
           <button onClick={() => setView("declined")}
-            style={{ width: "100%", padding: "14px", borderRadius: 10, border: "1px solid #2A3560", background: "transparent", color: "#4A5270", fontSize: 14, cursor: "pointer", fontFamily: "inherit" }}>
+            style={{ width: "100%", padding: "14px", borderRadius: 10, border: "1px solid #3D4570", background: "transparent", color: "#353C62", fontSize: 14, cursor: "pointer", fontFamily: "inherit" }}>
             ✕ Unable to Help
           </button>
         </div>
 
-        <div style={{ marginTop: 32, textAlign: "center", fontSize: 11, color: "#2A3560" }}>Farmer Development Inc. · (810) 844-1544 · farmerdevelopment.com</div>
+        <div style={{ marginTop: 32, textAlign: "center", fontSize: 11, color: "#3D4570" }}>Farmer Development Inc. · (810) 844-1544 · farmerdevelopment.com</div>
       </div>
     </div>
   );
@@ -566,51 +566,51 @@ function SchedPage({ token, fmJobs, setFmJobs, subcontractors, companies, sites 
   };
 
   if (!job) return (
-    <div style={{ minHeight: "100vh", background: "#0F1117", display: "flex", alignItems: "center", justifyContent: "center" }}>
-      <div style={{ textAlign: "center", color: "#3A4560" }}>
+    <div style={{ minHeight: "100vh", background: "#1A2240", display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <div style={{ textAlign: "center", color: "#4A5278" }}>
         <div style={{ fontSize: 48, marginBottom: 16 }}>🔗</div>
-        <div style={{ fontSize: 18, color: "#E8ECF4", marginBottom: 8 }}>Link not found</div>
+        <div style={{ fontSize: 18, color: "#1A2240", marginBottom: 8 }}>Link not found</div>
         <div style={{ fontSize: 13 }}>This scheduling link may have expired.</div>
       </div>
     </div>
   );
 
-  const inputSt = { width: "100%", boxSizing: "border-box", padding: "12px", background: "#0F1117", border: "1px solid #2A3560", borderRadius: 8, color: "#E8ECF4", fontSize: 14, fontFamily: "inherit", outline: "none" };
+  const inputSt = { width: "100%", boxSizing: "border-box", padding: "12px", background: "#1A2240", border: "1px solid #3D4570", borderRadius: 8, color: "#1A2240", fontSize: 14, fontFamily: "inherit", outline: "none" };
 
   if (view === "done") return (
-    <div style={{ minHeight: "100vh", background: "#0F1117", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
+    <div style={{ minHeight: "100vh", background: "#1A2240", display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}>
       <div style={{ maxWidth: 480, width: "100%", textAlign: "center" }}>
         <div style={{ fontSize: 56, marginBottom: 16 }}>✅</div>
-        <div style={{ fontSize: 22, fontWeight: 700, color: "#E8ECF4", marginBottom: 8 }}>Invoice Submitted!</div>
-        <div style={{ fontSize: 14, color: "#3A4560" }}>Your invoice and photos have been sent to the team for review.</div>
-        <div style={{ marginTop: 32, fontSize: 12, color: "#2A3560" }}>Farmer Development Inc. · (810) 844-1544</div>
+        <div style={{ fontSize: 22, fontWeight: 700, color: "#1A2240", marginBottom: 8 }}>Invoice Submitted!</div>
+        <div style={{ fontSize: 14, color: "#4A5278" }}>Your invoice and photos have been sent to the team for review.</div>
+        <div style={{ marginTop: 32, fontSize: 12, color: "#3D4570" }}>Farmer Development Inc. · (810) 844-1544</div>
       </div>
     </div>
   );
 
   if (view === "invoice") return (
-    <div style={{ minHeight: "100vh", background: "#0F1117", padding: 24, fontFamily: "inherit" }}>
+    <div style={{ minHeight: "100vh", background: "#1A2240", padding: 24, fontFamily: "inherit" }}>
       <div style={{ maxWidth: 520, margin: "0 auto" }}>
         <div style={{ marginBottom: 24 }}>
           <div style={{ fontSize: 11, color: "#3B6FE8", fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 4 }}>FARMER DEVELOPMENT INC.</div>
-          <div style={{ fontSize: 20, fontWeight: 700, color: "#E8ECF4" }}>Submit Invoice</div>
-          <div style={{ fontSize: 13, color: "#6A7590", marginTop: 4 }}>{job.name}</div>
+          <div style={{ fontSize: 20, fontWeight: 700, color: "#1A2240" }}>Submit Invoice</div>
+          <div style={{ fontSize: 13, color: "#4A5278", marginTop: 4 }}>{job.name}</div>
         </div>
 
-        <div style={{ background: "#161B28", borderRadius: 12, padding: 24, border: "1px solid #1E2640", display: "flex", flexDirection: "column", gap: 18 }}>
+        <div style={{ background: "#ECEEF8", borderRadius: 12, padding: 24, border: "1px solid #CBD1E8", display: "flex", flexDirection: "column", gap: 18 }}>
           <div>
-            <label style={{ display: "block", fontSize: 11, color: "#6A7590", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.07em" }}>Invoice Amount *</label>
+            <label style={{ display: "block", fontSize: 11, color: "#4A5278", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.07em" }}>Invoice Amount *</label>
             <div style={{ position: "relative" }}>
-              <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "#6A7590" }}>$</span>
+              <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: "#4A5278" }}>$</span>
               <input type="number" value={invoiceAmt} onChange={e => setInvoiceAmt(e.target.value)} placeholder="0.00" style={{ ...inputSt, paddingLeft: 28 }} />
             </div>
           </div>
           <div>
-            <label style={{ display: "block", fontSize: 11, color: "#6A7590", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.07em" }}>Work Completed Notes</label>
+            <label style={{ display: "block", fontSize: 11, color: "#4A5278", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.07em" }}>Work Completed Notes</label>
             <textarea value={invoiceNotes} onChange={e => setInvoiceNotes(e.target.value)} rows={3} placeholder="Describe the work completed…" style={{ ...inputSt, resize: "vertical" }} />
           </div>
           <div>
-            <label style={{ display: "block", fontSize: 11, color: "#6A7590", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.07em" }}>
+            <label style={{ display: "block", fontSize: 11, color: "#4A5278", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.07em" }}>
               Photos of Completed Work * <span style={{ color: "#F87171" }}>(Required)</span>
             </label>
             {invoicePhotos.length > 0 && (
@@ -624,17 +624,17 @@ function SchedPage({ token, fmJobs, setFmJobs, subcontractors, companies, sites 
                 ))}
               </div>
             )}
-            <label style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "14px", borderRadius: 8, border: "2px dashed #2A3560", cursor: "pointer", color: "#3B6FE8", fontSize: 13 }}>
+            <label style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, padding: "14px", borderRadius: 8, border: "2px dashed #3D4570", cursor: "pointer", color: "#3B6FE8", fontSize: 13 }}>
               📷 {uploading ? "Uploading…" : "Add Photos"}
               <input type="file" accept="image/*" multiple style={{ display: "none" }} onChange={handlePhotoUpload} />
             </label>
           </div>
           <div style={{ display: "flex", gap: 10 }}>
-            <button onClick={() => setView("main")} style={{ flex: 0, padding: "12px 20px", borderRadius: 8, border: "1px solid #2A3560", background: "transparent", color: "#6A7590", fontSize: 14, cursor: "pointer", fontFamily: "inherit" }}>← Back</button>
+            <button onClick={() => setView("main")} style={{ flex: 0, padding: "12px 20px", borderRadius: 8, border: "1px solid #3D4570", background: "transparent", color: "#4A5278", fontSize: 14, cursor: "pointer", fontFamily: "inherit" }}>← Back</button>
             <button
               disabled={!invoiceAmt || invoicePhotos.length === 0}
               onClick={() => { update({ subInvoiceSubmitted: true, subInvoiceAmount: invoiceAmt, subInvoiceNotes: invoiceNotes, subInvoicePhotos: invoicePhotos, subInvoiceDate: new Date().toISOString() }); setView("done"); }}
-              style={{ flex: 1, padding: "12px", borderRadius: 8, border: "none", background: (!invoiceAmt || invoicePhotos.length === 0) ? "#2A3560" : "#4ADE80", color: (!invoiceAmt || invoicePhotos.length === 0) ? "#4A5270" : "#0A1A0A", fontSize: 15, fontWeight: 700, cursor: (!invoiceAmt || invoicePhotos.length === 0) ? "not-allowed" : "pointer", fontFamily: "inherit" }}>
+              style={{ flex: 1, padding: "12px", borderRadius: 8, border: "none", background: (!invoiceAmt || invoicePhotos.length === 0) ? "#3D4570" : "#4ADE80", color: (!invoiceAmt || invoicePhotos.length === 0) ? "#353C62" : "#0A1A0A", fontSize: 15, fontWeight: 700, cursor: (!invoiceAmt || invoicePhotos.length === 0) ? "not-allowed" : "pointer", fontFamily: "inherit" }}>
               {invoicePhotos.length === 0 ? "Add photos to submit" : !invoiceAmt ? "Enter invoice amount" : "✅ Submit Invoice"}
             </button>
           </div>
@@ -644,12 +644,12 @@ function SchedPage({ token, fmJobs, setFmJobs, subcontractors, companies, sites 
   );
 
   return (
-    <div style={{ minHeight: "100vh", background: "#0F1117", padding: 24, fontFamily: "inherit" }}>
+    <div style={{ minHeight: "100vh", background: "#1A2240", padding: 24, fontFamily: "inherit" }}>
       <div style={{ maxWidth: 520, margin: "0 auto" }}>
         <div style={{ marginBottom: 24 }}>
           <div style={{ fontSize: 11, color: "#3B6FE8", fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 6 }}>FARMER DEVELOPMENT INC.</div>
-          <div style={{ fontSize: 22, fontWeight: 700, color: "#E8ECF4" }}>{job.scheduledDate ? (isReminder ? "⏰ Reminder: Work Tomorrow" : "📋 Job Details") : "📅 Schedule Your Visit"}</div>
-          {sub && <div style={{ fontSize: 14, color: "#6A7590", marginTop: 4 }}>Hi {sub.name}</div>}
+          <div style={{ fontSize: 22, fontWeight: 700, color: "#1A2240" }}>{job.scheduledDate ? (isReminder ? "⏰ Reminder: Work Tomorrow" : "📋 Job Details") : "📅 Schedule Your Visit"}</div>
+          {sub && <div style={{ fontSize: 14, color: "#4A5278", marginTop: 4 }}>Hi {sub.name}</div>}
         </div>
 
         {/* 2-day reminder banner */}
@@ -661,25 +661,25 @@ function SchedPage({ token, fmJobs, setFmJobs, subcontractors, companies, sites 
         )}
 
         {/* Job details */}
-        <div style={{ background: "#161B28", borderRadius: 12, padding: 24, border: "1px solid #1E2640", marginBottom: 16 }}>
-          <div style={{ fontSize: 11, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 10 }}>Job Details</div>
-          <div style={{ fontSize: 18, fontWeight: 700, color: "#E8ECF4", marginBottom: 12 }}>{job.name}</div>
+        <div style={{ background: "#ECEEF8", borderRadius: 12, padding: 24, border: "1px solid #CBD1E8", marginBottom: 16 }}>
+          <div style={{ fontSize: 11, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 10 }}>Job Details</div>
+          <div style={{ fontSize: 18, fontWeight: 700, color: "#1A2240", marginBottom: 12 }}>{job.name}</div>
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {co   && <div style={{ display: "flex", gap: 10 }}><span style={{ fontSize: 12, color: "#3A4560", width: 80, flexShrink: 0 }}>Client</span><span style={{ fontSize: 12, color: "#E8ECF4" }}>{co.name}</span></div>}
-            {(site?.address || job.storeCode) && <div style={{ display: "flex", gap: 10 }}><span style={{ fontSize: 12, color: "#3A4560", width: 80, flexShrink: 0 }}>Location</span><span style={{ fontSize: 12, color: "#E8ECF4" }}>{site?.address || "Store " + job.storeCode}</span></div>}
-            {site?.accessCode && <div style={{ display: "flex", gap: 10 }}><span style={{ fontSize: 12, color: "#3A4560", width: 80, flexShrink: 0 }}>Access Code</span><span style={{ fontSize: 14, fontWeight: 700, color: "#4ADE80", fontFamily: "monospace", letterSpacing: "0.1em" }}>{site.accessCode}</span></div>}
-            {job.ownersProjectNo && <div style={{ display: "flex", gap: 10 }}><span style={{ fontSize: 12, color: "#3A4560", width: 80, flexShrink: 0 }}>WO #</span><span style={{ fontSize: 12, color: "#E8ECF4" }}>{job.ownersProjectNo}</span></div>}
+            {co   && <div style={{ display: "flex", gap: 10 }}><span style={{ fontSize: 12, color: "#4A5278", width: 80, flexShrink: 0 }}>Client</span><span style={{ fontSize: 12, color: "#1A2240" }}>{co.name}</span></div>}
+            {(site?.address || job.storeCode) && <div style={{ display: "flex", gap: 10 }}><span style={{ fontSize: 12, color: "#4A5278", width: 80, flexShrink: 0 }}>Location</span><span style={{ fontSize: 12, color: "#1A2240" }}>{site?.address || "Store " + job.storeCode}</span></div>}
+            {site?.accessCode && <div style={{ display: "flex", gap: 10 }}><span style={{ fontSize: 12, color: "#4A5278", width: 80, flexShrink: 0 }}>Access Code</span><span style={{ fontSize: 14, fontWeight: 700, color: "#4ADE80", fontFamily: "monospace", letterSpacing: "0.1em" }}>{site.accessCode}</span></div>}
+            {job.ownersProjectNo && <div style={{ display: "flex", gap: 10 }}><span style={{ fontSize: 12, color: "#4A5278", width: 80, flexShrink: 0 }}>WO #</span><span style={{ fontSize: 12, color: "#1A2240" }}>{job.ownersProjectNo}</span></div>}
           </div>
           {job.scopeOfWork && (
-            <div style={{ marginTop: 14, paddingTop: 14, borderTop: "1px solid #1E2640" }}>
-              <div style={{ fontSize: 11, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 6 }}>Scope of Work</div>
+            <div style={{ marginTop: 14, paddingTop: 14, borderTop: "1px solid #CBD1E8" }}>
+              <div style={{ fontSize: 11, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 6 }}>Scope of Work</div>
               <div style={{ fontSize: 13, color: "#BCC6D8", lineHeight: 1.6 }}>{job.scopeOfWork}</div>
             </div>
           )}
           {/* Site photos */}
           {(job.photos||[]).length > 0 && (
-            <div style={{ marginTop: 14, paddingTop: 14, borderTop: "1px solid #1E2640" }}>
-              <div style={{ fontSize: 11, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 8 }}>📸 Site Photos</div>
+            <div style={{ marginTop: 14, paddingTop: 14, borderTop: "1px solid #CBD1E8" }}>
+              <div style={{ fontSize: 11, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 8 }}>📸 Site Photos</div>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 8 }}>
                 {(job.photos||[]).map((p,i) => <a key={i} href={p.data} target="_blank" rel="noreferrer"><img src={p.data} alt={p.name} style={{ width: "100%", aspectRatio: "4/3", objectFit: "cover", borderRadius: 8 }} /></a>)}
               </div>
@@ -692,12 +692,12 @@ function SchedPage({ token, fmJobs, setFmJobs, subcontractors, companies, sites 
           <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
             {!job.scheduledDate ? (
               <>
-                <div style={{ background: "#161B28", borderRadius: 12, padding: 20, border: "1px solid #1E2640" }}>
-                  <div style={{ fontSize: 13, color: "#E8ECF4", fontWeight: 600, marginBottom: 12 }}>Confirm your scheduled date</div>
+                <div style={{ background: "#ECEEF8", borderRadius: 12, padding: 20, border: "1px solid #CBD1E8" }}>
+                  <div style={{ fontSize: 13, color: "#1A2240", fontWeight: 600, marginBottom: 12 }}>Confirm your scheduled date</div>
                   <input type="date" value={schedDate} onChange={e => setSchedDate(e.target.value)} style={{ ...inputSt, marginBottom: 12 }} min={new Date().toISOString().slice(0,10)} />
                   <button disabled={!schedDate}
                     onClick={() => update({ scheduledDate: schedDate })}
-                    style={{ width: "100%", padding: "14px", borderRadius: 10, border: "none", background: schedDate ? "#3B6FE8" : "#2A3560", color: schedDate ? "#FFF" : "#4A5270", fontSize: 15, fontWeight: 700, cursor: schedDate ? "pointer" : "not-allowed", fontFamily: "inherit" }}>
+                    style={{ width: "100%", padding: "14px", borderRadius: 10, border: "none", background: schedDate ? "#3B6FE8" : "#3D4570", color: schedDate ? "#FFF" : "#353C62", fontSize: 15, fontWeight: 700, cursor: schedDate ? "pointer" : "not-allowed", fontFamily: "inherit" }}>
                     📅 Confirm Schedule Date
                   </button>
                 </div>
@@ -706,7 +706,7 @@ function SchedPage({ token, fmJobs, setFmJobs, subcontractors, companies, sites 
               <>
                 <div style={{ background: "#4ADE8015", border: "1px solid #4ADE8030", borderRadius: 12, padding: 16, textAlign: "center" }}>
                   <div style={{ fontSize: 12, color: "#4ADE80", marginBottom: 4 }}>✓ Scheduled</div>
-                  <div style={{ fontSize: 18, fontWeight: 700, color: "#E8ECF4" }}>{new Date(job.scheduledDate + "T12:00:00").toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}</div>
+                  <div style={{ fontSize: 18, fontWeight: 700, color: "#1A2240" }}>{new Date(job.scheduledDate + "T12:00:00").toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}</div>
                 </div>
                 <button onClick={() => setView("invoice")}
                   style={{ width: "100%", padding: "16px", borderRadius: 10, border: "none", background: "#4ADE80", color: "#0A1A0A", fontSize: 16, fontWeight: 800, cursor: "pointer", fontFamily: "inherit" }}>
@@ -719,11 +719,11 @@ function SchedPage({ token, fmJobs, setFmJobs, subcontractors, companies, sites 
           <div style={{ background: "#4ADE8015", border: "1px solid #4ADE8030", borderRadius: 12, padding: 20, textAlign: "center" }}>
             <div style={{ fontSize: 32, marginBottom: 8 }}>✅</div>
             <div style={{ fontSize: 16, fontWeight: 700, color: "#4ADE80" }}>Invoice already submitted</div>
-            <div style={{ fontSize: 13, color: "#3A4560", marginTop: 4 }}>Amount: {fmt(Number(job.subInvoiceAmount || 0))}</div>
+            <div style={{ fontSize: 13, color: "#4A5278", marginTop: 4 }}>Amount: {fmt(Number(job.subInvoiceAmount || 0))}</div>
           </div>
         )}
 
-        <div style={{ marginTop: 32, textAlign: "center", fontSize: 11, color: "#2A3560" }}>Farmer Development Inc. · (810) 844-1544</div>
+        <div style={{ marginTop: 32, textAlign: "center", fontSize: 11, color: "#3D4570" }}>Farmer Development Inc. · (810) 844-1544</div>
       </div>
     </div>
   );
@@ -845,7 +845,7 @@ export default function App() {
     { id: "proposed",         label: "Proposed to Owner", color: "#60A5FA" },
     { id: "owner_approved",   label: "Owner Approved",    color: "#4ADE80" },
     { id: "contracted",       label: "Contracted",        color: "#A78BFA" },
-    { id: "not_bidding",      label: "Not Bidding",       color: "#4A5270" },
+    { id: "not_bidding",      label: "Not Bidding",       color: "#353C62" },
   ];
 
   const LAWN_SERVICES = [
@@ -1357,20 +1357,20 @@ Return ONLY valid JSON, no markdown, no extra text:
       <div>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
           <div>
-            <div style={{ fontSize: 13, fontWeight: 600, color: "#FFFFFF", textTransform: "uppercase", letterSpacing: "0.06em" }}>Active Jobs — Gantt</div>
-            <div style={{ fontSize: 11, color: "#3A4560", marginTop: 2 }}>{jobList.length} job{jobList.length !== 1 ? "s" : ""} · {fmt(jobList.reduce((s, j) => s + j.contractValue, 0))} total</div>
+            <div style={{ fontSize: 13, fontWeight: 600, color: "#1A2240", textTransform: "uppercase", letterSpacing: "0.06em" }}>Active Jobs — Gantt</div>
+            <div style={{ fontSize: 11, color: "#4A5278", marginTop: 2 }}>{jobList.length} job{jobList.length !== 1 ? "s" : ""} · {fmt(jobList.reduce((s, j) => s + j.contractValue, 0))} total</div>
           </div>
           {showAddBtn && <button className="btn-primary" onClick={openAddJob}>+ Add Job</button>}
         </div>
         {jobList.length === 0
-          ? <div style={{ textAlign: "center", padding: "32px", color: "#2A3560", fontSize: 12, background: "#161B28", borderRadius: 10, border: "1px solid #1E2640" }}>No active jobs</div>
+          ? <div style={{ textAlign: "center", padding: "32px", color: "#3D4570", fontSize: 12, background: "#ECEEF8", borderRadius: 10, border: "1px solid #CBD1E8" }}>No active jobs</div>
           : (
-            <div style={{ background: "#0B0E18", border: "1px solid #1E2640", borderRadius: 10, overflow: "hidden" }}>
-              <div style={{ display: "flex", borderBottom: "1px solid #1E2640" }}>
-                <div style={{ width: 280, flexShrink: 0, padding: "8px 16px", fontSize: 10, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.08em", borderRight: "1px solid #1E2640" }}>JOB</div>
+            <div style={{ background: "#F5F7FC", border: "1px solid #CBD1E8", borderRadius: 10, overflow: "hidden" }}>
+              <div style={{ display: "flex", borderBottom: "1px solid #CBD1E8" }}>
+                <div style={{ width: 280, flexShrink: 0, padding: "8px 16px", fontSize: 10, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.08em", borderRight: "1px solid #CBD1E8" }}>JOB</div>
                 <div style={{ flex: 1, display: "grid", gridTemplateColumns: "repeat(" + months.length + ", 1fr)" }}>
                   {months.map((m, i) => (
-                    <div key={i} style={{ padding: "8px 6px", fontSize: 10, textTransform: "uppercase", textAlign: "center", borderRight: i < months.length - 1 ? "1px solid #1A2035" : "none", fontWeight: m.month === nowM && m.year === nowY ? 700 : 400, color: m.month === nowM && m.year === nowY ? "#3B6FE8" : "#4A5270" }}>
+                    <div key={i} style={{ padding: "8px 6px", fontSize: 10, textTransform: "uppercase", textAlign: "center", borderRight: i < months.length - 1 ? "1px solid #1A2035" : "none", fontWeight: m.month === nowM && m.year === nowY ? 700 : 400, color: m.month === nowM && m.year === nowY ? "#3B6FE8" : "#353C62" }}>
                       {MONTHS[m.month]}{m.year !== nowY ? " " + m.year : ""}
                     </div>
                   ))}
@@ -1381,23 +1381,23 @@ Return ONLY valid JSON, no markdown, no extra text:
                 const sc  = STATUS_CONFIG[job.status] || STATUS_CONFIG["On Schedule"];
                 return (
                   <div key={job.id} style={{ display: "flex", borderBottom: idx < jobList.length - 1 ? "1px solid #1A2035" : "none", cursor: "pointer" }}
-                    onMouseEnter={e => e.currentTarget.style.background = "#111520"}
+                    onMouseEnter={e => e.currentTarget.style.background = "#EEF0F8"}
                     onMouseLeave={e => e.currentTarget.style.background = "transparent"}
                     onClick={() => setSelectedJob(job)}>
-                    <div style={{ width: 280, flexShrink: 0, padding: "12px 16px", borderRight: "1px solid #1E2640" }}>
+                    <div style={{ width: 280, flexShrink: 0, padding: "12px 16px", borderRight: "1px solid #CBD1E8" }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
                         <div style={{ width: 6, height: 6, borderRadius: "50%", background: sc.color, flexShrink: 0 }} />
-                        <span style={{ fontSize: 12, color: "#E8ECF4", fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{job.name}</span>
+                        <span style={{ fontSize: 12, color: "#1A2240", fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{job.name}</span>
                       </div>
-                      <div style={{ fontSize: 11, color: "#3A4560", marginBottom: 4, paddingLeft: 14 }}>{job.client}</div>
+                      <div style={{ fontSize: 11, color: "#4A5278", marginBottom: 4, paddingLeft: 14 }}>{job.client}</div>
                       <div style={{ display: "flex", gap: 8, paddingLeft: 14 }}>
                         <span style={{ fontSize: 12, color: "#3B6FE8", fontWeight: 600 }}>{fmt(job.contractValue)}</span>
-                        <span style={{ fontSize: 10, color: "#3A4560" }}>· {job.pm}</span>
+                        <span style={{ fontSize: 10, color: "#4A5278" }}>· {job.pm}</span>
                       </div>
                     </div>
                     <div style={{ flex: 1, position: "relative", padding: "12px 0", minHeight: 56 }}>
                       <div style={{ position: "absolute", left: tPct + "%", top: 0, bottom: 0, width: 1, background: "#3B6FE840", zIndex: 1 }} />
-                      {months.map((_, i) => i > 0 && <div key={i} style={{ position: "absolute", left: ((i / months.length) * 100) + "%", top: 0, bottom: 0, width: 1, background: "#1A2035" }} />)}
+                      {months.map((_, i) => i > 0 && <div key={i} style={{ position: "absolute", left: ((i / months.length) * 100) + "%", top: 0, bottom: 0, width: 1, background: "#E8EBFA" }} />)}
                       <div style={{ position: "absolute", top: "50%", transform: "translateY(-50%)", left: bar.left, width: bar.width, height: 28, borderRadius: 6, background: sc.bg, border: "1px solid " + sc.color + "50", overflow: "hidden" }}>
                         <div style={{ height: "100%", width: job.pct + "%", background: sc.color + "40", borderRadius: "5px 0 0 5px" }} />
                         <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", paddingLeft: 8, gap: 6 }}>
@@ -1434,7 +1434,7 @@ Return ONLY valid JSON, no markdown, no extra text:
             <option value="__new__">+ Add new company</option>
           </select>
           {showInlineCompany && (
-            <div style={{ background: "#0A0D16", border: "1px solid #3B6FE840", borderRadius: 8, padding: 14, marginTop: 8, display: "flex", flexDirection: "column", gap: 10 }}>
+            <div style={{ background: "#F0F2F8", border: "1px solid #3B6FE840", borderRadius: 8, padding: 14, marginTop: 8, display: "flex", flexDirection: "column", gap: 10 }}>
               <div style={{ fontSize: 11, color: "#3B6FE8", fontWeight: 600, letterSpacing: "0.06em" }}>NEW COMPANY</div>
               <input className="fi" placeholder="Company name *" value={inlineCompany.name}    onChange={e => setInlineCompany(c => ({ ...c, name: e.target.value }))} />
               <input className="fi" placeholder="Address"        value={inlineCompany.address} onChange={e => setInlineCompany(c => ({ ...c, address: e.target.value }))} />
@@ -1458,7 +1458,7 @@ Return ONLY valid JSON, no markdown, no extra text:
               <option value="__new__">+ Add new contact</option>
             </select>
             {showInlineContact && (
-              <div style={{ background: "#0A0D16", border: "1px solid #3B6FE840", borderRadius: 8, padding: 14, marginTop: 8, display: "flex", flexDirection: "column", gap: 10 }}>
+              <div style={{ background: "#F0F2F8", border: "1px solid #3B6FE840", borderRadius: 8, padding: 14, marginTop: 8, display: "flex", flexDirection: "column", gap: 10 }}>
                 <div style={{ fontSize: 11, color: "#3B6FE8", fontWeight: 600, letterSpacing: "0.06em" }}>NEW CONTACT</div>
                 <div className="g2">
                   <input className="fi" placeholder="First name *" value={inlineContact.firstName} onChange={e => setInlineContact(c => ({ ...c, firstName: e.target.value }))} />
@@ -1484,48 +1484,48 @@ Return ONLY valid JSON, no markdown, no extra text:
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
     *{box-sizing:border-box;margin:0;padding:0}
     ::-webkit-scrollbar{width:4px;height:4px}
-    ::-webkit-scrollbar-track{background:#0F1117}
-    ::-webkit-scrollbar-thumb{background:#2A2F3E;border-radius:2px}
-    .nav-item{display:flex;align-items:center;gap:10px;padding:9px 16px;border-radius:6px;cursor:pointer;font-size:13px;color:#6B7694;transition:all 0.15s;border:none;background:none;width:100%;text-align:left;font-family:inherit;letter-spacing:0.01em}
-    .nav-item:hover{background:#161B28;color:#B8C4E0}
-    .nav-item.active{background:#1A2340;color:#FFFFFF;font-weight:500}
-    .bu-tab{padding:5px 14px;border-radius:4px;font-size:11px;font-weight:600;letter-spacing:0.08em;cursor:pointer;border:1px solid transparent;transition:all 0.15s;font-family:inherit;background:none;color:#4A5270}
-    .bu-tab:hover{color:#8892B0}
-    .bu-tab.active{background:#1A2340;color:#FFFFFF;border-color:#2A3560}
-    .stat-card{background:#161B28;border:1px solid #1E2640;border-radius:10px;padding:20px 22px;transition:border-color 0.2s}
-    .stat-card:hover{border-color:#2A3560}
-    .punch-item{display:flex;align-items:center;gap:12px;padding:12px 16px;background:#161B28;border:1px solid #1E2640;border-radius:8px;transition:all 0.15s}
-    .punch-item:hover{border-color:#2A3560}
+    ::-webkit-scrollbar-track{background:#EEF0F8}
+    ::-webkit-scrollbar-thumb{background:#B0BAD4;border-radius:2px}
+    .nav-item{display:flex;align-items:center;gap:10px;padding:9px 16px;border-radius:6px;cursor:pointer;font-size:13px;color:#9AAAC8;transition:all 0.15s;border:none;background:none;width:100%;text-align:left;font-family:inherit;letter-spacing:0.01em}
+    .nav-item:hover{background:#334060;color:#FFFFFF}
+    .nav-item.active{background:#3B6FE8;color:#FFFFFF;font-weight:500}
+    .bu-tab{padding:5px 14px;border-radius:4px;font-size:11px;font-weight:600;letter-spacing:0.08em;cursor:pointer;border:1px solid transparent;transition:all 0.15s;font-family:inherit;background:none;color:#4A5278}
+    .bu-tab:hover{color:#1A2240}
+    .bu-tab.active{background:#3B6FE8;color:#FFFFFF;border-color:#3B6FE8}
+    .stat-card{background:#FFFFFF;border:1px solid #D4D9EE;border-radius:10px;padding:20px 22px;transition:border-color 0.2s;box-shadow:0 1px 3px rgba(0,0,0,0.05)}
+    .stat-card:hover{border-color:#3B6FE8}
+    .punch-item{display:flex;align-items:center;gap:12px;padding:12px 16px;background:#FFFFFF;border:1px solid #D4D9EE;border-radius:8px;transition:all 0.15s}
+    .punch-item:hover{border-color:#3B6FE8}
     .priority-dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
     .btn-primary{background:#3B6FE8;color:#fff;border:none;cursor:pointer;padding:9px 18px;border-radius:6px;font-family:inherit;font-size:12px;font-weight:600;letter-spacing:0.06em;transition:all 0.2s}
-    .btn-primary:hover{background:#5585ED}
-    .btn-ghost{background:none;border:1px solid #1E2640;color:#4A5270;cursor:pointer;padding:5px 10px;border-radius:5px;font-family:inherit;font-size:11px;transition:all 0.2s}
-    .btn-ghost:hover{border-color:#2A3560;color:#8892B0}
-    .fi{background:#0A0D16;border:1px solid #1E2640;border-radius:6px;color:#E8ECF4;padding:9px 12px;font-family:inherit;font-size:12px;width:100%;outline:none;transition:border 0.2s}
+    .btn-primary:hover{background:#2A5FD8}
+    .btn-ghost{background:none;border:1px solid #C8D0E8;color:#3D4570;cursor:pointer;padding:5px 10px;border-radius:5px;font-family:inherit;font-size:11px;transition:all 0.2s}
+    .btn-ghost:hover{border-color:#3B6FE8;color:#1A2240}
+    .fi{background:#FFFFFF;border:1px solid #C8D0E8;border-radius:6px;color:#1A2240;padding:9px 12px;font-family:inherit;font-size:12px;width:100%;outline:none;transition:border 0.2s}
     .fi:focus{border-color:#3B6FE8}
-    select.fi option{background:#0F1117}
-    .lbl{font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:#3A4560;margin-bottom:5px;display:block;font-weight:500}
+    select.fi option{background:#FFFFFF}
+    .lbl{font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:#4A5278;margin-bottom:5px;display:block;font-weight:600}
     .pill{display:inline-flex;align-items:center;padding:3px 9px;border-radius:20px;font-size:10px;letter-spacing:0.05em;white-space:nowrap;font-weight:500}
-    .opp-row{background:#161B28;border:1px solid #1E2640;border-radius:8px;padding:14px 16px;transition:all 0.15s;cursor:pointer}
-    .opp-row:hover{border-color:#2A3560;background:#1A1F30}
-    .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,0.8);display:flex;align-items:center;justify-content:center;z-index:9000;backdrop-filter:blur(4px)}
-    .modal{background:#0F1117;border:1px solid #2A3560;border-radius:12px;padding:28px;width:540px;max-height:90vh;overflow-y:auto}
+    .opp-row{background:#FFFFFF;border:1px solid #D4D9EE;border-radius:8px;padding:14px 16px;transition:all 0.15s;cursor:pointer}
+    .opp-row:hover{border-color:#3B6FE8;background:#F5F7FE}
+    .modal-bg{position:fixed;inset:0;background:rgba(30,38,80,0.45);display:flex;align-items:center;justify-content:center;z-index:9000;backdrop-filter:blur(4px)}
+    .modal{background:#FFFFFF;border:1px solid #D4D9EE;border-radius:12px;padding:28px;width:540px;max-height:90vh;overflow-y:auto;box-shadow:0 8px 32px rgba(30,38,80,0.12)}
     .g2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
-    .side-panel{position:fixed;right:0;top:52px;bottom:0;width:400px;background:#0B0E18;border-left:1px solid #1E2640;padding:24px;overflow-y:auto;z-index:40}
+    .side-panel{position:fixed;right:0;top:52px;bottom:0;width:400px;background:#FFFFFF;border-left:1px solid #D4D9EE;padding:24px;overflow-y:auto;z-index:40;box-shadow:-4px 0 20px rgba(30,38,80,0.07)}
     @keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
     .fade-in{animation:fadeIn 0.2s ease both}
     @keyframes slideIn{from{transform:translateX(100%)}to{transform:translateX(0)}}
     .slide-in{animation:slideIn 0.2s ease both}
-    .coming-soon{display:flex;flex-direction:column;align-items:center;justify-content:center;height:300px;color:#2A3560;gap:12px}
-    .view-toggle{background:none;border:1px solid #1E2640;color:#4A5270;cursor:pointer;padding:6px 12px;font-family:inherit;font-size:11px;transition:all 0.15s;font-weight:500}
-    .view-toggle.on{background:#1A2340;color:#fff;border-color:#3B6FE8}
+    .coming-soon{display:flex;flex-direction:column;align-items:center;justify-content:center;height:300px;color:#8892B8;gap:12px}
+    .view-toggle{background:none;border:1px solid #C8D0E8;color:#3D4570;cursor:pointer;padding:6px 12px;font-family:inherit;font-size:11px;transition:all 0.15s;font-weight:500}
+    .view-toggle.on{background:#3B6FE8;color:#fff;border-color:#3B6FE8}
     .view-toggle:first-child{border-radius:6px 0 0 6px}
     .view-toggle:last-child{border-radius:0 6px 6px 0}
     input[type=range]{width:100%;accent-color:#3B6FE8}
-    .ns-row{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:#0A0D16;border:1px solid #1E2640;border-radius:6px}
-    .company-card{background:#161B28;border:1px solid #1E2640;border-radius:10px;padding:18px 20px;cursor:pointer;transition:all 0.15s}
-    .company-card:hover{border-color:#3B6FE8;background:#1A1F30}
-    .contact-chip{background:#0A0D16;border:1px solid #1E2640;border-radius:6px;padding:8px 12px;display:flex;align-items:center;justify-content:space-between}
+    .ns-row{display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:#F5F7FC;border:1px solid #D4D9EE;border-radius:6px}
+    .company-card{background:#FFFFFF;border:1px solid #D4D9EE;border-radius:10px;padding:18px 20px;cursor:pointer;transition:all 0.15s;box-shadow:0 1px 3px rgba(0,0,0,0.04)}
+    .company-card:hover{border-color:#3B6FE8;background:#F5F7FE}
+    .contact-chip{background:#F5F7FC;border:1px solid #D4D9EE;border-radius:6px;padding:8px 12px;display:flex;align-items:center;justify-content:space-between}
   `;
 
   const panelOpen = selectedJob || selectedOpp || selectedCompany || selectedSite || selectedCapexJob || selectedFmJob;
@@ -1536,24 +1536,24 @@ Return ONLY valid JSON, no markdown, no extra text:
 
   // Loading screen while Supabase fetches
   if (!supaReady && !dbError) return (
-    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "100vh", background: "#0F1117", color: "#E8ECF4", fontFamily: "'Inter','Segoe UI',sans-serif", gap: 16 }}>
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "100vh", background: "#EEF0F8", color: "#1A2240", fontFamily: "'Inter','Segoe UI',sans-serif", gap: 16 }}>
       <div style={{ width: 44, height: 44, background: "#3B6FE8", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, fontWeight: 700, color: "#fff" }}>FG</div>
-      <div style={{ fontSize: 13, color: "#3A4560", letterSpacing: "0.1em", textTransform: "uppercase" }}>Loading data…</div>
-      <div style={{ width: 180, height: 3, background: "#1E2640", borderRadius: 2, overflow: "hidden" }}>
+      <div style={{ fontSize: 13, color: "#4A5278", letterSpacing: "0.1em", textTransform: "uppercase" }}>Loading data…</div>
+      <div style={{ width: 180, height: 3, background: "#CBD1E8", borderRadius: 2, overflow: "hidden" }}>
         <div style={{ height: "100%", background: "#3B6FE8", borderRadius: 2, animation: "pulse 1.5s ease-in-out infinite", width: "60%" }} />
       </div>
     </div>
   );
 
   return (
-    <div style={{ display: "flex", minHeight: "100vh", background: "#0F1117", color: "#E8ECF4", fontFamily: "'Inter','Segoe UI',sans-serif" }}>
+    <div style={{ display: "flex", minHeight: "100vh", background: "#EEF0F8", color: "#1A2240", fontFamily: "'Inter','Segoe UI',sans-serif" }}>
       <style>{CSS}</style>
 
       {/* ── Sidebar ── */}
-      <div style={{ width: sidebarCollapsed ? 60 : 200, background: "#0B0E18", borderRight: "1px solid #161B28", display: "flex", flexDirection: "column", transition: "width 0.2s", flexShrink: 0, position: "sticky", top: 0, height: "100vh", overflow: "hidden" }}>
-        <div style={{ padding: "18px 16px 14px", borderBottom: "1px solid #161B28", display: "flex", alignItems: "center", gap: 10 }}>
+      <div style={{ width: sidebarCollapsed ? 60 : 200, background: "#1E2A48", borderRight: "1px solid #162040", display: "flex", flexDirection: "column", transition: "width 0.2s", flexShrink: 0, position: "sticky", top: 0, height: "100vh", overflow: "hidden" }}>
+        <div style={{ padding: "18px 16px 14px", borderBottom: "1px solid #2A3860", display: "flex", alignItems: "center", gap: 10 }}>
           <div style={{ width: 32, height: 32, background: "#3B6FE8", borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, color: "#fff", flexShrink: 0 }}>FG</div>
-          {!sidebarCollapsed && <div><div style={{ fontSize: 13, fontWeight: 700, color: "#FFFFFF", letterSpacing: "0.04em" }}>FARMER</div><div style={{ fontSize: 10, color: "#3B6FE8", letterSpacing: "0.1em", fontWeight: 500 }}>GROUP</div></div>}
+          {!sidebarCollapsed && <div><div style={{ fontSize: 13, fontWeight: 700, color: "#FFFFFF", letterSpacing: "0.04em" }}>FARMER</div><div style={{ fontSize: 10, color: "#6B9FE8", letterSpacing: "0.1em", fontWeight: 500 }}>GROUP</div></div>}
         </div>
         <div style={{ flex: 1, padding: "12px 8px", overflowY: "auto" }}>
           {navItems.map(item => (
@@ -1564,7 +1564,7 @@ Return ONLY valid JSON, no markdown, no extra text:
             </button>
           ))}
         </div>
-        <div style={{ padding: "12px 8px", borderTop: "1px solid #161B28" }}>
+        <div style={{ padding: "12px 8px", borderTop: "1px solid #2A3860" }}>
           <button className="nav-item" onClick={() => setSidebarCollapsed(!sidebarCollapsed)} style={{ justifyContent: "center" }}>
             <span style={{ fontSize: 14 }}>{sidebarCollapsed ? "→" : "←"}</span>
             {!sidebarCollapsed && <span style={{ textTransform: "uppercase", fontSize: 11, letterSpacing: "0.07em" }}>Collapse</span>}
@@ -1575,15 +1575,15 @@ Return ONLY valid JSON, no markdown, no extra text:
       {/* ── Main ── */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
         {/* Topbar */}
-        <div style={{ borderBottom: "1px solid #161B28", padding: "0 28px", height: 52, display: "flex", alignItems: "center", justifyContent: "space-between", background: "#0B0E18", position: "sticky", top: 0, zIndex: 40 }}>
+        <div style={{ borderBottom: "1px solid #D4D9EE", padding: "0 28px", height: 52, display: "flex", alignItems: "center", justifyContent: "space-between", background: "#FFFFFF", position: "sticky", top: 0, zIndex: 40, boxShadow: "0 1px 4px rgba(30,42,80,0.06)" }}>
           <div style={{ display: "flex", gap: 4 }}>
             {BUSINESS_UNITS.map(bu => <button key={bu.id} className={"bu-tab" + (activeBU === bu.id ? " active" : "")} onClick={() => handleBUChange(bu.id)}>{bu.short}</button>)}
           </div>
-          <div style={{ fontSize: 11, color: "#2A3560", letterSpacing: "0.1em", textTransform: "uppercase" }}>{BUSINESS_UNITS.find(b => b.id === activeBU)?.label}</div>
+          <div style={{ fontSize: 11, color: "#4A5278", letterSpacing: "0.1em", textTransform: "uppercase" }}>{BUSINESS_UNITS.find(b => b.id === activeBU)?.label}</div>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             {supaReady && <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 10, color: "#4ADE80", background: "#4ADE8015", border: "1px solid #4ADE8030", padding: "3px 10px", borderRadius: 4 }}><span style={{ width: 6, height: 6, borderRadius: "50%", background: "#4ADE80", display: "inline-block" }}></span>DB Live</div>}
             {dbError && <div style={{ fontSize: 10, color: "#F87171", background: "#F8717115", border: "1px solid #F8717130", padding: "3px 10px", borderRadius: 4 }}>⚠ Offline</div>}
-            <div style={{ background: "#1A2340", border: "1px solid #3B6FE8", color: "#3B6FE8", fontSize: 11, fontWeight: 600, padding: "4px 14px", borderRadius: 4, letterSpacing: "0.08em" }}>OWNER</div>
+            <div style={{ background: "#EEF1FB", border: "1px solid #3B6FE840", color: "#3B6FE8", fontSize: 11, fontWeight: 600, padding: "4px 14px", borderRadius: 4, letterSpacing: "0.08em" }}>OWNER</div>
           </div>
         </div>
 
@@ -1594,8 +1594,8 @@ Return ONLY valid JSON, no markdown, no extra text:
           {activeNav === "dashboard" && (
             <div className="fade-in" style={{ display: "flex", flexDirection: "column", gap: 28 }}>
               <div>
-                <div style={{ fontSize: 28, fontWeight: 700, color: "#FFFFFF", letterSpacing: "-0.02em" }}>GOOD MORNING, FARMER GROUP</div>
-                <div style={{ fontSize: 12, color: "#3A4560", marginTop: 4, letterSpacing: "0.06em" }}>{dayName().toUpperCase()}</div>
+                <div style={{ fontSize: 28, fontWeight: 700, color: "#1A2240", letterSpacing: "-0.02em" }}>GOOD MORNING, FARMER GROUP</div>
+                <div style={{ fontSize: 12, color: "#4A5278", marginTop: 4, letterSpacing: "0.06em" }}>{dayName().toUpperCase()}</div>
               </div>
 
               {activeBU === "all" ? (
@@ -1603,11 +1603,11 @@ Return ONLY valid JSON, no markdown, no extra text:
                   {Object.entries(SAMPLE_STATS).map(([key, s]) => (
                     <div key={key} className="stat-card" style={{ cursor: "pointer" }} onClick={() => handleBUChange(key)}>
                       <div style={{ fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: BU_COLORS[key].accent, marginBottom: 10, fontWeight: 600 }}>{s.label}</div>
-                      <div style={{ fontSize: 22, fontWeight: 700, color: "#FFFFFF", marginBottom: 4 }}>{s.pipeline}</div>
-                      <div style={{ fontSize: 11, color: "#3A4560" }}>Pipeline</div>
-                      <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid #1E2640", display: "flex", justifyContent: "space-between" }}>
-                        <div><div style={{ fontSize: 14, fontWeight: 600, color: "#B8C4E0" }}>{s.jobs}</div><div style={{ fontSize: 10, color: "#3A4560" }}>Active Jobs</div></div>
-                        <div style={{ textAlign: "right" }}><div style={{ fontSize: 14, fontWeight: 600, color: "#B8C4E0" }}>{s.budget}</div><div style={{ fontSize: 10, color: "#3A4560" }}>Budget</div></div>
+                      <div style={{ fontSize: 22, fontWeight: 700, color: "#1A2240", marginBottom: 4 }}>{s.pipeline}</div>
+                      <div style={{ fontSize: 11, color: "#4A5278" }}>Pipeline</div>
+                      <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid #CBD1E8", display: "flex", justifyContent: "space-between" }}>
+                        <div><div style={{ fontSize: 14, fontWeight: 600, color: "#252E52" }}>{s.jobs}</div><div style={{ fontSize: 10, color: "#4A5278" }}>Active Jobs</div></div>
+                        <div style={{ textAlign: "right" }}><div style={{ fontSize: 14, fontWeight: 600, color: "#252E52" }}>{s.budget}</div><div style={{ fontSize: 10, color: "#4A5278" }}>Budget</div></div>
                       </div>
                     </div>
                   ))}
@@ -1621,9 +1621,9 @@ Return ONLY valid JSON, no markdown, no extra text:
                   ].map(s => (
                     <div key={s.label} className="stat-card" style={{ position: "relative", overflow: "hidden" }}>
                       <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: buColor.accent }} />
-                      <div style={{ fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "#3A4560", marginBottom: 10 }}>{s.label}</div>
+                      <div style={{ fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "#4A5278", marginBottom: 10 }}>{s.label}</div>
                       <div style={{ fontSize: 28, fontWeight: 700, color: buColor.accent }}>{s.value}</div>
-                      <div style={{ fontSize: 11, color: "#3A4560", marginTop: 5 }}>{s.sub}</div>
+                      <div style={{ fontSize: 11, color: "#4A5278", marginTop: 5 }}>{s.sub}</div>
                     </div>
                   ))}
                 </div>
@@ -1635,21 +1635,21 @@ Return ONLY valid JSON, no markdown, no extra text:
               {/* Punch list */}
               <div>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
-                  <div style={{ fontSize: 11, letterSpacing: "0.1em", textTransform: "uppercase", color: "#3A4560", fontWeight: 600 }}>Today's Punch List</div>
-                  <div style={{ fontSize: 11, color: "#3A4560" }}>{new Date().toLocaleDateString("en-US", { month: "short", day: "numeric" })}</div>
+                  <div style={{ fontSize: 11, letterSpacing: "0.1em", textTransform: "uppercase", color: "#4A5278", fontWeight: 600 }}>Today's Punch List</div>
+                  <div style={{ fontSize: 11, color: "#4A5278" }}>{new Date().toLocaleDateString("en-US", { month: "short", day: "numeric" })}</div>
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                   {dynamicPunchList.filter(p => activeBU === "all" || p.bu === activeBU).map(item => (
                     <div key={item.id} className="punch-item">
                       <div className="priority-dot" style={{ background: item.priority === "high" ? "#F87171" : "#FCD34D" }} />
-                      <span style={{ fontSize: 13, color: "#B8C4E0", flex: 1 }}>{item.text}</span>
+                      <span style={{ fontSize: 13, color: "#252E52", flex: 1 }}>{item.text}</span>
                       {item.tag && <span style={{ fontSize: 10, color: "#3B6FE8", background: "#3B6FE820", padding: "2px 8px", borderRadius: 10, letterSpacing: "0.06em", textTransform: "uppercase" }}>{item.tag}</span>}
-                      {item.dueDate && <span style={{ fontSize: 10, color: "#3A4560" }}>{item.dueDate}</span>}
-                      <span style={{ fontSize: 10, color: "#3A4560", background: "#1E2640", padding: "2px 8px", borderRadius: 10, textTransform: "uppercase", letterSpacing: "0.06em" }}>{BUSINESS_UNITS.find(b => b.id === item.bu)?.short}</span>
+                      {item.dueDate && <span style={{ fontSize: 10, color: "#4A5278" }}>{item.dueDate}</span>}
+                      <span style={{ fontSize: 10, color: "#4A5278", background: "#CBD1E8", padding: "2px 8px", borderRadius: 10, textTransform: "uppercase", letterSpacing: "0.06em" }}>{BUSINESS_UNITS.find(b => b.id === item.bu)?.short}</span>
                     </div>
                   ))}
                   {dynamicPunchList.filter(p => activeBU === "all" || p.bu === activeBU).length === 0 && (
-                    <div style={{ textAlign: "center", padding: "24px", color: "#2A3560", fontSize: 12 }}>No reminders in the next 7 days.</div>
+                    <div style={{ textAlign: "center", padding: "24px", color: "#3D4570", fontSize: 12 }}>No reminders in the next 7 days.</div>
                   )}
                 </div>
               </div>
@@ -1657,16 +1657,16 @@ Return ONLY valid JSON, no markdown, no extra text:
               {/* Quick access */}
               {activeBU !== "all" && (
                 <div>
-                  <div style={{ fontSize: 11, letterSpacing: "0.1em", textTransform: "uppercase", color: "#3A4560", fontWeight: 600, marginBottom: 14 }}>Quick Access</div>
+                  <div style={{ fontSize: 11, letterSpacing: "0.1em", textTransform: "uppercase", color: "#4A5278", fontWeight: 600, marginBottom: 14 }}>Quick Access</div>
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 10 }}>
                     {navItems.filter(n => n.id !== "dashboard").map(item => (
                       <button key={item.id} onClick={() => setActiveNav(item.id)}
-                        style={{ background: "#161B28", border: "1px solid #1E2640", borderRadius: 8, padding: "16px", cursor: "pointer", textAlign: "left", transition: "all 0.15s", fontFamily: "inherit" }}
+                        style={{ background: "#ECEEF8", border: "1px solid #CBD1E8", borderRadius: 8, padding: "16px", cursor: "pointer", textAlign: "left", transition: "all 0.15s", fontFamily: "inherit" }}
                         onMouseEnter={e => { e.currentTarget.style.borderColor = buColor.accent; e.currentTarget.style.background = buColor.light; }}
-                        onMouseLeave={e => { e.currentTarget.style.borderColor = "#1E2640";      e.currentTarget.style.background = "#161B28"; }}>
+                        onMouseLeave={e => { e.currentTarget.style.borderColor = "#CBD1E8";      e.currentTarget.style.background = "#ECEEF8"; }}>
                         <div style={{ fontSize: 18, marginBottom: 8 }}>{item.icon}</div>
-                        <div style={{ fontSize: 11, color: "#B8C4E0", textTransform: "uppercase", letterSpacing: "0.07em", fontWeight: 500 }}>{item.label}</div>
-                        <div style={{ fontSize: 10, color: "#3A4560", marginTop: 3 }}>→ View</div>
+                        <div style={{ fontSize: 11, color: "#252E52", textTransform: "uppercase", letterSpacing: "0.07em", fontWeight: 500 }}>{item.label}</div>
+                        <div style={{ fontSize: 10, color: "#4A5278", marginTop: 3 }}>→ View</div>
                       </button>
                     ))}
                   </div>
@@ -1680,12 +1680,12 @@ Return ONLY valid JSON, no markdown, no extra text:
             <div className="fade-in" style={{ display: "flex", flexDirection: "column", gap: 22 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div>
-                  <div style={{ fontSize: 22, fontWeight: 700, color: "#FFFFFF", letterSpacing: "-0.01em", textTransform: "uppercase" }}>Customers</div>
-                  <div style={{ fontSize: 11, color: "#3A4560", marginTop: 3, letterSpacing: "0.06em" }}>{companies.length} COMPANIES · {contacts.length} CONTACTS</div>
+                  <div style={{ fontSize: 22, fontWeight: 700, color: "#1A2240", letterSpacing: "-0.01em", textTransform: "uppercase" }}>Customers</div>
+                  <div style={{ fontSize: 11, color: "#4A5278", marginTop: 3, letterSpacing: "0.06em" }}>{companies.length} COMPANIES · {contacts.length} CONTACTS</div>
                 </div>
                 <div style={{ display: "flex", gap: 8 }}>
                   <input className="fi" style={{ width: 200 }} placeholder="Search companies…" value={crmSearch} onChange={e => setCrmSearch(e.target.value)} />
-                  <label className="btn-ghost" style={{ cursor: "pointer", display: "inline-flex", alignItems: "center", padding: "5px 10px", borderRadius: 5, border: "1px solid #1E2640", color: "#4A5270", fontSize: 11, fontFamily: "inherit" }}>
+                  <label className="btn-ghost" style={{ cursor: "pointer", display: "inline-flex", alignItems: "center", padding: "5px 10px", borderRadius: 5, border: "1px solid #CBD1E8", color: "#353C62", fontSize: 11, fontFamily: "inherit" }}>
                     ↑ Import CSV
                     <input type="file" accept=".csv" style={{ display: "none" }} onChange={e => {
                       const file = e.target.files[0];
@@ -1738,7 +1738,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                 ].map(s => (
                   <div key={s.label} className="stat-card" style={{ position: "relative", overflow: "hidden", padding: "14px 18px" }}>
                     <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: s.color }} />
-                    <div style={{ fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "#3A4560", marginBottom: 6 }}>{s.label}</div>
+                    <div style={{ fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "#4A5278", marginBottom: 6 }}>{s.label}</div>
                     <div style={{ fontSize: 22, fontWeight: 700, color: s.color }}>{s.value}</div>
                   </div>
                 ))}
@@ -1752,19 +1752,19 @@ Return ONLY valid JSON, no markdown, no extra text:
                   return (
                     <div key={company.id} className="company-card" onClick={() => setSelectedCompany(company)}>
                       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
-                        <div style={{ width: 40, height: 40, borderRadius: 8, background: "#1A2340", border: "1px solid #2A3560", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 700, color: "#3B6FE8", flexShrink: 0 }}>
+                        <div style={{ width: 40, height: 40, borderRadius: 8, background: "#E8EEFA", border: "1px solid #3D4570", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 700, color: "#3B6FE8", flexShrink: 0 }}>
                           {company.logo ? <img src={company.logo} style={{ width: 36, height: 36, borderRadius: 6, objectFit: "cover" }} alt="" /> : company.name.charAt(0).toUpperCase()}
                         </div>
                         <div style={{ minWidth: 0 }}>
-                          <div style={{ fontSize: 14, color: "#E8ECF4", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{company.name}</div>
-                          {company.website && <div style={{ fontSize: 11, color: "#3A4560" }}>{company.website}</div>}
+                          <div style={{ fontSize: 14, color: "#1A2240", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{company.name}</div>
+                          {company.website && <div style={{ fontSize: 11, color: "#4A5278" }}>{company.website}</div>}
                         </div>
                       </div>
-                      {company.address && <div style={{ fontSize: 11, color: "#3A4560", marginBottom: 10 }}>📍 {company.address}</div>}
-                      <div style={{ display: "flex", justifyContent: "space-between", paddingTop: 10, borderTop: "1px solid #1E2640" }}>
-                        <div><div style={{ fontSize: 13, fontWeight: 600, color: "#B8C4E0" }}>{cc.length}</div><div style={{ fontSize: 10, color: "#3A4560" }}>Contacts</div></div>
-                        <div><div style={{ fontSize: 13, fontWeight: 600, color: "#B8C4E0" }}>{cj.length}</div><div style={{ fontSize: 10, color: "#3A4560" }}>Jobs</div></div>
-                        <div style={{ textAlign: "right" }}><div style={{ fontSize: 13, fontWeight: 600, color: "#3B6FE8" }}>{fmt(tv)}</div><div style={{ fontSize: 10, color: "#3A4560" }}>Contract Val.</div></div>
+                      {company.address && <div style={{ fontSize: 11, color: "#4A5278", marginBottom: 10 }}>📍 {company.address}</div>}
+                      <div style={{ display: "flex", justifyContent: "space-between", paddingTop: 10, borderTop: "1px solid #CBD1E8" }}>
+                        <div><div style={{ fontSize: 13, fontWeight: 600, color: "#252E52" }}>{cc.length}</div><div style={{ fontSize: 10, color: "#4A5278" }}>Contacts</div></div>
+                        <div><div style={{ fontSize: 13, fontWeight: 600, color: "#252E52" }}>{cj.length}</div><div style={{ fontSize: 10, color: "#4A5278" }}>Jobs</div></div>
+                        <div style={{ textAlign: "right" }}><div style={{ fontSize: 13, fontWeight: 600, color: "#3B6FE8" }}>{fmt(tv)}</div><div style={{ fontSize: 10, color: "#4A5278" }}>Contract Val.</div></div>
                       </div>
                     </div>
                   );
@@ -1778,8 +1778,8 @@ Return ONLY valid JSON, no markdown, no extra text:
             <div className="fade-in" style={{ display: "flex", flexDirection: "column", gap: 22 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div>
-                  <div style={{ fontSize: 22, fontWeight: 700, color: "#FFFFFF", letterSpacing: "-0.01em", textTransform: "uppercase" }}>Budgeting</div>
-                  <div style={{ fontSize: 11, color: "#3A4560", marginTop: 3, letterSpacing: "0.06em" }}>MAJOR PROJECTS · PRE-LEAD SCOPING · {pipeline.filter(o => o.bu === "major" && o.stage === "Budgeting").length} PROJECTS</div>
+                  <div style={{ fontSize: 22, fontWeight: 700, color: "#1A2240", letterSpacing: "-0.01em", textTransform: "uppercase" }}>Budgeting</div>
+                  <div style={{ fontSize: 11, color: "#4A5278", marginTop: 3, letterSpacing: "0.06em" }}>MAJOR PROJECTS · PRE-LEAD SCOPING · {pipeline.filter(o => o.bu === "major" && o.stage === "Budgeting").length} PROJECTS</div>
                 </div>
                 <button className="btn-primary" onClick={() => openAdd("Budgeting")}>+ Add Project</button>
               </div>
@@ -1791,7 +1791,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                 ].map(s => (
                   <div key={s.label} className="stat-card" style={{ position: "relative", overflow: "hidden", padding: "14px 18px" }}>
                     <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: s.color }} />
-                    <div style={{ fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "#3A4560", marginBottom: 6 }}>{s.label}</div>
+                    <div style={{ fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "#4A5278", marginBottom: 6 }}>{s.label}</div>
                     <div style={{ fontSize: 22, fontWeight: 700, color: s.color }}>{s.value}</div>
                   </div>
                 ))}
@@ -1805,17 +1805,17 @@ Return ONLY valid JSON, no markdown, no extra text:
                   return (
                     <div key={o.id} className="opp-row" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }} onClick={() => setSelectedOpp(o)}>
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 14, color: "#E8ECF4", fontWeight: 600, marginBottom: 4 }}>{o.name}</div>
+                        <div style={{ fontSize: 14, color: "#1A2240", fontWeight: 600, marginBottom: 4 }}>{o.name}</div>
                         <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
                           {co && <span style={{ fontSize: 11, color: "#3B6FE8" }}>🏢 {co.name}</span>}
-                          {o.budgetDueDate && <span style={{ fontSize: 11, color: overdue ? "#F87171" : soon ? "#FCD34D" : "#3A4560" }}>📅 Budget due: {o.budgetDueDate}{overdue ? " ⚠ OVERDUE" : ""}</span>}
-                          {o.notes && <span style={{ fontSize: 11, color: "#3A4560" }}>📝 {o.notes}</span>}
+                          {o.budgetDueDate && <span style={{ fontSize: 11, color: overdue ? "#F87171" : soon ? "#FCD34D" : "#4A5278" }}>📅 Budget due: {o.budgetDueDate}{overdue ? " ⚠ OVERDUE" : ""}</span>}
+                          {o.notes && <span style={{ fontSize: 11, color: "#4A5278" }}>📝 {o.notes}</span>}
                         </div>
                       </div>
                       <div style={{ display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>
                         <div style={{ textAlign: "right" }}>
                           <div style={{ fontSize: 16, fontWeight: 700, color: "#FCD34D" }}>{fmt(o.value)}</div>
-                          <div style={{ fontSize: 10, color: "#3A4560" }}>estimated</div>
+                          <div style={{ fontSize: 10, color: "#4A5278" }}>estimated</div>
                         </div>
                         <button className="btn-primary" style={{ fontSize: 11, padding: "6px 12px", background: "#4ADE8020", color: "#4ADE80", border: "1px solid #4ADE8040" }}
                           onClick={e => { e.stopPropagation(); setPipeline(pipeline.map(p => p.id === o.id ? { ...p, stage: "Lead" } : p)); }}>
@@ -1830,7 +1830,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                   );
                 })}
                 {pipeline.filter(o => o.bu === "major" && o.stage === "Budgeting").length === 0 && (
-                  <div style={{ textAlign: "center", padding: "48px", color: "#2A3560", fontSize: 12, background: "#161B28", borderRadius: 10, border: "1px solid #1E2640" }}>No projects in budgeting yet</div>
+                  <div style={{ textAlign: "center", padding: "48px", color: "#3D4570", fontSize: 12, background: "#ECEEF8", borderRadius: 10, border: "1px solid #CBD1E8" }}>No projects in budgeting yet</div>
                 )}
               </div>
             </div>
@@ -1841,8 +1841,8 @@ Return ONLY valid JSON, no markdown, no extra text:
             <div className="fade-in" style={{ display: "flex", flexDirection: "column", gap: 22 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div>
-                  <div style={{ fontSize: 22, fontWeight: 700, color: "#FFFFFF", letterSpacing: "-0.01em", textTransform: "uppercase" }}>Active Jobs</div>
-                  <div style={{ fontSize: 11, color: "#3A4560", marginTop: 3, letterSpacing: "0.06em" }}>{majorJobs.length} JOBS · {fmt(majorJobs.reduce((s, j) => s + j.contractValue, 0))} TOTAL</div>
+                  <div style={{ fontSize: 22, fontWeight: 700, color: "#1A2240", letterSpacing: "-0.01em", textTransform: "uppercase" }}>Active Jobs</div>
+                  <div style={{ fontSize: 11, color: "#4A5278", marginTop: 3, letterSpacing: "0.06em" }}>{majorJobs.length} JOBS · {fmt(majorJobs.reduce((s, j) => s + j.contractValue, 0))} TOTAL</div>
                 </div>
                 <button className="btn-primary" onClick={openAddJob}>+ Add Job</button>
               </div>
@@ -1855,7 +1855,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                 ].map(s => (
                   <div key={s.label} className="stat-card" style={{ position: "relative", overflow: "hidden", padding: "14px 18px" }}>
                     <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: s.color }} />
-                    <div style={{ fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "#3A4560", marginBottom: 6 }}>{s.label}</div>
+                    <div style={{ fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "#4A5278", marginBottom: 6 }}>{s.label}</div>
                     <div style={{ fontSize: 22, fontWeight: 700, color: s.color }}>{s.value}</div>
                   </div>
                 ))}
@@ -1870,43 +1870,43 @@ Return ONLY valid JSON, no markdown, no extra text:
 
               {/* ── FM INBOX (unassigned leads) — FM only ── */}
               {activeBU === "facility" && (
-                <div style={{ background: "#0D1020", border: "1px solid #FCD34D30", borderRadius: 12, padding: "18px 20px" }}>
+                <div style={{ background: "#F8F9FD", border: "1px solid #FCD34D30", borderRadius: 12, padding: "18px 20px" }}>
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                       <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#FCD34D", boxShadow: fmInbox.length > 0 ? "0 0 8px #FCD34D" : "none" }} />
                       <span style={{ fontSize: 13, fontWeight: 700, color: "#FCD34D", textTransform: "uppercase", letterSpacing: "0.07em" }}>Lead Inbox</span>
-                      <span style={{ fontSize: 11, color: "#3A4560" }}>{fmInbox.length} unassigned</span>
+                      <span style={{ fontSize: 11, color: "#4A5278" }}>{fmInbox.length} unassigned</span>
                     </div>
                     <button className="btn-ghost" style={{ fontSize: 11, borderColor: "#FCD34D40", color: "#FCD34D" }} onClick={() => { setInboxForm({ name: "", companyName: "", storeCode: "", address: "", scopeOfWork: "", ownersProjectNo: "", bidDueDate: "", notes: "", source: "manual" }); setInboxParseText(""); setShowInboxForm(true); }}>+ New Lead</button>
                   </div>
 
                   {fmInbox.length === 0 && (
-                    <div style={{ textAlign: "center", padding: "24px", color: "#2A3560", fontSize: 12, border: "1px dashed #1E2640", borderRadius: 8 }}>
+                    <div style={{ textAlign: "center", padding: "24px", color: "#3D4570", fontSize: 12, border: "1px dashed #CBD1E8", borderRadius: 8 }}>
                       No unassigned leads — add one manually or paste an email to parse
                     </div>
                   )}
 
                   <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                     {fmInbox.map(lead => (
-                      <div key={lead.id} style={{ background: "#161B28", border: "1px solid #FCD34D20", borderRadius: 8, padding: "14px 16px" }}>
+                      <div key={lead.id} style={{ background: "#ECEEF8", border: "1px solid #FCD34D20", borderRadius: 8, padding: "14px 16px" }}>
                         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10 }}>
                           <div style={{ flex: 1, minWidth: 0 }}>
                             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 5, flexWrap: "wrap" }}>
-                              <span style={{ fontSize: 13, fontWeight: 600, color: "#E8ECF4" }}>{lead.name}</span>
+                              <span style={{ fontSize: 13, fontWeight: 600, color: "#1A2240" }}>{lead.name}</span>
                               {lead.source === "email" && <span style={{ fontSize: 10, background: "#3B6FE820", color: "#3B6FE8", padding: "1px 7px", borderRadius: 4 }}>✉ email</span>}
-                              {lead.storeCode && <span style={{ fontSize: 10, background: "#1A2035", color: "#3A4560", padding: "1px 7px", borderRadius: 4 }}>#{lead.storeCode}</span>}
+                              {lead.storeCode && <span style={{ fontSize: 10, background: "#E8EBFA", color: "#4A5278", padding: "1px 7px", borderRadius: 4 }}>#{lead.storeCode}</span>}
                               {lead.bidDueDate && <span style={{ fontSize: 10, background: "#FCD34D15", color: "#FCD34D", padding: "1px 7px", borderRadius: 4 }}>📋 Bid: {lead.bidDueDate}</span>}
                             </div>
                             <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
                               {lead.companyName && <span style={{ fontSize: 11, color: "#3B6FE8" }}>🏢 {lead.companyName}</span>}
-                              {lead.address     && <span style={{ fontSize: 11, color: "#4A5270" }}>📍 {lead.address}</span>}
+                              {lead.address     && <span style={{ fontSize: 11, color: "#4A5278" }}>📍 {lead.address}</span>}
                             </div>
-                            {lead.scopeOfWork && <div style={{ fontSize: 11, color: "#4A5270", marginTop: 4, fontStyle: "italic" }}>{lead.scopeOfWork}</div>}
+                            {lead.scopeOfWork && <div style={{ fontSize: 11, color: "#4A5278", marginTop: 4, fontStyle: "italic" }}>{lead.scopeOfWork}</div>}
                           </div>
                           <div style={{ display: "flex", gap: 6, flexShrink: 0, alignItems: "center" }}>
                             {/* Assign dropdown */}
                             <select
-                              style={{ background: "#0F1420", border: "1px solid #3B6FE860", color: "#3B6FE8", fontSize: 11, borderRadius: 5, padding: "5px 10px", cursor: "pointer", fontFamily: "inherit" }}
+                              style={{ background: "#FFFFFF", border: "1px solid #3B6FE860", color: "#3B6FE8", fontSize: 11, borderRadius: 5, padding: "5px 10px", cursor: "pointer", fontFamily: "inherit" }}
                               defaultValue=""
                               onChange={e => { if (e.target.value) assignInboxLead(lead, e.target.value); }}>
                               <option value="" disabled>Assign to…</option>
@@ -1927,7 +1927,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                         <div style={{ fontSize: 15, fontWeight: 700, color: "#FCD34D", marginBottom: 18, textTransform: "uppercase", letterSpacing: "0.05em" }}>New Lead</div>
 
                         {/* Email parse box */}
-                        <div style={{ background: "#0D1020", border: "1px solid #3B6FE840", borderRadius: 8, padding: 14, marginBottom: 18 }}>
+                        <div style={{ background: "#F8F9FD", border: "1px solid #3B6FE840", borderRadius: 8, padding: 14, marginBottom: 18 }}>
                           <div style={{ fontSize: 10, color: "#3B6FE8", textTransform: "uppercase", letterSpacing: "0.07em", fontWeight: 600, marginBottom: 8 }}>⚡ Parse from Email</div>
                           <textarea
                             className="fi" rows={5}
@@ -1942,7 +1942,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                           </button>
                         </div>
 
-                        <div style={{ fontSize: 10, color: "#2A3560", textTransform: "uppercase", letterSpacing: "0.1em", textAlign: "center", marginBottom: 14 }}>— or fill in manually —</div>
+                        <div style={{ fontSize: 10, color: "#3D4570", textTransform: "uppercase", letterSpacing: "0.1em", textAlign: "center", marginBottom: 14 }}>— or fill in manually —</div>
 
                         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                           <div><label className="lbl">Job Title / Name *</label><input className="fi" value={inboxForm.name} onChange={e => setInboxForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Roof Leak Repair" /></div>
@@ -1979,18 +1979,18 @@ Return ONLY valid JSON, no markdown, no extra text:
                               const gp  = fmGrossProfit(nte);
                               const vnte = fmVendorNTE(nte);
                               return (
-                                <div style={{ marginTop: 8, background: "#0A0D16", border: "1px solid #1E2640", borderRadius: 6, padding: "10px 14px", display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
+                                <div style={{ marginTop: 8, background: "#F0F2F8", border: "1px solid #CBD1E8", borderRadius: 6, padding: "10px 14px", display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
                                   <div>
-                                    <div style={{ fontSize: 9, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 3 }}>Gross Value</div>
-                                    <div style={{ fontSize: 14, fontWeight: 700, color: "#E8ECF4" }}>{fmt(nte)}</div>
+                                    <div style={{ fontSize: 9, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 3 }}>Gross Value</div>
+                                    <div style={{ fontSize: 14, fontWeight: 700, color: "#1A2240" }}>{fmt(nte)}</div>
                                   </div>
                                   <div>
-                                    <div style={{ fontSize: 9, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 3 }}>Our GP</div>
+                                    <div style={{ fontSize: 9, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 3 }}>Our GP</div>
                                     <div style={{ fontSize: 14, fontWeight: 700, color: "#4ADE80" }}>{fmt(gp)}</div>
-                                    <div style={{ fontSize: 9, color: "#3A4560" }}>{Math.round((gp/nte)*100)}% · {gp === 125 ? "min $125" : "30%"}</div>
+                                    <div style={{ fontSize: 9, color: "#4A5278" }}>{Math.round((gp/nte)*100)}% · {gp === 125 ? "min $125" : "30%"}</div>
                                   </div>
                                   <div>
-                                    <div style={{ fontSize: 9, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 3 }}>Vendor NTE</div>
+                                    <div style={{ fontSize: 9, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 3 }}>Vendor NTE</div>
                                     <div style={{ fontSize: 14, fontWeight: 700, color: "#FCD34D" }}>{fmt(vnte)}</div>
                                   </div>
                                 </div>
@@ -2010,8 +2010,8 @@ Return ONLY valid JSON, no markdown, no extra text:
               )}
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                 <div>
-                  <div style={{ fontSize: 22, fontWeight: 700, color: "#FFFFFF", letterSpacing: "-0.01em", textTransform: "uppercase" }}>Pipeline</div>
-                  <div style={{ fontSize: 11, color: "#3A4560", marginTop: 3, letterSpacing: "0.06em" }}>{BUSINESS_UNITS.find(b => b.id === activeBU)?.label.toUpperCase()} · {visiblePipeline.length} OPPORTUNITIES</div>
+                  <div style={{ fontSize: 22, fontWeight: 700, color: "#1A2240", letterSpacing: "-0.01em", textTransform: "uppercase" }}>Pipeline</div>
+                  <div style={{ fontSize: 11, color: "#4A5278", marginTop: 3, letterSpacing: "0.06em" }}>{BUSINESS_UNITS.find(b => b.id === activeBU)?.label.toUpperCase()} · {visiblePipeline.length} OPPORTUNITIES</div>
                 </div>
                 <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                   {activeBU === "all" && (
@@ -2037,7 +2037,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                 ].map(s => (
                   <div key={s.label} className="stat-card" style={{ position: "relative", overflow: "hidden", padding: "14px 18px" }}>
                     <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: s.color }} />
-                    <div style={{ fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "#3A4560", marginBottom: 6 }}>{s.label}</div>
+                    <div style={{ fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "#4A5278", marginBottom: 6 }}>{s.label}</div>
                     <div style={{ fontSize: 22, fontWeight: 700, color: s.color }}>{s.value}</div>
                   </div>
                 ))}
@@ -2053,7 +2053,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                 const totalFmPipeline = fmPipelineJobs.reduce((s,j) => s + (j.contractValue||0), 0);
                 return (
                   <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-                    <div style={{ fontSize: 11, color: "#3A4560", letterSpacing: "0.07em", textTransform: "uppercase", borderBottom: "1px solid #1E2640", paddingBottom: 10 }}>
+                    <div style={{ fontSize: 11, color: "#4A5278", letterSpacing: "0.07em", textTransform: "uppercase", borderBottom: "1px solid #CBD1E8", paddingBottom: 10 }}>
                       {fmPipelineJobs.length} jobs in pipeline · {fmt(totalFmPipeline)} total value
                     </div>
                     <div style={{ display: "flex", gap: 10, overflowX: "auto", paddingBottom: 8 }}>
@@ -2064,7 +2064,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                             <div style={{ background: st.color + "15", border: "1px solid " + st.color + "30", borderRadius: 7, padding: "8px 12px", marginBottom: 10 }}>
                               <div style={{ fontSize: 10, letterSpacing: "0.07em", textTransform: "uppercase", color: st.color, fontWeight: 600, marginBottom: 2 }}>{st.label}</div>
                               <div style={{ display: "flex", justifyContent: "space-between" }}>
-                                <span style={{ fontSize: 10, color: "#3A4560" }}>{stageJobs.length} job{stageJobs.length !== 1 ? "s" : ""}</span>
+                                <span style={{ fontSize: 10, color: "#4A5278" }}>{stageJobs.length} job{stageJobs.length !== 1 ? "s" : ""}</span>
                                 <span style={{ fontSize: 11, color: st.color, fontWeight: 600 }}>{fmt(stageJobs.reduce((s,j) => s+(j.contractValue||0),0))}</span>
                               </div>
                             </div>
@@ -2076,13 +2076,13 @@ Return ONLY valid JSON, no markdown, no extra text:
                                 const overdue = actionDate && new Date(actionDate) < new Date();
                                 const soon    = actionDate && new Date(actionDate) <= new Date(Date.now() + 3*86400000);
                                 return (
-                                  <div key={job.id} style={{ background: "#161B28", border: "1px solid " + st.color + "25", borderRadius: 8, padding: 12, cursor: "pointer" }} onClick={() => setSelectedFmJob(job)}>
-                                    <div style={{ fontSize: 12, color: "#E8ECF4", fontWeight: 500, lineHeight: 1.35, marginBottom: 4 }}>{job.name}</div>
+                                  <div key={job.id} style={{ background: "#ECEEF8", border: "1px solid " + st.color + "25", borderRadius: 8, padding: 12, cursor: "pointer" }} onClick={() => setSelectedFmJob(job)}>
+                                    <div style={{ fontSize: 12, color: "#1A2240", fontWeight: 500, lineHeight: 1.35, marginBottom: 4 }}>{job.name}</div>
                                     {co && <div style={{ fontSize: 10, color: "#3B6FE8", marginBottom: 3 }}>🏢 {co.name}</div>}
-                                    {job.storeCode && <div style={{ fontSize: 10, color: "#3A4560", marginBottom: 3 }}>#{job.storeCode}</div>}
-                                    {job.coordinator && <div style={{ fontSize: 10, color: "#4A5270", marginBottom: 3 }}>👤 {job.coordinator}</div>}
-                                    {sub && <div style={{ fontSize: 10, color: "#4A5270", marginBottom: 3 }}>🔧 {sub.name}</div>}
-                                    {actionDate && <div style={{ fontSize: 10, color: overdue ? "#F87171" : soon ? "#FCD34D" : "#3A4560", marginBottom: 6 }}>📅 {st.actionLabel}: {actionDate}{overdue ? " ⚠" : ""}</div>}
+                                    {job.storeCode && <div style={{ fontSize: 10, color: "#4A5278", marginBottom: 3 }}>#{job.storeCode}</div>}
+                                    {job.coordinator && <div style={{ fontSize: 10, color: "#353C62", marginBottom: 3 }}>👤 {job.coordinator}</div>}
+                                    {sub && <div style={{ fontSize: 10, color: "#353C62", marginBottom: 3 }}>🔧 {sub.name}</div>}
+                                    {actionDate && <div style={{ fontSize: 10, color: overdue ? "#F87171" : soon ? "#FCD34D" : "#4A5278", marginBottom: 6 }}>📅 {st.actionLabel}: {actionDate}{overdue ? " ⚠" : ""}</div>}
                                     {job.contractValue > 0 && <div style={{ fontSize: 14, fontWeight: 700, color: st.color, marginBottom: 8 }}>{fmt(job.contractValue)}</div>}
                                     <div style={{ display: "flex", gap: 5 }} onClick={e => e.stopPropagation()}>
                                       {FM_PIPELINE_STAGES.map((s, i) => {
@@ -2103,7 +2103,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                                   </div>
                                 );
                               })}
-                              {stageJobs.length === 0 && <div style={{ border: "1px dashed " + st.color + "20", borderRadius: 8, padding: "20px 8px", textAlign: "center", fontSize: 10, color: "#1E2840" }}>EMPTY</div>}
+                              {stageJobs.length === 0 && <div style={{ border: "1px dashed " + st.color + "20", borderRadius: 8, padding: "20px 8px", textAlign: "center", fontSize: 10, color: "#8892B8" }}>EMPTY</div>}
                             </div>
                           </div>
                         );
@@ -2124,7 +2124,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                         <div style={{ background: sc.bg, border: "1px solid " + sc.color + "30", borderRadius: 7, padding: "8px 12px", marginBottom: 10 }}>
                           <div style={{ fontSize: 10, letterSpacing: "0.07em", textTransform: "uppercase", color: sc.color, fontWeight: 600, marginBottom: 2 }}>{stage}</div>
                           <div style={{ display: "flex", justifyContent: "space-between" }}>
-                            <span style={{ fontSize: 10, color: "#3A4560" }}>{stageOpps.length} opp{stageOpps.length !== 1 ? "s" : ""}</span>
+                            <span style={{ fontSize: 10, color: "#4A5278" }}>{stageOpps.length} opp{stageOpps.length !== 1 ? "s" : ""}</span>
                             <span style={{ fontSize: 11, color: sc.color, fontWeight: 600 }}>{fmt(stageOpps.reduce((s, o) => s + o.value, 0))}</span>
                           </div>
                         </div>
@@ -2132,8 +2132,8 @@ Return ONLY valid JSON, no markdown, no extra text:
                           {stageOpps.map(o => {
                             const co = companies.find(c => c.id === o.companyId);
                             return (
-                              <div key={o.id} style={{ background: "#161B28", border: "1px solid " + sc.color + "25", borderRadius: 8, padding: 12, cursor: "pointer" }} onClick={() => setSelectedOpp(o)}>
-                                <div style={{ fontSize: 12, color: "#E8ECF4", fontWeight: 500, lineHeight: 1.35, marginBottom: 4 }}>{o.name}</div>
+                              <div key={o.id} style={{ background: "#ECEEF8", border: "1px solid " + sc.color + "25", borderRadius: 8, padding: 12, cursor: "pointer" }} onClick={() => setSelectedOpp(o)}>
+                                <div style={{ fontSize: 12, color: "#1A2240", fontWeight: 500, lineHeight: 1.35, marginBottom: 4 }}>{o.name}</div>
                                 {co && <div style={{ fontSize: 10, color: "#3B6FE8", marginBottom: 4 }}>🏢 {co.name}</div>}
                                 {o.bidDueDate && <div style={{ fontSize: 10, color: "#FCD34D", marginBottom: 4 }}>📋 Bid: {o.bidDueDate}</div>}
                                 <div style={{ fontSize: 15, fontWeight: 700, color: sc.color, marginBottom: 8 }}>{fmt(o.value)}</div>
@@ -2145,7 +2145,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                               </div>
                             );
                           })}
-                          {stageOpps.length === 0 && <div style={{ border: "1px dashed " + sc.color + "20", borderRadius: 8, padding: "20px 8px", textAlign: "center", fontSize: 10, color: "#1E2840" }}>EMPTY</div>}
+                          {stageOpps.length === 0 && <div style={{ border: "1px dashed " + sc.color + "20", borderRadius: 8, padding: "20px 8px", textAlign: "center", fontSize: 10, color: "#8892B8" }}>EMPTY</div>}
                         </div>
                       </div>
                     );
@@ -2155,7 +2155,7 @@ Return ONLY valid JSON, no markdown, no extra text:
 
               {activeBU !== "facility" && pipelineView === "list" && (
                 <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                  <div style={{ display: "grid", gridTemplateColumns: "2fr 1.5fr 1fr 1fr 1fr auto", gap: 12, padding: "6px 16px", fontSize: 10, letterSpacing: "0.08em", textTransform: "uppercase", color: "#2A3560" }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "2fr 1.5fr 1fr 1fr 1fr auto", gap: 12, padding: "6px 16px", fontSize: 10, letterSpacing: "0.08em", textTransform: "uppercase", color: "#3D4570" }}>
                     <span>Opportunity</span><span>Company</span><span>Stage</span><span style={{ textAlign: "right" }}>Value</span><span>Close</span><span />
                   </div>
                   {visiblePipeline.map(o => {
@@ -2164,13 +2164,13 @@ Return ONLY valid JSON, no markdown, no extra text:
                     return (
                       <div key={o.id} className="opp-row" style={{ display: "grid", gridTemplateColumns: "2fr 1.5fr 1fr 1fr 1fr auto", gap: 12, alignItems: "center" }} onClick={() => setSelectedOpp(o)}>
                         <div>
-                          <div style={{ fontSize: 13, color: "#E8ECF4", fontWeight: 500 }}>{o.name}</div>
+                          <div style={{ fontSize: 13, color: "#1A2240", fontWeight: 500 }}>{o.name}</div>
                           {o.bidDueDate && <div style={{ fontSize: 10, color: "#FCD34D", marginTop: 2 }}>📋 Bid: {o.bidDueDate}</div>}
                         </div>
                         <div style={{ fontSize: 11, color: "#3B6FE8" }}>{co ? co.name : ""}</div>
                         <span className="pill" style={{ background: sc.bg, color: sc.color }}>{o.stage}</span>
-                        <div style={{ fontSize: 14, fontWeight: 600, color: "#E8ECF4", textAlign: "right" }}>{fmt(o.value)}</div>
-                        <div style={{ fontSize: 11, color: "#3A4560" }}>{o.closeDate}</div>
+                        <div style={{ fontSize: 14, fontWeight: 600, color: "#1A2240", textAlign: "right" }}>{fmt(o.value)}</div>
+                        <div style={{ fontSize: 11, color: "#4A5278" }}>{o.closeDate}</div>
                         <div style={{ display: "flex", gap: 5 }} onClick={e => e.stopPropagation()}>
                           <button className="btn-ghost" onClick={() => openEdit(o)}>✎</button>
                           <button className="btn-ghost" style={{ color: "#F87171", borderColor: "#F8717120" }} onClick={() => deleteOpp(o.id)}>✕</button>
@@ -2188,14 +2188,14 @@ Return ONLY valid JSON, no markdown, no extra text:
             <div className="fade-in" style={{ display: "flex", flexDirection: "column", gap: 22 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div>
-                  <div style={{ fontSize: 22, fontWeight: 700, color: "#FFFFFF", letterSpacing: "-0.01em", textTransform: "uppercase" }}>Sites</div>
-                  <div style={{ fontSize: 11, color: "#3A4560", marginTop: 3, letterSpacing: "0.06em" }}>
+                  <div style={{ fontSize: 22, fontWeight: 700, color: "#1A2240", letterSpacing: "-0.01em", textTransform: "uppercase" }}>Sites</div>
+                  <div style={{ fontSize: 11, color: "#4A5278", marginTop: 3, letterSpacing: "0.06em" }}>
                     {BUSINESS_UNITS.find(b => b.id === activeBU)?.label.toUpperCase()} · {sites.length} SITES
                   </div>
                 </div>
                 <div style={{ display: "flex", gap: 8 }}>
                   <input className="fi" style={{ width: 200 }} placeholder="Search sites…" value={siteSearch} onChange={e => setSiteSearch(e.target.value)} />
-                  <label className="btn-ghost" style={{ cursor: "pointer", display: "inline-flex", alignItems: "center", padding: "5px 10px", borderRadius: 5, border: "1px solid #1E2640", color: "#4A5270", fontSize: 11, fontFamily: "inherit" }}>
+                  <label className="btn-ghost" style={{ cursor: "pointer", display: "inline-flex", alignItems: "center", padding: "5px 10px", borderRadius: 5, border: "1px solid #CBD1E8", color: "#353C62", fontSize: 11, fontFamily: "inherit" }}>
                     ↑ Import CSV
                     <input type="file" accept=".csv" style={{ display: "none" }} onChange={e => {
                       const file = e.target.files[0]; if (!file) return;
@@ -2269,7 +2269,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                 ].map(s => (
                   <div key={s.label} className="stat-card" style={{ position: "relative", overflow: "hidden", padding: "14px 18px" }}>
                     <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: s.color }} />
-                    <div style={{ fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "#3A4560", marginBottom: 6 }}>{s.label}</div>
+                    <div style={{ fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "#4A5278", marginBottom: 6 }}>{s.label}</div>
                     <div style={{ fontSize: 22, fontWeight: 700, color: s.color }}>{s.value}</div>
                   </div>
                 ))}
@@ -2283,14 +2283,14 @@ Return ONLY valid JSON, no markdown, no extra text:
                       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
                         <div style={{ width: 36, height: 36, borderRadius: 8, background: buColor.light, border: "1px solid " + buColor.accent + "40", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, flexShrink: 0 }}>📍</div>
                         <div style={{ minWidth: 0 }}>
-                          <div style={{ fontSize: 13, color: "#E8ECF4", fontWeight: 600 }}>Store #{site.storeNumber || "—"}</div>
+                          <div style={{ fontSize: 13, color: "#1A2240", fontWeight: 600 }}>Store #{site.storeNumber || "—"}</div>
                           {co && <div style={{ fontSize: 11, color: "#3B6FE8" }}>{co.name}</div>}
                         </div>
                       </div>
-                      {site.address && <div style={{ fontSize: 11, color: "#3A4560", marginBottom: 8 }}>📍 {site.address}</div>}
-                      {site.phone   && <div style={{ fontSize: 11, color: "#3A4560", marginBottom: 4 }}>📞 {site.phone}</div>}
-                      <div style={{ display: "flex", justifyContent: "space-between", paddingTop: 10, borderTop: "1px solid #1E2640" }}>
-                        <div><div style={{ fontSize: 13, fontWeight: 600, color: "#B8C4E0" }}>{siteContacts.length}</div><div style={{ fontSize: 10, color: "#3A4560" }}>Contacts</div></div>
+                      {site.address && <div style={{ fontSize: 11, color: "#4A5278", marginBottom: 8 }}>📍 {site.address}</div>}
+                      {site.phone   && <div style={{ fontSize: 11, color: "#4A5278", marginBottom: 4 }}>📞 {site.phone}</div>}
+                      <div style={{ display: "flex", justifyContent: "space-between", paddingTop: 10, borderTop: "1px solid #CBD1E8" }}>
+                        <div><div style={{ fontSize: 13, fontWeight: 600, color: "#252E52" }}>{siteContacts.length}</div><div style={{ fontSize: 10, color: "#4A5278" }}>Contacts</div></div>
                         <div style={{ display: "flex", gap: 6 }} onClick={e => e.stopPropagation()}>
                           <button className="btn-ghost" style={{ fontSize: 11 }} onClick={() => openEditSite(site)}>✎</button>
                           <button className="btn-ghost" style={{ fontSize: 11, color: "#F87171", borderColor: "#F8717120" }} onClick={() => deleteSite(site.id)}>✕</button>
@@ -2299,7 +2299,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                     </div>
                   );
                 })}
-                {sites.length === 0 && <div style={{ gridColumn: "1/-1", textAlign: "center", padding: "48px", color: "#2A3560", fontSize: 12, background: "#161B28", borderRadius: 10, border: "1px solid #1E2640" }}>No sites yet</div>}
+                {sites.length === 0 && <div style={{ gridColumn: "1/-1", textAlign: "center", padding: "48px", color: "#3D4570", fontSize: 12, background: "#ECEEF8", borderRadius: 10, border: "1px solid #CBD1E8" }}>No sites yet</div>}
               </div>
             </div>
           )}
@@ -2359,8 +2359,8 @@ Return ONLY valid JSON, no markdown, no extra text:
                 {/* Header */}
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <div>
-                    <div style={{ fontSize: 22, fontWeight: 700, color: "#FFFFFF", letterSpacing: "-0.01em", textTransform: "uppercase" }}>Sites — {activeBU === "lawn" ? "Lawn" : "Snow"}</div>
-                    <div style={{ fontSize: 11, color: "#3A4560", marginTop: 3, letterSpacing: "0.06em" }}>{currentSites.length} SITES · {uniqueCompanyIds.length} COMPANIES{taggedSites.length === 0 ? " · ⚠ No BU tags set — showing all sites" : ""}</div>
+                    <div style={{ fontSize: 22, fontWeight: 700, color: "#1A2240", letterSpacing: "-0.01em", textTransform: "uppercase" }}>Sites — {activeBU === "lawn" ? "Lawn" : "Snow"}</div>
+                    <div style={{ fontSize: 11, color: "#4A5278", marginTop: 3, letterSpacing: "0.06em" }}>{currentSites.length} SITES · {uniqueCompanyIds.length} COMPANIES{taggedSites.length === 0 ? " · ⚠ No BU tags set — showing all sites" : ""}</div>
                   </div>
                   <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                     <input className="fi" style={{ width: 200 }} placeholder="Search sites, companies…" value={lsSearch} onChange={e => setLsSearch(e.target.value)} />
@@ -2378,7 +2378,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                       );
                       return null;
                     })()}
-                    <label className="btn-ghost" style={{ cursor: "pointer", display: "inline-flex", alignItems: "center", padding: "5px 10px", borderRadius: 5, border: "1px solid #1E2640", color: "#4A5270", fontSize: 11, fontFamily: "inherit" }}>
+                    <label className="btn-ghost" style={{ cursor: "pointer", display: "inline-flex", alignItems: "center", padding: "5px 10px", borderRadius: 5, border: "1px solid #CBD1E8", color: "#353C62", fontSize: 11, fontFamily: "inherit" }}>
                       ↑ Import CSV
                       <input type="file" accept=".csv" style={{ display: "none" }} onChange={e => {
                         const file = e.target.files[0]; if (!file) return;
@@ -2437,21 +2437,21 @@ Return ONLY valid JSON, no markdown, no extra text:
                   ].map(s => (
                     <div key={s.label} className="stat-card" style={{ position: "relative", overflow: "hidden", padding: "14px 18px" }}>
                       <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: s.color }} />
-                      <div style={{ fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "#3A4560", marginBottom: 6 }}>{s.label}</div>
+                      <div style={{ fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "#4A5278", marginBottom: 6 }}>{s.label}</div>
                       <div style={{ fontSize: 22, fontWeight: 700, color: s.color }}>{s.value}</div>
                     </div>
                   ))}
                 </div>
 
                 {/* Map */}
-                <div style={{ background: "#161B28", border: "1px solid #1E2640", borderRadius: 12, overflow: "hidden" }}>
-                  <div style={{ padding: "10px 16px", borderBottom: "1px solid #1E2640", display: "flex", alignItems: "center", gap: 8 }}>
-                    <div style={{ fontSize: 11, color: "#3A4560", letterSpacing: "0.08em", textTransform: "uppercase", fontWeight: 600 }}>Service Area Map</div>
+                <div style={{ background: "#ECEEF8", border: "1px solid #CBD1E8", borderRadius: 12, overflow: "hidden" }}>
+                  <div style={{ padding: "10px 16px", borderBottom: "1px solid #CBD1E8", display: "flex", alignItems: "center", gap: 8 }}>
+                    <div style={{ fontSize: 11, color: "#4A5278", letterSpacing: "0.08em", textTransform: "uppercase", fontWeight: 600 }}>Service Area Map</div>
                     <div style={{ display: "flex", alignItems: "center", gap: 5, marginLeft: 8 }}>
-                      <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#4ADE80" }} /><span style={{ fontSize: 10, color: "#B8C4E0" }}>Contracted ({contractedCount})</span>
+                      <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#4ADE80" }} /><span style={{ fontSize: 10, color: "#252E52" }}>Contracted ({contractedCount})</span>
                     </div>
                     <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                      <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#FCD34D" }} /><span style={{ fontSize: 10, color: "#B8C4E0" }}>In Progress ({currentSites.length - contractedCount})</span>
+                      <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#FCD34D" }} /><span style={{ fontSize: 10, color: "#252E52" }}>In Progress ({currentSites.length - contractedCount})</span>
                     </div>
                   </div>
                   <div style={{ height: 340, position: "relative" }}>
@@ -2459,7 +2459,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                       srcDoc={`<!DOCTYPE html><html><head>
                         <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
                         <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-                        <style>html,body,#map{margin:0;padding:0;height:100%;background:#0F1117;}</style>
+                        <style>html,body,#map{margin:0;padding:0;height:100%;background:#FFFFFF;}</style>
                       </head><body><div id="map"></div><script>
                         var map = L.map('map', { zoomControl: true, attributionControl: false }).setView([39.5, -98.5], 4);
                         L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { maxZoom: 19 }).addTo(map);
@@ -2475,7 +2475,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                           bounds.push([s.lat,s.lng]);
                         });
                         if(bounds.length > 1) map.fitBounds(bounds, {padding:[20,20]});
-                        if(bounds.length === 0) { var el=document.getElementById('map'); el.innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#3A4560;font-family:sans-serif;font-size:13px">No geocoded sites yet</div>'; }
+                        if(bounds.length === 0) { var el=document.getElementById('map'); el.innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#4A5278;font-family:sans-serif;font-size:13px">No geocoded sites yet</div>'; }
                       </script></body></html>`}
                     />
                   </div>
@@ -2484,12 +2484,12 @@ Return ONLY valid JSON, no markdown, no extra text:
                 {/* ── Company → State → Sites Hierarchy ── */}
                 <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                   {/* Column header */}
-                  <div style={{ display: "grid", gridTemplateColumns: "28px 1fr 80px 90px 80px", padding: "6px 14px", fontSize: 9, color: "#2A3560", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", borderBottom: "1px solid #1E2640" }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "28px 1fr 80px 90px 80px", padding: "6px 14px", fontSize: 9, color: "#3D4570", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", borderBottom: "1px solid #CBD1E8" }}>
                     <div></div><div>Company / Location</div><div style={{ textAlign: "right" }}>Sites</div><div style={{ textAlign: "right" }}>Contracted</div><div style={{ textAlign: "right" }}>Annual</div>
                   </div>
 
                   {Object.keys(byCompany).length === 0 && (
-                    <div style={{ textAlign: "center", padding: "40px", color: "#2A3560", fontSize: 12, background: "#161B28", borderRadius: 8, border: "1px solid #1E2640" }}>
+                    <div style={{ textAlign: "center", padding: "40px", color: "#3D4570", fontSize: 12, background: "#ECEEF8", borderRadius: 8, border: "1px solid #CBD1E8" }}>
                       No sites yet — import a CSV or add sites manually
                     </div>
                   )}
@@ -2511,20 +2511,20 @@ Return ONLY valid JSON, no markdown, no extra text:
                     const stateKeys = Object.keys(byState).sort();
 
                     return (
-                      <div key={cid} style={{ background: "#0A0D16", border: "1px solid #1E2640", borderRadius: 8, overflow: "hidden" }}>
+                      <div key={cid} style={{ background: "#F0F2F8", border: "1px solid #CBD1E8", borderRadius: 8, overflow: "hidden" }}>
                         {/* Company row */}
                         <div onClick={() => { setExpandedCompany(coExpanded ? null : cid); setExpandedState(null); }}
-                          style={{ display: "grid", gridTemplateColumns: "28px 1fr 80px 90px 80px", padding: "11px 14px", cursor: "pointer", alignItems: "center", background: coExpanded ? "#141824" : "transparent", transition: "background 0.15s" }}
-                          onMouseEnter={e => { if (!coExpanded) e.currentTarget.style.background = "#0D1020"; }}
+                          style={{ display: "grid", gridTemplateColumns: "28px 1fr 80px 90px 80px", padding: "11px 14px", cursor: "pointer", alignItems: "center", background: coExpanded ? "#F5F7FC" : "transparent", transition: "background 0.15s" }}
+                          onMouseEnter={e => { if (!coExpanded) e.currentTarget.style.background = "#F8F9FD"; }}
                           onMouseLeave={e => { if (!coExpanded) e.currentTarget.style.background = "transparent"; }}>
-                          <div style={{ fontSize: 12, color: "#3A4560" }}>{coExpanded ? "▼" : "▶"}</div>
+                          <div style={{ fontSize: 12, color: "#4A5278" }}>{coExpanded ? "▼" : "▶"}</div>
                           <div>
-                            <div style={{ fontSize: 13, fontWeight: 700, color: "#E8ECF4" }}>{coName}</div>
-                            <div style={{ fontSize: 10, color: "#3A4560", marginTop: 2 }}>{stateKeys.length} {stateKeys.length === 1 ? "state" : "states"}</div>
+                            <div style={{ fontSize: 13, fontWeight: 700, color: "#1A2240" }}>{coName}</div>
+                            <div style={{ fontSize: 10, color: "#4A5278", marginTop: 2 }}>{stateKeys.length} {stateKeys.length === 1 ? "state" : "states"}</div>
                           </div>
-                          <div style={{ fontSize: 12, fontWeight: 600, color: "#B8C4E0", textAlign: "right" }}>{companySites.length}</div>
-                          <div style={{ fontSize: 11, color: coContracted > 0 ? "#4ADE80" : "#3A4560", textAlign: "right" }}>{coContracted > 0 ? coContracted + " ✓" : "—"}</div>
-                          <div style={{ fontSize: 11, fontWeight: coAnnual > 0 ? 700 : 400, color: coAnnual > 0 ? "#4ADE80" : "#2A3560", textAlign: "right" }}>{coAnnual > 0 ? "$" + Math.round(coAnnual/1000) + "k" : "—"}</div>
+                          <div style={{ fontSize: 12, fontWeight: 600, color: "#252E52", textAlign: "right" }}>{companySites.length}</div>
+                          <div style={{ fontSize: 11, color: coContracted > 0 ? "#4ADE80" : "#4A5278", textAlign: "right" }}>{coContracted > 0 ? coContracted + " ✓" : "—"}</div>
+                          <div style={{ fontSize: 11, fontWeight: coAnnual > 0 ? 700 : 400, color: coAnnual > 0 ? "#4ADE80" : "#3D4570", textAlign: "right" }}>{coAnnual > 0 ? "$" + Math.round(coAnnual/1000) + "k" : "—"}</div>
                         </div>
 
                         {/* States within company */}
@@ -2534,18 +2534,18 @@ Return ONLY valid JSON, no markdown, no extra text:
                           const stContracted = stateSites.filter(isContracted).length;
                           const stAnnual = stateSites.reduce((sum, s) => sum + lawnBidAnnualOur(getLawnBid(s.id)), 0);
                           return (
-                            <div key={stKey} style={{ borderTop: "1px solid #1E2640" }}>
+                            <div key={stKey} style={{ borderTop: "1px solid #CBD1E8" }}>
                               {/* State row */}
                               <div onClick={() => setExpandedState(stExpanded ? null : (cid + stKey))}
-                                style={{ display: "grid", gridTemplateColumns: "28px 1fr 80px 90px 80px", padding: "9px 14px 9px 36px", cursor: "pointer", alignItems: "center", background: stExpanded ? "#111520" : "#0D1020", transition: "background 0.15s" }}>
-                                <div style={{ fontSize: 11, color: "#3A4560" }}>{stExpanded ? "▼" : "▶"}</div>
+                                style={{ display: "grid", gridTemplateColumns: "28px 1fr 80px 90px 80px", padding: "9px 14px 9px 36px", cursor: "pointer", alignItems: "center", background: stExpanded ? "#EEF0F8" : "#F8F9FD", transition: "background 0.15s" }}>
+                                <div style={{ fontSize: 11, color: "#4A5278" }}>{stExpanded ? "▼" : "▶"}</div>
                                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                                  <div style={{ fontSize: 11, fontWeight: 600, color: "#B8C4E0" }}>{stKey}</div>
-                                  <div style={{ fontSize: 10, color: "#3A4560" }}>{stateSites.length} sites</div>
+                                  <div style={{ fontSize: 11, fontWeight: 600, color: "#252E52" }}>{stKey}</div>
+                                  <div style={{ fontSize: 10, color: "#4A5278" }}>{stateSites.length} sites</div>
                                 </div>
                                 <div style={{ fontSize: 11, color: "#6B7694", textAlign: "right" }}>{stateSites.length}</div>
-                                <div style={{ fontSize: 11, color: stContracted > 0 ? "#4ADE80" : "#3A4560", textAlign: "right" }}>{stContracted > 0 ? stContracted + " ✓" : "—"}</div>
-                                <div style={{ fontSize: 11, fontWeight: stAnnual > 0 ? 700 : 400, color: stAnnual > 0 ? "#4ADE80" : "#2A3560", textAlign: "right" }}>{stAnnual > 0 ? "$" + Math.round(stAnnual/1000) + "k" : "—"}</div>
+                                <div style={{ fontSize: 11, color: stContracted > 0 ? "#4ADE80" : "#4A5278", textAlign: "right" }}>{stContracted > 0 ? stContracted + " ✓" : "—"}</div>
+                                <div style={{ fontSize: 11, fontWeight: stAnnual > 0 ? 700 : 400, color: stAnnual > 0 ? "#4ADE80" : "#3D4570", textAlign: "right" }}>{stAnnual > 0 ? "$" + Math.round(stAnnual/1000) + "k" : "—"}</div>
                               </div>
 
                               {/* Site rows within state */}
@@ -2555,23 +2555,23 @@ Return ONLY valid JSON, no markdown, no extra text:
                                 const bidStatus = bid ? LAWN_BID_STATUSES.find(s => s.id === bid.status) : null;
                                 const sub = bid?.selectedSubId ? subcontractors.find(s => s.id === bid.selectedSubId) : null;
                                 const annualVal = lawnBidAnnualOur(bid);
-                                const dotColor = contracted ? "#4ADE80" : bid ? "#FCD34D" : "#2A3560";
+                                const dotColor = contracted ? "#4ADE80" : bid ? "#FCD34D" : "#3D4570";
                                 return (
                                   <div key={site.id} onClick={() => setSelectedLsSite(site)}
-                                    style={{ display: "grid", gridTemplateColumns: "28px 1fr 80px 90px 80px", padding: "8px 14px 8px 54px", alignItems: "center", borderTop: "1px solid #1E264040", background: idx % 2 === 0 ? "#080B14" : "#0A0D16", cursor: "pointer" }}
-                                    onMouseEnter={e => e.currentTarget.style.background = "#141824"}
-                                    onMouseLeave={e => e.currentTarget.style.background = idx % 2 === 0 ? "#080B14" : "#0A0D16"}>
+                                    style={{ display: "grid", gridTemplateColumns: "28px 1fr 80px 90px 80px", padding: "8px 14px 8px 54px", alignItems: "center", borderTop: "1px solid #CBD1E840", background: idx % 2 === 0 ? "#FAFBFF" : "#F5F7FC", cursor: "pointer" }}
+                                    onMouseEnter={e => e.currentTarget.style.background = "#F5F7FC"}
+                                    onMouseLeave={e => e.currentTarget.style.background = idx % 2 === 0 ? "#F5F7FC" : "#F0F2F8"}>
                                     <div style={{ display: "flex", alignItems: "center" }}>
                                       <div style={{ width: 7, height: 7, borderRadius: "50%", background: dotColor }} />
                                     </div>
                                     <div>
-                                      <div style={{ fontSize: 12, color: "#E8ECF4", fontWeight: 500 }}>
+                                      <div style={{ fontSize: 12, color: "#1A2240", fontWeight: 500 }}>
                                         {site.storeNumber ? <span style={{ fontWeight: 700 }}>#{site.storeNumber} </span> : null}
                                         <span style={{ color: "#6B7694", fontWeight: 400 }}>{site.address}</span>
                                       </div>
                                       {sub && <div style={{ fontSize: 10, color: "#A78BFA", marginTop: 1 }}>🔧 {sub.name}</div>}
                                     </div>
-                                    <div style={{ fontSize: 10, color: "#3A4560", textAlign: "right" }}>
+                                    <div style={{ fontSize: 10, color: "#4A5278", textAlign: "right" }}>
                                       {site.phone || ""}
                                     </div>
                                     <div style={{ fontSize: 10, textAlign: "right" }}>
@@ -2579,10 +2579,10 @@ Return ONLY valid JSON, no markdown, no extra text:
                                         ? <span style={{ color: "#4ADE80" }}>✓ Contracted</span>
                                         : bidStatus
                                           ? <span style={{ color: bidStatus.color }}>{bidStatus.label}</span>
-                                          : <span style={{ color: "#2A3560" }}>No Bid</span>
+                                          : <span style={{ color: "#3D4570" }}>No Bid</span>
                                       }
                                     </div>
-                                    <div style={{ fontSize: 11, fontWeight: annualVal > 0 ? 700 : 400, color: annualVal > 0 ? "#4ADE80" : "#2A3560", textAlign: "right" }}>
+                                    <div style={{ fontSize: 11, fontWeight: annualVal > 0 ? 700 : 400, color: annualVal > 0 ? "#4ADE80" : "#3D4570", textAlign: "right" }}>
                                       {annualVal > 0 ? "$" + Math.round(annualVal/1000) + "k" : "—"}
                                     </div>
                                   </div>
@@ -2604,8 +2604,8 @@ Return ONLY valid JSON, no markdown, no extra text:
             <div className="fade-in" style={{ display: "flex", flexDirection: "column", gap: 22 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div>
-                  <div style={{ fontSize: 22, fontWeight: 700, color: "#FFFFFF", letterSpacing: "-0.01em", textTransform: "uppercase" }}>Capital Improvements — Active Projects</div>
-                  <div style={{ fontSize: 11, color: "#3A4560", marginTop: 3, letterSpacing: "0.06em" }}>{capexJobs.filter(j => j.stage !== "estimating").length} PROJECTS · {fmt(capexJobs.reduce((s,j) => s+j.contractValue,0))} TOTAL</div>
+                  <div style={{ fontSize: 22, fontWeight: 700, color: "#1A2240", letterSpacing: "-0.01em", textTransform: "uppercase" }}>Capital Improvements — Active Projects</div>
+                  <div style={{ fontSize: 11, color: "#4A5278", marginTop: 3, letterSpacing: "0.06em" }}>{capexJobs.filter(j => j.stage !== "estimating").length} PROJECTS · {fmt(capexJobs.reduce((s,j) => s+j.contractValue,0))} TOTAL</div>
                 </div>
                 <div style={{ display: "flex", gap: 8 }}>
                   <input className="fi" style={{ width: 180 }} placeholder="Search…" value={capexSearch} onChange={e => setCapexSearch(e.target.value)} />
@@ -2619,11 +2619,11 @@ Return ONLY valid JSON, no markdown, no extra text:
                   const cnt = capexJobs.filter(j => j.stage === st.id).length;
                   const val = capexJobs.filter(j => j.stage === st.id).reduce((s,j) => s+j.contractValue, 0);
                   return (
-                    <div key={st.id} style={{ flex: "0 0 160px", background: "#161B28", border: "1px solid " + st.color + "30", borderRadius: 8, padding: "12px 14px", position: "relative", overflow: "hidden" }}>
+                    <div key={st.id} style={{ flex: "0 0 160px", background: "#ECEEF8", border: "1px solid " + st.color + "30", borderRadius: 8, padding: "12px 14px", position: "relative", overflow: "hidden" }}>
                       <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: st.color }} />
                       <div style={{ fontSize: 10, color: st.color, textTransform: "uppercase", letterSpacing: "0.07em", fontWeight: 600, marginBottom: 4 }}>{st.label}</div>
-                      <div style={{ fontSize: 18, fontWeight: 700, color: "#FFFFFF" }}>{cnt}</div>
-                      <div style={{ fontSize: 11, color: "#3A4560" }}>{fmt(val)}</div>
+                      <div style={{ fontSize: 18, fontWeight: 700, color: "#1A2240" }}>{cnt}</div>
+                      <div style={{ fontSize: 11, color: "#4A5278" }}>{fmt(val)}</div>
                     </div>
                   );
                 })}
@@ -2639,7 +2639,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                     <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
                       <div style={{ width: 8, height: 8, borderRadius: "50%", background: st.color }} />
                       <span style={{ fontSize: 11, letterSpacing: "0.08em", textTransform: "uppercase", color: st.color, fontWeight: 600 }}>{st.label}</span>
-                      <span style={{ fontSize: 10, color: "#3A4560" }}>({stageJobs.length})</span>
+                      <span style={{ fontSize: 10, color: "#4A5278" }}>({stageJobs.length})</span>
                     </div>
                     <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                       {stageJobs.map(job => {
@@ -2652,12 +2652,12 @@ Return ONLY valid JSON, no markdown, no extra text:
                           <div key={job.id} className="opp-row" onClick={() => setSelectedCapexJob(job)}>
                             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                               <div style={{ flex: 1, minWidth: 0 }}>
-                                <div style={{ fontSize: 13, color: "#E8ECF4", fontWeight: 600, marginBottom: 4 }}>{job.name}</div>
+                                <div style={{ fontSize: 13, color: "#1A2240", fontWeight: 600, marginBottom: 4 }}>{job.name}</div>
                                 <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
                                   {co   && <span style={{ fontSize: 11, color: "#3B6FE8" }}>🏢 {co.name}</span>}
-                                  {site && <span style={{ fontSize: 11, color: "#4A5270" }}>📍 Store #{site.storeNumber}</span>}
-                                  {job.pm && <span style={{ fontSize: 11, color: "#4A5270" }}>👤 {job.pm}</span>}
-                                  {actionDate && <span style={{ fontSize: 11, color: overdue ? "#F87171" : soon ? "#FCD34D" : "#3A4560" }}>📅 {st.actionLabel}: {actionDate}{overdue ? " ⚠" : ""}</span>}
+                                  {site && <span style={{ fontSize: 11, color: "#4A5278" }}>📍 Store #{site.storeNumber}</span>}
+                                  {job.pm && <span style={{ fontSize: 11, color: "#353C62" }}>👤 {job.pm}</span>}
+                                  {actionDate && <span style={{ fontSize: 11, color: overdue ? "#F87171" : soon ? "#FCD34D" : "#4A5278" }}>📅 {st.actionLabel}: {actionDate}{overdue ? " ⚠" : ""}</span>}
                                 </div>
                               </div>
                               <div style={{ display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>
@@ -2711,8 +2711,8 @@ Return ONLY valid JSON, no markdown, no extra text:
                 {/* Header */}
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <div>
-                    <div style={{ fontSize: 22, fontWeight: 700, color: "#FFFFFF", letterSpacing: "-0.01em", textTransform: "uppercase" }}>Active Jobs</div>
-                    <div style={{ fontSize: 11, color: "#3A4560", marginTop: 3, letterSpacing: "0.06em" }}>{filtered.length} JOBS · {fmt(totalGross)} GROSS · {fmt(totalProfit)} PROFIT</div>
+                    <div style={{ fontSize: 22, fontWeight: 700, color: "#1A2240", letterSpacing: "-0.01em", textTransform: "uppercase" }}>Active Jobs</div>
+                    <div style={{ fontSize: 11, color: "#4A5278", marginTop: 3, letterSpacing: "0.06em" }}>{filtered.length} JOBS · {fmt(totalGross)} GROSS · {fmt(totalProfit)} PROFIT</div>
                   </div>
                   <div style={{ display: "flex", gap: 8 }}>
                     <input className="fi" style={{ width: 180 }} placeholder="Search…" value={fmSearch} onChange={e => setFmSearch(e.target.value)} />
@@ -2726,11 +2726,11 @@ Return ONLY valid JSON, no markdown, no extra text:
                     const cnt = filtered.filter(j => j.stage === st.id).length;
                     const val = filtered.filter(j => j.stage === st.id).reduce((s,j) => s+j.contractValue,0);
                     return (
-                      <div key={st.id} style={{ flex: "0 0 140px", background: "#161B28", border: "1px solid " + st.color + "30", borderRadius: 8, padding: "10px 14px", position: "relative", overflow: "hidden" }}>
+                      <div key={st.id} style={{ flex: "0 0 140px", background: "#ECEEF8", border: "1px solid " + st.color + "30", borderRadius: 8, padding: "10px 14px", position: "relative", overflow: "hidden" }}>
                         <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: st.color }} />
                         <div style={{ fontSize: 10, color: st.color, textTransform: "uppercase", letterSpacing: "0.07em", fontWeight: 600, marginBottom: 3 }}>{st.label}</div>
-                        <div style={{ fontSize: 16, fontWeight: 700, color: "#FFFFFF" }}>{cnt}</div>
-                        <div style={{ fontSize: 10, color: "#3A4560" }}>{fmt(val)}</div>
+                        <div style={{ fontSize: 16, fontWeight: 700, color: "#1A2240" }}>{cnt}</div>
+                        <div style={{ fontSize: 10, color: "#4A5278" }}>{fmt(val)}</div>
                       </div>
                     );
                   })}
@@ -2741,9 +2741,9 @@ Return ONLY valid JSON, no markdown, no extra text:
                   {coords.map(c => (
                     <button key={c} onClick={() => setFmCoordFilter(c)}
                       style={{ padding: "6px 14px", borderRadius: 20, border: "1px solid", cursor: "pointer", fontSize: 11, fontFamily: "inherit", fontWeight: 500, transition: "all 0.15s",
-                        borderColor: fmCoordFilter === c ? buColor.accent : "#1E2640",
+                        borderColor: fmCoordFilter === c ? buColor.accent : "#CBD1E8",
                         background:  fmCoordFilter === c ? buColor.light  : "transparent",
-                        color:       fmCoordFilter === c ? buColor.accent  : "#3A4560" }}>
+                        color:       fmCoordFilter === c ? buColor.accent  : "#4A5278" }}>
                       {c === "all" ? "All Jobs" : c}
                       <span style={{ marginLeft: 6, fontSize: 10, opacity: 0.7 }}>
                         {c === "all" ? fmJobs.length : fmJobs.filter(j => j.coordinator === c).length}
@@ -2753,29 +2753,29 @@ Return ONLY valid JSON, no markdown, no extra text:
                 </div>
 
                 {/* Spreadsheet table */}
-                <div style={{ overflowX: "auto", borderRadius: 10, border: "1px solid #1E2640" }}>
+                <div style={{ overflowX: "auto", borderRadius: 10, border: "1px solid #CBD1E8" }}>
                   <table style={{ borderCollapse: "collapse", width: "100%", minWidth: FM_COLS.reduce((s,c) => s+c.w, 0) + 80 }}>
                     <thead>
-                      <tr style={{ background: "#0F1420", borderBottom: "1px solid #1E2640" }}>
+                      <tr style={{ background: "#FFFFFF", borderBottom: "1px solid #CBD1E8" }}>
                         <th style={{ width: 40, padding: "10px 12px", textAlign: "left" }}></th>
                         {FM_COLS.map(col => (
-                          <th key={col.key} style={{ width: col.w, padding: "10px 12px", textAlign: "left", fontSize: 10, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.07em", fontWeight: 600, whiteSpace: "nowrap" }}>{col.label}</th>
+                          <th key={col.key} style={{ width: col.w, padding: "10px 12px", textAlign: "left", fontSize: 10, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", fontWeight: 600, whiteSpace: "nowrap" }}>{col.label}</th>
                         ))}
                         <th style={{ width: 80, padding: "10px 12px" }}></th>
                       </tr>
                     </thead>
                     <tbody>
                       {filtered.length === 0 && (
-                        <tr><td colSpan={FM_COLS.length + 2} style={{ textAlign: "center", padding: "48px", color: "#2A3560", fontSize: 12 }}>No jobs found</td></tr>
+                        <tr><td colSpan={FM_COLS.length + 2} style={{ textAlign: "center", padding: "48px", color: "#3D4570", fontSize: 12 }}>No jobs found</td></tr>
                       )}
                       {filtered.map((job, idx) => {
                         const st   = FM_STAGES.find(s => s.id === job.stage) || FM_STAGES[0];
                         const site = sites.find(s => s.id === job.siteId);
                         const sub  = subcontractors.find(s => s.id === job.subcontractorId);
-                        const rowBg = idx % 2 === 0 ? "#0D1020" : "#111624";
+                        const rowBg = idx % 2 === 0 ? "#F8F9FD" : "#F2F4FA";
                         return (
-                          <tr key={job.id} style={{ background: rowBg, borderBottom: "1px solid #1A2035", cursor: "pointer", transition: "background 0.1s" }}
-                            onMouseEnter={e => e.currentTarget.style.background = "#1A2040"}
+                          <tr key={job.id} style={{ background: rowBg, borderBottom: "1px solid #D8DCF0", cursor: "pointer", transition: "background 0.1s" }}
+                            onMouseEnter={e => e.currentTarget.style.background = "#EBF0FF"}
                             onMouseLeave={e => e.currentTarget.style.background = rowBg}
                             onClick={() => setSelectedFmJob(job)}>
                             {/* Stage dot */}
@@ -2783,39 +2783,39 @@ Return ONLY valid JSON, no markdown, no extra text:
                               <div style={{ width: 8, height: 8, borderRadius: "50%", background: st.color, margin: "auto" }} title={st.label} />
                             </td>
                             {/* Store Code */}
-                            <td style={{ padding: "10px 12px", fontSize: 12, color: "#B8C4E0", whiteSpace: "nowrap" }}>{job.storeCode || "—"}</td>
+                            <td style={{ padding: "10px 12px", fontSize: 12, color: "#252E52", whiteSpace: "nowrap" }}>{job.storeCode || "—"}</td>
                             {/* Project No */}
-                            <td style={{ padding: "10px 12px", fontSize: 12, color: "#B8C4E0", whiteSpace: "nowrap" }}>{job.projectNo || "—"}</td>
+                            <td style={{ padding: "10px 12px", fontSize: 12, color: "#252E52", whiteSpace: "nowrap" }}>{job.projectNo || "—"}</td>
                             {/* Scope / Name */}
-                            <td style={{ padding: "10px 12px", fontSize: 12, color: "#E8ECF4", fontWeight: 500, maxWidth: 220 }}>
+                            <td style={{ padding: "10px 12px", fontSize: 12, color: "#1A2240", fontWeight: 500, maxWidth: 220 }}>
                               <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{job.name}</div>
                             </td>
                             {/* Site Address */}
-                            <td style={{ padding: "10px 12px", fontSize: 11, color: "#4A5270", maxWidth: 180 }}>
+                            <td style={{ padding: "10px 12px", fontSize: 11, color: "#353C62", maxWidth: 180 }}>
                               <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{site?.address || "—"}</div>
                             </td>
                             {/* Vendor */}
                             <td style={{ padding: "10px 12px", fontSize: 12 }}>
-                              {sub ? <span style={{ background: "#3B6FE820", color: buColor.accent, padding: "2px 8px", borderRadius: 4, fontSize: 11, whiteSpace: "nowrap" }}>{sub.name}</span> : <span style={{ color: "#2A3560", fontSize: 11 }}>—</span>}
+                              {sub ? <span style={{ background: "#3B6FE820", color: buColor.accent, padding: "2px 8px", borderRadius: 4, fontSize: 11, whiteSpace: "nowrap" }}>{sub.name}</span> : <span style={{ color: "#3D4570", fontSize: 11 }}>—</span>}
                             </td>
                             {/* Owner's Project No */}
-                            <td style={{ padding: "10px 12px", fontSize: 11, color: "#4A5270", whiteSpace: "nowrap" }}>{job.ownersProjectNo || "—"}</td>
+                            <td style={{ padding: "10px 12px", fontSize: 11, color: "#353C62", whiteSpace: "nowrap" }}>{job.ownersProjectNo || "—"}</td>
                             {/* Gross Value */}
-                            <td style={{ padding: "10px 12px", fontSize: 12, color: "#E8ECF4", fontWeight: 600, whiteSpace: "nowrap" }}>{fmt(job.contractValue)}</td>
+                            <td style={{ padding: "10px 12px", fontSize: 12, color: "#1A2240", fontWeight: 600, whiteSpace: "nowrap" }}>{fmt(job.contractValue)}</td>
                             {/* Gross Profit */}
                             <td style={{ padding: "10px 12px", fontSize: 12, color: "#4ADE80", fontWeight: 600, whiteSpace: "nowrap" }}>{fmt(job.grossProfit)}</td>
                             {/* Vendor Invoice Amount */}
-                            <td style={{ padding: "10px 12px", fontSize: 12, color: "#B8C4E0", whiteSpace: "nowrap" }}>{job.vendorInvoiceAmount ? fmt(job.vendorInvoiceAmount) : "—"}</td>
+                            <td style={{ padding: "10px 12px", fontSize: 12, color: "#252E52", whiteSpace: "nowrap" }}>{job.vendorInvoiceAmount ? fmt(job.vendorInvoiceAmount) : "—"}</td>
                             {/* Start Work Date */}
-                            <td style={{ padding: "10px 12px", fontSize: 11, color: "#4A5270", whiteSpace: "nowrap" }}>{job.startDate || "—"}</td>
+                            <td style={{ padding: "10px 12px", fontSize: 11, color: "#353C62", whiteSpace: "nowrap" }}>{job.startDate || "—"}</td>
                             {/* Vendor Invoice Number */}
-                            <td style={{ padding: "10px 12px", fontSize: 11, color: "#4A5270", whiteSpace: "nowrap" }}>{job.vendorInvoiceNumber || "—"}</td>
+                            <td style={{ padding: "10px 12px", fontSize: 11, color: "#353C62", whiteSpace: "nowrap" }}>{job.vendorInvoiceNumber || "—"}</td>
                             {/* Next Step */}
                             <td style={{ padding: "10px 12px" }}>
                               <span style={{ fontSize: 10, fontWeight: 600, color: st.color, background: st.color + "15", padding: "3px 8px", borderRadius: 4, whiteSpace: "nowrap" }}>{st.label}</span>
                             </td>
                             {/* Vendor Next Step */}
-                            <td style={{ padding: "10px 12px", fontSize: 11, color: "#4A5270", maxWidth: 120 }}>
+                            <td style={{ padding: "10px 12px", fontSize: 11, color: "#353C62", maxWidth: 120 }}>
                               <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{VENDOR_NEXT_STEPS.find(v => v.id === job.vendorNextStep)?.label || job.vendorNextStep || "—"}</div>
                             </td>
                             {/* Actions */}
@@ -2831,10 +2831,10 @@ Return ONLY valid JSON, no markdown, no extra text:
                     </tbody>
                     {filtered.length > 0 && (
                       <tfoot>
-                        <tr style={{ background: "#0A0D16", borderTop: "2px solid #1E2640" }}>
-                          <td colSpan={6} style={{ padding: "10px 12px", fontSize: 11, color: "#3A4560", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.07em" }}>Totals</td>
+                        <tr style={{ background: "#F0F2F8", borderTop: "2px solid #CBD1E8" }}>
+                          <td colSpan={6} style={{ padding: "10px 12px", fontSize: 11, color: "#4A5278", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.07em" }}>Totals</td>
                           <td style={{ padding: "10px 12px" }}></td>
-                          <td style={{ padding: "10px 12px", fontSize: 12, color: "#E8ECF4", fontWeight: 700 }}>{fmt(totalGross)}</td>
+                          <td style={{ padding: "10px 12px", fontSize: 12, color: "#1A2240", fontWeight: 700 }}>{fmt(totalGross)}</td>
                           <td style={{ padding: "10px 12px", fontSize: 12, color: "#4ADE80", fontWeight: 700 }}>{fmt(totalProfit)}</td>
                           <td colSpan={5} style={{ padding: "10px 12px" }}></td>
                         </tr>
@@ -2850,12 +2850,12 @@ Return ONLY valid JSON, no markdown, no extra text:
           {activeNav === "finance" && (
             <div className="fade-in">
               <div style={{ marginBottom: 28 }}>
-                <div style={{ fontSize: 22, fontWeight: 700, color: "#FFFFFF", textTransform: "uppercase" }}>Finance</div>
-                <div style={{ fontSize: 11, color: "#3A4560", marginTop: 4 }}>FARMER GROUP · ALL BUSINESS UNITS</div>
+                <div style={{ fontSize: 22, fontWeight: 700, color: "#1A2240", textTransform: "uppercase" }}>Finance</div>
+                <div style={{ fontSize: 11, color: "#4A5278", marginTop: 4 }}>FARMER GROUP · ALL BUSINESS UNITS</div>
               </div>
               <div className="coming-soon">
                 <div style={{ width: 48, height: 48, borderRadius: 12, background: "#3B6FE815", border: "1px solid #3B6FE833", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22 }}>💰</div>
-                <div style={{ fontSize: 14, color: "#3A4560", fontWeight: 500 }}>Finance — Coming Soon</div>
+                <div style={{ fontSize: 14, color: "#4A5278", fontWeight: 500 }}>Finance — Coming Soon</div>
               </div>
             </div>
           )}
@@ -2865,15 +2865,15 @@ Return ONLY valid JSON, no markdown, no extra text:
             <div className="fade-in" style={{ display: "flex", flexDirection: "column", gap: 22 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div>
-                  <div style={{ fontSize: 22, fontWeight: 700, color: "#FFFFFF", letterSpacing: "-0.01em", textTransform: "uppercase" }}>Team</div>
-                  <div style={{ fontSize: 11, color: "#3A4560", marginTop: 3, letterSpacing: "0.06em" }}>{BUSINESS_UNITS.find(b => b.id === activeBU)?.label.toUpperCase()} · {fmTeam.length} MEMBERS · CLICK A NAME TO SEE THEIR DAILY REPORT</div>
+                  <div style={{ fontSize: 22, fontWeight: 700, color: "#1A2240", letterSpacing: "-0.01em", textTransform: "uppercase" }}>Team</div>
+                  <div style={{ fontSize: 11, color: "#4A5278", marginTop: 3, letterSpacing: "0.06em" }}>{BUSINESS_UNITS.find(b => b.id === activeBU)?.label.toUpperCase()} · {fmTeam.length} MEMBERS · CLICK A NAME TO SEE THEIR DAILY REPORT</div>
                 </div>
                 <button className="btn-primary" onClick={() => { setEditTeamId(null); setTeamForm({ name: "", phone: "", email: "" }); setShowTeamForm(true); }}>+ Add Member</button>
               </div>
 
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                 {fmTeam.length === 0 && (
-                  <div style={{ textAlign: "center", padding: "48px", color: "#2A3560", fontSize: 12, background: "#161B28", borderRadius: 10, border: "1px solid #1E2640" }}>No team members yet — add your first one</div>
+                  <div style={{ textAlign: "center", padding: "48px", color: "#3D4570", fontSize: 12, background: "#ECEEF8", borderRadius: 10, border: "1px solid #CBD1E8" }}>No team members yet — add your first one</div>
                 )}
                 {fmTeam.map(m => {
                   const myJobs   = fmJobs.filter(j => j.coordinator === m.name);
@@ -2895,8 +2895,8 @@ Return ONLY valid JSON, no markdown, no extra text:
                           <div>
                             <div style={{ fontSize: 14, color: buColor.accent, fontWeight: 600, textDecoration: "underline", textDecorationColor: buColor.accent + "60" }}>{m.name}</div>
                             <div style={{ display: "flex", gap: 14, marginTop: 3, flexWrap: "wrap" }}>
-                              {m.phone && <span style={{ fontSize: 11, color: "#3A4560" }}>📞 {m.phone}</span>}
-                              {m.email && <span style={{ fontSize: 11, color: "#3A4560" }}>✉ {m.email}</span>}
+                              {m.phone && <span style={{ fontSize: 11, color: "#4A5278" }}>📞 {m.phone}</span>}
+                              {m.email && <span style={{ fontSize: 11, color: "#4A5278" }}>✉ {m.email}</span>}
                             </div>
                           </div>
                         </div>
@@ -2964,41 +2964,41 @@ Return ONLY valid JSON, no markdown, no extra text:
               const sub     = subcontractors.find(s => s.id === job.subcontractorId);
               const actionDate = st ? job[st.actionKey] : null;
               return (
-                <div style={{ background: "#0D1020", border: "1px solid #1E2640", borderRadius: 8, padding: "14px 16px", display: "flex", flexDirection: "column", gap: 8, cursor: "pointer", transition: "border-color 0.15s" }}
+                <div style={{ background: "#F8F9FD", border: "1px solid #CBD1E8", borderRadius: 8, padding: "14px 16px", display: "flex", flexDirection: "column", gap: 8, cursor: "pointer", transition: "border-color 0.15s" }}
                   onClick={() => setSelectedFmJob(job)}
                   onMouseEnter={e => e.currentTarget.style.borderColor = buColor.accent + "60"}
-                  onMouseLeave={e => e.currentTarget.style.borderColor = "#1E2640"}>
+                  onMouseLeave={e => e.currentTarget.style.borderColor = "#CBD1E8"}>
                   <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10 }}>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 4 }}>
-                        <span style={{ fontSize: 13, color: "#E8ECF4", fontWeight: 600 }}>{job.name}</span>
-                        {job.storeCode  && <span style={{ fontSize: 10, color: "#3A4560", background: "#1A2035", padding: "2px 7px", borderRadius: 4 }}>#{job.storeCode}</span>}
-                        {job.projectNo  && <span style={{ fontSize: 10, color: "#3A4560", background: "#1A2035", padding: "2px 7px", borderRadius: 4 }}>{job.projectNo}</span>}
+                        <span style={{ fontSize: 13, color: "#1A2240", fontWeight: 600 }}>{job.name}</span>
+                        {job.storeCode  && <span style={{ fontSize: 10, color: "#4A5278", background: "#E8EBFA", padding: "2px 7px", borderRadius: 4 }}>#{job.storeCode}</span>}
+                        {job.projectNo  && <span style={{ fontSize: 10, color: "#4A5278", background: "#E8EBFA", padding: "2px 7px", borderRadius: 4 }}>{job.projectNo}</span>}
                         {urgency && <span style={{ fontSize: 10, fontWeight: 700, color: urgency.color, background: urgency.bg, padding: "2px 8px", borderRadius: 4 }}>{urgency.text}</span>}
                       </div>
                       <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
-                        {site && <span style={{ fontSize: 11, color: "#4A5270" }}>📍 {site.address}</span>}
-                        {sub  && <span style={{ fontSize: 11, color: "#4A5270" }}>🔧 {sub.name}</span>}
+                        {site && <span style={{ fontSize: 11, color: "#4A5278" }}>📍 {site.address}</span>}
+                        {sub  && <span style={{ fontSize: 11, color: "#353C62" }}>🔧 {sub.name}</span>}
                       </div>
                     </div>
                     <div style={{ textAlign: "right", flexShrink: 0 }}>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: "#E8ECF4" }}>{fmt(job.contractValue)}</div>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: "#1A2240" }}>{fmt(job.contractValue)}</div>
                       <div style={{ fontSize: 11, color: "#4ADE80" }}>{fmt(job.grossProfit)} GP</div>
                     </div>
                   </div>
                   {/* Key dates row */}
                   <div style={{ display: "flex", gap: 10, flexWrap: "wrap", paddingTop: 8, borderTop: "1px solid #1A2035" }}>
                     {st && actionDate && (
-                      <span style={{ fontSize: 11, color: urgency ? urgency.color : "#4A5270" }}>
+                      <span style={{ fontSize: 11, color: urgency ? urgency.color : "#353C62" }}>
                         📅 {st.actionLabel}: <strong>{actionDate}</strong>
                       </span>
                     )}
-                    {job.startDate && <span style={{ fontSize: 11, color: "#4A5270" }}>▶ Start: {job.startDate}</span>}
-                    {job.vendorNextStep && <span style={{ fontSize: 11, color: "#B8C4E0" }}>↪ Vendor: {VENDOR_NEXT_STEPS.find(v => v.id === job.vendorNextStep)?.label || job.vendorNextStep}</span>}
-                    {job.ownersProjectNo && <span style={{ fontSize: 11, color: "#3A4560" }}>WO: {job.ownersProjectNo}</span>}
+                    {job.startDate && <span style={{ fontSize: 11, color: "#353C62" }}>▶ Start: {job.startDate}</span>}
+                    {job.vendorNextStep && <span style={{ fontSize: 11, color: "#252E52" }}>↪ Vendor: {VENDOR_NEXT_STEPS.find(v => v.id === job.vendorNextStep)?.label || job.vendorNextStep}</span>}
+                    {job.ownersProjectNo && <span style={{ fontSize: 11, color: "#4A5278" }}>WO: {job.ownersProjectNo}</span>}
                   </div>
                   {job.notes && (
-                    <div style={{ fontSize: 11, color: "#4A5270", fontStyle: "italic", paddingTop: 4, borderTop: "1px solid #1A2035" }}>
+                    <div style={{ fontSize: 11, color: "#353C62", fontStyle: "italic", paddingTop: 4, borderTop: "1px solid #1A2035" }}>
                       {job.notes}
                     </div>
                   )}
@@ -3015,8 +3015,8 @@ Return ONLY valid JSON, no markdown, no extra text:
                     {selectedCoord.charAt(0).toUpperCase()}
                   </div>
                   <div>
-                    <div style={{ fontSize: 22, fontWeight: 700, color: "#FFFFFF", letterSpacing: "-0.01em" }}>{selectedCoord}</div>
-                    <div style={{ fontSize: 11, color: "#3A4560", marginTop: 2, letterSpacing: "0.06em" }}>
+                    <div style={{ fontSize: 22, fontWeight: 700, color: "#1A2240", letterSpacing: "-0.01em" }}>{selectedCoord}</div>
+                    <div style={{ fontSize: 11, color: "#4A5278", marginTop: 2, letterSpacing: "0.06em" }}>
                       {new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" }).toUpperCase()} · DAILY REPORT
                     </div>
                   </div>
@@ -3030,34 +3030,34 @@ Return ONLY valid JSON, no markdown, no extra text:
                     { label: "In Pipeline",   value: myJobs.filter(j => FM_PIPELINE_STAGES.some(s => s.id === j.stage)).length,                 color: "#818CF8" },
                     { label: "Urgent",        value: myJobs.filter(j => getPriority(j) <= 1).length,                                            color: "#F87171" },
                   ].map(k => (
-                    <div key={k.label} style={{ background: "#161B28", border: "1px solid " + k.color + "25", borderRadius: 8, padding: "12px 16px", position: "relative", overflow: "hidden" }}>
+                    <div key={k.label} style={{ background: "#ECEEF8", border: "1px solid " + k.color + "25", borderRadius: 8, padding: "12px 16px", position: "relative", overflow: "hidden" }}>
                       <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: k.color }} />
-                      <div style={{ fontSize: 10, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 4 }}>{k.label}</div>
+                      <div style={{ fontSize: 10, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 4 }}>{k.label}</div>
                       <div style={{ fontSize: 22, fontWeight: 700, color: k.color }}>{k.value}</div>
                     </div>
                   ))}
                 </div>
 
                 {/* Financial summary */}
-                <div style={{ background: "#161B28", border: "1px solid #1E2640", borderRadius: 8, padding: "14px 20px", display: "flex", gap: 32 }}>
+                <div style={{ background: "#ECEEF8", border: "1px solid #CBD1E8", borderRadius: 8, padding: "14px 20px", display: "flex", gap: 32 }}>
                   <div>
-                    <div style={{ fontSize: 10, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 4 }}>Total Gross Value</div>
-                    <div style={{ fontSize: 20, fontWeight: 700, color: "#E8ECF4" }}>{fmt(totalGross)}</div>
+                    <div style={{ fontSize: 10, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 4 }}>Total Gross Value</div>
+                    <div style={{ fontSize: 20, fontWeight: 700, color: "#1A2240" }}>{fmt(totalGross)}</div>
                   </div>
                   <div>
-                    <div style={{ fontSize: 10, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 4 }}>Total Gross Profit</div>
+                    <div style={{ fontSize: 10, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 4 }}>Total Gross Profit</div>
                     <div style={{ fontSize: 20, fontWeight: 700, color: "#4ADE80" }}>{fmt(totalProfit)}</div>
                   </div>
                   <div>
-                    <div style={{ fontSize: 10, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 4 }}>GP Margin</div>
-                    <div style={{ fontSize: 20, fontWeight: 700, color: totalGross ? (totalProfit/totalGross > 0.2 ? "#4ADE80" : "#FCD34D") : "#3A4560" }}>
+                    <div style={{ fontSize: 10, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 4 }}>GP Margin</div>
+                    <div style={{ fontSize: 20, fontWeight: 700, color: totalGross ? (totalProfit/totalGross > 0.2 ? "#4ADE80" : "#FCD34D") : "#4A5278" }}>
                       {totalGross ? Math.round((totalProfit/totalGross)*100) + "%" : "—"}
                     </div>
                   </div>
                 </div>
 
                 {myJobs.length === 0 && (
-                  <div style={{ textAlign: "center", padding: "48px", color: "#2A3560", fontSize: 12, background: "#161B28", borderRadius: 10, border: "1px solid #1E2640" }}>
+                  <div style={{ textAlign: "center", padding: "48px", color: "#3D4570", fontSize: 12, background: "#ECEEF8", borderRadius: 10, border: "1px solid #CBD1E8" }}>
                     No jobs assigned to {selectedCoord} yet
                   </div>
                 )}
@@ -3074,9 +3074,9 @@ Return ONLY valid JSON, no markdown, no extra text:
                       <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
                         <div style={{ width: 10, height: 10, borderRadius: "50%", background: st.color, flexShrink: 0 }} />
                         <span style={{ fontSize: 12, letterSpacing: "0.07em", textTransform: "uppercase", color: st.color, fontWeight: 700 }}>{st.label}</span>
-                        <span style={{ fontSize: 10, color: "#2A3560", background: "#1A2035", padding: "1px 7px", borderRadius: 4 }}>{phaseLabel}</span>
-                        <span style={{ fontSize: 10, color: "#3A4560" }}>{stageJobs.length} job{stageJobs.length !== 1 ? "s" : ""}</span>
-                        <span style={{ fontSize: 10, color: "#3A4560" }}>· {fmt(stageJobs.reduce((s,j) => s+(j.contractValue||0),0))}</span>
+                        <span style={{ fontSize: 10, color: "#3D4570", background: "#E8EBFA", padding: "1px 7px", borderRadius: 4 }}>{phaseLabel}</span>
+                        <span style={{ fontSize: 10, color: "#4A5278" }}>{stageJobs.length} job{stageJobs.length !== 1 ? "s" : ""}</span>
+                        <span style={{ fontSize: 10, color: "#4A5278" }}>· {fmt(stageJobs.reduce((s,j) => s+(j.contractValue||0),0))}</span>
                       </div>
                       <div style={{ display: "flex", flexDirection: "column", gap: 8, paddingLeft: 4 }}>
                         {stageJobs.map(j => <JobRow key={j.id} job={j} />)}
@@ -3107,11 +3107,11 @@ Return ONLY valid JSON, no markdown, no extra text:
               <div className="fade-in" style={{ display: "flex", flexDirection: "column", gap: 22 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                   <div>
-                    <div style={{ fontSize: 22, fontWeight: 700, color: "#FFFFFF", letterSpacing: "-0.01em", textTransform: "uppercase" }}>Subcontractors</div>
-                    <div style={{ fontSize: 11, color: "#3A4560", marginTop: 3, letterSpacing: "0.06em" }}>MASTER LIST · {allCount} TOTAL · showing {visibleSubs.length} for {activeBU.toUpperCase()}</div>
+                    <div style={{ fontSize: 22, fontWeight: 700, color: "#1A2240", letterSpacing: "-0.01em", textTransform: "uppercase" }}>Subcontractors</div>
+                    <div style={{ fontSize: 11, color: "#4A5278", marginTop: 3, letterSpacing: "0.06em" }}>MASTER LIST · {allCount} TOTAL · showing {visibleSubs.length} for {activeBU.toUpperCase()}</div>
                   </div>
                   <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                    <button className="btn-ghost" style={{ fontSize: 11, color: "#3A4560" }} onClick={() => { /* show all toggle handled by rendering all */ }}>
+                    <button className="btn-ghost" style={{ fontSize: 11, color: "#4A5278" }} onClick={() => { /* show all toggle handled by rendering all */ }}>
                       {visibleSubs.length < allCount ? `+ ${allCount - visibleSubs.length} hidden (other BUs)` : ""}
                     </button>
                     <button className="btn-primary" onClick={() => { setEditSubId(null); setSubForm({ name: "", trade: "", phone: "", email: "", msaStatus: "missing", coiExpiry: "", w9: false, notes: "", services: [activeBU === "facility" ? "fm" : activeBU] }); setShowSubForm(true); }}>+ Add Subcontractor</button>
@@ -3127,7 +3127,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                   ].map(s => (
                     <div key={s.label} className="stat-card" style={{ position: "relative", overflow: "hidden", padding: "14px 18px" }}>
                       <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: s.color }} />
-                      <div style={{ fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "#3A4560", marginBottom: 6 }}>{s.label}</div>
+                      <div style={{ fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "#4A5278", marginBottom: 6 }}>{s.label}</div>
                       <div style={{ fontSize: 22, fontWeight: 700, color: s.color }}>{s.value}</div>
                     </div>
                   ))}
@@ -3135,7 +3135,7 @@ Return ONLY valid JSON, no markdown, no extra text:
 
                 <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                   {subcontractors.length === 0 && (
-                    <div style={{ textAlign: "center", padding: "48px", color: "#2A3560", fontSize: 12, background: "#161B28", borderRadius: 10, border: "1px solid #1E2640" }}>No subcontractors yet — add your first one</div>
+                    <div style={{ textAlign: "center", padding: "48px", color: "#3D4570", fontSize: 12, background: "#ECEEF8", borderRadius: 10, border: "1px solid #CBD1E8" }}>No subcontractors yet — add your first one</div>
                   )}
                   {subcontractors.map(s => {
                     const msaColor   = s.msaStatus === "signed" ? "#4ADE80" : s.msaStatus === "expired" ? "#F87171" : "#FCD34D";
@@ -3155,16 +3155,16 @@ Return ONLY valid JSON, no markdown, no extra text:
                         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
                           <div style={{ flex: 1, minWidth: 0 }}>
                             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6, flexWrap: "wrap" }}>
-                              <div style={{ fontSize: 14, color: "#E8ECF4", fontWeight: 600 }}>{s.name}</div>
+                              <div style={{ fontSize: 14, color: "#1A2240", fontWeight: 600 }}>{s.name}</div>
                               {s.trade && <span style={{ fontSize: 10, color: buColor.accent, background: buColor.light, padding: "2px 8px", borderRadius: 10, textTransform: "uppercase", letterSpacing: "0.06em" }}>{s.trade}</span>}
                               {svcTags.map(sv => (
                                 <span key={sv.id} style={{ fontSize: 10, color: sv.color, background: sv.color + "20", border: "1px solid " + sv.color + "40", padding: "2px 8px", borderRadius: 10, fontWeight: 600 }}>{sv.label}</span>
                               ))}
-                              {(!s.services || s.services.length === 0) && <span style={{ fontSize: 10, color: "#3A4560", fontStyle: "italic" }}>All divisions</span>}
+                              {(!s.services || s.services.length === 0) && <span style={{ fontSize: 10, color: "#4A5278", fontStyle: "italic" }}>All divisions</span>}
                             </div>
                             <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginBottom: 8 }}>
-                              {s.phone && <span style={{ fontSize: 11, color: "#3A4560" }}>📞 {s.phone}</span>}
-                              {s.email && <span style={{ fontSize: 11, color: "#3A4560" }}>✉ {s.email}</span>}
+                              {s.phone && <span style={{ fontSize: 11, color: "#4A5278" }}>📞 {s.phone}</span>}
+                              {s.email && <span style={{ fontSize: 11, color: "#4A5278" }}>✉ {s.email}</span>}
                               {assignedFmJobs.length > 0 && <span style={{ fontSize: 11, color: "#7BA7F5" }}>🔨 {assignedFmJobs.length} FM job{assignedFmJobs.length !== 1 ? "s" : ""}</span>}
                               {assignedLawnBids.length > 0 && <span style={{ fontSize: 11, color: "#4CAF82" }}>🌿 {assignedLawnBids.length} lawn site{assignedLawnBids.length !== 1 ? "s" : ""}</span>}
                             </div>
@@ -3173,7 +3173,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                               <span style={{ fontSize: 10, fontWeight: 600, color: coiColor, background: coiColor + "15", border: "1px solid " + coiColor + "30", padding: "3px 10px", borderRadius: 10 }}>{coiLabel}</span>
                               <span style={{ fontSize: 10, fontWeight: 600, color: w9Color, background: w9Color + "15", border: "1px solid " + w9Color + "30", padding: "3px 10px", borderRadius: 10 }}>{s.w9 ? "W9 ✓" : "W9 Missing"}</span>
                             </div>
-                            {s.notes && <div style={{ fontSize: 11, color: "#3A4560", marginTop: 8, fontStyle: "italic" }}>{s.notes}</div>}
+                            {s.notes && <div style={{ fontSize: 11, color: "#4A5278", marginTop: 8, fontStyle: "italic" }}>{s.notes}</div>}
                           </div>
                           <div style={{ display: "flex", gap: 5, flexShrink: 0 }}>
                             <button className="btn-ghost" style={{ fontSize: 11 }} onClick={() => { setEditSubId(s.id); setSubForm({ name: s.name, trade: s.trade||"", phone: s.phone||"", email: s.email||"", msaStatus: s.msaStatus||"missing", coiExpiry: s.coiExpiry||"", w9: !!s.w9, notes: s.notes||"", services: s.services||[] }); setShowSubForm(true); }}>✎</button>
@@ -3210,7 +3210,7 @@ Return ONLY valid JSON, no markdown, no extra text:
               return "untouched";
             };
             const COLS = [
-              { id: "untouched",      label: "Not Touched",      color: "#3A4560",  icon: "○" },
+              { id: "untouched",      label: "Not Touched",      color: "#4A5278",  icon: "○" },
               { id: "bidding",        label: "Bidding",           color: "#FCD34D",  icon: "🔧" },
               { id: "owner_approval", label: "Owner Approval",    color: "#60A5FA",  icon: "⏳" },
               { id: "buyout",         label: "Buyout",            color: "#4ADE80",  icon: "💰" },
@@ -3229,32 +3229,32 @@ Return ONLY valid JSON, no markdown, no extra text:
                 {/* Header */}
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                   <div>
-                    <div style={{ fontSize: 22, fontWeight: 700, color: "#FFFFFF", letterSpacing: "-0.01em", textTransform: "uppercase" }}>Lawn Bids</div>
-                    <div style={{ fontSize: 11, color: "#3A4560", marginTop: 3, letterSpacing: "0.06em" }}>SEASON {lawnBidSeason} · {currentSites.length} SITES · ${Math.round(totalOur).toLocaleString()} BOOK VALUE{notBiddingCount > 0 && !showNotBidding ? ` · ${notBiddingCount} HIDDEN` : ""}</div>
+                    <div style={{ fontSize: 22, fontWeight: 700, color: "#1A2240", letterSpacing: "-0.01em", textTransform: "uppercase" }}>Lawn Bids</div>
+                    <div style={{ fontSize: 11, color: "#4A5278", marginTop: 3, letterSpacing: "0.06em" }}>SEASON {lawnBidSeason} · {currentSites.length} SITES · ${Math.round(totalOur).toLocaleString()} BOOK VALUE{notBiddingCount > 0 && !showNotBidding ? ` · ${notBiddingCount} HIDDEN` : ""}</div>
                   </div>
                   <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                     {notBiddingCount > 0 && (
-                      <button onClick={() => setShowNotBidding(v => !v)} style={{ background: showNotBidding ? "#4A527020" : "transparent", border: "1px solid #4A527050", color: showNotBidding ? "#9CA3C0" : "#4A5270", borderRadius: 6, padding: "6px 12px", fontSize: 11, cursor: "pointer" }}>
+                      <button onClick={() => setShowNotBidding(v => !v)} style={{ background: showNotBidding ? "#353C6220" : "transparent", border: "1px solid #353C6250", color: showNotBidding ? "#9CA3C0" : "#353C62", borderRadius: 6, padding: "6px 12px", fontSize: 11, cursor: "pointer" }}>
                         {showNotBidding ? "👁 Hide Archived" : `📦 ${notBiddingCount} Archived`}
                       </button>
                     )}
-                    <select value={lawnBidSeason} onChange={e => setLawnBidSeason(e.target.value)} style={{ background: "#141824", border: "1px solid #1E2640", color: "#B8C4E0", borderRadius: 6, padding: "6px 10px", fontSize: 13 }}>
+                    <select value={lawnBidSeason} onChange={e => setLawnBidSeason(e.target.value)} style={{ background: "#F5F7FC", border: "1px solid #CBD1E8", color: "#252E52", borderRadius: 6, padding: "6px 10px", fontSize: 13 }}>
                       {["2024","2025","2026","2027"].map(y => <option key={y} value={y}>{y}</option>)}
                     </select>
                   </div>
                 </div>
 
                 {/* ── Bid Map ── */}
-                <div style={{ background: "#0A0D16", border: "1px solid #1E2640", borderRadius: 12, overflow: "hidden" }}>
+                <div style={{ background: "#F0F2F8", border: "1px solid #CBD1E8", borderRadius: 12, overflow: "hidden" }}>
                   {/* Map filter tabs */}
-                  <div style={{ display: "flex", gap: 0, borderBottom: "1px solid #1E2640", padding: "10px 14px", alignItems: "center", justifyContent: "space-between" }}>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.08em" }}>📍 Bid Map</div>
+                  <div style={{ display: "flex", gap: 0, borderBottom: "1px solid #CBD1E8", padding: "10px 14px", alignItems: "center", justifyContent: "space-between" }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.08em" }}>📍 Bid Map</div>
                     <div style={{ display: "flex", gap: 6 }}>
-                      {[{ id: "all", label: "All", color: "#B8C4E0" }, ...COLS].map(col => {
+                      {[{ id: "all", label: "All", color: "#252E52" }, ...COLS].map(col => {
                         const count = col.id === "all" ? currentSites.length : colSites(col.id).length;
                         const active = bidMapColFilter === col.id;
                         return (
-                          <button key={col.id} onClick={() => setBidMapColFilter(col.id)} style={{ background: active ? (col.color || "#B8C4E0") + "20" : "transparent", border: "1px solid " + (active ? (col.color || "#B8C4E0") + "50" : "#1E2640"), color: active ? (col.color || "#B8C4E0") : "#3A4560", borderRadius: 6, padding: "4px 10px", fontSize: 10, cursor: "pointer", fontWeight: active ? 700 : 400 }}>
+                          <button key={col.id} onClick={() => setBidMapColFilter(col.id)} style={{ background: active ? (col.color || "#252E52") + "20" : "transparent", border: "1px solid " + (active ? (col.color || "#252E52") + "50" : "#CBD1E8"), color: active ? (col.color || "#252E52") : "#4A5278", borderRadius: 6, padding: "4px 10px", fontSize: 10, cursor: "pointer", fontWeight: active ? 700 : 400 }}>
                             {col.label} <span style={{ opacity: 0.7 }}>({count})</span>
                           </button>
                         );
@@ -3264,7 +3264,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                   {/* Map */}
                   <div style={{ position: "relative", height: 280 }}>
                     {mapSitesWithCoords.length === 0 ? (
-                      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "#3A4560", fontSize: 13 }}>No sites with coordinates in this filter</div>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "#4A5278", fontSize: 13 }}>No sites with coordinates in this filter</div>
                     ) : (() => {
                       const lats = mapSitesWithCoords.map(s => s.lat);
                       const lngs = mapSitesWithCoords.map(s => s.lng);
@@ -3281,7 +3281,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                     })()}
                     <div style={{ position: "absolute", bottom: 8, left: 12, display: "flex", gap: 6 }}>
                       {COLS.map(col => (
-                        <div key={col.id} style={{ display: "flex", alignItems: "center", gap: 4, background: "#0A0D16CC", borderRadius: 4, padding: "3px 7px" }}>
+                        <div key={col.id} style={{ display: "flex", alignItems: "center", gap: 4, background: "#F0F2F8CC", borderRadius: 4, padding: "3px 7px" }}>
                           <div style={{ width: 7, height: 7, borderRadius: "50%", background: col.color }} />
                           <span style={{ fontSize: 9, color: col.color }}>{col.label}</span>
                         </div>
@@ -3295,9 +3295,9 @@ Return ONLY valid JSON, no markdown, no extra text:
                   {COLS.map(col => {
                     const sites = colSites(col.id);
                     return (
-                      <div key={col.id} style={{ background: "#0A0D16", border: "1px solid #1E2640", borderRadius: 10, overflow: "hidden" }}>
+                      <div key={col.id} style={{ background: "#F0F2F8", border: "1px solid #CBD1E8", borderRadius: 10, overflow: "hidden" }}>
                         {/* Column header */}
-                        <div style={{ padding: "12px 14px", borderBottom: "1px solid #1E2640", display: "flex", alignItems: "center", justifyContent: "space-between", background: col.color + "08" }}>
+                        <div style={{ padding: "12px 14px", borderBottom: "1px solid #CBD1E8", display: "flex", alignItems: "center", justifyContent: "space-between", background: col.color + "08" }}>
                           <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
                             <div style={{ width: 8, height: 8, borderRadius: "50%", background: col.color, flexShrink: 0 }} />
                             <span style={{ fontSize: 11, fontWeight: 700, color: col.color, textTransform: "uppercase", letterSpacing: "0.08em" }}>{col.label}</span>
@@ -3308,7 +3308,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                         {/* Cards */}
                         <div style={{ padding: "10px 10px", display: "flex", flexDirection: "column", gap: 8, minHeight: 120 }}>
                           {sites.length === 0 && (
-                            <div style={{ textAlign: "center", padding: "20px 0", color: "#2A3560", fontSize: 11 }}>No sites</div>
+                            <div style={{ textAlign: "center", padding: "20px 0", color: "#3D4570", fontSize: 11 }}>No sites</div>
                           )}
                           {sites.map(site => {
                             const bid = getLawnBid(site.id);
@@ -3319,19 +3319,19 @@ Return ONLY valid JSON, no markdown, no extra text:
                             const isEditing = editLawnBidId === site.id;
 
                             return (
-                              <div key={site.id} style={{ background: "#161B28", border: "1px solid " + (isEditing ? col.color + "50" : "#1E2640"), borderRadius: 8, overflow: "hidden", transition: "border-color 0.15s" }}>
+                              <div key={site.id} style={{ background: "#ECEEF8", border: "1px solid " + (isEditing ? col.color + "50" : "#CBD1E8"), borderRadius: 8, overflow: "hidden", transition: "border-color 0.15s" }}>
                                 {/* Card header — click to expand */}
                                 <div onClick={() => setEditLawnBidId(isEditing ? null : site.id)} style={{ padding: "10px 12px", cursor: "pointer" }}>
-                                  <div style={{ fontSize: 12, fontWeight: 600, color: "#E8ECF4", marginBottom: 3 }}>
+                                  <div style={{ fontSize: 12, fontWeight: 600, color: "#1A2240", marginBottom: 3 }}>
                                     {co?.name || "Unknown"} #{site.storeNumber || "—"}
                                   </div>
-                                  <div style={{ fontSize: 10, color: "#3A4560", marginBottom: 6 }}>{site.address}</div>
+                                  <div style={{ fontSize: 10, color: "#4A5278", marginBottom: 6 }}>{site.address}</div>
                                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                                     {annualOur > 0
-                                      ? <span style={{ fontSize: 11, fontWeight: 700, color: "#4ADE80" }}>${Math.round(annualOur).toLocaleString()}<span style={{ fontSize: 9, fontWeight: 400, color: "#3A4560" }}>/yr</span></span>
-                                      : <span style={{ fontSize: 10, color: "#2A3560" }}>No pricing yet</span>
+                                      ? <span style={{ fontSize: 11, fontWeight: 700, color: "#4ADE80" }}>${Math.round(annualOur).toLocaleString()}<span style={{ fontSize: 9, fontWeight: 400, color: "#4A5278" }}>/yr</span></span>
+                                      : <span style={{ fontSize: 10, color: "#3D4570" }}>No pricing yet</span>
                                     }
-                                    <span style={{ fontSize: 10, color: "#3A4560" }}>{isEditing ? "▲" : "▼"}</span>
+                                    <span style={{ fontSize: 10, color: "#4A5278" }}>{isEditing ? "▲" : "▼"}</span>
                                   </div>
                                   {/* Sub tags */}
                                   {assignedSubs.length > 0 && (
@@ -3347,14 +3347,14 @@ Return ONLY valid JSON, no markdown, no extra text:
 
                                 {/* Expanded edit panel */}
                                 {isEditing && (
-                                  <div style={{ borderTop: "1px solid #1E2640", padding: "14px 12px", display: "flex", flexDirection: "column", gap: 12 }}>
+                                  <div style={{ borderTop: "1px solid #CBD1E8", padding: "14px 12px", display: "flex", flexDirection: "column", gap: 12 }}>
 
                                     {/* Move to column */}
                                     <div>
-                                      <div style={{ fontSize: 9, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>Stage</div>
+                                      <div style={{ fontSize: 9, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>Stage</div>
                                       <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                                         {[
-                                          { colId: "untouched",      status: null,             label: "Not Touched",     color: "#3A4560" },
+                                          { colId: "untouched",      status: null,             label: "Not Touched",     color: "#4A5278" },
                                           { colId: "bidding",        status: "bidding",         label: "Bidding",         color: "#FCD34D" },
                                           { colId: "owner_approval", status: "owner_approved",  label: "Owner Approval",  color: "#60A5FA" },
                                           { colId: "buyout",         status: "buyout",          label: "Buyout",          color: "#4ADE80" },
@@ -3383,8 +3383,8 @@ Return ONLY valid JSON, no markdown, no extra text:
                                               } else {
                                                 upsertLawnBid(site.id, b => ({ ...b, status: opt.status }));
                                               }
-                                            }} style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 8px", background: active ? opt.color + "15" : "transparent", border: "1px solid " + (active ? opt.color + "40" : "#1E2640"), borderRadius: 5, cursor: "pointer", fontFamily: "inherit", fontSize: 10, color: active ? opt.color : "#3A4560", textAlign: "left", transition: "all 0.15s" }}>
-                                              <div style={{ width: 6, height: 6, borderRadius: "50%", background: active ? opt.color : "#2A3560", flexShrink: 0 }} />
+                                            }} style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 8px", background: active ? opt.color + "15" : "transparent", border: "1px solid " + (active ? opt.color + "40" : "#CBD1E8"), borderRadius: 5, cursor: "pointer", fontFamily: "inherit", fontSize: 10, color: active ? opt.color : "#4A5278", textAlign: "left", transition: "all 0.15s" }}>
+                                              <div style={{ width: 6, height: 6, borderRadius: "50%", background: active ? opt.color : "#3D4570", flexShrink: 0 }} />
                                               {opt.label}
                                             </button>
                                           );
@@ -3410,14 +3410,14 @@ Return ONLY valid JSON, no markdown, no extra text:
 
                                     {/* Vendor assignment */}
                                     <div>
-                                      <div style={{ fontSize: 9, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>Contractors</div>
+                                      <div style={{ fontSize: 9, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>Contractors</div>
                                       <select defaultValue="" onChange={e => {
                                         const subId = e.target.value;
                                         if (!subId) return;
                                         const cur = bid?.subcontractorIds || [];
                                         if (!cur.includes(subId)) upsertLawnBid(site.id, b => ({ ...b, subcontractorIds: [...(b.subcontractorIds||[]), subId] }));
                                         e.target.value = "";
-                                      }} style={{ width: "100%", background: "#0A0D16", border: "1px solid #1E2640", borderRadius: 5, padding: "5px 8px", fontSize: 11, color: "#E8ECF4", boxSizing: "border-box", marginBottom: 6 }}>
+                                      }} style={{ width: "100%", background: "#F0F2F8", border: "1px solid #CBD1E8", borderRadius: 5, padding: "5px 8px", fontSize: 11, color: "#1A2240", boxSizing: "border-box", marginBottom: 6 }}>
                                         <option value="">+ Add contractor…</option>
                                         {subcontractors.filter(s => !(bid?.subcontractorIds||[]).includes(s.id)).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                                       </select>
@@ -3427,9 +3427,9 @@ Return ONLY valid JSON, no markdown, no extra text:
                                           if (!s) return null;
                                           const isSelected = bid?.selectedSubId === subId;
                                           return (
-                                            <div key={subId} style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 8px", background: isSelected ? "#4ADE8010" : "#0A0D16", border: "1px solid " + (isSelected ? "#4ADE8040" : "#1E2640"), borderRadius: 5 }}>
+                                            <div key={subId} style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 8px", background: isSelected ? "#4ADE8010" : "#F0F2F8", border: "1px solid " + (isSelected ? "#4ADE8040" : "#CBD1E8"), borderRadius: 5 }}>
                                               <input type="radio" name={"sel_" + site.id} checked={isSelected} onChange={() => upsertLawnBid(site.id, b => ({ ...b, selectedSubId: subId }))} style={{ accentColor: "#4ADE80" }} />
-                                              <span style={{ fontSize: 10, color: isSelected ? "#4ADE80" : "#B8C4E0", flex: 1 }}>{s.name}</span>
+                                              <span style={{ fontSize: 10, color: isSelected ? "#4ADE80" : "#252E52", flex: 1 }}>{s.name}</span>
                                               <button onClick={() => upsertLawnBid(site.id, b => ({ ...b, subcontractorIds: (b.subcontractorIds||[]).filter(id => id !== subId), selectedSubId: b.selectedSubId === subId ? "" : b.selectedSubId }))} style={{ background: "none", border: "none", color: "#F87171", cursor: "pointer", fontSize: 12, padding: 0 }}>✕</button>
                                             </div>
                                           );
@@ -3439,21 +3439,21 @@ Return ONLY valid JSON, no markdown, no extra text:
 
                                     {/* ── SERVICE LINE ITEM PRICING ── */}
                                     <div>
-                                      <div style={{ fontSize: 9, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>Service Pricing</div>
-                                      <div style={{ background: "#0A0D16", borderRadius: 6, border: "1px solid #1E2640", overflow: "hidden" }}>
+                                      <div style={{ fontSize: 9, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>Service Pricing</div>
+                                      <div style={{ background: "#F0F2F8", borderRadius: 6, border: "1px solid #CBD1E8", overflow: "hidden" }}>
                                         {/* Column headers */}
-                                        <div style={{ display: "grid", gridTemplateColumns: "16px 1fr 70px 70px 60px", gap: 4, padding: "5px 8px", borderBottom: "1px solid #1E2640", alignItems: "center" }}>
+                                        <div style={{ display: "grid", gridTemplateColumns: "16px 1fr 70px 70px 60px", gap: 4, padding: "5px 8px", borderBottom: "1px solid #CBD1E8", alignItems: "center" }}>
                                           <div />
-                                          <div style={{ fontSize: 9, color: "#2A3560", textTransform: "uppercase", letterSpacing: "0.06em" }}>Service</div>
+                                          <div style={{ fontSize: 9, color: "#3D4570", textTransform: "uppercase", letterSpacing: "0.06em" }}>Service</div>
                                           <div style={{ fontSize: 9, color: "#FBBF2480", textAlign: "right", textTransform: "uppercase", letterSpacing: "0.06em" }}>Sub $</div>
                                           <div style={{ fontSize: 9, color: "#4ADE8080", textAlign: "right", textTransform: "uppercase", letterSpacing: "0.06em" }}>Our $</div>
-                                          <div style={{ fontSize: 9, color: "#3A4560", textAlign: "right", textTransform: "uppercase", letterSpacing: "0.06em" }}>Annual</div>
+                                          <div style={{ fontSize: 9, color: "#4A5278", textAlign: "right", textTransform: "uppercase", letterSpacing: "0.06em" }}>Annual</div>
                                         </div>
                                         {LAWN_SERVICES.map(svc => {
                                           const sv = bid?.services?.[svc.id] || { subPrice: 0, ourPrice: 0, included: false };
                                           const annualLine = lawnBidAnnualOur({ services: { [svc.id]: { ...sv, included: true } } });
                                           return (
-                                            <div key={svc.id} style={{ display: "grid", gridTemplateColumns: "16px 1fr 70px 70px 60px", gap: 4, padding: "5px 8px", borderBottom: "1px solid #0D1120", alignItems: "center", background: sv.included ? "#161B28" : "transparent" }}>
+                                            <div key={svc.id} style={{ display: "grid", gridTemplateColumns: "16px 1fr 70px 70px 60px", gap: 4, padding: "5px 8px", borderBottom: "1px solid #E8EBF4", alignItems: "center", background: sv.included ? "#ECEEF8" : "transparent" }}>
                                               {/* Checkbox */}
                                               <input type="checkbox" checked={!!sv.included} onChange={e => {
                                                 upsertLawnBid(site.id, b => ({
@@ -3463,8 +3463,8 @@ Return ONLY valid JSON, no markdown, no extra text:
                                               }} style={{ accentColor: "#4ADE80", margin: 0, cursor: "pointer" }} />
                                               {/* Label + freq */}
                                               <div>
-                                                <div style={{ fontSize: 10, color: sv.included ? "#E8ECF4" : "#3A4560", fontWeight: sv.included ? 500 : 400 }}>{svc.label}</div>
-                                                <div style={{ fontSize: 8, color: "#2A3560" }}>{svc.freq}</div>
+                                                <div style={{ fontSize: 10, color: sv.included ? "#1A2240" : "#4A5278", fontWeight: sv.included ? 500 : 400 }}>{svc.label}</div>
+                                                <div style={{ fontSize: 8, color: "#3D4570" }}>{svc.freq}</div>
                                               </div>
                                               {/* Sub price input */}
                                               <input
@@ -3479,7 +3479,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                                                     services: { ...b.services, [svc.id]: { ...b.services[svc.id], subPrice: sub, ourPrice: our, included: sub > 0 ? true : b.services[svc.id]?.included } }
                                                   }));
                                                 }}
-                                                style={{ background: "#0A0D16", border: "1px solid #1E2640", borderRadius: 4, padding: "3px 5px", fontSize: 10, color: "#FBBF24", textAlign: "right", width: "100%", fontFamily: "inherit", boxSizing: "border-box" }}
+                                                style={{ background: "#F0F2F8", border: "1px solid #CBD1E8", borderRadius: 4, padding: "3px 5px", fontSize: 10, color: "#FBBF24", textAlign: "right", width: "100%", fontFamily: "inherit", boxSizing: "border-box" }}
                                               />
                                               {/* Our price input (auto-filled but overridable) */}
                                               <input
@@ -3493,18 +3493,18 @@ Return ONLY valid JSON, no markdown, no extra text:
                                                     services: { ...b.services, [svc.id]: { ...b.services[svc.id], ourPrice: our } }
                                                   }));
                                                 }}
-                                                style={{ background: "#0A0D16", border: "1px solid #1E2640", borderRadius: 4, padding: "3px 5px", fontSize: 10, color: "#4ADE80", textAlign: "right", width: "100%", fontFamily: "inherit", boxSizing: "border-box" }}
+                                                style={{ background: "#F0F2F8", border: "1px solid #CBD1E8", borderRadius: 4, padding: "3px 5px", fontSize: 10, color: "#4ADE80", textAlign: "right", width: "100%", fontFamily: "inherit", boxSizing: "border-box" }}
                                               />
                                               {/* Annual calc */}
-                                              <div style={{ fontSize: 10, color: sv.included && sv.ourPrice > 0 ? "#4ADE80" : "#2A3560", textAlign: "right", fontWeight: 600 }}>
+                                              <div style={{ fontSize: 10, color: sv.included && sv.ourPrice > 0 ? "#4ADE80" : "#3D4570", textAlign: "right", fontWeight: 600 }}>
                                                 {sv.included && sv.ourPrice > 0 ? "$" + Math.round(annualLine).toLocaleString() : "—"}
                                               </div>
                                             </div>
                                           );
                                         })}
                                         {/* Annual total footer */}
-                                        <div style={{ display: "grid", gridTemplateColumns: "16px 1fr 70px 70px 60px", gap: 4, padding: "7px 8px", borderTop: "1px solid #1E2640", alignItems: "center", background: "#0A0D16" }}>
-                                          <div /><div style={{ fontSize: 9, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 600 }}>Annual Total</div>
+                                        <div style={{ display: "grid", gridTemplateColumns: "16px 1fr 70px 70px 60px", gap: 4, padding: "7px 8px", borderTop: "1px solid #CBD1E8", alignItems: "center", background: "#F0F2F8" }}>
+                                          <div /><div style={{ fontSize: 9, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 600 }}>Annual Total</div>
                                           <div style={{ fontSize: 10, color: "#FBBF24", textAlign: "right", fontWeight: 600 }}>
                                             ${Math.round(bid ? LAWN_SERVICES.reduce((s, sv2) => { const sv3 = bid.services?.[sv2.id]; if (!sv3?.included || !sv3.subPrice) return s; return s + (sv2.unit==="per_cut" ? sv3.subPrice*28 : sv2.unit==="monthly" ? sv3.subPrice*7 : sv3.subPrice); }, 0) : 0).toLocaleString()}
                                           </div>
@@ -3516,7 +3516,7 @@ Return ONLY valid JSON, no markdown, no extra text:
 
                                     {/* Contracts — file attachments */}
                                     <div>
-                                      <div style={{ fontSize: 9, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>Contracts</div>
+                                      <div style={{ fontSize: 9, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>Contracts</div>
                                       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                                         {/* Owner Contract */}
                                         <div>
@@ -3528,8 +3528,8 @@ Return ONLY valid JSON, no markdown, no extra text:
                                               <button onClick={() => upsertLawnBid(site.id, b => ({ ...b, ownerContractFile: null, ownerContractFileName: "" }))} style={{ background: "none", border: "none", color: "#F87171", cursor: "pointer", fontSize: 11, padding: 0 }}>✕</button>
                                             </div>
                                           ) : (
-                                            <label style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 8px", background: "#0A0D16", border: "1px dashed #A78BFA50", borderRadius: 5, cursor: "pointer" }}>
-                                              <span style={{ fontSize: 10, color: "#3A4560" }}>📎 Attach signed owner contract…</span>
+                                            <label style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 8px", background: "#F0F2F8", border: "1px dashed #A78BFA50", borderRadius: 5, cursor: "pointer" }}>
+                                              <span style={{ fontSize: 10, color: "#4A5278" }}>📎 Attach signed owner contract…</span>
                                               <input type="file" accept=".pdf,.doc,.docx,.jpg,.png" style={{ display: "none" }} onChange={e => {
                                                 const file = e.target.files?.[0];
                                                 if (!file) return;
@@ -3554,8 +3554,8 @@ Return ONLY valid JSON, no markdown, no extra text:
                                               }} style={{ background: "none", border: "none", color: "#F87171", cursor: "pointer", fontSize: 11, padding: 0 }}>✕</button>
                                             </div>
                                           ) : (
-                                            <label style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 8px", background: "#0A0D16", border: "1px dashed #60A5FA50", borderRadius: 5, cursor: "pointer" }}>
-                                              <span style={{ fontSize: 10, color: "#3A4560" }}>📎 Attach signed subcontract…</span>
+                                            <label style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 8px", background: "#F0F2F8", border: "1px dashed #60A5FA50", borderRadius: 5, cursor: "pointer" }}>
+                                              <span style={{ fontSize: 10, color: "#4A5278" }}>📎 Attach signed subcontract…</span>
                                               <input type="file" accept=".pdf,.doc,.docx,.jpg,.png" style={{ display: "none" }} onChange={e => {
                                                 const file = e.target.files?.[0];
                                                 if (!file) return;
@@ -3573,18 +3573,18 @@ Return ONLY valid JSON, no markdown, no extra text:
 
                                     {/* Notes */}
                                     <div>
-                                      <div style={{ fontSize: 9, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 4 }}>Notes</div>
-                                      <input value={bid?.notes || ""} onChange={e => upsertLawnBid(site.id, b => ({ ...b, notes: e.target.value }))} placeholder="Notes…" style={{ width: "100%", background: "#0A0D16", border: "1px solid #1E2640", borderRadius: 5, padding: "5px 8px", fontSize: 11, color: "#E8ECF4", boxSizing: "border-box" }} />
+                                      <div style={{ fontSize: 9, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 4 }}>Notes</div>
+                                      <input value={bid?.notes || ""} onChange={e => upsertLawnBid(site.id, b => ({ ...b, notes: e.target.value }))} placeholder="Notes…" style={{ width: "100%", background: "#F0F2F8", border: "1px solid #CBD1E8", borderRadius: 5, padding: "5px 8px", fontSize: 11, color: "#1A2240", boxSizing: "border-box" }} />
                                     </div>
 
                                     {/* Sitefotos link */}
                                     <div>
-                                      <div style={{ fontSize: 9, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 4 }}>
+                                      <div style={{ fontSize: 9, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 4 }}>
                                         📸 Sitefotos Link
-                                        <span style={{ marginLeft: 6, fontSize: 8, color: "#2A3560", textTransform: "none", fontWeight: 400 }}>paste your Sitefotos property URL</span>
+                                        <span style={{ marginLeft: 6, fontSize: 8, color: "#3D4570", textTransform: "none", fontWeight: 400 }}>paste your Sitefotos property URL</span>
                                       </div>
                                       <div style={{ display: "flex", gap: 5 }}>
-                                        <input value={bid?.sitefotosUrl || ""} onChange={e => upsertLawnBid(site.id, b => ({ ...b, sitefotosUrl: e.target.value }))} placeholder="https://app.sitefotos.com/property/…" style={{ flex: 1, background: "#0A0D16", border: "1px solid #1E2640", borderRadius: 5, padding: "5px 8px", fontSize: 10, color: "#60A5FA", boxSizing: "border-box" }} />
+                                        <input value={bid?.sitefotosUrl || ""} onChange={e => upsertLawnBid(site.id, b => ({ ...b, sitefotosUrl: e.target.value }))} placeholder="https://app.sitefotos.com/property/…" style={{ flex: 1, background: "#F0F2F8", border: "1px solid #CBD1E8", borderRadius: 5, padding: "5px 8px", fontSize: 10, color: "#60A5FA", boxSizing: "border-box" }} />
                                         {bid?.sitefotosUrl && (
                                           <a href={bid.sitefotosUrl} target="_blank" rel="noopener noreferrer" style={{ padding: "5px 10px", background: "#60A5FA15", border: "1px solid #60A5FA40", borderRadius: 5, color: "#60A5FA", fontSize: 11, textDecoration: "none", display: "flex", alignItems: "center" }}>Open →</a>
                                         )}
@@ -3592,13 +3592,13 @@ Return ONLY valid JSON, no markdown, no extra text:
                                     </div>
 
                                     {/* Archive / Not Bidding */}
-                                    <div style={{ borderTop: "1px solid #1E2640", paddingTop: 10 }}>
+                                    <div style={{ borderTop: "1px solid #CBD1E8", paddingTop: 10 }}>
                                       {bid?.status === "not_bidding" ? (
                                         <button onClick={() => upsertLawnBid(site.id, b => ({ ...b, status: "bidding" }))} style={{ width: "100%", padding: "7px 0", background: "#4ADE8010", border: "1px solid #4ADE8030", borderRadius: 7, color: "#4ADE80", fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
                                           ↩ Restore to Bidding
                                         </button>
                                       ) : (
-                                        <button onClick={() => { if (window.confirm("Archive this site? It will be hidden from the kanban but can be restored.")) upsertLawnBid(site.id, b => ({ ...b, status: "not_bidding" })); }} style={{ width: "100%", padding: "7px 0", background: "transparent", border: "1px solid #3A456040", borderRadius: 7, color: "#3A4560", fontSize: 11, cursor: "pointer", fontFamily: "inherit" }}>
+                                        <button onClick={() => { if (window.confirm("Archive this site? It will be hidden from the kanban but can be restored.")) upsertLawnBid(site.id, b => ({ ...b, status: "not_bidding" })); }} style={{ width: "100%", padding: "7px 0", background: "transparent", border: "1px solid #4A527840", borderRadius: 7, color: "#4A5278", fontSize: 11, cursor: "pointer", fontFamily: "inherit" }}>
                                           📦 Archive (not bidding this season)
                                         </button>
                                       )}
@@ -3681,7 +3681,7 @@ Return ONLY valid JSON, no markdown, no extra text:
             const grandSub = rows.reduce((s, r) => s + r.annualSub, 0);
             const pricedCount = rows.filter(r => r.annual > 0).length;
 
-            const colColors = { untouched: "#3A4560", bidding: "#FBBF24", owner_approval: "#60A5FA", buyout: "#4ADE80", not_bidding: "#F87171" };
+            const colColors = { untouched: "#4A5278", bidding: "#FBBF24", owner_approval: "#60A5FA", buyout: "#4ADE80", not_bidding: "#F87171" };
             const colLabels = { untouched: "Not Touched", bidding: "Bidding", owner_approval: "Owner Appr.", buyout: "Buyout", not_bidding: "Not Bidding" };
 
             const exportCSV = () => {
@@ -3710,17 +3710,17 @@ Return ONLY valid JSON, no markdown, no extra text:
                 {/* Header */}
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12 }}>
                   <div>
-                    <div style={{ fontSize: 22, fontWeight: 700, color: "#FFFFFF", letterSpacing: "-0.01em", textTransform: "uppercase" }}>Pricing Sheet — {lawnBidSeason}</div>
-                    <div style={{ fontSize: 11, color: "#3A4560", marginTop: 3, letterSpacing: "0.06em" }}>{pricedCount} of {rows.length} sites priced · <span style={{ color: "#4ADE80" }}>Our Total: ${Math.round(grandTotal).toLocaleString()}/yr</span> · <span style={{ color: "#FBBF24" }}>Sub Total: ${Math.round(grandSub).toLocaleString()}/yr</span></div>
+                    <div style={{ fontSize: 22, fontWeight: 700, color: "#1A2240", letterSpacing: "-0.01em", textTransform: "uppercase" }}>Pricing Sheet — {lawnBidSeason}</div>
+                    <div style={{ fontSize: 11, color: "#4A5278", marginTop: 3, letterSpacing: "0.06em" }}>{pricedCount} of {rows.length} sites priced · <span style={{ color: "#4ADE80" }}>Our Total: ${Math.round(grandTotal).toLocaleString()}/yr</span> · <span style={{ color: "#FBBF24" }}>Sub Total: ${Math.round(grandSub).toLocaleString()}/yr</span></div>
                   </div>
                   <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
                     <input className="fi" style={{ width: 180 }} placeholder="Search…" value={pricingSearch} onChange={e => setPricingSearch(e.target.value)} />
-                    <select value={pricingFilter} onChange={e => setPricingFilter(e.target.value)} style={{ background: "#141824", border: "1px solid #1E2640", color: "#B8C4E0", borderRadius: 6, padding: "6px 10px", fontSize: 12, fontFamily: "inherit" }}>
+                    <select value={pricingFilter} onChange={e => setPricingFilter(e.target.value)} style={{ background: "#F5F7FC", border: "1px solid #CBD1E8", color: "#252E52", borderRadius: 6, padding: "6px 10px", fontSize: 12, fontFamily: "inherit" }}>
                       <option value="all">All Sites</option>
                       <option value="priced">Priced Only</option>
                       <option value="unpriced">Unpriced Only</option>
                     </select>
-                    <select value={pricingSort} onChange={e => setPricingSort(e.target.value)} style={{ background: "#141824", border: "1px solid #1E2640", color: "#B8C4E0", borderRadius: 6, padding: "6px 10px", fontSize: 12, fontFamily: "inherit" }}>
+                    <select value={pricingSort} onChange={e => setPricingSort(e.target.value)} style={{ background: "#F5F7FC", border: "1px solid #CBD1E8", color: "#252E52", borderRadius: 6, padding: "6px 10px", fontSize: 12, fontFamily: "inherit" }}>
                       <option value="company">Sort: Company</option>
                       <option value="annual">Sort: Annual $</option>
                       <option value="stage">Sort: Stage</option>
@@ -3733,32 +3733,32 @@ Return ONLY valid JSON, no markdown, no extra text:
                 </div>
 
                 {/* Table */}
-                <div style={{ overflowX: "auto", borderRadius: 10, border: "1px solid #1E2640" }}>
+                <div style={{ overflowX: "auto", borderRadius: 10, border: "1px solid #CBD1E8" }}>
                   <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11, tableLayout: "auto" }}>
                     <thead>
-                      <tr style={{ background: "#0A0D16", position: "sticky", top: 0, zIndex: 2 }}>
-                        <th style={{ padding: "10px 12px", textAlign: "left", color: "#3A4560", fontWeight: 600, whiteSpace: "nowrap", borderBottom: "1px solid #1E2640", fontSize: 10 }}>Company / Site</th>
-                        <th style={{ padding: "10px 8px", textAlign: "left", color: "#3A4560", fontWeight: 600, whiteSpace: "nowrap", borderBottom: "1px solid #1E2640", fontSize: 10 }}>Stage</th>
+                      <tr style={{ background: "#F0F2F8", position: "sticky", top: 0, zIndex: 2 }}>
+                        <th style={{ padding: "10px 12px", textAlign: "left", color: "#4A5278", fontWeight: 600, whiteSpace: "nowrap", borderBottom: "1px solid #CBD1E8", fontSize: 10 }}>Company / Site</th>
+                        <th style={{ padding: "10px 8px", textAlign: "left", color: "#4A5278", fontWeight: 600, whiteSpace: "nowrap", borderBottom: "1px solid #CBD1E8", fontSize: 10 }}>Stage</th>
                         {LAWN_SERVICES.map(s => (
-                          <th key={s.id} style={{ padding: "10px 8px", textAlign: "right", color: "#3A4560", fontWeight: 600, whiteSpace: "nowrap", borderBottom: "1px solid #1E2640", fontSize: 10, minWidth: 80 }}>
-                            {s.label}<br /><span style={{ color: "#2A3560", fontSize: 9, fontWeight: 400 }}>{s.freq}</span>
+                          <th key={s.id} style={{ padding: "10px 8px", textAlign: "right", color: "#4A5278", fontWeight: 600, whiteSpace: "nowrap", borderBottom: "1px solid #CBD1E8", fontSize: 10, minWidth: 80 }}>
+                            {s.label}<br /><span style={{ color: "#3D4570", fontSize: 9, fontWeight: 400 }}>{s.freq}</span>
                           </th>
                         ))}
-                        <th style={{ padding: "10px 12px", textAlign: "right", color: "#4ADE80", fontWeight: 700, whiteSpace: "nowrap", borderBottom: "1px solid #1E2640", fontSize: 10, borderLeft: "1px solid #1E2640" }}>Annual</th>
+                        <th style={{ padding: "10px 12px", textAlign: "right", color: "#4ADE80", fontWeight: 700, whiteSpace: "nowrap", borderBottom: "1px solid #CBD1E8", fontSize: 10, borderLeft: "1px solid #CBD1E8" }}>Annual</th>
                       </tr>
                     </thead>
                     <tbody>
                       {rows.map(({ site, co, bid, annual, annualSub, statusCol }) => {
                         const hasData = annual > 0 || annualSub > 0;
                         return (
-                          <tr key={site.id} style={{ borderBottom: "1px solid #1E2640", background: "transparent" }}
-                            onMouseEnter={e => e.currentTarget.style.background = "#161B28"}
+                          <tr key={site.id} style={{ borderBottom: "1px solid #CBD1E8", background: "transparent" }}
+                            onMouseEnter={e => e.currentTarget.style.background = "#ECEEF8"}
                             onMouseLeave={e => e.currentTarget.style.background = "transparent"}
                           >
                             {/* Site info */}
                             <td style={{ padding: "9px 12px", whiteSpace: "nowrap" }}>
-                              <div style={{ fontWeight: 600, color: "#E8ECF4", fontSize: 11 }}>{co?.name || "—"} <span style={{ color: "#3A4560", fontWeight: 400 }}>#{site.storeNumber || "—"}</span></div>
-                              <div style={{ color: "#3A4560", fontSize: 10, marginTop: 1 }}>{(site.address || "").split(",").slice(-2).join(",").trim()}</div>
+                              <div style={{ fontWeight: 600, color: "#1A2240", fontSize: 11 }}>{co?.name || "—"} <span style={{ color: "#4A5278", fontWeight: 400 }}>#{site.storeNumber || "—"}</span></div>
+                              <div style={{ color: "#4A5278", fontSize: 10, marginTop: 1 }}>{(site.address || "").split(",").slice(-2).join(",").trim()}</div>
                             </td>
                             {/* Stage */}
                             <td style={{ padding: "9px 8px", whiteSpace: "nowrap" }}>
@@ -3770,20 +3770,20 @@ Return ONLY valid JSON, no markdown, no extra text:
                               const included = sv?.included;
                               const price = showSub ? (sv?.subPrice || 0) : (sv?.ourPrice || 0);
                               return (
-                                <td key={svc.id} style={{ padding: "9px 8px", textAlign: "right", color: included && price > 0 ? (showSub ? "#FBBF24" : "#4ADE80") : "#2A3560", fontSize: 11 }}>
+                                <td key={svc.id} style={{ padding: "9px 8px", textAlign: "right", color: included && price > 0 ? (showSub ? "#FBBF24" : "#4ADE80") : "#3D4570", fontSize: 11 }}>
                                   {included && price > 0 ? "$" + price.toLocaleString() : "—"}
                                 </td>
                               );
                             })}
                             {/* Annual total */}
-                            <td style={{ padding: "9px 12px", textAlign: "right", borderLeft: "1px solid #1E2640", whiteSpace: "nowrap" }}>
+                            <td style={{ padding: "9px 12px", textAlign: "right", borderLeft: "1px solid #CBD1E8", whiteSpace: "nowrap" }}>
                               {hasData ? (
                                 <div>
                                   <div style={{ fontWeight: 700, color: "#4ADE80", fontSize: 12 }}>${Math.round(annual).toLocaleString()}</div>
                                   <div style={{ fontSize: 9, color: "#FBBF24" }}>sub ${Math.round(annualSub).toLocaleString()}</div>
                                 </div>
                               ) : (
-                                <span style={{ color: "#2A3560", fontSize: 10 }}>No pricing</span>
+                                <span style={{ color: "#3D4570", fontSize: 10 }}>No pricing</span>
                               )}
                             </td>
                           </tr>
@@ -3792,8 +3792,8 @@ Return ONLY valid JSON, no markdown, no extra text:
                     </tbody>
                     {/* Footer totals */}
                     <tfoot>
-                      <tr style={{ background: "#0A0D16", borderTop: "2px solid #1E2640" }}>
-                        <td colSpan={2} style={{ padding: "10px 12px", color: "#3A4560", fontSize: 11, fontWeight: 600 }}>TOTALS ({rows.length} sites)</td>
+                      <tr style={{ background: "#F0F2F8", borderTop: "2px solid #CBD1E8" }}>
+                        <td colSpan={2} style={{ padding: "10px 12px", color: "#4A5278", fontSize: 11, fontWeight: 600 }}>TOTALS ({rows.length} sites)</td>
                         {LAWN_SERVICES.map(svc => {
                           const total = rows.reduce((sum, { bid }) => {
                             const sv = bid?.services?.[svc.id];
@@ -3802,12 +3802,12 @@ Return ONLY valid JSON, no markdown, no extra text:
                             return sum + price;
                           }, 0);
                           return (
-                            <td key={svc.id} style={{ padding: "10px 8px", textAlign: "right", color: total > 0 ? (showSub ? "#FBBF2490" : "#4ADE8090") : "#2A3560", fontSize: 11, fontWeight: 600 }}>
+                            <td key={svc.id} style={{ padding: "10px 8px", textAlign: "right", color: total > 0 ? (showSub ? "#FBBF2490" : "#4ADE8090") : "#3D4570", fontSize: 11, fontWeight: 600 }}>
                               {total > 0 ? "$" + Math.round(total).toLocaleString() : "—"}
                             </td>
                           );
                         })}
-                        <td style={{ padding: "10px 12px", textAlign: "right", borderLeft: "1px solid #1E2640" }}>
+                        <td style={{ padding: "10px 12px", textAlign: "right", borderLeft: "1px solid #CBD1E8" }}>
                           <div style={{ fontWeight: 700, color: "#4ADE80", fontSize: 13 }}>${Math.round(grandTotal).toLocaleString()}</div>
                           <div style={{ fontSize: 9, color: "#FBBF24" }}>sub ${Math.round(grandSub).toLocaleString()}</div>
                         </td>
@@ -3836,8 +3836,8 @@ Return ONLY valid JSON, no markdown, no extra text:
               <div className="fade-in" style={{ display: "flex", flexDirection: "column", gap: 20 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                   <div>
-                    <div style={{ fontSize: 22, fontWeight: 700, color: "#FFFFFF", letterSpacing: "-0.01em", textTransform: "uppercase" }}>Active Sites</div>
-                    <div style={{ fontSize: 11, color: "#3A4560", marginTop: 3, letterSpacing: "0.06em" }}>{activeSites.length} ACTIVE · ${Math.round(totalBook).toLocaleString()} CONTRACTED</div>
+                    <div style={{ fontSize: 22, fontWeight: 700, color: "#1A2240", letterSpacing: "-0.01em", textTransform: "uppercase" }}>Active Sites</div>
+                    <div style={{ fontSize: 11, color: "#4A5278", marginTop: 3, letterSpacing: "0.06em" }}>{activeSites.length} ACTIVE · ${Math.round(totalBook).toLocaleString()} CONTRACTED</div>
                   </div>
                 </div>
 
@@ -3850,7 +3850,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                   ].map(s => (
                     <div key={s.label} className="stat-card" style={{ position: "relative", overflow: "hidden", padding: "14px 18px" }}>
                       <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: s.color }} />
-                      <div style={{ fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "#3A4560", marginBottom: 6 }}>{s.label}</div>
+                      <div style={{ fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "#4A5278", marginBottom: 6 }}>{s.label}</div>
                       <div style={{ fontSize: 22, fontWeight: 700, color: s.color }}>{s.value}</div>
                     </div>
                   ))}
@@ -3878,80 +3878,80 @@ Return ONLY valid JSON, no markdown, no extra text:
                       const gpPct = annualOur > 0 ? Math.round(gp / annualOur * 100) : 0;
                       const includedServices = LAWN_SERVICES.filter(s => bid?.services?.[s.id]?.included);
                       return (
-                        <div key={site.id} style={{ background: "#0F1117", border: "1px solid " + (isExpanded ? "#4ADE8060" : "#4ADE8030"), borderRadius: 10, overflow: "hidden", transition: "border-color 0.2s" }}>
+                        <div key={site.id} style={{ background: "#1A2240", border: "1px solid " + (isExpanded ? "#4ADE8060" : "#4ADE8030"), borderRadius: 10, overflow: "hidden", transition: "border-color 0.2s" }}>
                           {/* Card header row — always visible, click to expand */}
                           <div onClick={() => setExpandedActiveSiteId(isExpanded ? null : site.id)} style={{ padding: "14px 18px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, cursor: "pointer" }}>
                             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                               <div style={{ width: 36, height: 36, borderRadius: 8, background: "#4ADE8015", border: "1px solid #4ADE8030", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, flexShrink: 0 }}>✅</div>
                               <div>
-                                <div style={{ fontSize: 14, fontWeight: 600, color: "#E8ECF4" }}>{co?.name || "Unknown"}{site.storeNumber ? ` — #${site.storeNumber}` : ""}</div>
-                                <div style={{ fontSize: 11, color: "#3A4560" }}>{site.address}</div>
+                                <div style={{ fontSize: 14, fontWeight: 600, color: "#1A2240" }}>{co?.name || "Unknown"}{site.storeNumber ? ` — #${site.storeNumber}` : ""}</div>
+                                <div style={{ fontSize: 11, color: "#4A5278" }}>{site.address}</div>
                                 {sub && <div style={{ fontSize: 10, color: "#4ADE80", marginTop: 2 }}>🔧 {sub.name}</div>}
                               </div>
                             </div>
                             <div style={{ display: "flex", alignItems: "center", gap: 14, flexShrink: 0 }}>
                               <div style={{ textAlign: "right" }}>
-                                <div style={{ fontSize: 15, fontWeight: 700, color: "#4ADE80" }}>${Math.round(annualOur).toLocaleString()}<span style={{ fontSize: 10, color: "#3A4560", fontWeight: 400 }}>/yr</span></div>
+                                <div style={{ fontSize: 15, fontWeight: 700, color: "#4ADE80" }}>${Math.round(annualOur).toLocaleString()}<span style={{ fontSize: 10, color: "#4A5278", fontWeight: 400 }}>/yr</span></div>
                                 <div style={{ fontSize: 10, color: gpPct >= 30 ? "#4ADE80" : "#FBBF24" }}>{gpPct}% GP</div>
                               </div>
-                              <div style={{ fontSize: 16, color: "#3A4560", transform: isExpanded ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.2s" }}>▼</div>
+                              <div style={{ fontSize: 16, color: "#4A5278", transform: isExpanded ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.2s" }}>▼</div>
                             </div>
                           </div>
 
                           {/* Expanded detail panel */}
                           {isExpanded && (
-                            <div style={{ borderTop: "1px solid #1E2640", padding: "18px 20px", display: "flex", flexDirection: "column", gap: 16 }}>
+                            <div style={{ borderTop: "1px solid #CBD1E8", padding: "18px 20px", display: "flex", flexDirection: "column", gap: 16 }}>
 
                               {/* Site info + financials */}
                               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                                <div style={{ background: "#0A0D16", borderRadius: 8, padding: "12px 14px", border: "1px solid #1E2640" }}>
-                                  <div style={{ fontSize: 9, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>Site Info</div>
+                                <div style={{ background: "#F0F2F8", borderRadius: 8, padding: "12px 14px", border: "1px solid #CBD1E8" }}>
+                                  <div style={{ fontSize: 9, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>Site Info</div>
                                   <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-                                    <div style={{ fontSize: 11, color: "#B8C4E0" }}><span style={{ color: "#3A4560" }}>Company: </span>{co?.name || "—"}</div>
-                                    {site.storeNumber && <div style={{ fontSize: 11, color: "#B8C4E0" }}><span style={{ color: "#3A4560" }}>Store #: </span>{site.storeNumber}</div>}
-                                    <div style={{ fontSize: 11, color: "#B8C4E0" }}><span style={{ color: "#3A4560" }}>Address: </span>{site.address}</div>
-                                    {site.phone && <div style={{ fontSize: 11, color: "#B8C4E0" }}><span style={{ color: "#3A4560" }}>Phone: </span>{site.phone}</div>}
-                                    {site.accessCode && <div style={{ fontSize: 11, color: "#B8C4E0" }}><span style={{ color: "#3A4560" }}>Access: </span>{site.accessCode}</div>}
-                                    {site.notes && <div style={{ fontSize: 11, color: "#B8C4E0" }}><span style={{ color: "#3A4560" }}>Notes: </span>{site.notes}</div>}
-                                    <div style={{ fontSize: 11, color: "#B8C4E0" }}><span style={{ color: "#3A4560" }}>Season: </span>{bid?.season || lawnBidSeason}</div>
+                                    <div style={{ fontSize: 11, color: "#252E52" }}><span style={{ color: "#4A5278" }}>Company: </span>{co?.name || "—"}</div>
+                                    {site.storeNumber && <div style={{ fontSize: 11, color: "#252E52" }}><span style={{ color: "#4A5278" }}>Store #: </span>{site.storeNumber}</div>}
+                                    <div style={{ fontSize: 11, color: "#252E52" }}><span style={{ color: "#4A5278" }}>Address: </span>{site.address}</div>
+                                    {site.phone && <div style={{ fontSize: 11, color: "#252E52" }}><span style={{ color: "#4A5278" }}>Phone: </span>{site.phone}</div>}
+                                    {site.accessCode && <div style={{ fontSize: 11, color: "#252E52" }}><span style={{ color: "#4A5278" }}>Access: </span>{site.accessCode}</div>}
+                                    {site.notes && <div style={{ fontSize: 11, color: "#252E52" }}><span style={{ color: "#4A5278" }}>Notes: </span>{site.notes}</div>}
+                                    <div style={{ fontSize: 11, color: "#252E52" }}><span style={{ color: "#4A5278" }}>Season: </span>{bid?.season || lawnBidSeason}</div>
                                     {bid?.sitefotosUrl && <a href={bid.sitefotosUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: 10, color: "#60A5FA", display: "flex", alignItems: "center", gap: 4, marginTop: 2 }}>📸 Sitefotos →</a>}
                                   </div>
                                 </div>
-                                <div style={{ background: "#0A0D16", borderRadius: 8, padding: "12px 14px", border: "1px solid #1E2640" }}>
-                                  <div style={{ fontSize: 9, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>Financials</div>
+                                <div style={{ background: "#F0F2F8", borderRadius: 8, padding: "12px 14px", border: "1px solid #CBD1E8" }}>
+                                  <div style={{ fontSize: 9, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>Financials</div>
                                   <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                                     <div style={{ display: "flex", justifyContent: "space-between" }}>
-                                      <span style={{ fontSize: 11, color: "#3A4560" }}>Sub Cost / yr</span>
+                                      <span style={{ fontSize: 11, color: "#4A5278" }}>Sub Cost / yr</span>
                                       <span style={{ fontSize: 12, color: "#FBBF24", fontWeight: 600 }}>${Math.round(annualSub).toLocaleString()}</span>
                                     </div>
                                     <div style={{ display: "flex", justifyContent: "space-between" }}>
-                                      <span style={{ fontSize: 11, color: "#3A4560" }}>Our Price / yr</span>
+                                      <span style={{ fontSize: 11, color: "#4A5278" }}>Our Price / yr</span>
                                       <span style={{ fontSize: 12, color: "#4ADE80", fontWeight: 700 }}>${Math.round(annualOur).toLocaleString()}</span>
                                     </div>
-                                    <div style={{ borderTop: "1px solid #1E2640", paddingTop: 6, display: "flex", justifyContent: "space-between" }}>
-                                      <span style={{ fontSize: 11, color: "#3A4560" }}>Gross Profit</span>
+                                    <div style={{ borderTop: "1px solid #CBD1E8", paddingTop: 6, display: "flex", justifyContent: "space-between" }}>
+                                      <span style={{ fontSize: 11, color: "#4A5278" }}>Gross Profit</span>
                                       <span style={{ fontSize: 12, color: gpPct >= 30 ? "#4ADE80" : "#FBBF24", fontWeight: 700 }}>${Math.round(gp).toLocaleString()} ({gpPct}%)</span>
                                     </div>
                                     {bid?.acreage && <div style={{ display: "flex", justifyContent: "space-between" }}>
-                                      <span style={{ fontSize: 11, color: "#3A4560" }}>Acreage</span>
-                                      <span style={{ fontSize: 11, color: "#B8C4E0" }}>{bid.acreage} acres</span>
+                                      <span style={{ fontSize: 11, color: "#4A5278" }}>Acreage</span>
+                                      <span style={{ fontSize: 11, color: "#252E52" }}>{bid.acreage} acres</span>
                                     </div>}
                                   </div>
                                 </div>
                               </div>
 
                               {/* Contractors */}
-                              <div style={{ background: "#0A0D16", borderRadius: 8, padding: "12px 14px", border: "1px solid #1E2640" }}>
-                                <div style={{ fontSize: 9, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>Contractors</div>
-                                {allSubs.length === 0 ? <div style={{ fontSize: 11, color: "#3A4560" }}>None assigned</div> : (
+                              <div style={{ background: "#F0F2F8", borderRadius: 8, padding: "12px 14px", border: "1px solid #CBD1E8" }}>
+                                <div style={{ fontSize: 9, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>Contractors</div>
+                                {allSubs.length === 0 ? <div style={{ fontSize: 11, color: "#4A5278" }}>None assigned</div> : (
                                   <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
                                     {allSubs.map(s => {
                                       const isPrimary = bid?.selectedSubId === s.id;
                                       return (
                                         <div key={s.id} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                                          <div style={{ width: 6, height: 6, borderRadius: "50%", background: isPrimary ? "#4ADE80" : "#3A4560", flexShrink: 0 }} />
-                                          <span style={{ fontSize: 11, color: isPrimary ? "#4ADE80" : "#B8C4E0", fontWeight: isPrimary ? 600 : 400 }}>{s.name}{isPrimary ? " ✓ Primary" : ""}</span>
-                                          {s.phone && <span style={{ fontSize: 10, color: "#3A4560" }}>· {s.phone}</span>}
+                                          <div style={{ width: 6, height: 6, borderRadius: "50%", background: isPrimary ? "#4ADE80" : "#4A5278", flexShrink: 0 }} />
+                                          <span style={{ fontSize: 11, color: isPrimary ? "#4ADE80" : "#252E52", fontWeight: isPrimary ? 600 : 400 }}>{s.name}{isPrimary ? " ✓ Primary" : ""}</span>
+                                          {s.phone && <span style={{ fontSize: 10, color: "#4A5278" }}>· {s.phone}</span>}
                                         </div>
                                       );
                                     })}
@@ -3961,15 +3961,15 @@ Return ONLY valid JSON, no markdown, no extra text:
 
                               {/* Services table */}
                               {includedServices.length > 0 && (
-                                <div style={{ background: "#0A0D16", borderRadius: 8, border: "1px solid #1E2640", overflow: "hidden" }}>
-                                  <div style={{ fontSize: 9, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.08em", padding: "10px 14px 6px" }}>Services</div>
+                                <div style={{ background: "#F0F2F8", borderRadius: 8, border: "1px solid #CBD1E8", overflow: "hidden" }}>
+                                  <div style={{ fontSize: 9, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.08em", padding: "10px 14px 6px" }}>Services</div>
                                   <table style={{ width: "100%", borderCollapse: "collapse" }}>
                                     <thead>
-                                      <tr style={{ borderBottom: "1px solid #1E2640" }}>
-                                        <th style={{ fontSize: 9, color: "#3A4560", textAlign: "left", padding: "5px 14px", fontWeight: 400, textTransform: "uppercase", letterSpacing: "0.06em" }}>Service</th>
+                                      <tr style={{ borderBottom: "1px solid #CBD1E8" }}>
+                                        <th style={{ fontSize: 9, color: "#4A5278", textAlign: "left", padding: "5px 14px", fontWeight: 400, textTransform: "uppercase", letterSpacing: "0.06em" }}>Service</th>
                                         <th style={{ fontSize: 9, color: "#FBBF2480", textAlign: "right", padding: "5px 8px", fontWeight: 400 }}>Sub</th>
                                         <th style={{ fontSize: 9, color: "#4ADE8080", textAlign: "right", padding: "5px 8px", fontWeight: 400 }}>Ours</th>
-                                        <th style={{ fontSize: 9, color: "#3A4560", textAlign: "right", padding: "5px 14px", fontWeight: 400 }}>Annual</th>
+                                        <th style={{ fontSize: 9, color: "#4A5278", textAlign: "right", padding: "5px 14px", fontWeight: 400 }}>Annual</th>
                                       </tr>
                                     </thead>
                                     <tbody>
@@ -3977,8 +3977,8 @@ Return ONLY valid JSON, no markdown, no extra text:
                                         const sv = bid.services[s.id];
                                         const freq = s.unit === "per_cut" ? 28 : s.unit === "monthly" ? 7 : 1;
                                         return (
-                                          <tr key={s.id} style={{ borderBottom: "1px solid #0D1120" }}>
-                                            <td style={{ fontSize: 11, color: "#B8C4E0", padding: "6px 14px" }}>{s.label} <span style={{ fontSize: 9, color: "#3A4560" }}>×{freq}</span></td>
+                                          <tr key={s.id} style={{ borderBottom: "1px solid #E8EBF4" }}>
+                                            <td style={{ fontSize: 11, color: "#252E52", padding: "6px 14px" }}>{s.label} <span style={{ fontSize: 9, color: "#4A5278" }}>×{freq}</span></td>
                                             <td style={{ fontSize: 11, color: "#FBBF24", textAlign: "right", padding: "6px 8px" }}>${sv.subPrice?.toLocaleString() || "—"}</td>
                                             <td style={{ fontSize: 11, color: "#4ADE80", textAlign: "right", padding: "6px 8px" }}>${sv.ourPrice?.toLocaleString() || "—"}</td>
                                             <td style={{ fontSize: 11, color: "#4ADE80", textAlign: "right", padding: "6px 14px", fontWeight: 600 }}>${Math.round((sv.ourPrice||0) * freq).toLocaleString()}</td>
@@ -4003,8 +4003,8 @@ Return ONLY valid JSON, no markdown, no extra text:
                               </div>
 
                               {bid?.notes && (
-                                <div style={{ background: "#0A0D16", borderRadius: 8, padding: "10px 14px", border: "1px solid #1E2640", fontSize: 11, color: "#B8C4E0" }}>
-                                  <span style={{ fontSize: 9, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.08em", marginRight: 8 }}>Notes:</span>{bid.notes}
+                                <div style={{ background: "#F0F2F8", borderRadius: 8, padding: "10px 14px", border: "1px solid #CBD1E8", fontSize: 11, color: "#252E52" }}>
+                                  <span style={{ fontSize: 9, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.08em", marginRight: 8 }}>Notes:</span>{bid.notes}
                                 </div>
                               )}
                             </div>
@@ -4014,7 +4014,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                     })}
                   </div>
                 ) : (
-                  <div style={{ textAlign: "center", padding: "48px", color: "#2A3560", fontSize: 12, background: "#161B28", borderRadius: 10, border: "1px solid #1E2640" }}>
+                  <div style={{ textAlign: "center", padding: "48px", color: "#3D4570", fontSize: 12, background: "#ECEEF8", borderRadius: 10, border: "1px solid #CBD1E8" }}>
                     <div style={{ fontSize: 28, marginBottom: 12 }}>✅</div>
                     No active sites yet. Sites move here automatically once they reach Buyout with both contracts attached.
                   </div>
@@ -4028,14 +4028,14 @@ Return ONLY valid JSON, no markdown, no extra text:
                       const bid = getLawnBid(site.id);
                       const co = companies.find(c => c.id === site.companyId);
                       return (
-                        <div key={site.id} style={{ background: "#0F1117", border: "1px solid #FCD34D30", borderRadius: 10, padding: "14px 18px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16 }}>
+                        <div key={site.id} style={{ background: "#1A2240", border: "1px solid #FCD34D30", borderRadius: 10, padding: "14px 18px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16 }}>
                           <div>
-                            <div style={{ fontSize: 13, fontWeight: 600, color: "#E8ECF4" }}>{co?.name || "Unknown"} — #{site.storeNumber || "—"}</div>
-                            <div style={{ fontSize: 11, color: "#3A4560" }}>{site.address}</div>
+                            <div style={{ fontSize: 13, fontWeight: 600, color: "#1A2240" }}>{co?.name || "Unknown"} — #{site.storeNumber || "—"}</div>
+                            <div style={{ fontSize: 11, color: "#4A5278" }}>{site.address}</div>
                           </div>
                           <div style={{ display: "flex", gap: 6, fontSize: 10, alignItems: "center" }}>
                             <span style={{ color: bid?.subcontractFile ? "#4ADE80" : "#F87171" }}>{bid?.subcontractFile ? "✓" : "✗"} Subcontract</span>
-                            <span style={{ color: "#3A4560" }}>·</span>
+                            <span style={{ color: "#4A5278" }}>·</span>
                             <span style={{ color: bid?.ownerContractFile ? "#4ADE80" : "#F87171" }}>{bid?.ownerContractFile ? "✓" : "✗"} Owner Contract</span>
                             <button onClick={() => { setActiveNav("bids"); setEditLawnBidId(site.id); }} style={{ marginLeft: 8, fontSize: 10, color: "#60A5FA", background: "#60A5FA10", border: "1px solid #60A5FA30", borderRadius: 4, padding: "3px 8px", cursor: "pointer", fontFamily: "inherit" }}>Attach Docs →</button>
                           </div>
@@ -4052,12 +4052,12 @@ Return ONLY valid JSON, no markdown, no extra text:
           {!["dashboard", "customers", "jobs", "pipeline", "budgeting", "finance", "sites", "projects", "team", "subcontractors", "bids", "active-sites", "pricing"].includes(activeNav) && (
             <div className="fade-in">
               <div style={{ marginBottom: 28 }}>
-                <div style={{ fontSize: 22, fontWeight: 700, color: "#FFFFFF", textTransform: "uppercase" }}>{navItems.find(n => n.id === activeNav)?.label}</div>
-                <div style={{ fontSize: 11, color: "#3A4560", marginTop: 4 }}>{BUSINESS_UNITS.find(b => b.id === activeBU)?.label.toUpperCase()}</div>
+                <div style={{ fontSize: 22, fontWeight: 700, color: "#1A2240", textTransform: "uppercase" }}>{navItems.find(n => n.id === activeNav)?.label}</div>
+                <div style={{ fontSize: 11, color: "#4A5278", marginTop: 4 }}>{BUSINESS_UNITS.find(b => b.id === activeBU)?.label.toUpperCase()}</div>
               </div>
               <div className="coming-soon">
                 <div style={{ width: 48, height: 48, borderRadius: 12, background: buColor.light, border: "1px solid " + buColor.accent + "33", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22 }}>{navItems.find(n => n.id === activeNav)?.icon}</div>
-                <div style={{ fontSize: 14, color: "#3A4560", fontWeight: 500 }}>{navItems.find(n => n.id === activeNav)?.label} — Coming Soon</div>
+                <div style={{ fontSize: 14, color: "#4A5278", fontWeight: 500 }}>{navItems.find(n => n.id === activeNav)?.label} — Coming Soon</div>
               </div>
             </div>
           )}
@@ -4069,7 +4069,7 @@ Return ONLY valid JSON, no markdown, no extra text:
       {selectedSite && !selectedCompany && (
         <div className="side-panel slide-in">
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-            <div style={{ fontSize: 13, fontWeight: 600, color: "#FFFFFF", textTransform: "uppercase", letterSpacing: "0.06em" }}>Site Detail</div>
+            <div style={{ fontSize: 13, fontWeight: 600, color: "#1A2240", textTransform: "uppercase", letterSpacing: "0.06em" }}>Site Detail</div>
             <button className="btn-ghost" onClick={() => setSelectedSite(null)}>✕</button>
           </div>
           {(() => {
@@ -4080,34 +4080,34 @@ Return ONLY valid JSON, no markdown, no extra text:
                 <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                   <div style={{ width: 44, height: 44, borderRadius: 10, background: buColor.light, border: "1px solid " + buColor.accent + "40", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20 }}>📍</div>
                   <div>
-                    <div style={{ fontSize: 16, color: "#E8ECF4", fontWeight: 600 }}>Store #{selectedSite.storeNumber || "—"}</div>
+                    <div style={{ fontSize: 16, color: "#1A2240", fontWeight: 600 }}>Store #{selectedSite.storeNumber || "—"}</div>
                     {co && <div style={{ fontSize: 12, color: "#3B6FE8", cursor: "pointer" }} onClick={() => { setSelectedSite(null); setSelectedCompany(co); }}>🏢 {co.name}</div>}
                   </div>
                 </div>
 
-                <div style={{ background: "#0A0D16", borderRadius: 8, padding: "14px", border: "1px solid #1E2640", display: "flex", flexDirection: "column", gap: 10 }}>
+                <div style={{ background: "#F0F2F8", borderRadius: 8, padding: "14px", border: "1px solid #CBD1E8", display: "flex", flexDirection: "column", gap: 10 }}>
                   {[
                     { label: "Address",     value: selectedSite.address     || "—" },
                     { label: "Phone",       value: selectedSite.phone        || "—" },
                     { label: "Access Code", value: selectedSite.accessCode   || "—" },
                   ].map(r => (
                     <div key={r.label} style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
-                      <span style={{ fontSize: 11, color: "#3A4560", flexShrink: 0 }}>{r.label}</span>
-                      <span style={{ fontSize: 11, color: r.label === "Access Code" ? "#FCD34D" : "#B8C4E0", textAlign: "right", fontWeight: r.label === "Access Code" ? 600 : 400 }}>{r.value}</span>
+                      <span style={{ fontSize: 11, color: "#4A5278", flexShrink: 0 }}>{r.label}</span>
+                      <span style={{ fontSize: 11, color: r.label === "Access Code" ? "#FCD34D" : "#252E52", textAlign: "right", fontWeight: r.label === "Access Code" ? 600 : 400 }}>{r.value}</span>
                     </div>
                   ))}
                 </div>
 
                 {siteContacts.length > 0 && (
                   <div>
-                    <div style={{ fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "#3A4560", marginBottom: 10, fontWeight: 600 }}>Contacts</div>
+                    <div style={{ fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "#4A5278", marginBottom: 10, fontWeight: 600 }}>Contacts</div>
                     <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                       {siteContacts.map(p => (
                         <div key={p.id} className="contact-chip">
                           <div>
-                            <div style={{ fontSize: 12, color: "#E8ECF4", fontWeight: 500 }}>{p.firstName} {p.lastName}</div>
-                            <div style={{ fontSize: 10, color: "#3A4560" }}>{p.title} · {p.email}</div>
-                            {p.phone && <div style={{ fontSize: 10, color: "#3A4560" }}>{p.phone}</div>}
+                            <div style={{ fontSize: 12, color: "#1A2240", fontWeight: 500 }}>{p.firstName} {p.lastName}</div>
+                            <div style={{ fontSize: 10, color: "#4A5278" }}>{p.title} · {p.email}</div>
+                            {p.phone && <div style={{ fontSize: 10, color: "#4A5278" }}>{p.phone}</div>}
                           </div>
                         </div>
                       ))}
@@ -4115,7 +4115,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                   </div>
                 )}
 
-                {selectedSite.notes && <div style={{ fontSize: 12, color: "#6B7694", lineHeight: 1.6, background: "#0A0D16", padding: "10px 12px", borderRadius: 6, border: "1px solid #1E2640" }}>{selectedSite.notes}</div>}
+                {selectedSite.notes && <div style={{ fontSize: 12, color: "#6B7694", lineHeight: 1.6, background: "#F0F2F8", padding: "10px 12px", borderRadius: 6, border: "1px solid #CBD1E8" }}>{selectedSite.notes}</div>}
 
                 {/* Lawn bid pricing section — shown when this site has a lawn bid */}
                 {(() => {
@@ -4126,24 +4126,24 @@ Return ONLY valid JSON, no markdown, no extra text:
                   const annualOur = lawnBidAnnualOur ? lawnBidAnnualOur(bid) : 0;
                   const COLS_LABELS = { untouched: "Not Touched", bidding: "Bidding", owner_approval: "Owner Approval", not_bidding: "Not Bidding" };
                   const statusCol = bid.status === "bidding" ? "bidding" : bid.status === "owner_approved" ? "owner_approval" : bid.status === "buyout" ? "buyout" : bid.status === "contracted" ? "buyout" : bid.status === "not_bidding" ? "not_bidding" : "untouched";
-                  const colColors = { untouched: "#3A4560", bidding: "#FBBF24", owner_approval: "#60A5FA", buyout: "#4ADE80", not_bidding: "#F87171" };
+                  const colColors = { untouched: "#4A5278", bidding: "#FBBF24", owner_approval: "#60A5FA", buyout: "#4ADE80", not_bidding: "#F87171" };
                   return (
                     <div>
-                      <div style={{ fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "#3A4560", marginBottom: 10, fontWeight: 600 }}>Lawn Bid — {lawnBidSeason}</div>
-                      <div style={{ background: "#0A0D16", borderRadius: 8, padding: 14, border: "1px solid #1E2640", display: "flex", flexDirection: "column", gap: 10 }}>
+                      <div style={{ fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "#4A5278", marginBottom: 10, fontWeight: 600 }}>Lawn Bid — {lawnBidSeason}</div>
+                      <div style={{ background: "#F0F2F8", borderRadius: 8, padding: 14, border: "1px solid #CBD1E8", display: "flex", flexDirection: "column", gap: 10 }}>
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                          <span style={{ fontSize: 11, color: "#3A4560" }}>Stage</span>
+                          <span style={{ fontSize: 11, color: "#4A5278" }}>Stage</span>
                           <span style={{ fontSize: 11, fontWeight: 600, color: colColors[statusCol] }}>{COLS_LABELS[statusCol]}</span>
                         </div>
                         {annualOur > 0 && (
                           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                            <span style={{ fontSize: 11, color: "#3A4560" }}>Annual Our Price</span>
+                            <span style={{ fontSize: 11, color: "#4A5278" }}>Annual Our Price</span>
                             <span style={{ fontSize: 13, fontWeight: 700, color: "#4ADE80" }}>${Math.round(annualOur).toLocaleString()}/yr</span>
                           </div>
                         )}
                         {assignedSubs.length > 0 && (
                           <div>
-                            <div style={{ fontSize: 10, color: "#3A4560", marginBottom: 6 }}>Contractors</div>
+                            <div style={{ fontSize: 10, color: "#4A5278", marginBottom: 6 }}>Contractors</div>
                             <div style={{ display: "flex", flexWrap: "wrap", gap: 4 }}>
                               {assignedSubs.map(s => (
                                 <span key={s.id} style={{ fontSize: 10, padding: "2px 8px", borderRadius: 4, background: s.id === bid.selectedSubId ? "#4ADE8020" : "#A78BFA15", color: s.id === bid.selectedSubId ? "#4ADE80" : "#A78BFA", border: "1px solid " + (s.id === bid.selectedSubId ? "#4ADE8030" : "#A78BFA30") }}>
@@ -4156,21 +4156,21 @@ Return ONLY valid JSON, no markdown, no extra text:
                         {/* Service line items */}
                         {LAWN_SERVICES && bid.services && Object.entries(bid.services).filter(([,v]) => v?.subPrice > 0).length > 0 && (
                           <div>
-                            <div style={{ fontSize: 10, color: "#3A4560", marginBottom: 6 }}>Services</div>
+                            <div style={{ fontSize: 10, color: "#4A5278", marginBottom: 6 }}>Services</div>
                             <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                               {Object.entries(bid.services).filter(([,v]) => v?.subPrice > 0).map(([key, val]) => {
                                 const svc = LAWN_SERVICES.find(s => s.id === key);
                                 return (
                                   <div key={key} style={{ display: "flex", justifyContent: "space-between", fontSize: 10 }}>
-                                    <span style={{ color: "#6A7590" }}>{svc?.label || key}</span>
-                                    <span style={{ color: "#B8C4E0" }}>${(val.subPrice || 0).toLocaleString()} sub · ${(val.ourPrice || 0).toLocaleString()} ours</span>
+                                    <span style={{ color: "#4A5278" }}>{svc?.label || key}</span>
+                                    <span style={{ color: "#252E52" }}>${(val.subPrice || 0).toLocaleString()} sub · ${(val.ourPrice || 0).toLocaleString()} ours</span>
                                   </div>
                                 );
                               })}
                             </div>
                           </div>
                         )}
-                        {bid.notes && <div style={{ fontSize: 11, color: "#6A7590", fontStyle: "italic" }}>{bid.notes}</div>}
+                        {bid.notes && <div style={{ fontSize: 11, color: "#4A5278", fontStyle: "italic" }}>{bid.notes}</div>}
                         <button className="btn-ghost" style={{ fontSize: 10, padding: "5px 0", color: "#60A5FA", borderColor: "#60A5FA30" }} onClick={() => { setSelectedSite(null); setEditLawnBidId(selectedSite.id); }}>Open in Bids →</button>
                       </div>
                     </div>
@@ -4191,18 +4191,18 @@ Return ONLY valid JSON, no markdown, no extra text:
       {selectedCompany && (
         <div className="side-panel slide-in">
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-            <div style={{ fontSize: 13, fontWeight: 600, color: "#FFFFFF", textTransform: "uppercase", letterSpacing: "0.06em" }}>Company Profile</div>
+            <div style={{ fontSize: 13, fontWeight: 600, color: "#1A2240", textTransform: "uppercase", letterSpacing: "0.06em" }}>Company Profile</div>
             <button className="btn-ghost" onClick={() => setSelectedCompany(null)}>✕</button>
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-              <div style={{ width: 48, height: 48, borderRadius: 10, background: "#1A2340", border: "1px solid #2A3560", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, fontWeight: 700, color: "#3B6FE8", flexShrink: 0 }}>
+              <div style={{ width: 48, height: 48, borderRadius: 10, background: "#E8EEFA", border: "1px solid #3D4570", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, fontWeight: 700, color: "#3B6FE8", flexShrink: 0 }}>
                 {selectedCompany.logo ? <img src={selectedCompany.logo} style={{ width: 44, height: 44, borderRadius: 8, objectFit: "cover" }} alt="" /> : selectedCompany.name.charAt(0).toUpperCase()}
               </div>
               <div>
-                <div style={{ fontSize: 16, color: "#E8ECF4", fontWeight: 600 }}>{selectedCompany.name}</div>
+                <div style={{ fontSize: 16, color: "#1A2240", fontWeight: 600 }}>{selectedCompany.name}</div>
                 {selectedCompany.website && <div style={{ fontSize: 11, color: "#3B6FE8" }}>{selectedCompany.website}</div>}
-                {selectedCompany.address && <div style={{ fontSize: 11, color: "#3A4560" }}>{selectedCompany.address}</div>}
+                {selectedCompany.address && <div style={{ fontSize: 11, color: "#4A5278" }}>{selectedCompany.address}</div>}
               </div>
             </div>
 
@@ -4211,7 +4211,7 @@ Return ONLY valid JSON, no markdown, no extra text:
               <button className="btn-ghost" style={{ color: "#3B6FE8", borderColor: "#3B6FE840" }} onClick={() => { setContactForm({ companyId: selectedCompany.id, firstName: "", lastName: "", title: "", email: "", phone: "" }); setShowContactForm(true); }}>+ Contact</button>
             </div>
 
-            <hr style={{ border: "none", borderTop: "1px solid #1E2640" }} />
+            <hr style={{ border: "none", borderTop: "1px solid #CBD1E8" }} />
 
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
               {[
@@ -4220,45 +4220,45 @@ Return ONLY valid JSON, no markdown, no extra text:
                 { label: "Pipeline Opps",        value: getCompanyPipeline(selectedCompany.id).length, color: "#FCD34D" },
                 { label: "Sites",                value: getCompanySites(selectedCompany.id).length,    color: "#A78BFA" },
               ].map(s => (
-                <div key={s.label} style={{ background: "#0A0D16", border: "1px solid #1E2640", borderRadius: 8, padding: "10px 12px" }}>
-                  <div style={{ fontSize: 9, letterSpacing: "0.1em", textTransform: "uppercase", color: "#3A4560", marginBottom: 4 }}>{s.label}</div>
+                <div key={s.label} style={{ background: "#F0F2F8", border: "1px solid #CBD1E8", borderRadius: 8, padding: "10px 12px" }}>
+                  <div style={{ fontSize: 9, letterSpacing: "0.1em", textTransform: "uppercase", color: "#4A5278", marginBottom: 4 }}>{s.label}</div>
                   <div style={{ fontSize: 18, fontWeight: 700, color: s.color }}>{s.value}</div>
                 </div>
               ))}
             </div>
 
             <div>
-              <div style={{ fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "#3A4560", marginBottom: 10, fontWeight: 600 }}>Contacts</div>
+              <div style={{ fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "#4A5278", marginBottom: 10, fontWeight: 600 }}>Contacts</div>
               <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                 {getCompanyContacts(selectedCompany.id).map(p => (
                   <div key={p.id} className="contact-chip">
                     <div>
-                      <div style={{ fontSize: 12, color: "#E8ECF4", fontWeight: 500 }}>{p.firstName} {p.lastName}</div>
-                      <div style={{ fontSize: 10, color: "#3A4560" }}>{p.title} · {p.email}</div>
-                      {p.phone && <div style={{ fontSize: 10, color: "#3A4560" }}>{p.phone}</div>}
+                      <div style={{ fontSize: 12, color: "#1A2240", fontWeight: 500 }}>{p.firstName} {p.lastName}</div>
+                      <div style={{ fontSize: 10, color: "#4A5278" }}>{p.title} · {p.email}</div>
+                      {p.phone && <div style={{ fontSize: 10, color: "#4A5278" }}>{p.phone}</div>}
                     </div>
                     <button className="btn-ghost" style={{ fontSize: 11 }} onClick={() => { setEditContactId(p.id); setContactForm({ ...p }); setShowContactForm(true); }}>✎</button>
                   </div>
                 ))}
-                {getCompanyContacts(selectedCompany.id).length === 0 && <div style={{ fontSize: 11, color: "#2A3560", textAlign: "center", padding: "12px" }}>No contacts yet</div>}
+                {getCompanyContacts(selectedCompany.id).length === 0 && <div style={{ fontSize: 11, color: "#3D4570", textAlign: "center", padding: "12px" }}>No contacts yet</div>}
               </div>
             </div>
 
             {getCompanyJobs(selectedCompany.id).length > 0 && (
               <div>
-                <div style={{ fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "#3A4560", marginBottom: 10, fontWeight: 600 }}>Active Jobs</div>
+                <div style={{ fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "#4A5278", marginBottom: 10, fontWeight: 600 }}>Active Jobs</div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                   {getCompanyJobs(selectedCompany.id).map(j => {
                     const sc = STATUS_CONFIG[j.status] || STATUS_CONFIG["On Schedule"];
                     return (
-                      <div key={j.id} style={{ background: "#0A0D16", border: "1px solid #1E2640", borderRadius: 8, padding: "10px 12px" }}>
+                      <div key={j.id} style={{ background: "#F0F2F8", border: "1px solid #CBD1E8", borderRadius: 8, padding: "10px 12px" }}>
                         <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                          <span style={{ fontSize: 12, color: "#E8ECF4", fontWeight: 500 }}>{j.name}</span>
+                          <span style={{ fontSize: 12, color: "#1A2240", fontWeight: 500 }}>{j.name}</span>
                           <span style={{ fontSize: 12, color: "#3B6FE8", fontWeight: 600 }}>{fmt(j.contractValue)}</span>
                         </div>
                         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                           <span className="pill" style={{ background: sc.bg, color: sc.color }}>{j.status}</span>
-                          <span style={{ fontSize: 10, color: "#3A4560" }}>{j.pct}% complete</span>
+                          <span style={{ fontSize: 10, color: "#4A5278" }}>{j.pct}% complete</span>
                         </div>
                       </div>
                     );
@@ -4269,14 +4269,14 @@ Return ONLY valid JSON, no markdown, no extra text:
 
             {getCompanyPipeline(selectedCompany.id).length > 0 && (
               <div>
-                <div style={{ fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "#3A4560", marginBottom: 10, fontWeight: 600 }}>Pipeline</div>
+                <div style={{ fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "#4A5278", marginBottom: 10, fontWeight: 600 }}>Pipeline</div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                   {getCompanyPipeline(selectedCompany.id).map(o => {
                     const sc = STAGE_COLORS[o.stage] || { color: "#60A5FA", bg: "#60A5FA15" };
                     return (
-                      <div key={o.id} style={{ background: "#0A0D16", border: "1px solid #1E2640", borderRadius: 8, padding: "10px 12px" }}>
+                      <div key={o.id} style={{ background: "#F0F2F8", border: "1px solid #CBD1E8", borderRadius: 8, padding: "10px 12px" }}>
                         <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                          <span style={{ fontSize: 12, color: "#E8ECF4", fontWeight: 500 }}>{o.name}</span>
+                          <span style={{ fontSize: 12, color: "#1A2240", fontWeight: 500 }}>{o.name}</span>
                           <span style={{ fontSize: 12, fontWeight: 600, color: sc.color }}>{fmt(o.value)}</span>
                         </div>
                         <span className="pill" style={{ background: sc.bg, color: sc.color }}>{o.stage}</span>
@@ -4294,7 +4294,7 @@ Return ONLY valid JSON, no markdown, no extra text:
       {selectedJob && !selectedOpp && !selectedCompany && (
         <div className="side-panel slide-in">
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-            <div style={{ fontSize: 13, fontWeight: 600, color: "#FFFFFF", textTransform: "uppercase", letterSpacing: "0.06em" }}>Job Detail</div>
+            <div style={{ fontSize: 13, fontWeight: 600, color: "#1A2240", textTransform: "uppercase", letterSpacing: "0.06em" }}>Job Detail</div>
             <button className="btn-ghost" onClick={() => setSelectedJob(null)}>✕</button>
           </div>
           {(() => {
@@ -4303,28 +4303,28 @@ Return ONLY valid JSON, no markdown, no extra text:
             return (
               <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
                 <div>
-                  <div style={{ fontSize: 16, color: "#E8ECF4", fontWeight: 600, marginBottom: 4 }}>{selectedJob.name}</div>
+                  <div style={{ fontSize: 16, color: "#1A2240", fontWeight: 600, marginBottom: 4 }}>{selectedJob.name}</div>
                   {co && <div style={{ fontSize: 12, color: "#3B6FE8", marginBottom: 6, cursor: "pointer" }} onClick={() => { setSelectedJob(null); setSelectedCompany(co); }}>🏢 {co.name}</div>}
                   <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                     <span className="pill" style={{ background: sc.bg, color: sc.color }}>{selectedJob.status}</span>
                     <span style={{ fontSize: 20, fontWeight: 700, color: "#3B6FE8" }}>{fmt(selectedJob.contractValue)}</span>
                   </div>
                 </div>
-                <div style={{ background: "#0A0D16", borderRadius: 8, padding: "14px", border: "1px solid #1E2640", display: "flex", flexDirection: "column", gap: 10 }}>
+                <div style={{ background: "#F0F2F8", borderRadius: 8, padding: "14px", border: "1px solid #CBD1E8", display: "flex", flexDirection: "column", gap: 10 }}>
                   {[{ label: "Project Manager", value: selectedJob.pm }, { label: "Start Date", value: selectedJob.startDate }, { label: "End Date", value: selectedJob.endDate }].map(r => (
                     <div key={r.label} style={{ display: "flex", justifyContent: "space-between" }}>
-                      <span style={{ fontSize: 11, color: "#3A4560" }}>{r.label}</span>
-                      <span style={{ fontSize: 11, color: "#B8C4E0" }}>{r.value}</span>
+                      <span style={{ fontSize: 11, color: "#4A5278" }}>{r.label}</span>
+                      <span style={{ fontSize: 11, color: "#252E52" }}>{r.value}</span>
                     </div>
                   ))}
                 </div>
                 <div>
-                  <div style={{ fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "#3A4560", marginBottom: 8 }}>Completion — {selectedJob.pct}%</div>
-                  <div style={{ background: "#0A0D16", borderRadius: 4, height: 8, overflow: "hidden" }}>
+                  <div style={{ fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "#4A5278", marginBottom: 8 }}>Completion — {selectedJob.pct}%</div>
+                  <div style={{ background: "#F0F2F8", borderRadius: 4, height: 8, overflow: "hidden" }}>
                     <div style={{ height: "100%", width: selectedJob.pct + "%", background: sc.color, borderRadius: 4 }} />
                   </div>
                 </div>
-                {selectedJob.notes && <div style={{ fontSize: 12, color: "#6B7694", lineHeight: 1.6, background: "#0A0D16", padding: "10px 12px", borderRadius: 6, border: "1px solid #1E2640" }}>{selectedJob.notes}</div>}
+                {selectedJob.notes && <div style={{ fontSize: 12, color: "#6B7694", lineHeight: 1.6, background: "#F0F2F8", padding: "10px 12px", borderRadius: 6, border: "1px solid #CBD1E8" }}>{selectedJob.notes}</div>}
                 <div style={{ display: "flex", gap: 8 }}>
                   <button className="btn-ghost" style={{ flex: 1 }} onClick={() => { openEditJob(selectedJob); setSelectedJob(null); }}>✎ Edit</button>
                   <button className="btn-ghost" style={{ color: "#F87171", borderColor: "#F8717120" }} onClick={() => deleteJob(selectedJob.id)}>✕</button>
@@ -4339,47 +4339,47 @@ Return ONLY valid JSON, no markdown, no extra text:
       {selectedOpp && !selectedCompany && (
         <div className="side-panel slide-in">
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-            <div style={{ fontSize: 13, fontWeight: 600, color: "#FFFFFF", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: "#1A2240", textTransform: "uppercase", letterSpacing: "0.06em" }}>
               {selectedOpp.stage === "Budgeting" ? "Budget Detail" : selectedOpp.stage === "Lead" ? "Lead Detail" : "Opportunity Detail"}
             </div>
             <button className="btn-ghost" onClick={() => setSelectedOpp(null)}>✕</button>
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
             <div>
-              <div style={{ fontSize: 15, color: "#E8ECF4", fontWeight: 600, marginBottom: 6 }}>{selectedOpp.name}</div>
+              <div style={{ fontSize: 15, color: "#1A2240", fontWeight: 600, marginBottom: 6 }}>{selectedOpp.name}</div>
               {(() => {
                 const co = companies.find(c => c.id === selectedOpp.companyId);
                 const ct = contacts.find(p => p.id === selectedOpp.contactId);
                 return co ? (
                   <div style={{ marginBottom: 10 }}>
                     <div style={{ fontSize: 12, color: "#3B6FE8", cursor: "pointer", marginBottom: 2 }} onClick={() => { setSelectedOpp(null); setSelectedCompany(co); }}>🏢 {co.name}</div>
-                    {ct && <div style={{ fontSize: 11, color: "#3A4560" }}>👤 {ct.firstName} {ct.lastName} · {ct.title}</div>}
+                    {ct && <div style={{ fontSize: 11, color: "#4A5278" }}>👤 {ct.firstName} {ct.lastName} · {ct.title}</div>}
                   </div>
                 ) : null;
               })()}
               <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                 <span className="pill" style={{ background: (STAGE_COLORS[selectedOpp.stage] || { bg: "#60A5FA15" }).bg, color: (STAGE_COLORS[selectedOpp.stage] || { color: "#60A5FA" }).color }}>{selectedOpp.stage}</span>
-                <span style={{ fontSize: 20, fontWeight: 700, color: "#FFFFFF" }}>{fmt(selectedOpp.value)}</span>
+                <span style={{ fontSize: 20, fontWeight: 700, color: "#1A2240" }}>{fmt(selectedOpp.value)}</span>
               </div>
             </div>
 
             {selectedOpp.stage === "Budgeting" && (
-              <div style={{ background: "#0A0D16", borderRadius: 8, padding: "12px", border: "1px solid #1E2640" }}>
-                <div style={{ fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "#3A4560", marginBottom: 6 }}>Budget Due Date</div>
-                <div style={{ fontSize: 14, color: selectedOpp.budgetDueDate ? "#FCD34D" : "#3A4560", fontWeight: 500 }}>{selectedOpp.budgetDueDate || "Not set"}</div>
+              <div style={{ background: "#F0F2F8", borderRadius: 8, padding: "12px", border: "1px solid #CBD1E8" }}>
+                <div style={{ fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "#4A5278", marginBottom: 6 }}>Budget Due Date</div>
+                <div style={{ fontSize: 14, color: selectedOpp.budgetDueDate ? "#FCD34D" : "#4A5278", fontWeight: 500 }}>{selectedOpp.budgetDueDate || "Not set"}</div>
               </div>
             )}
 
             {["Proposal / Bid", "Bid Submitted"].includes(selectedOpp.stage) && (
-              <div style={{ background: "#0A0D16", borderRadius: 8, padding: "12px", border: "1px solid #FCD34D30" }}>
-                <div style={{ fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "#3A4560", marginBottom: 6 }}>Bid Due Date</div>
-                <div style={{ fontSize: 14, color: selectedOpp.bidDueDate ? "#FCD34D" : "#3A4560", fontWeight: 500 }}>{selectedOpp.bidDueDate || "Not set"}</div>
+              <div style={{ background: "#F0F2F8", borderRadius: 8, padding: "12px", border: "1px solid #FCD34D30" }}>
+                <div style={{ fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "#4A5278", marginBottom: 6 }}>Bid Due Date</div>
+                <div style={{ fontSize: 14, color: selectedOpp.bidDueDate ? "#FCD34D" : "#4A5278", fontWeight: 500 }}>{selectedOpp.bidDueDate || "Not set"}</div>
               </div>
             )}
 
             {selectedOpp.stage === "Lead" && (selectedOpp.nextSteps || []).length > 0 && (
               <div>
-                <div style={{ fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "#3A4560", marginBottom: 8, fontWeight: 600 }}>Next Steps</div>
+                <div style={{ fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "#4A5278", marginBottom: 8, fontWeight: 600 }}>Next Steps</div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                   {(selectedOpp.nextSteps || []).map((ns, i) => {
                     const nsOverdue = ns.dueDate && new Date(ns.dueDate) < new Date();
@@ -4387,9 +4387,9 @@ Return ONLY valid JSON, no markdown, no extra text:
                       <div key={i} className="ns-row">
                         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                           <div style={{ width: 6, height: 6, borderRadius: "50%", background: nsOverdue ? "#F87171" : "#3B6FE8", flexShrink: 0 }} />
-                          <span style={{ fontSize: 12, color: "#E8ECF4", fontWeight: 500 }}>{ns.step}</span>
+                          <span style={{ fontSize: 12, color: "#1A2240", fontWeight: 500 }}>{ns.step}</span>
                         </div>
-                        <span style={{ fontSize: 11, color: nsOverdue ? "#F87171" : "#3A4560" }}>{ns.dueDate || "No date"}</span>
+                        <span style={{ fontSize: 11, color: nsOverdue ? "#F87171" : "#4A5278" }}>{ns.dueDate || "No date"}</span>
                       </div>
                     );
                   })}
@@ -4397,8 +4397,8 @@ Return ONLY valid JSON, no markdown, no extra text:
               </div>
             )}
 
-            {selectedOpp.closeDate && <div style={{ fontSize: 11, color: "#3A4560" }}><span style={{ color: "#4A5270" }}>Expected Close: </span>{selectedOpp.closeDate}</div>}
-            {selectedOpp.notes     && <div style={{ fontSize: 12, color: "#6B7694", lineHeight: 1.6, background: "#0A0D16", padding: "10px 12px", borderRadius: 6, border: "1px solid #1E2640" }}>{selectedOpp.notes}</div>}
+            {selectedOpp.closeDate && <div style={{ fontSize: 11, color: "#4A5278" }}><span style={{ color: "#353C62" }}>Expected Close: </span>{selectedOpp.closeDate}</div>}
+            {selectedOpp.notes     && <div style={{ fontSize: 12, color: "#6B7694", lineHeight: 1.6, background: "#F0F2F8", padding: "10px 12px", borderRadius: 6, border: "1px solid #CBD1E8" }}>{selectedOpp.notes}</div>}
             <div style={{ display: "flex", gap: 8 }}>
               <button className="btn-ghost" style={{ flex: 1 }} onClick={() => { openEdit(selectedOpp); setSelectedOpp(null); }}>✎ Edit</button>
               <button className="btn-ghost" style={{ color: "#F87171", borderColor: "#F8717120" }} onClick={() => deleteOpp(selectedOpp.id)}>✕</button>
@@ -4411,7 +4411,7 @@ Return ONLY valid JSON, no markdown, no extra text:
       {showJobForm && (
         <div className="modal-bg" onClick={e => e.target === e.currentTarget && setShowJobForm(false)}>
           <div className="modal fade-in">
-            <div style={{ fontSize: 16, fontWeight: 700, color: "#FFFFFF", marginBottom: 22, textTransform: "uppercase", letterSpacing: "0.04em" }}>{editJobId !== null ? "Edit Job" : "Add Active Job"}</div>
+            <div style={{ fontSize: 16, fontWeight: 700, color: "#1A2240", marginBottom: 22, textTransform: "uppercase", letterSpacing: "0.04em" }}>{editJobId !== null ? "Edit Job" : "Add Active Job"}</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
               <div><label className="lbl">Job Name *</label><input className="fi" value={jobForm.name} onChange={fj("name")} placeholder="e.g. Riverside Community Center" /></div>
               <CustomerPicker
@@ -4448,7 +4448,7 @@ Return ONLY valid JSON, no markdown, no extra text:
       {showForm && (
         <div className="modal-bg" onClick={e => e.target === e.currentTarget && setShowForm(false)}>
           <div className="modal fade-in">
-            <div style={{ fontSize: 16, fontWeight: 700, color: "#FFFFFF", marginBottom: 22, textTransform: "uppercase", letterSpacing: "0.04em" }}>{editId !== null ? "Edit" : "Add"} — {form.stage}</div>
+            <div style={{ fontSize: 16, fontWeight: 700, color: "#1A2240", marginBottom: 22, textTransform: "uppercase", letterSpacing: "0.04em" }}>{editId !== null ? "Edit" : "Add"} — {form.stage}</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
               <div><label className="lbl">Opportunity Name *</label><input className="fi" value={form.name} onChange={fp("name")} placeholder="e.g. Riverside Community Center" /></div>
               <CustomerPicker
@@ -4484,8 +4484,8 @@ Return ONLY valid JSON, no markdown, no extra text:
                     {(form.nextSteps || []).map((ns, i) => (
                       <div key={i} className="ns-row">
                         <div style={{ display: "flex", gap: 8 }}>
-                          <span style={{ fontSize: 12, color: "#E8ECF4" }}>{ns.step}</span>
-                          <span style={{ fontSize: 11, color: "#3A4560" }}>{ns.dueDate}</span>
+                          <span style={{ fontSize: 12, color: "#1A2240" }}>{ns.step}</span>
+                          <span style={{ fontSize: 11, color: "#4A5278" }}>{ns.dueDate}</span>
                         </div>
                         <button className="btn-ghost" style={{ color: "#F87171", padding: "2px 6px" }} onClick={() => removeNextStep(i)}>✕</button>
                       </div>
@@ -4517,7 +4517,7 @@ Return ONLY valid JSON, no markdown, no extra text:
       {showCompanyForm && (
         <div className="modal-bg" onClick={e => e.target === e.currentTarget && setShowCompanyForm(false)}>
           <div className="modal fade-in">
-            <div style={{ fontSize: 16, fontWeight: 700, color: "#FFFFFF", marginBottom: 22, textTransform: "uppercase" }}>{editCompanyId ? "Edit Company" : "Add Company"}</div>
+            <div style={{ fontSize: 16, fontWeight: 700, color: "#1A2240", marginBottom: 22, textTransform: "uppercase" }}>{editCompanyId ? "Edit Company" : "Add Company"}</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
               <div><label className="lbl">Company Name *</label><input className="fi" value={companyForm.name}    onChange={e => setCompanyForm(f => ({ ...f, name:    e.target.value }))} placeholder="e.g. Riverside City" /></div>
               <div><label className="lbl">Address</label>        <input className="fi" value={companyForm.address} onChange={e => setCompanyForm(f => ({ ...f, address: e.target.value }))} placeholder="123 Main St, City, State" /></div>
@@ -4539,7 +4539,7 @@ Return ONLY valid JSON, no markdown, no extra text:
       {showContactForm && (
         <div className="modal-bg" onClick={e => e.target === e.currentTarget && setShowContactForm(false)}>
           <div className="modal fade-in">
-            <div style={{ fontSize: 16, fontWeight: 700, color: "#FFFFFF", marginBottom: 22, textTransform: "uppercase" }}>{editContactId ? "Edit Contact" : "Add Contact"}</div>
+            <div style={{ fontSize: 16, fontWeight: 700, color: "#1A2240", marginBottom: 22, textTransform: "uppercase" }}>{editContactId ? "Edit Contact" : "Add Contact"}</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
               <div><label className="lbl">Company</label>
                 <select className="fi" value={contactForm.companyId} onChange={e => setContactForm(f => ({ ...f, companyId: e.target.value }))}>
@@ -4569,7 +4569,7 @@ Return ONLY valid JSON, no markdown, no extra text:
       {showSiteForm && (
         <div className="modal-bg" onClick={e => e.target === e.currentTarget && setShowSiteForm(false)}>
           <div className="modal fade-in">
-            <div style={{ fontSize: 16, fontWeight: 700, color: "#FFFFFF", marginBottom: 22, textTransform: "uppercase" }}>{editSiteId ? "Edit Site" : "Add Site"}</div>
+            <div style={{ fontSize: 16, fontWeight: 700, color: "#1A2240", marginBottom: 22, textTransform: "uppercase" }}>{editSiteId ? "Edit Site" : "Add Site"}</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
               <div><label className="lbl">Company</label>
                 <select className="fi" value={siteForm.companyId} onChange={e => setSiteForm(f => ({ ...f, companyId: e.target.value, contactIds: [] }))}>
@@ -4588,19 +4588,19 @@ Return ONLY valid JSON, no markdown, no extra text:
                   <label className="lbl">Assigned Contacts</label>
                   <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 160, overflowY: "auto" }}>
                     {contacts.filter(p => p.companyId === siteForm.companyId).map(p => (
-                      <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", background: (siteForm.contactIds || []).includes(p.id) ? "#1A2340" : "#0A0D16", border: "1px solid " + ((siteForm.contactIds || []).includes(p.id) ? "#3B6FE8" : "#1E2640"), borderRadius: 6, cursor: "pointer" }}
+                      <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", background: (siteForm.contactIds || []).includes(p.id) ? "#E8EEFA" : "#F0F2F8", border: "1px solid " + ((siteForm.contactIds || []).includes(p.id) ? "#3B6FE8" : "#CBD1E8"), borderRadius: 6, cursor: "pointer" }}
                         onClick={() => toggleSiteContact(p.id)}>
-                        <div style={{ width: 14, height: 14, borderRadius: 3, background: (siteForm.contactIds || []).includes(p.id) ? "#3B6FE8" : "transparent", border: "1px solid " + ((siteForm.contactIds || []).includes(p.id) ? "#3B6FE8" : "#3A4560"), display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                        <div style={{ width: 14, height: 14, borderRadius: 3, background: (siteForm.contactIds || []).includes(p.id) ? "#3B6FE8" : "transparent", border: "1px solid " + ((siteForm.contactIds || []).includes(p.id) ? "#3B6FE8" : "#4A5278"), display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                           {(siteForm.contactIds || []).includes(p.id) && <span style={{ fontSize: 9, color: "#fff" }}>✓</span>}
                         </div>
                         <div>
-                          <div style={{ fontSize: 12, color: "#E8ECF4" }}>{p.firstName} {p.lastName}</div>
-                          <div style={{ fontSize: 10, color: "#3A4560" }}>{p.title}</div>
+                          <div style={{ fontSize: 12, color: "#1A2240" }}>{p.firstName} {p.lastName}</div>
+                          <div style={{ fontSize: 10, color: "#4A5278" }}>{p.title}</div>
                         </div>
                       </div>
                     ))}
                     {contacts.filter(p => p.companyId === siteForm.companyId).length === 0 && (
-                      <div style={{ fontSize: 11, color: "#2A3560", padding: "8px 12px" }}>No contacts for this company yet</div>
+                      <div style={{ fontSize: 11, color: "#3D4570", padding: "8px 12px" }}>No contacts for this company yet</div>
                     )}
                   </div>
                 </div>
@@ -4619,7 +4619,7 @@ Return ONLY valid JSON, no markdown, no extra text:
       {selectedCapexJob && (
         <div className="side-panel slide-in">
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-            <div style={{ fontSize: 13, fontWeight: 600, color: "#FFFFFF", textTransform: "uppercase", letterSpacing: "0.06em" }}>Capital Improvement</div>
+            <div style={{ fontSize: 13, fontWeight: 600, color: "#1A2240", textTransform: "uppercase", letterSpacing: "0.06em" }}>Capital Improvement</div>
             <button className="btn-ghost" onClick={() => setSelectedCapexJob(null)}>✕</button>
           </div>
           {(() => {
@@ -4631,15 +4631,15 @@ Return ONLY valid JSON, no markdown, no extra text:
             return (
               <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
                 <div>
-                  <div style={{ fontSize: 15, color: "#E8ECF4", fontWeight: 600, marginBottom: 6 }}>{selectedCapexJob.name}</div>
+                  <div style={{ fontSize: 15, color: "#1A2240", fontWeight: 600, marginBottom: 6 }}>{selectedCapexJob.name}</div>
                   {co && <div style={{ fontSize: 12, color: "#3B6FE8", marginBottom: 2, cursor: "pointer" }} onClick={() => { setSelectedCapexJob(null); setSelectedCompany(co); }}>🏢 {co.name}</div>}
-                  {site && <div style={{ fontSize: 11, color: "#4A5270", marginBottom: 8 }}>📍 Store #{site.storeNumber} — {site.address}</div>}
+                  {site && <div style={{ fontSize: 11, color: "#353C62", marginBottom: 8 }}>📍 Store #{site.storeNumber} — {site.address}</div>}
                   <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                     <span className="pill" style={{ background: st.color + "20", color: st.color }}>{st.label}</span>
-                    <span style={{ fontSize: 20, fontWeight: 700, color: "#FFFFFF" }}>{fmt(selectedCapexJob.contractValue)}</span>
+                    <span style={{ fontSize: 20, fontWeight: 700, color: "#1A2240" }}>{fmt(selectedCapexJob.contractValue)}</span>
                   </div>
                 </div>
-                <div style={{ background: "#0A0D16", borderRadius: 8, padding: "14px", border: "1px solid #1E2640", display: "flex", flexDirection: "column", gap: 10 }}>
+                <div style={{ background: "#F0F2F8", borderRadius: 8, padding: "14px", border: "1px solid #CBD1E8", display: "flex", flexDirection: "column", gap: 10 }}>
                   {[
                     { label: "PM",              value: selectedCapexJob.pm        || "—" },
                     { label: "Start Date",      value: selectedCapexJob.startDate || "—" },
@@ -4647,20 +4647,20 @@ Return ONLY valid JSON, no markdown, no extra text:
                     { label: st.actionLabel,    value: actionDate || "—", highlight: overdue },
                   ].map(r => (
                     <div key={r.label} style={{ display: "flex", justifyContent: "space-between" }}>
-                      <span style={{ fontSize: 11, color: "#3A4560" }}>{r.label}</span>
-                      <span style={{ fontSize: 11, color: r.highlight ? "#F87171" : "#B8C4E0", fontWeight: r.highlight ? 600 : 400 }}>{r.value}{r.highlight ? " ⚠" : ""}</span>
+                      <span style={{ fontSize: 11, color: "#4A5278" }}>{r.label}</span>
+                      <span style={{ fontSize: 11, color: r.highlight ? "#F87171" : "#252E52", fontWeight: r.highlight ? 600 : 400 }}>{r.value}{r.highlight ? " ⚠" : ""}</span>
                     </div>
                   ))}
                 </div>
                 {selectedCapexJob.stage === "do_work" && (
                   <div>
-                    <div style={{ fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "#3A4560", marginBottom: 8 }}>Completion — {selectedCapexJob.pct}%</div>
-                    <div style={{ background: "#0A0D16", borderRadius: 4, height: 8, overflow: "hidden" }}>
+                    <div style={{ fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "#4A5278", marginBottom: 8 }}>Completion — {selectedCapexJob.pct}%</div>
+                    <div style={{ background: "#F0F2F8", borderRadius: 4, height: 8, overflow: "hidden" }}>
                       <div style={{ height: "100%", width: (selectedCapexJob.pct || 0) + "%", background: st.color, borderRadius: 4 }} />
                     </div>
                   </div>
                 )}
-                {selectedCapexJob.notes && <div style={{ fontSize: 12, color: "#6B7694", lineHeight: 1.6, background: "#0A0D16", padding: "10px 12px", borderRadius: 6, border: "1px solid #1E2640" }}>{selectedCapexJob.notes}</div>}
+                {selectedCapexJob.notes && <div style={{ fontSize: 12, color: "#6B7694", lineHeight: 1.6, background: "#F0F2F8", padding: "10px 12px", borderRadius: 6, border: "1px solid #CBD1E8" }}>{selectedCapexJob.notes}</div>}
                 <div style={{ display: "flex", gap: 8 }}>
                   <button className="btn-ghost" style={{ flex: 1 }} onClick={() => { openEditCapex(selectedCapexJob); setSelectedCapexJob(null); }}>✎ Edit</button>
                   <button className="btn-ghost" style={{ color: "#F87171", borderColor: "#F8717120" }} onClick={() => deleteCapex(selectedCapexJob.id)}>✕</button>
@@ -4693,22 +4693,22 @@ Return ONLY valid JSON, no markdown, no extra text:
                 {/* Header */}
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 11, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 4 }}>FM Job</div>
-                    <div style={{ fontSize: 15, color: "#E8ECF4", fontWeight: 700, lineHeight: 1.3 }}>{job.name}</div>
-                    {job.storeCode && <div style={{ fontSize: 11, color: "#3A4560", marginTop: 2 }}>#{job.storeCode} {job.projectNo ? "· " + job.projectNo : ""}</div>}
+                    <div style={{ fontSize: 11, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 4 }}>FM Job</div>
+                    <div style={{ fontSize: 15, color: "#1A2240", fontWeight: 700, lineHeight: 1.3 }}>{job.name}</div>
+                    {job.storeCode && <div style={{ fontSize: 11, color: "#4A5278", marginTop: 2 }}>#{job.storeCode} {job.projectNo ? "· " + job.projectNo : ""}</div>}
                   </div>
                   <button className="btn-ghost" onClick={() => setSelectedFmJob(null)} style={{ flexShrink: 0 }}>✕</button>
                 </div>
 
                 {co && <div style={{ fontSize: 12, color: "#3B6FE8", cursor: "pointer" }} onClick={() => { setSelectedFmJob(null); setSelectedCompany(co); }}>🏢 {co.name}</div>}
-                {site && <div style={{ fontSize: 11, color: "#4A5270" }}>📍 {site.address}</div>}
+                {site && <div style={{ fontSize: 11, color: "#4A5278" }}>📍 {site.address}</div>}
 
                 {/* Stage selector — full pipeline across all 6 stages */}
                 <div>
-                  <div style={{ fontSize: 10, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 8 }}>Stage</div>
+                  <div style={{ fontSize: 10, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 8 }}>Stage</div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                     {/* Pipeline stages */}
-                    <div style={{ fontSize: 9, color: "#2A3560", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 2 }}>Pipeline</div>
+                    <div style={{ fontSize: 9, color: "#3D4570", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 2 }}>Pipeline</div>
                     <div style={{ display: "flex", gap: 4, marginBottom: 6 }}>
                       {FM_PIPELINE_STAGES.map(s => (
                         <button key={s.id} onClick={() => {
@@ -4721,15 +4721,15 @@ Return ONLY valid JSON, no markdown, no extra text:
                           update(patch);
                         }}
                           style={{ flex: 1, padding: "6px 4px", borderRadius: 5, border: "1px solid", cursor: "pointer", fontSize: 10, fontFamily: "inherit", fontWeight: 600, transition: "all 0.15s", textAlign: "center",
-                            borderColor: job.stage === s.id ? s.color : "#1E2640",
+                            borderColor: job.stage === s.id ? s.color : "#CBD1E8",
                             background:  job.stage === s.id ? s.color + "25" : "transparent",
-                            color:       job.stage === s.id ? s.color : "#3A4560" }}>
+                            color:       job.stage === s.id ? s.color : "#4A5278" }}>
                           {s.label}
                         </button>
                       ))}
                     </div>
                     {/* Active stages */}
-                    <div style={{ fontSize: 9, color: "#2A3560", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 2 }}>Active Jobs</div>
+                    <div style={{ fontSize: 9, color: "#3D4570", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 2 }}>Active Jobs</div>
                     <div style={{ display: "flex", gap: 4 }}>
                       {FM_ACTIVE_STAGES.map(s => (
                         <button key={s.id} onClick={() => {
@@ -4747,9 +4747,9 @@ Return ONLY valid JSON, no markdown, no extra text:
                           update(patch);
                         }}
                           style={{ flex: 1, padding: "6px 4px", borderRadius: 5, border: "1px solid", cursor: "pointer", fontSize: 10, fontFamily: "inherit", fontWeight: 600, transition: "all 0.15s", textAlign: "center",
-                            borderColor: job.stage === s.id ? s.color : "#1E2640",
+                            borderColor: job.stage === s.id ? s.color : "#CBD1E8",
                             background:  job.stage === s.id ? s.color + "25" : "transparent",
-                            color:       job.stage === s.id ? s.color : "#3A4560" }}>
+                            color:       job.stage === s.id ? s.color : "#4A5278" }}>
                           {s.label}
                         </button>
                       ))}
@@ -4763,12 +4763,12 @@ Return ONLY valid JSON, no markdown, no extra text:
                     <div style={{ fontSize: 10, color: "#60A5FA", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 10 }}>📋 Owner Approval</div>
                     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                       {job.ownerApprovalDate && (
-                        <div style={{ fontSize: 11, color: "#6A7590" }}>
-                          Sent for approval: <span style={{ color: "#E8ECF4" }}>{new Date(job.ownerApprovalDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</span>
+                        <div style={{ fontSize: 11, color: "#4A5278" }}>
+                          Sent for approval: <span style={{ color: "#1A2240" }}>{new Date(job.ownerApprovalDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</span>
                         </div>
                       )}
                       <div>
-                        <div style={{ fontSize: 10, color: "#3A4560", marginBottom: 4 }}>Follow-up Reminder Date</div>
+                        <div style={{ fontSize: 10, color: "#4A5278", marginBottom: 4 }}>Follow-up Reminder Date</div>
                         <input className="fi" type="date" value={job.followUpDate || ""}
                           onChange={e => update({ followUpDate: e.target.value })}
                           style={{ borderColor: job.followUpDate && new Date(job.followUpDate) < new Date() ? "#F87171" : undefined }} />
@@ -4789,12 +4789,12 @@ Return ONLY valid JSON, no markdown, no extra text:
                     <div style={{ fontSize: 10, color: "#4ADE80", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 8 }}>📅 Scheduling</div>
                     {job.scheduledDate ? (
                       <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                        <div style={{ fontSize: 11, color: "#E8ECF4" }}>Scheduled: <strong>{new Date(job.scheduledDate + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}</strong></div>
+                        <div style={{ fontSize: 11, color: "#1A2240" }}>Scheduled: <strong>{new Date(job.scheduledDate + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}</strong></div>
                         {job.subInvoiceSubmitted && (
                           <div style={{ background: "#4ADE8015", borderRadius: 6, padding: "8px 10px" }}>
                             <div style={{ fontSize: 10, color: "#4ADE80", fontWeight: 700, marginBottom: 4 }}>✓ Invoice Submitted</div>
-                            {job.subInvoiceAmount && <div style={{ fontSize: 12, color: "#E8ECF4" }}>Amount: {fmt(Number(job.subInvoiceAmount))}</div>}
-                            {job.subInvoiceNotes && <div style={{ fontSize: 11, color: "#6A7590", marginTop: 2 }}>{job.subInvoiceNotes}</div>}
+                            {job.subInvoiceAmount && <div style={{ fontSize: 12, color: "#1A2240" }}>Amount: {fmt(Number(job.subInvoiceAmount))}</div>}
+                            {job.subInvoiceNotes && <div style={{ fontSize: 11, color: "#4A5278", marginTop: 2 }}>{job.subInvoiceNotes}</div>}
                             {(job.subInvoicePhotos||[]).length > 0 && (
                               <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 4, marginTop: 6 }}>
                                 {(job.subInvoicePhotos||[]).map((p,i) => <img key={i} src={p.data} style={{ width: "100%", aspectRatio: "1", objectFit: "cover", borderRadius: 4 }} />)}
@@ -4804,7 +4804,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                         )}
                       </div>
                     ) : (
-                      <div style={{ fontSize: 11, color: "#6A7590" }}>
+                      <div style={{ fontSize: 11, color: "#4A5278" }}>
                         Awaiting sub to confirm schedule date
                         {job.schedSentAt && <div style={{ fontSize: 10, marginTop: 2 }}>Link sent: {new Date(job.schedSentAt).toLocaleDateString()}</div>}
                       </div>
@@ -4819,7 +4819,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                 {/* Key action date */}
                 {st.actionKey && (
                   <div>
-                    <div style={{ fontSize: 10, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5 }}>{st.actionLabel}</div>
+                    <div style={{ fontSize: 10, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5 }}>{st.actionLabel}</div>
                     <input className="fi" type="date" value={job[st.actionKey] || ""}
                       onChange={e => update({ [st.actionKey]: e.target.value })}
                       style={{ borderColor: overdue ? "#F87171" : undefined }} />
@@ -4829,7 +4829,7 @@ Return ONLY valid JSON, no markdown, no extra text:
 
                 {/* Coordinator */}
                 <div>
-                  <div style={{ fontSize: 10, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5 }}>Coordinator</div>
+                  <div style={{ fontSize: 10, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5 }}>Coordinator</div>
                   <select className="fi" value={job.coordinator || ""} onChange={e => update({ coordinator: e.target.value })}>
                     <option value="">Unassigned</option>
                     {fmTeam.map(m => <option key={m.id} value={m.name}>{m.name}</option>)}
@@ -4842,20 +4842,20 @@ Return ONLY valid JSON, no markdown, no extra text:
                   const gp       = job.grossProfit > 0 ? job.grossProfit : fmGrossProfit(nte);
                   const vendorNTE = job.vendorNTE ? Number(job.vendorNTE) : fmVendorNTE(nte);
                   return (
-                    <div style={{ background: "#0A0D16", border: "1px solid #818CF840", borderRadius: 8, padding: "14px" }}>
+                    <div style={{ background: "#F0F2F8", border: "1px solid #818CF840", borderRadius: 8, padding: "14px" }}>
                       <div style={{ fontSize: 10, color: "#818CF8", textTransform: "uppercase", letterSpacing: "0.07em", fontWeight: 700, marginBottom: 12 }}>📋 Estimating</div>
 
                       {/* Margin breakdown */}
                       {nte > 0 && (
-                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 12, background: "#161B28", borderRadius: 6, padding: "10px 12px" }}>
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 12, background: "#ECEEF8", borderRadius: 6, padding: "10px 12px" }}>
                           <div>
-                            <div style={{ fontSize: 9, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 2 }}>Gross Value</div>
-                            <div style={{ fontSize: 15, fontWeight: 700, color: "#E8ECF4" }}>{fmt(nte)}</div>
+                            <div style={{ fontSize: 9, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 2 }}>Gross Value</div>
+                            <div style={{ fontSize: 15, fontWeight: 700, color: "#1A2240" }}>{fmt(nte)}</div>
                           </div>
                           <div>
-                            <div style={{ fontSize: 9, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 2 }}>Our GP</div>
+                            <div style={{ fontSize: 9, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 2 }}>Our GP</div>
                             <div style={{ fontSize: 15, fontWeight: 700, color: "#4ADE80" }}>{fmt(gp)}</div>
-                            <div style={{ fontSize: 9, color: "#3A4560" }}>{Math.round((gp/nte)*100)}% · {gp <= 125 && gp === fmGrossProfit(nte) ? "min $125" : "30%"}</div>
+                            <div style={{ fontSize: 9, color: "#4A5278" }}>{Math.round((gp/nte)*100)}% · {gp <= 125 && gp === fmGrossProfit(nte) ? "min $125" : "30%"}</div>
                           </div>
                           <div>
                             <div style={{ fontSize: 9, color: "#FCD34D", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 2 }}>Vendor NTE</div>
@@ -4867,7 +4867,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                         {!nte && (
                           <div>
-                            <div style={{ fontSize: 10, color: "#3A4560", marginBottom: 4 }}>Authorized Amount (NTE / Gross Value)</div>
+                            <div style={{ fontSize: 10, color: "#4A5278", marginBottom: 4 }}>Authorized Amount (NTE / Gross Value)</div>
                             <input className="fi" type="number" placeholder="From the work order ticket"
                               value={job.contractValue || job.nte || ""}
                               onChange={e => {
@@ -4878,7 +4878,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                           </div>
                         )}
                         <div>
-                          <div style={{ fontSize: 10, color: "#3A4560", marginBottom: 4 }}>Assign Subcontractor to Quote</div>
+                          <div style={{ fontSize: 10, color: "#4A5278", marginBottom: 4 }}>Assign Subcontractor to Quote</div>
                           <select className="fi" value={job.subcontractorId || ""} onChange={e => update({ subcontractorId: e.target.value })}>
                             <option value="">Select sub…</option>
                             {subcontractors.map(s => <option key={s.id} value={s.id}>{s.name}{s.trade ? " — " + s.trade : ""}</option>)}
@@ -4904,13 +4904,13 @@ Return ONLY valid JSON, no markdown, no extra text:
                                   navigator.clipboard?.writeText(window.location.origin + "/?subtoken=" + token);
                                   alert("✅ Link copied to clipboard!\n\nSend this to " + (subcontractors.find(s => s.id === job.subcontractorId)?.name || "the sub") + ":\n\n" + window.location.origin + "/?subtoken=" + token);
                                 }}
-                                style={{ width: "100%", padding: "10px", borderRadius: 6, border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 12, fontWeight: 700, background: "#818CF8", color: "#FFFFFF" }}>
+                                style={{ width: "100%", padding: "10px", borderRadius: 6, border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 12, fontWeight: 700, background: "#818CF8", color: "#1A2240" }}>
                                 📤 Send to Sub for Quote
                               </button>
                             )}
                           </div>
                         )}
-                        {!job.subcontractorId && <div style={{ fontSize: 10, color: "#2A3560", fontStyle: "italic" }}>Assign a sub above to send for quote</div>}
+                        {!job.subcontractorId && <div style={{ fontSize: 10, color: "#3D4570", fontStyle: "italic" }}>Assign a sub above to send for quote</div>}
                       </div>
                     </div>
                   );
@@ -4923,7 +4923,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                   const quotePrice = Number(job.vendorQuotePrice || 0);
                   const withinNTE = quotePrice > 0 && quotePrice <= vendorNTE;
                   return (
-                    <div style={{ background: "#0A0D16", border: "1px solid #A78BFA40", borderRadius: 8, padding: "14px" }}>
+                    <div style={{ background: "#F0F2F8", border: "1px solid #A78BFA40", borderRadius: 8, padding: "14px" }}>
                       <div style={{ fontSize: 10, color: "#A78BFA", textTransform: "uppercase", letterSpacing: "0.07em", fontWeight: 700, marginBottom: 12 }}>⏳ Waiting for Quote</div>
                       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                         {/* Vendor NTE prominently displayed */}
@@ -4933,20 +4933,20 @@ Return ONLY valid JSON, no markdown, no extra text:
                             <div style={{ fontSize: 20, fontWeight: 700, color: "#FCD34D" }}>{fmt(vendorNTE)}</div>
                           </div>
                           <div style={{ textAlign: "right" }}>
-                            <div style={{ fontSize: 9, color: "#3A4560", marginBottom: 2 }}>Our Gross Value</div>
-                            <div style={{ fontSize: 13, fontWeight: 600, color: "#E8ECF4" }}>{fmt(nte)}</div>
+                            <div style={{ fontSize: 9, color: "#4A5278", marginBottom: 2 }}>Our Gross Value</div>
+                            <div style={{ fontSize: 13, fontWeight: 600, color: "#1A2240" }}>{fmt(nte)}</div>
                             <div style={{ fontSize: 9, color: "#4ADE80" }}>GP: {fmt(fmGrossProfit(nte))}</div>
                           </div>
                         </div>
-                        {job.subSentAt && <div style={{ fontSize: 10, color: "#4A5270" }}>📤 Sent: {new Date(job.subSentAt).toLocaleDateString()}</div>}
+                        {job.subSentAt && <div style={{ fontSize: 10, color: "#353C62" }}>📤 Sent: {new Date(job.subSentAt).toLocaleDateString()}</div>}
                         <div>
-                          <div style={{ fontSize: 10, color: "#3A4560", marginBottom: 4 }}>Quote Received — Price</div>
+                          <div style={{ fontSize: 10, color: "#4A5278", marginBottom: 4 }}>Quote Received — Price</div>
                           <input className="fi" type="number" placeholder="Sub's quoted price"
                             value={job.vendorQuotePrice || ""}
                             onChange={e => update({ vendorQuotePrice: e.target.value })} />
                         </div>
                         <div>
-                          <div style={{ fontSize: 10, color: "#3A4560", marginBottom: 4 }}>Quote Scope</div>
+                          <div style={{ fontSize: 10, color: "#4A5278", marginBottom: 4 }}>Quote Scope</div>
                           <textarea className="fi" rows={2} placeholder="What the sub quoted…"
                             value={job.vendorQuoteScope || ""}
                             onChange={e => update({ vendorQuoteScope: e.target.value })}
@@ -4954,7 +4954,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                         </div>
                         {quotePrice > 0 && (
                           <div style={{ background: withinNTE ? "#4ADE8015" : "#F8717115", border: "1px solid " + (withinNTE ? "#4ADE8030" : "#F8717130"), borderRadius: 6, padding: "8px 12px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                            <span style={{ fontSize: 12, fontWeight: 700, color: "#E8ECF4" }}>Quote: {fmt(quotePrice)}</span>
+                            <span style={{ fontSize: 12, fontWeight: 700, color: "#1A2240" }}>Quote: {fmt(quotePrice)}</span>
                             <span style={{ fontSize: 11, color: withinNTE ? "#4ADE80" : "#F87171", fontWeight: 600 }}>
                               {withinNTE ? "✓ Within vendor NTE" : "⚠ Exceeds vendor NTE by " + fmt(quotePrice - vendorNTE)}
                             </span>
@@ -4966,8 +4966,8 @@ Return ONLY valid JSON, no markdown, no extra text:
                           const ready = hasPrice && hasScope;
                           return (
                             <button onClick={() => ready && update({ stage: "generate_proposal" })}
-                              style={{ width: "100%", padding: "10px", borderRadius: 6, border: ready ? "none" : "1px solid #2A3560", cursor: ready ? "pointer" : "not-allowed", fontFamily: "inherit", fontSize: 12, fontWeight: 700,
-                                background: ready ? "#C084FC" : "transparent", color: ready ? "#FFFFFF" : "#3A4560", transition: "all 0.2s" }}>
+                              style={{ width: "100%", padding: "10px", borderRadius: 6, border: ready ? "none" : "1px solid #3D4570", cursor: ready ? "pointer" : "not-allowed", fontFamily: "inherit", fontSize: 12, fontWeight: 700,
+                                background: ready ? "#C084FC" : "transparent", color: ready ? "#1A2240" : "#4A5278", transition: "all 0.2s" }}>
                               {ready ? "→ Generate Proposal" : "Enter price + scope to continue"}
                             </button>
                           );
@@ -4979,18 +4979,18 @@ Return ONLY valid JSON, no markdown, no extra text:
 
                 {/* ── GENERATE PROPOSAL panel ── */}
                 {job.stage === "generate_proposal" && (
-                  <div style={{ background: "#0A0D16", border: "1px solid #C084FC40", borderRadius: 8, padding: "14px" }}>
+                  <div style={{ background: "#F0F2F8", border: "1px solid #C084FC40", borderRadius: 8, padding: "14px" }}>
                     <div style={{ fontSize: 10, color: "#C084FC", textTransform: "uppercase", letterSpacing: "0.07em", fontWeight: 700, marginBottom: 12 }}>📄 Generate Proposal</div>
                     <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                       <div className="g2" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
                         <div>
-                          <div style={{ fontSize: 10, color: "#3A4560", marginBottom: 4 }}>Work Order #</div>
+                          <div style={{ fontSize: 10, color: "#4A5278", marginBottom: 4 }}>Work Order #</div>
                           <input className="fi" placeholder="WO-260311-00207"
                             value={job.ownersProjectNo || ""}
                             onChange={e => update({ ownersProjectNo: e.target.value })} />
                         </div>
                         <div>
-                          <div style={{ fontSize: 10, color: "#3A4560", marginBottom: 4 }}>Proposal #</div>
+                          <div style={{ fontSize: 10, color: "#4A5278", marginBottom: 4 }}>Proposal #</div>
                           <input className="fi" placeholder="e.g. PROP-2026-001"
                             value={proposalNum}
                             onChange={e => setProposalNum(e.target.value)} />
@@ -4998,7 +4998,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                       </div>
                       <button
                         onClick={() => { initProposal(job); }}
-                        style={{ width: "100%", padding: "10px", borderRadius: 6, border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 12, fontWeight: 700, background: "#C084FC", color: "#FFFFFF" }}>
+                        style={{ width: "100%", padding: "10px", borderRadius: 6, border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 12, fontWeight: 700, background: "#C084FC", color: "#1A2240" }}>
                         ✨ Generate Proposal
                       </button>
                       <button onClick={() => update({ stage: "owner_approval", pmPingedAt: new Date().toISOString() })}
@@ -5009,7 +5009,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                   </div>
                 )}
                 <div>
-                  <div style={{ fontSize: 10, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5 }}>Subcontractor / Vendor</div>
+                  <div style={{ fontSize: 10, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5 }}>Subcontractor / Vendor</div>
                   <select className="fi" value={job.subcontractorId || ""} onChange={e => update({ subcontractorId: e.target.value })}>
                     <option value="">Unassigned</option>
                     {subcontractors.map(s => (
@@ -5017,7 +5017,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                     ))}
                   </select>
                   {sub && (
-                    <div style={{ marginTop: 6, background: "#0A0D16", borderRadius: 6, padding: "8px 12px", border: "1px solid #1E2640" }}>
+                    <div style={{ marginTop: 6, background: "#F0F2F8", borderRadius: 6, padding: "8px 12px", border: "1px solid #CBD1E8" }}>
                       {(() => {
                         const coiDate = sub.coiExpiry ? new Date(sub.coiExpiry) : null;
                         const coiExpiring = coiDate && coiDate > new Date() && coiDate <= new Date(Date.now() + 30*86400000);
@@ -5036,7 +5036,7 @@ Return ONLY valid JSON, no markdown, no extra text:
 
                 {/* Vendor next step */}
                 <div>
-                  <div style={{ fontSize: 10, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5 }}>Vendor Next Step</div>
+                  <div style={{ fontSize: 10, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5 }}>Vendor Next Step</div>
                   {job.stage === "owner_approval" ? (
                     <div style={{ padding: "8px 12px", background: "#FCD34D10", border: "1px solid #FCD34D30", borderRadius: 6, fontSize: 12, color: "#FCD34D", fontWeight: 600 }}>
                       🔒 Awaiting Confirmation
@@ -5050,24 +5050,24 @@ Return ONLY valid JSON, no markdown, no extra text:
                   )}
                   {/* Quote fields — shown only when Need Quote is selected */}
                   {job.vendorNextStep === "need_quote" && (
-                    <div style={{ marginTop: 10, background: "#0A0D16", border: "1px solid #A78BFA40", borderRadius: 8, padding: "12px 14px", display: "flex", flexDirection: "column", gap: 10 }}>
+                    <div style={{ marginTop: 10, background: "#F0F2F8", border: "1px solid #A78BFA40", borderRadius: 8, padding: "12px 14px", display: "flex", flexDirection: "column", gap: 10 }}>
                       <div style={{ fontSize: 10, color: "#A78BFA", textTransform: "uppercase", letterSpacing: "0.07em", fontWeight: 600, marginBottom: 2 }}>Quote Details</div>
                       <div>
-                        <div style={{ fontSize: 10, color: "#3A4560", marginBottom: 4 }}>Quote Price</div>
+                        <div style={{ fontSize: 10, color: "#4A5278", marginBottom: 4 }}>Quote Price</div>
                         <input className="fi" type="number" placeholder="0.00"
                           value={job.vendorQuotePrice || ""}
                           onChange={e => update({ vendorQuotePrice: e.target.value })} />
                       </div>
                       <div>
-                        <div style={{ fontSize: 10, color: "#3A4560", marginBottom: 4 }}>Quote Scope</div>
+                        <div style={{ fontSize: 10, color: "#4A5278", marginBottom: 4 }}>Quote Scope</div>
                         <textarea className="fi" rows={3} placeholder="Describe what the vendor quoted…"
                           value={job.vendorQuoteScope || ""}
                           onChange={e => update({ vendorQuoteScope: e.target.value })}
                           style={{ resize: "vertical" }} />
                       </div>
                       <div>
-                        <div style={{ fontSize: 10, color: "#3A4560", marginBottom: 4 }}>Attach File</div>
-                        <label style={{ display: "flex", alignItems: "center", gap: 8, background: "#161B28", border: "1px solid #1E2640", borderRadius: 5, padding: "7px 12px", cursor: "pointer", fontSize: 11, color: "#4A5270" }}>
+                        <div style={{ fontSize: 10, color: "#4A5278", marginBottom: 4 }}>Attach File</div>
+                        <label style={{ display: "flex", alignItems: "center", gap: 8, background: "#ECEEF8", border: "1px solid #CBD1E8", borderRadius: 5, padding: "7px 12px", cursor: "pointer", fontSize: 11, color: "#353C62" }}>
                           📎 {job.vendorQuoteFile ? job.vendorQuoteFile : "Choose file…"}
                           <input type="file" style={{ display: "none" }} onChange={e => {
                             if (e.target.files[0]) update({ vendorQuoteFile: e.target.files[0].name });
@@ -5098,13 +5098,13 @@ Return ONLY valid JSON, no markdown, no extra text:
                 </div>
 
                 {/* Financials */}
-                <div style={{ background: "#0A0D16", borderRadius: 8, padding: "12px 14px", border: "1px solid #1E2640", display: "flex", gap: 20 }}>
+                <div style={{ background: "#F0F2F8", borderRadius: 8, padding: "12px 14px", border: "1px solid #CBD1E8", display: "flex", gap: 20 }}>
                   <div>
-                    <div style={{ fontSize: 9, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 3 }}>Gross Value</div>
-                    <div style={{ fontSize: 18, fontWeight: 700, color: "#E8ECF4" }}>{fmt(job.contractValue)}</div>
+                    <div style={{ fontSize: 9, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 3 }}>Gross Value</div>
+                    <div style={{ fontSize: 18, fontWeight: 700, color: "#1A2240" }}>{fmt(job.contractValue)}</div>
                   </div>
                   <div>
-                    <div style={{ fontSize: 9, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 3 }}>Gross Profit</div>
+                    <div style={{ fontSize: 9, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 3 }}>Gross Profit</div>
                     <div style={{ fontSize: 18, fontWeight: 700, color: "#4ADE80" }}>{fmt(job.grossProfit)}</div>
                   </div>
                   {job.vendorNTE && <div>
@@ -5114,13 +5114,13 @@ Return ONLY valid JSON, no markdown, no extra text:
                 </div>
 
                 {/* Notes */}
-                {job.notes && <div style={{ fontSize: 12, color: "#6B7694", lineHeight: 1.6, background: "#0A0D16", padding: "10px 12px", borderRadius: 6, border: "1px solid #1E2640" }}>{job.notes}</div>}
+                {job.notes && <div style={{ fontSize: 12, color: "#6B7694", lineHeight: 1.6, background: "#F0F2F8", padding: "10px 12px", borderRadius: 6, border: "1px solid #CBD1E8" }}>{job.notes}</div>}
 
                 {/* Photos */}
                 <div>
-                  <div style={{ fontSize: 10, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div style={{ fontSize: 10, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                     <span>📸 Site Photos</span>
-                    <span style={{ color: "#2A3560" }}>{(job.photos||[]).length} photo{(job.photos||[]).length !== 1 ? "s" : ""} · shown to sub after accept</span>
+                    <span style={{ color: "#3D4570" }}>{(job.photos||[]).length} photo{(job.photos||[]).length !== 1 ? "s" : ""} · shown to sub after accept</span>
                   </div>
                   {(job.photos||[]).length > 0 && (
                     <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6, marginBottom: 8 }}>
@@ -5133,7 +5133,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                       ))}
                     </div>
                   )}
-                  <label style={{ display: "block", padding: "8px 12px", borderRadius: 6, border: "1px dashed #2A3560", textAlign: "center", cursor: "pointer", fontSize: 11, color: "#3A4560" }}>
+                  <label style={{ display: "block", padding: "8px 12px", borderRadius: 6, border: "1px dashed #3D4570", textAlign: "center", cursor: "pointer", fontSize: 11, color: "#4A5278" }}>
                     + Add Photos
                     <input type="file" accept="image/*" multiple style={{ display: "none" }} onChange={e => {
                       const files = Array.from(e.target.files);
@@ -5161,7 +5161,7 @@ Return ONLY valid JSON, no markdown, no extra text:
       {showCapexForm && (
         <div className="modal-bg" onClick={e => e.target === e.currentTarget && setShowCapexForm(false)}>
           <div className="modal fade-in">
-            <div style={{ fontSize: 16, fontWeight: 700, color: "#FFFFFF", marginBottom: 22, textTransform: "uppercase" }}>{editCapexId ? "Edit CapEx Job" : "Add CapEx Job"}</div>
+            <div style={{ fontSize: 16, fontWeight: 700, color: "#1A2240", marginBottom: 22, textTransform: "uppercase" }}>{editCapexId ? "Edit CapEx Job" : "Add CapEx Job"}</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
               <div><label className="lbl">Job Name *</label><input className="fi" value={capexForm.name} onChange={e => setCapexForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. HVAC Upgrade" /></div>
               <div className="g2">
@@ -5214,7 +5214,7 @@ Return ONLY valid JSON, no markdown, no extra text:
       {showFmForm && (
         <div className="modal-bg" onClick={e => e.target === e.currentTarget && setShowFmForm(false)}>
           <div className="modal fade-in" style={{ maxHeight: "90vh", overflowY: "auto" }}>
-            <div style={{ fontSize: 16, fontWeight: 700, color: "#FFFFFF", marginBottom: 22, textTransform: "uppercase" }}>{editFmId ? "Edit FM Job" : "Add FM Job"}</div>
+            <div style={{ fontSize: 16, fontWeight: 700, color: "#1A2240", marginBottom: 22, textTransform: "uppercase" }}>{editFmId ? "Edit FM Job" : "Add FM Job"}</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
               <div><label className="lbl">Scope of Work / Job Name *</label><input className="fi" value={fmForm.name} onChange={e => setFmForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Door Lock Replacement" /></div>
               <div className="g2">
@@ -5282,7 +5282,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                 </select>
               </div>
               {fmForm.vendorNextStep === "need_quote" && (
-                <div style={{ background: "#0A0D16", border: "1px solid #A78BFA40", borderRadius: 8, padding: "12px 14px", display: "flex", flexDirection: "column", gap: 10 }}>
+                <div style={{ background: "#F0F2F8", border: "1px solid #A78BFA40", borderRadius: 8, padding: "12px 14px", display: "flex", flexDirection: "column", gap: 10 }}>
                   <div style={{ fontSize: 10, color: "#A78BFA", textTransform: "uppercase", letterSpacing: "0.07em", fontWeight: 600 }}>Quote Details</div>
                   <div className="g2">
                     <div><label className="lbl">Quote Price</label><input className="fi" type="number" placeholder="0.00" value={fmForm.vendorQuotePrice} onChange={e => setFmForm(f => ({ ...f, vendorQuotePrice: e.target.value }))} /></div>
@@ -5317,49 +5317,49 @@ Return ONLY valid JSON, no markdown, no extra text:
         return (
           <div className="side-panel slide-in">
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-              <div style={{ fontSize: 13, fontWeight: 600, color: "#FFFFFF", textTransform: "uppercase", letterSpacing: "0.06em" }}>{activeBU === "lawn" ? "🌿 Lawn Site" : "❄️ Snow Site"}</div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: "#1A2240", textTransform: "uppercase", letterSpacing: "0.06em" }}>{activeBU === "lawn" ? "🌿 Lawn Site" : "❄️ Snow Site"}</div>
               <button className="btn-ghost" onClick={() => setSelectedLsSite(null)}>✕</button>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
 
               {/* Site identity */}
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <div style={{ width: 12, height: 12, borderRadius: "50%", background: companyColorMap[selectedLsSite.companyId] || "#3A4560", flexShrink: 0 }} />
+                <div style={{ width: 12, height: 12, borderRadius: "50%", background: companyColorMap[selectedLsSite.companyId] || "#4A5278", flexShrink: 0 }} />
                 <div>
-                  <div style={{ fontSize: 15, color: "#E8ECF4", fontWeight: 600 }}>{selectedLsSite.storeNumber ? "Store #" + selectedLsSite.storeNumber : selectedLsSite.address}</div>
+                  <div style={{ fontSize: 15, color: "#1A2240", fontWeight: 600 }}>{selectedLsSite.storeNumber ? "Store #" + selectedLsSite.storeNumber : selectedLsSite.address}</div>
                   {slCo && <div style={{ fontSize: 11, color: "#3B6FE8" }}>{slCo.name}</div>}
                 </div>
               </div>
 
               {/* Site details */}
-              <div style={{ background: "#0A0D16", borderRadius: 8, padding: "12px 14px", border: "1px solid #1E2640", display: "flex", flexDirection: "column", gap: 8 }}>
+              <div style={{ background: "#F0F2F8", borderRadius: 8, padding: "12px 14px", border: "1px solid #CBD1E8", display: "flex", flexDirection: "column", gap: 8 }}>
                 {[
                   { label: "Address",     value: selectedLsSite.address || "—" },
                   { label: "Phone",       value: selectedLsSite.phone   || "—" },
                   { label: "Coordinates", value: selectedLsSite.lat ? selectedLsSite.lat.toFixed(4) + ", " + selectedLsSite.lng.toFixed(4) : "Not geocoded" },
                 ].map(r => (
                   <div key={r.label} style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
-                    <span style={{ fontSize: 11, color: "#3A4560", flexShrink: 0 }}>{r.label}</span>
-                    <span style={{ fontSize: 11, color: "#B8C4E0", textAlign: "right", wordBreak: "break-all" }}>{r.value}</span>
+                    <span style={{ fontSize: 11, color: "#4A5278", flexShrink: 0 }}>{r.label}</span>
+                    <span style={{ fontSize: 11, color: "#252E52", textAlign: "right", wordBreak: "break-all" }}>{r.value}</span>
                   </div>
                 ))}
               </div>
 
               {/* Bid stage pipeline */}
               {slBid && (
-                <div style={{ background: "#0A0D16", borderRadius: 8, padding: "12px 14px", border: "1px solid #1E2640" }}>
-                  <div style={{ fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "#3A4560", marginBottom: 10 }}>Bid Stage</div>
+                <div style={{ background: "#F0F2F8", borderRadius: 8, padding: "12px 14px", border: "1px solid #CBD1E8" }}>
+                  <div style={{ fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "#4A5278", marginBottom: 10 }}>Bid Stage</div>
                   <div style={{ display: "flex", gap: 0, alignItems: "center" }}>
                     {STAGES.map((st, i) => {
                       const active = i <= stageIdx;
                       return (
                         <div key={st.id} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
                           <div style={{ display: "flex", alignItems: "center", width: "100%" }}>
-                            {i > 0 && <div style={{ flex: 1, height: 2, background: active ? st.color : "#1E2640" }} />}
-                            <div style={{ width: 10, height: 10, borderRadius: "50%", background: i <= stageIdx ? STAGES[Math.min(stageIdx, i)].color : "#1E2640", border: "2px solid " + (i === stageIdx ? STAGES[stageIdx].color : "#1E2640"), flexShrink: 0 }} />
-                            {i < STAGES.length - 1 && <div style={{ flex: 1, height: 2, background: i < stageIdx ? STAGES[stageIdx].color : "#1E2640" }} />}
+                            {i > 0 && <div style={{ flex: 1, height: 2, background: active ? st.color : "#CBD1E8" }} />}
+                            <div style={{ width: 10, height: 10, borderRadius: "50%", background: i <= stageIdx ? STAGES[Math.min(stageIdx, i)].color : "#CBD1E8", border: "2px solid " + (i === stageIdx ? STAGES[stageIdx].color : "#CBD1E8"), flexShrink: 0 }} />
+                            {i < STAGES.length - 1 && <div style={{ flex: 1, height: 2, background: i < stageIdx ? STAGES[stageIdx].color : "#CBD1E8" }} />}
                           </div>
-                          <div style={{ fontSize: 8, color: i === stageIdx ? STAGES[stageIdx].color : "#2A3560", letterSpacing: "0.06em", textAlign: "center", lineHeight: 1.2 }}>{st.label.toUpperCase()}</div>
+                          <div style={{ fontSize: 8, color: i === stageIdx ? STAGES[stageIdx].color : "#3D4570", letterSpacing: "0.06em", textAlign: "center", lineHeight: 1.2 }}>{st.label.toUpperCase()}</div>
                         </div>
                       );
                     })}
@@ -5371,16 +5371,16 @@ Return ONLY valid JSON, no markdown, no extra text:
                 </div>
               )}
               {!slBid && (
-                <div style={{ background: "#0A0D16", borderRadius: 8, padding: "10px 14px", border: "1px solid #1E2640", fontSize: 11, color: "#3A4560", textAlign: "center" }}>No bid started — go to Bids tab to create one</div>
+                <div style={{ background: "#F0F2F8", borderRadius: 8, padding: "10px 14px", border: "1px solid #CBD1E8", fontSize: 11, color: "#4A5278", textAlign: "center" }}>No bid started — go to Bids tab to create one</div>
               )}
 
               {/* Subcontractor */}
-              <div style={{ background: "#0A0D16", borderRadius: 8, padding: "12px 14px", border: "1px solid #1E2640" }}>
-                <div style={{ fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "#3A4560", marginBottom: 8 }}>Subcontractor</div>
+              <div style={{ background: "#F0F2F8", borderRadius: 8, padding: "12px 14px", border: "1px solid #CBD1E8" }}>
+                <div style={{ fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "#4A5278", marginBottom: 8 }}>Subcontractor</div>
                 {slSub ? (
                   <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-                    <div style={{ fontSize: 13, fontWeight: 600, color: "#E8ECF4" }}>{slSub.name}</div>
-                    {slSub.phone && <div style={{ fontSize: 11, color: "#3A4560" }}>📞 {slSub.phone}</div>}
+                    <div style={{ fontSize: 13, fontWeight: 600, color: "#1A2240" }}>{slSub.name}</div>
+                    {slSub.phone && <div style={{ fontSize: 11, color: "#4A5278" }}>📞 {slSub.phone}</div>}
                     {slSub.email && <div style={{ fontSize: 11, color: "#3B6FE8" }}>✉ {slSub.email}</div>}
                     <div style={{ display: "flex", gap: 6, marginTop: 2 }}>
                       {slSub.msaStatus && <span style={{ fontSize: 9, padding: "2px 7px", borderRadius: 3, background: slSub.msaStatus === "signed" ? "#4ADE8020" : "#FCD34D20", color: slSub.msaStatus === "signed" ? "#4ADE80" : "#FCD34D" }}>MSA: {slSub.msaStatus}</span>}
@@ -5388,28 +5388,28 @@ Return ONLY valid JSON, no markdown, no extra text:
                     </div>
                   </div>
                 ) : (
-                  <div style={{ fontSize: 11, color: "#3A4560" }}>No contractor assigned</div>
+                  <div style={{ fontSize: 11, color: "#4A5278" }}>No contractor assigned</div>
                 )}
               </div>
 
               {/* Contract links */}
               {slBid && (
-                <div style={{ background: "#0A0D16", borderRadius: 8, padding: "12px 14px", border: "1px solid #1E2640" }}>
-                  <div style={{ fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "#3A4560", marginBottom: 8 }}>Contracts</div>
+                <div style={{ background: "#F0F2F8", borderRadius: 8, padding: "12px 14px", border: "1px solid #CBD1E8" }}>
+                  <div style={{ fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "#4A5278", marginBottom: 8 }}>Contracts</div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
                     {slBid.subcontractUrl ? (
                       <a href={slBid.subcontractUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, color: "#60A5FA", textDecoration: "none", display: "flex", alignItems: "center", gap: 5 }}>
-                        📄 Subcontract <span style={{ fontSize: 10, color: "#3A4560" }}>→</span>
+                        📄 Subcontract <span style={{ fontSize: 10, color: "#4A5278" }}>→</span>
                       </a>
                     ) : (
-                      <div style={{ fontSize: 11, color: "#3A4560" }}>📄 Subcontract — not uploaded</div>
+                      <div style={{ fontSize: 11, color: "#4A5278" }}>📄 Subcontract — not uploaded</div>
                     )}
                     {slBid.ownerContractUrl ? (
                       <a href={slBid.ownerContractUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: 12, color: "#A78BFA", textDecoration: "none", display: "flex", alignItems: "center", gap: 5 }}>
-                        📋 Owner Contract <span style={{ fontSize: 10, color: "#3A4560" }}>→</span>
+                        📋 Owner Contract <span style={{ fontSize: 10, color: "#4A5278" }}>→</span>
                       </a>
                     ) : (
-                      <div style={{ fontSize: 11, color: "#3A4560" }}>📋 Owner Contract — not uploaded</div>
+                      <div style={{ fontSize: 11, color: "#4A5278" }}>📋 Owner Contract — not uploaded</div>
                     )}
                   </div>
                 </div>
@@ -5417,11 +5417,11 @@ Return ONLY valid JSON, no markdown, no extra text:
 
               {selectedLsSite.accessCode && (
                 <div style={{ background: "#FCD34D15", border: "1px solid #FCD34D40", borderRadius: 8, padding: "12px 14px" }}>
-                  <div style={{ fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "#3A4560", marginBottom: 4 }}>Access Code</div>
+                  <div style={{ fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "#4A5278", marginBottom: 4 }}>Access Code</div>
                   <div style={{ fontSize: 18, fontWeight: 700, color: "#FCD34D", letterSpacing: "0.15em" }}>{selectedLsSite.accessCode}</div>
                 </div>
               )}
-              {selectedLsSite.notes && <div style={{ fontSize: 12, color: "#6B7694", lineHeight: 1.6, background: "#0A0D16", padding: "10px 12px", borderRadius: 6, border: "1px solid #1E2640" }}>{selectedLsSite.notes}</div>}
+              {selectedLsSite.notes && <div style={{ fontSize: 12, color: "#6B7694", lineHeight: 1.6, background: "#F0F2F8", padding: "10px 12px", borderRadius: 6, border: "1px solid #CBD1E8" }}>{selectedLsSite.notes}</div>}
 
               <div style={{ display: "flex", gap: 8 }}>
                 <button className="btn-ghost" style={{ flex: 1 }} onClick={() => { openEditLsSite(selectedLsSite); setSelectedLsSite(null); }}>✎ Edit</button>
@@ -5436,7 +5436,7 @@ Return ONLY valid JSON, no markdown, no extra text:
       {showLsSiteForm && (
         <div className="modal-bg" onClick={e => e.target === e.currentTarget && setShowLsSiteForm(false)}>
           <div className="modal fade-in">
-            <div style={{ fontSize: 16, fontWeight: 700, color: "#FFFFFF", marginBottom: 22, textTransform: "uppercase" }}>{editLsSiteId ? "Edit Site" : "Add Site"}</div>
+            <div style={{ fontSize: 16, fontWeight: 700, color: "#1A2240", marginBottom: 22, textTransform: "uppercase" }}>{editLsSiteId ? "Edit Site" : "Add Site"}</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
               <div><label className="lbl">Company</label>
                 <select className="fi" value={lsSiteForm.companyId} onChange={e => setLsSiteForm(f => ({ ...f, companyId: e.target.value }))}>
@@ -5471,7 +5471,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                 />
               </div>
               <div><label className="lbl">Access Code</label><input className="fi" value={lsSiteForm.accessCode} onChange={e => setLsSiteForm(f => ({ ...f, accessCode: e.target.value }))} placeholder="Gate / door code" /></div>
-              <div style={{ background: "#0A0D16", border: "1px solid #1E2640", borderRadius: 8, padding: "10px 14px" }}>
+              <div style={{ background: "#F0F2F8", border: "1px solid #CBD1E8", borderRadius: 8, padding: "10px 14px" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
                   <label className="lbl" style={{ margin: 0 }}>Coordinates</label>
                   {lsGeocoding && <span style={{ fontSize: 10, color: "#60A5FA", display: "flex", alignItems: "center", gap: 5 }}>⏳ Looking up address…</span>}
@@ -5565,21 +5565,21 @@ Return ONLY valid JSON, no markdown, no extra text:
 
         return (
           <div className="modal-bg" onClick={e => e.target === e.currentTarget && setShowProposal(false)}>
-            <div className="modal fade-in" style={{ maxWidth: 1100, width: "97vw", maxHeight: "94vh", overflowY: "auto", padding: 0, background: "#161B28", borderRadius: 12 }}>
+            <div className="modal fade-in" style={{ maxWidth: 1100, width: "97vw", maxHeight: "94vh", overflowY: "auto", padding: 0, background: "#ECEEF8", borderRadius: 12 }}>
 
               {/* Dark toolbar */}
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "16px 20px", borderBottom: "1px solid #1E2640", flexWrap: "wrap", gap: 12, background: "#0F1117", borderRadius: "12px 12px 0 0" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "16px 20px", borderBottom: "1px solid #CBD1E8", flexWrap: "wrap", gap: 12, background: "#1A2240", borderRadius: "12px 12px 0 0" }}>
                 <div style={{ fontSize: 14, fontWeight: 700, color: "#C084FC", letterSpacing: "0.05em" }}>📄 Bid Quote Take-Off</div>
                 <div style={{ display: "flex", gap: 12, alignItems: "flex-end", flexWrap: "wrap" }}>
                   <div>
-                    <div style={{ fontSize: 10, color: "#6A7590", marginBottom: 5, textTransform: "uppercase", letterSpacing: "0.07em", fontWeight: 600 }}>Proposal #</div>
-                    <input className="fi" style={{ width: 150, fontSize: 14, fontWeight: 600, borderColor: "#3B6FE8", background: "#161B28" }} placeholder="PS-2026-001" value={proposalNum} onChange={e => setProposalNum(e.target.value)} />
+                    <div style={{ fontSize: 10, color: "#4A5278", marginBottom: 5, textTransform: "uppercase", letterSpacing: "0.07em", fontWeight: 600 }}>Proposal #</div>
+                    <input className="fi" style={{ width: 150, fontSize: 14, fontWeight: 600, borderColor: "#3B6FE8", background: "#ECEEF8" }} placeholder="PS-2026-001" value={proposalNum} onChange={e => setProposalNum(e.target.value)} />
                   </div>
                   <div>
                     <div style={{ fontSize: 10, color: "#FCD34D", marginBottom: 5, textTransform: "uppercase", letterSpacing: "0.07em", fontWeight: 600 }}>Gross Value</div>
                     <div style={{ position: "relative" }}>
                       <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "#FCD34D", fontSize: 14, fontWeight: 700 }}>$</span>
-                      <input className="fi" type="number" style={{ width: 130, paddingLeft: 24, fontSize: 16, fontWeight: 700, color: "#FCD34D", borderColor: "#FCD34D60", background: "#161B28" }}
+                      <input className="fi" type="number" style={{ width: 130, paddingLeft: 24, fontSize: 16, fontWeight: 700, color: "#FCD34D", borderColor: "#FCD34D60", background: "#ECEEF8" }}
                         value={proposalGrossValue}
                         onChange={e => {
                           const v = Number(e.target.value);
@@ -5753,8 +5753,8 @@ Return ONLY valid JSON, no markdown, no extra text:
                 </div>
               </div>
 
-              <div style={{ padding: "12px 16px", borderTop: "1px solid #1E2640", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <div style={{ fontSize: 11, color: "#6A7590" }}>
+              <div style={{ padding: "12px 16px", borderTop: "1px solid #CBD1E8", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div style={{ fontSize: 11, color: "#4A5278" }}>
                   Line items: {fmtD(lineSubTotal)} · OH&P (20%): {fmtD(ohp20pct)} · <strong style={{ color: "#4ADE80" }}>Grand Total: {fmtD(grandTotal)}</strong>
                   {grossValue > 0 && <span style={{ marginLeft: 8, color: "#FCD34D" }}>· Actual margin: {fmtD(grossValue - lineSubTotal)} ({Math.round(((grossValue - lineSubTotal)/grossValue)*100)}%)</span>}
                 </div>
@@ -5808,18 +5808,18 @@ Return ONLY valid JSON, no markdown, no extra text:
 
         return (
           <div style={{ position: "fixed", inset: 0, background: "#00000090", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center" }} onClick={e => { if (e.target === e.currentTarget) setLawnBidDocSiteId(null); }}>
-            <div style={{ background: "#0F1117", border: "1px solid #1E2640", borderRadius: 14, width: "min(820px, 96vw)", maxHeight: "92vh", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+            <div style={{ background: "#1A2240", border: "1px solid #CBD1E8", borderRadius: 14, width: "min(820px, 96vw)", maxHeight: "92vh", display: "flex", flexDirection: "column", overflow: "hidden" }}>
 
               {/* Modal header */}
-              <div style={{ padding: "16px 22px", borderBottom: "1px solid #1E2640", display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>
+              <div style={{ padding: "16px 22px", borderBottom: "1px solid #CBD1E8", display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>
                 <div>
-                  <div style={{ fontSize: 15, fontWeight: 700, color: "#FFFFFF" }}>📄 Lawn Bid Request Document</div>
-                  <div style={{ fontSize: 11, color: "#3A4560", marginTop: 2 }}>{site.address} · Season {lawnBidSeason}</div>
+                  <div style={{ fontSize: 15, fontWeight: 700, color: "#1A2240" }}>📄 Lawn Bid Request Document</div>
+                  <div style={{ fontSize: 11, color: "#4A5278", marginTop: 2 }}>{site.address} · Season {lawnBidSeason}</div>
                 </div>
                 <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 7 }}>
-                    <span style={{ fontSize: 11, color: "#3A4560", whiteSpace: "nowrap" }}>Make out to:</span>
-                    <select value={chosenSubId} onChange={e => setLawnBidDocSubId(e.target.value)} style={{ background: "#141824", border: "1px solid " + (chosenSubId ? "#60A5FA50" : "#F87171"), color: chosenSubId ? "#B8C4E0" : "#F87171", borderRadius: 6, padding: "6px 10px", fontSize: 12, minWidth: 160 }}>
+                    <span style={{ fontSize: 11, color: "#4A5278", whiteSpace: "nowrap" }}>Make out to:</span>
+                    <select value={chosenSubId} onChange={e => setLawnBidDocSubId(e.target.value)} style={{ background: "#F5F7FC", border: "1px solid " + (chosenSubId ? "#60A5FA50" : "#F87171"), color: chosenSubId ? "#252E52" : "#F87171", borderRadius: 6, padding: "6px 10px", fontSize: 12, minWidth: 160 }}>
                       <option value="">— Select contractor —</option>
                       {(assignedSubs.length > 0 ? assignedSubs : subcontractors).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                     </select>
@@ -5988,12 +5988,12 @@ Return ONLY valid JSON, no markdown, no extra text:
       {/* ── TEAM MEMBER FORM MODAL ── */}
       {showTeamForm && (
         <div style={{ position: "fixed", inset: 0, background: "#00000090", zIndex: 9000, display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <div style={{ background: "#161B28", border: "1px solid #1E2640", borderRadius: 12, padding: 28, width: 400, maxHeight: "90vh", overflowY: "auto" }}>
-            <div style={{ fontSize: 14, fontWeight: 600, color: "#FFFFFF", marginBottom: 20 }}>{editTeamId ? "Edit" : "Add"} Team Member</div>
+          <div style={{ background: "#ECEEF8", border: "1px solid #CBD1E8", borderRadius: 12, padding: 28, width: 400, maxHeight: "90vh", overflowY: "auto" }}>
+            <div style={{ fontSize: 14, fontWeight: 600, color: "#1A2240", marginBottom: 20 }}>{editTeamId ? "Edit" : "Add"} Team Member</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               {[["Name", "name"], ["Phone", "phone"], ["Email", "email"]].map(([label, key]) => (
                 <div key={key}>
-                  <div style={{ fontSize: 10, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5 }}>{label}</div>
+                  <div style={{ fontSize: 10, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5 }}>{label}</div>
                   <input className="fi" style={{ width: "100%", boxSizing: "border-box" }} value={teamForm[key]} onChange={e => setTeamForm({ ...teamForm, [key]: e.target.value })} />
                 </div>
               ))}
@@ -6014,17 +6014,17 @@ Return ONLY valid JSON, no markdown, no extra text:
       {/* ── SUBCONTRACTOR FORM MODAL ── */}
       {showSubForm && (
         <div style={{ position: "fixed", inset: 0, background: "#00000090", zIndex: 9000, display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <div style={{ background: "#161B28", border: "1px solid #1E2640", borderRadius: 12, padding: 28, width: 480, maxHeight: "90vh", overflowY: "auto" }}>
-            <div style={{ fontSize: 14, fontWeight: 600, color: "#FFFFFF", marginBottom: 20 }}>{editSubId ? "Edit" : "Add"} Subcontractor</div>
+          <div style={{ background: "#ECEEF8", border: "1px solid #CBD1E8", borderRadius: 12, padding: 28, width: 480, maxHeight: "90vh", overflowY: "auto" }}>
+            <div style={{ fontSize: 14, fontWeight: 600, color: "#1A2240", marginBottom: 20 }}>{editSubId ? "Edit" : "Add"} Subcontractor</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               {[["Name", "name"], ["Trade / Specialty", "trade"], ["Phone", "phone"], ["Email", "email"]].map(([label, key]) => (
                 <div key={key}>
-                  <div style={{ fontSize: 10, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5 }}>{label}</div>
+                  <div style={{ fontSize: 10, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5 }}>{label}</div>
                   <input className="fi" style={{ width: "100%", boxSizing: "border-box" }} value={subForm[key]} onChange={e => setSubForm({ ...subForm, [key]: e.target.value })} />
                 </div>
               ))}
               <div>
-                <div style={{ fontSize: 10, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 8 }}>Works for Division(s)</div>
+                <div style={{ fontSize: 10, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 8 }}>Works for Division(s)</div>
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                   {[{ id: "fm", label: "Facility Maint.", color: "#7BA7F5" }, { id: "lawn", label: "Lawn", color: "#4CAF82" }, { id: "snow", label: "Snow", color: "#A8C4F8" }].map(sv => {
                     const checked = (subForm.services || []).includes(sv.id);
@@ -6032,16 +6032,16 @@ Return ONLY valid JSON, no markdown, no extra text:
                       <button key={sv.id} onClick={() => {
                         const cur = subForm.services || [];
                         setSubForm({ ...subForm, services: checked ? cur.filter(x => x !== sv.id) : [...cur, sv.id] });
-                      }} style={{ padding: "6px 14px", borderRadius: 20, border: "1px solid " + (checked ? sv.color : "#1E2640"), background: checked ? sv.color + "25" : "transparent", color: checked ? sv.color : "#3A4560", fontSize: 11, fontWeight: checked ? 600 : 400, cursor: "pointer", fontFamily: "inherit", transition: "all 0.15s" }}>
+                      }} style={{ padding: "6px 14px", borderRadius: 20, border: "1px solid " + (checked ? sv.color : "#CBD1E8"), background: checked ? sv.color + "25" : "transparent", color: checked ? sv.color : "#4A5278", fontSize: 11, fontWeight: checked ? 600 : 400, cursor: "pointer", fontFamily: "inherit", transition: "all 0.15s" }}>
                         {sv.label}
                       </button>
                     );
                   })}
                 </div>
-                <div style={{ fontSize: 10, color: "#2A3560", marginTop: 5 }}>Leave blank to include in all divisions</div>
+                <div style={{ fontSize: 10, color: "#3D4570", marginTop: 5 }}>Leave blank to include in all divisions</div>
               </div>
               <div>
-                <div style={{ fontSize: 10, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5 }}>MSA Status</div>
+                <div style={{ fontSize: 10, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5 }}>MSA Status</div>
                 <select className="fi" style={{ width: "100%" }} value={subForm.msaStatus} onChange={e => setSubForm({ ...subForm, msaStatus: e.target.value })}>
                   <option value="missing">Missing</option>
                   <option value="signed">Signed</option>
@@ -6049,15 +6049,15 @@ Return ONLY valid JSON, no markdown, no extra text:
                 </select>
               </div>
               <div>
-                <div style={{ fontSize: 10, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5 }}>COI Expiry Date</div>
+                <div style={{ fontSize: 10, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5 }}>COI Expiry Date</div>
                 <input className="fi" type="date" style={{ width: "100%", boxSizing: "border-box" }} value={subForm.coiExpiry} onChange={e => setSubForm({ ...subForm, coiExpiry: e.target.value })} />
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                 <input type="checkbox" id="w9check" checked={subForm.w9} onChange={e => setSubForm({ ...subForm, w9: e.target.checked })} style={{ width: 16, height: 16, accentColor: buColor.accent }} />
-                <label htmlFor="w9check" style={{ fontSize: 12, color: "#B8C4E0", cursor: "pointer" }}>W9 on file</label>
+                <label htmlFor="w9check" style={{ fontSize: 12, color: "#252E52", cursor: "pointer" }}>W9 on file</label>
               </div>
               <div>
-                <div style={{ fontSize: 10, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5 }}>Notes</div>
+                <div style={{ fontSize: 10, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5 }}>Notes</div>
                 <textarea className="fi" rows={3} style={{ width: "100%", boxSizing: "border-box", resize: "vertical" }} value={subForm.notes} onChange={e => setSubForm({ ...subForm, notes: e.target.value })} />
               </div>
             </div>
@@ -6115,14 +6115,14 @@ Return ONLY valid JSON, no markdown, no extra text:
 
         return (
           <div style={{ position: "fixed", inset: 0, background: "#00000090", zIndex: 1100, display: "flex", alignItems: "center", justifyContent: "center" }} onClick={e => { if (e.target === e.currentTarget) { setAcreageModalSiteId(null); setAcreageInput(""); } }}>
-            <div style={{ background: "#0F1117", border: "1px solid #1E2640", borderRadius: 14, width: "min(420px, 95vw)", padding: 28, display: "flex", flexDirection: "column", gap: 18 }}>
+            <div style={{ background: "#1A2240", border: "1px solid #CBD1E8", borderRadius: 14, width: "min(420px, 95vw)", padding: 28, display: "flex", flexDirection: "column", gap: 18 }}>
               <div>
-                <div style={{ fontSize: 16, fontWeight: 700, color: "#FFFFFF", marginBottom: 4 }}>📐 Mowing Cost Calculator</div>
-                <div style={{ fontSize: 11, color: "#3A4560" }}>{site.address}</div>
+                <div style={{ fontSize: 16, fontWeight: 700, color: "#1A2240", marginBottom: 4 }}>📐 Mowing Cost Calculator</div>
+                <div style={{ fontSize: 11, color: "#4A5278" }}>{site.address}</div>
               </div>
 
               <div>
-                <div style={{ fontSize: 10, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>Property Acreage</div>
+                <div style={{ fontSize: 10, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>Property Acreage</div>
                 <input
                   type="number"
                   step="0.1"
@@ -6132,28 +6132,28 @@ Return ONLY valid JSON, no markdown, no extra text:
                   onChange={e => setAcreageInput(e.target.value)}
                   autoFocus
                   onKeyDown={e => { if (e.key === "Enter") applyCalc(); }}
-                  style={{ width: "100%", background: "#0A0D16", border: "1px solid #FBBF2440", borderRadius: 7, padding: "10px 12px", fontSize: 16, color: "#FBBF24", boxSizing: "border-box", fontFamily: "inherit", outline: "none" }}
+                  style={{ width: "100%", background: "#F0F2F8", border: "1px solid #FBBF2440", borderRadius: 7, padding: "10px 12px", fontSize: 16, color: "#FBBF24", boxSizing: "border-box", fontFamily: "inherit", outline: "none" }}
                 />
-                <div style={{ fontSize: 10, color: "#3A4560", marginTop: 5 }}>Rate: $275/acre per cut · 28 cuts/season</div>
+                <div style={{ fontSize: 10, color: "#4A5278", marginTop: 5 }}>Rate: $275/acre per cut · 28 cuts/season</div>
               </div>
 
               {acres > 0 && (
-                <div style={{ background: "#0A0D16", borderRadius: 8, border: "1px solid #1E2640", padding: "14px 16px", display: "flex", flexDirection: "column", gap: 10 }}>
+                <div style={{ background: "#F0F2F8", borderRadius: 8, border: "1px solid #CBD1E8", padding: "14px 16px", display: "flex", flexDirection: "column", gap: 10 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <span style={{ fontSize: 11, color: "#B8C4E0" }}>Sub cost / cut</span>
+                    <span style={{ fontSize: 11, color: "#252E52" }}>Sub cost / cut</span>
                     <span style={{ fontSize: 14, fontWeight: 700, color: "#FBBF24" }}>${subCostPerCut.toFixed(2)}</span>
                   </div>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <span style={{ fontSize: 11, color: "#B8C4E0" }}>Our price / cut <span style={{ fontSize: 9, color: "#3A4560" }}>(30% margin)</span></span>
+                    <span style={{ fontSize: 11, color: "#252E52" }}>Our price / cut <span style={{ fontSize: 9, color: "#4A5278" }}>(30% margin)</span></span>
                     <span style={{ fontSize: 14, fontWeight: 700, color: "#4ADE80" }}>${ourPricePerCut.toFixed(2)}</span>
                   </div>
-                  <div style={{ borderTop: "1px solid #1E2640", paddingTop: 10 }}>
+                  <div style={{ borderTop: "1px solid #CBD1E8", paddingTop: 10 }}>
                     <div style={{ display: "flex", justifyContent: "space-between" }}>
-                      <span style={{ fontSize: 11, color: "#B8C4E0" }}>Annual sub total</span>
+                      <span style={{ fontSize: 11, color: "#252E52" }}>Annual sub total</span>
                       <span style={{ fontSize: 12, color: "#FBBF24", fontWeight: 600 }}>${Math.round(annualSub).toLocaleString()}</span>
                     </div>
                     <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4 }}>
-                      <span style={{ fontSize: 11, color: "#B8C4E0" }}>Annual our total</span>
+                      <span style={{ fontSize: 11, color: "#252E52" }}>Annual our total</span>
                       <span style={{ fontSize: 13, color: "#4ADE80", fontWeight: 700 }}>${Math.round(annualOur).toLocaleString()}</span>
                     </div>
                   </div>
@@ -6161,8 +6161,8 @@ Return ONLY valid JSON, no markdown, no extra text:
               )}
 
               <div style={{ display: "flex", gap: 8 }}>
-                <button onClick={() => { setAcreageModalSiteId(null); setAcreageInput(""); }} style={{ flex: 1, padding: "9px 0", background: "transparent", border: "1px solid #1E2640", borderRadius: 7, color: "#6A7590", fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>Cancel</button>
-                <button onClick={applyCalc} disabled={!acres} style={{ flex: 2, padding: "9px 0", background: acres ? "#4ADE8020" : "#1E2640", border: "1px solid " + (acres ? "#4ADE8050" : "#1E2640"), borderRadius: 7, color: acres ? "#4ADE80" : "#3A4560", fontSize: 13, fontWeight: 700, cursor: acres ? "pointer" : "default", fontFamily: "inherit" }}>
+                <button onClick={() => { setAcreageModalSiteId(null); setAcreageInput(""); }} style={{ flex: 1, padding: "9px 0", background: "transparent", border: "1px solid #CBD1E8", borderRadius: 7, color: "#4A5278", fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>Cancel</button>
+                <button onClick={applyCalc} disabled={!acres} style={{ flex: 2, padding: "9px 0", background: acres ? "#4ADE8020" : "#CBD1E8", border: "1px solid " + (acres ? "#4ADE8050" : "#CBD1E8"), borderRadius: 7, color: acres ? "#4ADE80" : "#4A5278", fontSize: 13, fontWeight: 700, cursor: acres ? "pointer" : "default", fontFamily: "inherit" }}>
                   ✓ Apply to Mowing Service
                 </button>
               </div>
@@ -6237,29 +6237,29 @@ Return ONLY valid JSON, no markdown, no extra text:
 
         return (
           <div style={{ position: "fixed", inset: 0, background: "#00000090", zIndex: 1100, display: "flex", alignItems: "center", justifyContent: "center" }} onClick={e => { if (e.target === e.currentTarget) setOwnerProposalSiteId(null); }}>
-            <div style={{ background: "#0F1117", border: "1px solid #1E2640", borderRadius: 14, width: "min(460px, 95vw)", padding: 28, display: "flex", flexDirection: "column", gap: 20 }}>
+            <div style={{ background: "#1A2240", border: "1px solid #CBD1E8", borderRadius: 14, width: "min(460px, 95vw)", padding: 28, display: "flex", flexDirection: "column", gap: 20 }}>
               <div>
-                <div style={{ fontSize: 16, fontWeight: 700, color: "#FFFFFF", marginBottom: 4 }}>📋 Generate Owner Proposal</div>
-                <div style={{ fontSize: 11, color: "#3A4560" }}>{site.address} · {co?.name || "—"} · {services.length} service{services.length !== 1 ? "s" : ""} · <span style={{ color: "#4ADE80", fontWeight: 600 }}>${Math.round(annualOur).toLocaleString()}/yr</span></div>
+                <div style={{ fontSize: 16, fontWeight: 700, color: "#1A2240", marginBottom: 4 }}>📋 Generate Owner Proposal</div>
+                <div style={{ fontSize: 11, color: "#4A5278" }}>{site.address} · {co?.name || "—"} · {services.length} service{services.length !== 1 ? "s" : ""} · <span style={{ color: "#4ADE80", fontWeight: 600 }}>${Math.round(annualOur).toLocaleString()}/yr</span></div>
               </div>
               <div>
-                <div style={{ fontSize: 10, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 10 }}>Select Contract Template</div>
+                <div style={{ fontSize: 10, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 10 }}>Select Contract Template</div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                   {OWNER_CONTRACT_TEMPLATES.map(t => (
-                    <button key={t.id} onClick={() => generateProposal(t)} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 16px", background: "#0A0D16", border: "1px solid " + t.color + "40", borderRadius: 8, cursor: "pointer", fontFamily: "inherit", textAlign: "left", transition: "all 0.15s" }}
+                    <button key={t.id} onClick={() => generateProposal(t)} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 16px", background: "#F0F2F8", border: "1px solid " + t.color + "40", borderRadius: 8, cursor: "pointer", fontFamily: "inherit", textAlign: "left", transition: "all 0.15s" }}
                       onMouseEnter={e => e.currentTarget.style.background = t.color + "15"}
-                      onMouseLeave={e => e.currentTarget.style.background = "#0A0D16"}>
+                      onMouseLeave={e => e.currentTarget.style.background = "#F0F2F8"}>
                       <div style={{ width: 10, height: 10, borderRadius: "50%", background: t.color, flexShrink: 0 }} />
                       <div>
-                        <div style={{ fontSize: 13, fontWeight: 600, color: "#E8ECF4" }}>{t.label}</div>
-                        <div style={{ fontSize: 10, color: "#3A4560", marginTop: 2 }}>Generates & prints proposal with {t.label} formatting</div>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: "#1A2240" }}>{t.label}</div>
+                        <div style={{ fontSize: 10, color: "#4A5278", marginTop: 2 }}>Generates & prints proposal with {t.label} formatting</div>
                       </div>
                       <div style={{ marginLeft: "auto", fontSize: 12, color: t.color }}>Print →</div>
                     </button>
                   ))}
                 </div>
               </div>
-              <button onClick={() => setOwnerProposalSiteId(null)} style={{ padding: "9px 0", background: "transparent", border: "1px solid #1E2640", borderRadius: 7, color: "#6A7590", fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>Cancel</button>
+              <button onClick={() => setOwnerProposalSiteId(null)} style={{ padding: "9px 0", background: "transparent", border: "1px solid #CBD1E8", borderRadius: 7, color: "#4A5278", fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>Cancel</button>
             </div>
           </div>
         );
@@ -6289,15 +6289,15 @@ Return ONLY valid JSON, no markdown, no extra text:
 
         return (
           <div style={{ position: "fixed", inset: 0, background: "#00000090", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center" }} onClick={e => { if (e.target === e.currentTarget) setLawnSubcontractSiteId(null); }}>
-            <div style={{ background: "#0F1117", border: "1px solid #1E2640", borderRadius: 14, width: "min(900px, 96vw)", maxHeight: "93vh", display: "flex", flexDirection: "column", overflow: "hidden" }}>
-              <div style={{ padding: "14px 20px", borderBottom: "1px solid #1E2640", display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>
+            <div style={{ background: "#1A2240", border: "1px solid #CBD1E8", borderRadius: 14, width: "min(900px, 96vw)", maxHeight: "93vh", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+              <div style={{ padding: "14px 20px", borderBottom: "1px solid #CBD1E8", display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>
                 <div>
-                  <div style={{ fontSize: 15, fontWeight: 700, color: "#FFFFFF" }}>📄 Landscaping Subcontract</div>
-                  <div style={{ fontSize: 11, color: "#3A4560", marginTop: 2 }}>{site.address} · {sub?.name || "No sub selected"} · Season {lawnBidSeason}</div>
+                  <div style={{ fontSize: 15, fontWeight: 700, color: "#1A2240" }}>📄 Landscaping Subcontract</div>
+                  <div style={{ fontSize: 11, color: "#4A5278", marginTop: 2 }}>{site.address} · {sub?.name || "No sub selected"} · Season {lawnBidSeason}</div>
                 </div>
                 <div style={{ display: "flex", gap: 8 }}>
                   <button onClick={printSubcontract} style={{ padding: "7px 16px", background: "#4ADE8020", border: "1px solid #4ADE8040", borderRadius: 7, color: "#4ADE80", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>🖨 Print / Save PDF</button>
-                  <button onClick={() => setLawnSubcontractSiteId(null)} style={{ padding: "7px 14px", background: "transparent", border: "1px solid #1E2640", borderRadius: 7, color: "#6A7590", fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>✕ Close</button>
+                  <button onClick={() => setLawnSubcontractSiteId(null)} style={{ padding: "7px 14px", background: "transparent", border: "1px solid #CBD1E8", borderRadius: 7, color: "#4A5278", fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>✕ Close</button>
                 </div>
               </div>
 
@@ -6308,8 +6308,8 @@ Return ONLY valid JSON, no markdown, no extra text:
                     {/* Header */}
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
                       <div style={{ border: "2px solid #1a3a6b", padding: "6px 10px" }}>
-                        <div style={{ fontSize: 22, fontWeight: 900, color: "#1a3a6b", letterSpacing: "0.05em" }}>FARMER</div>
-                        <div style={{ fontSize: 7, color: "#1a3a6b", letterSpacing: "0.15em", textTransform: "uppercase" }}>Development, Inc.</div>
+                        <div style={{ fontSize: 22, fontWeight: 900, color: "#3B6FE8", letterSpacing: "0.05em" }}>FARMER</div>
+                        <div style={{ fontSize: 7, color: "#3B6FE8", letterSpacing: "0.15em", textTransform: "uppercase" }}>Development, Inc.</div>
                       </div>
                       <div style={{ textAlign: "center", flex: 1, padding: "0 20px" }}>
                         <div style={{ fontSize: 16, fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.05em" }}>LANDSCAPING CONTRACT</div>
