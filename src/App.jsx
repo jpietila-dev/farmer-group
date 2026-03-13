@@ -861,6 +861,8 @@ export default function App() {
   const [showNotBidding,   setShowNotBidding]   = useState(false); // show not-bidding sites
   const [bidMapColFilter,  setBidMapColFilter]  = useState("all"); // map filter by column
   const [lawnSubcontractSiteId, setLawnSubcontractSiteId] = useState(null); // site id for subcontract modal
+  const [acreageModalSiteId, setAcreageModalSiteId] = useState(null); // site id for mowing acreage calc
+  const [acreageInput, setAcreageInput] = useState(""); // acreage input value
   const [showBidArchive, setShowBidArchive] = useState(false);
   const [bidStatFilter,  setBidStatFilter]  = useState(null); // null | "all" | "bidding" | "locked"
 
@@ -3352,6 +3354,18 @@ Return ONLY valid JSON, no markdown, no extra text:
                                             <button key={opt.colId} onClick={() => {
                                               if (opt.status === null) {
                                                 setLawnBids(prev => prev.filter(b => !(b.siteId === site.id && b.season === lawnBidSeason)));
+                                              } else if (opt.status === "owner_approved") {
+                                                // Moving to Owner Approval — warn if no contractor selected
+                                                const hasSub = (bid?.subcontractorIds||[]).length > 0;
+                                                const hasSelected = !!bid?.selectedSubId;
+                                                if (!hasSub) {
+                                                  if (!window.confirm("No contractor assigned to this bid yet. Move to Owner Approval anyway?")) return;
+                                                } else if (!hasSelected && (bid?.subcontractorIds||[]).length > 1) {
+                                                  if (!window.confirm("You have multiple contractors but none selected as primary. Move to Owner Approval anyway?")) return;
+                                                }
+                                                // If exactly one sub, auto-select it
+                                                const autoId = (bid?.subcontractorIds||[]).length === 1 ? bid.subcontractorIds[0] : bid?.selectedSubId || "";
+                                                upsertLawnBid(site.id, b => ({ ...b, status: opt.status, selectedSubId: autoId || b.selectedSubId }));
                                               } else {
                                                 upsertLawnBid(site.id, b => ({ ...b, status: opt.status }));
                                               }
@@ -3361,6 +3375,18 @@ Return ONLY valid JSON, no markdown, no extra text:
                                             </button>
                                           );
                                         })}
+                                      </div>
+                                      {/* Contractor warning for owner_approval stage */}
+                                      {getCol(site) === "owner_approval" && !(bid?.selectedSubId) && (bid?.subcontractorIds||[]).length > 0 && (
+                                        <div style={{ marginTop: 6, padding: "5px 8px", background: "#FBBF2415", border: "1px solid #FBBF2440", borderRadius: 5, fontSize: 9, color: "#FBBF24" }}>
+                                          ⚠ Select a primary contractor above before generating subcontract
+                                        </div>
+                                      )}
+                                      {getCol(site) === "owner_approval" && (bid?.subcontractorIds||[]).length === 0 && (
+                                        <div style={{ marginTop: 6, padding: "5px 8px", background: "#F8717115", border: "1px solid #F8717140", borderRadius: 5, fontSize: 9, color: "#F87171" }}>
+                                          ⚠ No contractor assigned — add one in Contractors section
+                                        </div>
+                                      )}
                                       </div>
                                     </div>
 
@@ -3494,10 +3520,16 @@ Return ONLY valid JSON, no markdown, no extra text:
                                     </div>
 
                                     {/* Actions */}
-                                    <div style={{ display: "flex", gap: 6 }}>
-                                      <button className="btn-primary" style={{ flex: 1, fontSize: 11, padding: "7px 0", background: "#60A5FA15", color: "#60A5FA", border: "1px solid #60A5FA40", borderRadius: 6, cursor: "pointer", fontWeight: 600 }} onClick={() => { setLawnBidDocSubId(null); setLawnBidDocSiteId(site.id); }}>📄 Bid Doc</button>
-                                      <button className="btn-ghost" style={{ flex: 1, fontSize: 10, padding: "5px 0", color: "#A78BFA", borderColor: "#A78BFA30" }} onClick={() => { setEditLawnBidId(null); setSelectedSite(site); }}>🔍 Full Details</button>
-                                      {!bid && <button className="btn-ghost" style={{ flex: 1, fontSize: 10, padding: "5px 0", color: "#4ADE80", borderColor: "#4ADE8030" }} onClick={() => upsertLawnBid(site.id, b => b)}>+ Start Bid</button>}
+                                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                                      <button className="btn-primary" style={{ flex: 1, minWidth: 80, fontSize: 11, padding: "7px 0", background: "#60A5FA15", color: "#60A5FA", border: "1px solid #60A5FA40", borderRadius: 6, cursor: "pointer", fontWeight: 600 }} onClick={() => { setLawnBidDocSubId(null); setLawnBidDocSiteId(site.id); }}>📄 Bid Doc</button>
+                                      <button className="btn-ghost" style={{ flex: 1, minWidth: 80, fontSize: 10, padding: "5px 0", color: "#A78BFA", borderColor: "#A78BFA30" }} onClick={() => { setEditLawnBidId(null); setSelectedSite(site); }}>🔍 Full Details</button>
+                                      {!bid && <button className="btn-ghost" style={{ flex: 1, minWidth: 80, fontSize: 10, padding: "5px 0", color: "#4ADE80", borderColor: "#4ADE8030" }} onClick={() => upsertLawnBid(site.id, b => b)}>+ Start Bid</button>}
+                                      {/* Acreage-based mowing calc */}
+                                      <button className="btn-ghost" style={{ flex: 1, minWidth: 80, fontSize: 10, padding: "5px 0", color: "#FBBF24", borderColor: "#FBBF2430" }} onClick={() => { setAcreageInput(bid?.acreage ? String(bid.acreage) : ""); setAcreageModalSiteId(site.id); }}>📐 Calc Mowing</button>
+                                      {/* Generate Subcontract — shown when owner_accepted or owner_approval with sub selected */}
+                                      {bid && (bid.status === "owner_accepted" || bid.status === "owner_approved") && bid.selectedSubId && (
+                                        <button className="btn-ghost" style={{ flex: 1, minWidth: 80, fontSize: 10, padding: "5px 0", color: "#4ADE80", borderColor: "#4ADE8030", fontWeight: 700 }} onClick={() => setLawnSubcontractSiteId(site.id)}>📋 Subcontract</button>
+                                      )}
                                     </div>
                                   </div>
                                 )}
@@ -5525,7 +5557,7 @@ Return ONLY valid JSON, no markdown, no extra text:
         const sub  = chosenSubId ? subcontractors.find(s => s.id === chosenSubId) : null;
         const mapLat = site.lat || 39.9526;
         const mapLng = site.lng || -75.1652;
-        const mapUrl = `https://maps.googleapis.com/maps/api/staticmap?center=${mapLat},${mapLng}&zoom=18&size=640x320&maptype=satellite&markers=color:red%7C${mapLat},${mapLng}&key=AIzaSyD-9tSrke72PouQMnMX-a7eZSW0jkFMBWY`;
+        const mapUrl = `https://maps.googleapis.com/maps/api/staticmap?center=${mapLat},${mapLng}&zoom=16&size=640x320&maptype=satellite&markers=color:red%7C${mapLat},${mapLng}&key=AIzaSyD-9tSrke72PouQMnMX-a7eZSW0jkFMBWY`;
         const today = new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
 
         const printBidDoc = () => {
@@ -5824,6 +5856,94 @@ Return ONLY valid JSON, no markdown, no extra text:
       )}
 
       {/* ── LANDSCAPING SUBCONTRACT MODAL ── */}
+      {/* ── ACREAGE MOWING CALCULATOR MODAL ── */}
+      {acreageModalSiteId && (() => {
+        const site = lawnSites.find(s => s.id === acreageModalSiteId);
+        if (!site) { setAcreageModalSiteId(null); return null; }
+        const bid = getLawnBid(site.id);
+        const acres = parseFloat(acreageInput) || 0;
+        const subCostPerCut = Math.round(acres * 275 * 100) / 100;
+        const ourPricePerCut = Math.ceil(subCostPerCut / 0.70);
+        const annualSub = subCostPerCut * 28;
+        const annualOur = ourPricePerCut * 28;
+
+        const applyCalc = () => {
+          if (!acres) return;
+          upsertLawnBid(site.id, b => ({
+            ...b,
+            acreage: acres,
+            services: {
+              ...(b.services || {}),
+              mowing: {
+                ...(b.services?.mowing || {}),
+                included: true,
+                subPrice: subCostPerCut,
+                ourPrice: ourPricePerCut,
+              }
+            }
+          }));
+          setAcreageModalSiteId(null);
+          setAcreageInput("");
+        };
+
+        return (
+          <div style={{ position: "fixed", inset: 0, background: "#00000090", zIndex: 1100, display: "flex", alignItems: "center", justifyContent: "center" }} onClick={e => { if (e.target === e.currentTarget) { setAcreageModalSiteId(null); setAcreageInput(""); } }}>
+            <div style={{ background: "#0F1117", border: "1px solid #1E2640", borderRadius: 14, width: "min(420px, 95vw)", padding: 28, display: "flex", flexDirection: "column", gap: 18 }}>
+              <div>
+                <div style={{ fontSize: 16, fontWeight: 700, color: "#FFFFFF", marginBottom: 4 }}>📐 Mowing Cost Calculator</div>
+                <div style={{ fontSize: 11, color: "#3A4560" }}>{site.address}</div>
+              </div>
+
+              <div>
+                <div style={{ fontSize: 10, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>Property Acreage</div>
+                <input
+                  type="number"
+                  step="0.1"
+                  min="0"
+                  placeholder="e.g. 1.5"
+                  value={acreageInput}
+                  onChange={e => setAcreageInput(e.target.value)}
+                  autoFocus
+                  onKeyDown={e => { if (e.key === "Enter") applyCalc(); }}
+                  style={{ width: "100%", background: "#0A0D16", border: "1px solid #FBBF2440", borderRadius: 7, padding: "10px 12px", fontSize: 16, color: "#FBBF24", boxSizing: "border-box", fontFamily: "inherit", outline: "none" }}
+                />
+                <div style={{ fontSize: 10, color: "#3A4560", marginTop: 5 }}>Rate: $275/acre per cut · 28 cuts/season</div>
+              </div>
+
+              {acres > 0 && (
+                <div style={{ background: "#0A0D16", borderRadius: 8, border: "1px solid #1E2640", padding: "14px 16px", display: "flex", flexDirection: "column", gap: 10 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span style={{ fontSize: 11, color: "#B8C4E0" }}>Sub cost / cut</span>
+                    <span style={{ fontSize: 14, fontWeight: 700, color: "#FBBF24" }}>${subCostPerCut.toFixed(2)}</span>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span style={{ fontSize: 11, color: "#B8C4E0" }}>Our price / cut <span style={{ fontSize: 9, color: "#3A4560" }}>(30% margin)</span></span>
+                    <span style={{ fontSize: 14, fontWeight: 700, color: "#4ADE80" }}>${ourPricePerCut.toFixed(2)}</span>
+                  </div>
+                  <div style={{ borderTop: "1px solid #1E2640", paddingTop: 10 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between" }}>
+                      <span style={{ fontSize: 11, color: "#B8C4E0" }}>Annual sub total</span>
+                      <span style={{ fontSize: 12, color: "#FBBF24", fontWeight: 600 }}>${Math.round(annualSub).toLocaleString()}</span>
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4 }}>
+                      <span style={{ fontSize: 11, color: "#B8C4E0" }}>Annual our total</span>
+                      <span style={{ fontSize: 13, color: "#4ADE80", fontWeight: 700 }}>${Math.round(annualOur).toLocaleString()}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div style={{ display: "flex", gap: 8 }}>
+                <button onClick={() => { setAcreageModalSiteId(null); setAcreageInput(""); }} style={{ flex: 1, padding: "9px 0", background: "transparent", border: "1px solid #1E2640", borderRadius: 7, color: "#6A7590", fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>Cancel</button>
+                <button onClick={applyCalc} disabled={!acres} style={{ flex: 2, padding: "9px 0", background: acres ? "#4ADE8020" : "#1E2640", border: "1px solid " + (acres ? "#4ADE8050" : "#1E2640"), borderRadius: 7, color: acres ? "#4ADE80" : "#3A4560", fontSize: 13, fontWeight: 700, cursor: acres ? "pointer" : "default", fontFamily: "inherit" }}>
+                  ✓ Apply to Mowing Service
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       {lawnSubcontractSiteId && (() => {
         const site = lawnSites.find(s => s.id === lawnSubcontractSiteId);
         if (!site) { setLawnSubcontractSiteId(null); return null; }
