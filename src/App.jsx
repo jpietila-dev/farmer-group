@@ -1678,11 +1678,9 @@ Return ONLY valid JSON, no markdown, no extra text:
           )}
 
           {/* ── CUSTOMERS ── */}
-          {activeNav === "customers" && (
-            <div className="fade-in" style={{ display: "flex", flexDirection: "column", gap: 22 }}>
-              {/* ── Customer Detail View ── */}
-              {selectedCustomer ? (() => {
-                const co = selectedCustomer;
+          {activeNav === "customers" && (() => {
+            if (selectedCustomer) {
+              const co = selectedCustomer;
                 const coContacts = contacts.filter(c => c.companyId === co.id);
                 const coSites = sites.filter(s => s.companyId === co.id);
                 const lawnSiteIds = new Set(coSites.filter(s => (s.businessUnits||[]).includes("lawn")).map(s => s.id));
@@ -2000,8 +1998,10 @@ Return ONLY valid JSON, no markdown, no extra text:
                     )}
                   </div>
                 );
-              })() : (
-              <div style={{ display: "flex", flexDirection: "column", gap: 22 }}>
+            }
+            // Customer list view
+            return (
+              <div className="fade-in" style={{ display: "flex", flexDirection: "column", gap: 22 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div>
                   <div style={{ fontSize: 22, fontWeight: 700, color: "#1A2240", letterSpacing: "-0.01em", textTransform: "uppercase" }}>Customers</div>
@@ -2146,9 +2146,8 @@ Return ONLY valid JSON, no markdown, no extra text:
                 })}
               </div>
               </div>
-              )}
-            </div>
-          )}
+            );
+          })()}
 
           {/* ── BUDGETING ── */}
           {activeNav === "budgeting" && activeBU === "major" && (
