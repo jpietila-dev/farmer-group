@@ -3387,7 +3387,6 @@ Return ONLY valid JSON, no markdown, no extra text:
                                           ⚠ No contractor assigned — add one in Contractors section
                                         </div>
                                       )}
-                                      </div>
                                     </div>
 
                                     {/* Vendor assignment */}
