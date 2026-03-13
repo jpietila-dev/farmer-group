@@ -5556,7 +5556,7 @@ Return ONLY valid JSON, no markdown, no extra text:
         const sub  = chosenSubId ? subcontractors.find(s => s.id === chosenSubId) : null;
         const mapLat = site.lat || 39.9526;
         const mapLng = site.lng || -75.1652;
-        const mapUrl = `https://maps.googleapis.com/maps/api/staticmap?center=${mapLat},${mapLng}&zoom=16&size=640x320&maptype=satellite&markers=color:red%7C${mapLat},${mapLng}&key=AIzaSyD-9tSrke72PouQMnMX-a7eZSW0jkFMBWY`;
+        const mapUrl = `https://maps.googleapis.com/maps/api/staticmap?center=${mapLat},${mapLng}&zoom=1&size=640x320&maptype=satellite&markers=color:red%7C${mapLat},${mapLng}&key=AIzaSyD-9tSrke72PouQMnMX-a7eZSW0jkFMBWY`;
         const today = new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
 
         const printBidDoc = () => {
