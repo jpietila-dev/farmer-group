@@ -2001,7 +2001,6 @@ Return ONLY valid JSON, no markdown, no extra text:
                   </div>
                 );
               })() : (
-              /* ── Customer List View ── */
               <div style={{ display: "flex", flexDirection: "column", gap: 22 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div>
