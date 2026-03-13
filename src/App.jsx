@@ -751,6 +751,8 @@ export default function App() {
   const [companyForm, setCompanyForm] = useState({ name: "", website: "", address: "", logo: "", notes: "" });
   const [contactForm, setContactForm] = useState({ companyId: "", firstName: "", lastName: "", title: "", email: "", phone: "" });
   const [crmSearch,   setCrmSearch]   = useState("");
+  const [selectedCustomer, setSelectedCustomer] = useState(null);
+  const [crmTab, setCrmTab] = useState("overview");
 
   // Inline add
   const [showInlineCompany, setShowInlineCompany] = useState(false);
@@ -1678,11 +1680,380 @@ Return ONLY valid JSON, no markdown, no extra text:
           {/* ── CUSTOMERS ── */}
           {activeNav === "customers" && (
             <div className="fade-in" style={{ display: "flex", flexDirection: "column", gap: 22 }}>
+              {/* ── Customer Detail View ── */}
+              {selectedCustomer ? (() => {
+                const co = selectedCustomer;
+                const coContacts = contacts.filter(c => c.companyId === co.id);
+                const coSites = sites.filter(s => s.companyId === co.id);
+                const lawnSiteIds = new Set(coSites.filter(s => (s.businessUnits||[]).includes("lawn")).map(s => s.id));
+                const coFmJobs = fmJobs.filter(j => j.companyId === co.id);
+                const coCapex = capexJobs.filter(j => j.companyId === co.id);
+                const coJobs = [...jobs.filter(j => j.companyId === co.id), ...coFmJobs, ...coCapex];
+                const coOpps = pipeline.filter(o => o.companyId === co.id);
+                const totalValue = [...jobs, ...coFmJobs, ...coCapex].filter(j => j.companyId === co.id).reduce((s, j) => s + (j.contractValue || 0), 0);
+                const lawnBidsForCo = lawnBids.filter(b => coSites.some(s => s.id === b.siteId));
+                const lawnAnnual = lawnBidsForCo.reduce((s, b) => s + lawnBidAnnualOur(b), 0);
+                const TABS = [
+                  { id: "overview",  label: "Overview" },
+                  { id: "sites",     label: `Sites (${coSites.length})` },
+                  { id: "contacts",  label: `Contacts (${coContacts.length})` },
+                  { id: "jobs",      label: `Jobs (${coJobs.length})` },
+                  { id: "bids",      label: `Lawn Bids (${lawnBidsForCo.length})` },
+                ];
+                return (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+                    {/* Back + Header */}
+                    <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                      <button onClick={() => { setSelectedCustomer(null); setCrmTab("overview"); }} style={{ background: "#F0F2F8", border: "1px solid #CBD1E8", borderRadius: 6, padding: "6px 12px", fontSize: 12, color: "#4A5278", cursor: "pointer", fontFamily: "inherit" }}>← Back</button>
+                      <div style={{ display: "flex", alignItems: "center", gap: 12, flex: 1 }}>
+                        <div style={{ width: 48, height: 48, borderRadius: 10, background: "#E8EEFA", border: "1px solid #3B6FE840", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, fontWeight: 700, color: "#3B6FE8", flexShrink: 0 }}>
+                          {co.logo ? <img src={co.logo} style={{ width: 44, height: 44, borderRadius: 8, objectFit: "cover" }} alt="" /> : co.name.charAt(0).toUpperCase()}
+                        </div>
+                        <div>
+                          <div style={{ fontSize: 22, fontWeight: 700, color: "#1A2240", letterSpacing: "-0.01em" }}>{co.name}</div>
+                          <div style={{ display: "flex", gap: 12, marginTop: 2 }}>
+                            {co.website && <span style={{ fontSize: 11, color: "#3B6FE8" }}>🌐 {co.website}</span>}
+                            {co.address && <span style={{ fontSize: 11, color: "#4A5278" }}>📍 {co.address}</span>}
+                          </div>
+                        </div>
+                        <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
+                          <button className="btn-ghost" onClick={() => { setEditCompanyId(co.id); setCompanyForm({ ...co }); setShowCompanyForm(true); }}>✎ Edit</button>
+                          <button className="btn-ghost" style={{ color: "#3B6FE8", borderColor: "#3B6FE840" }} onClick={() => { setContactForm({ companyId: co.id, firstName: "", lastName: "", title: "", email: "", phone: "" }); setEditContactId(null); setShowContactForm(true); }}>+ Contact</button>
+                          <button className="btn-primary" onClick={() => { setSiteForm({ companyId: co.id, storeNumber: "", address: "", phone: "", accessCode: "", notes: "", businessUnits: [], contactIds: [] }); setEditSiteId(null); setShowSiteForm(true); }}>+ Site</button>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Stats row */}
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: 10 }}>
+                      {[
+                        { label: "Sites",         value: coSites.length,          color: "#A78BFA" },
+                        { label: "Contacts",       value: coContacts.length,        color: "#60A5FA" },
+                        { label: "Active Jobs",    value: coJobs.length,            color: "#4ADE80" },
+                        { label: "Pipeline",       value: coOpps.length,            color: "#FCD34D" },
+                        { label: "Lawn Annual",    value: lawnAnnual > 0 ? "$" + Math.round(lawnAnnual/1000) + "k" : "—", color: "#4ADE80" },
+                      ].map(s => (
+                        <div key={s.label} className="stat-card" style={{ padding: "12px 16px", position: "relative", overflow: "hidden" }}>
+                          <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: s.color }} />
+                          <div style={{ fontSize: 9, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.08em" }}>{s.label}</div>
+                          <div style={{ fontSize: 20, fontWeight: 700, color: s.color, marginTop: 4 }}>{s.value}</div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Notes */}
+                    {co.notes && <div style={{ background: "#FFFBEB", border: "1px solid #FCD34D30", borderRadius: 8, padding: "10px 14px", fontSize: 12, color: "#4A5278", fontStyle: "italic" }}>📝 {co.notes}</div>}
+
+                    {/* Tabs */}
+                    <div style={{ display: "flex", borderBottom: "2px solid #E8EBF4", gap: 0 }}>
+                      {TABS.map(t => (
+                        <button key={t.id} onClick={() => setCrmTab(t.id)} style={{ padding: "8px 18px", background: "none", border: "none", borderBottom: crmTab === t.id ? "2px solid #3B6FE8" : "2px solid transparent", marginBottom: -2, fontSize: 12, fontWeight: crmTab === t.id ? 700 : 400, color: crmTab === t.id ? "#3B6FE8" : "#4A5278", cursor: "pointer", fontFamily: "inherit", transition: "all 0.15s" }}>
+                          {t.label}
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* ── SITES TAB ── */}
+                    {crmTab === "sites" && (
+                      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                        {coSites.length === 0 && (
+                          <div style={{ textAlign: "center", padding: "40px", color: "#4A5278", fontSize: 12, background: "#F5F7FC", borderRadius: 10, border: "1px dashed #CBD1E8" }}>
+                            No sites yet — <button onClick={() => { setSiteForm({ companyId: co.id, storeNumber: "", address: "", phone: "", accessCode: "", notes: "", businessUnits: [], contactIds: [] }); setEditSiteId(null); setShowSiteForm(true); }} style={{ background: "none", border: "none", color: "#3B6FE8", cursor: "pointer", fontSize: 12, textDecoration: "underline" }}>add the first site</button>
+                          </div>
+                        )}
+                        {coSites.map(site => {
+                          const bid = getLawnBid(site.id);
+                          const annual = lawnBidAnnualOur(bid);
+                          const selectedSub = bid?.selectedSubId ? subcontractors.find(s => s.id === bid.selectedSubId) : null;
+                          const siteContacts = contacts.filter(c => (site.contactIds||[]).includes(c.id));
+                          const bus = (site.businessUnits||[]);
+                          return (
+                            <div key={site.id} style={{ background: "#FFFFFF", border: "1px solid #D4D9EE", borderRadius: 10, padding: "16px 18px", display: "grid", gridTemplateColumns: "1fr auto", gap: 12, alignItems: "start" }}>
+                              <div>
+                                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                                  {site.storeNumber && <span style={{ fontSize: 12, fontWeight: 700, color: "#3B6FE8", background: "#3B6FE810", padding: "2px 8px", borderRadius: 4 }}>#{site.storeNumber}</span>}
+                                  <span style={{ fontSize: 13, fontWeight: 600, color: "#1A2240" }}>{site.address}</span>
+                                  {bus.map(bu => <span key={bu} style={{ fontSize: 9, padding: "2px 6px", borderRadius: 3, background: BU_COLORS[bu]?.light || "#F0F2F8", color: BU_COLORS[bu]?.accent || "#4A5278", border: "1px solid " + (BU_COLORS[bu]?.accent || "#CBD1E8") + "40", textTransform: "uppercase", letterSpacing: "0.06em" }}>{bu}</span>)}
+                                </div>
+                                <div style={{ display: "flex", gap: 16, flexWrap: "wrap", fontSize: 11, color: "#4A5278" }}>
+                                  {site.phone && <span>📞 {site.phone}</span>}
+                                  {site.accessCode && <span>🔑 {site.accessCode}</span>}
+                                  {site.notes && <span style={{ fontStyle: "italic" }}>📝 {site.notes}</span>}
+                                </div>
+                                {siteContacts.length > 0 && (
+                                  <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
+                                    {siteContacts.map(c => (
+                                      <span key={c.id} style={{ fontSize: 10, background: "#F0F2F8", border: "1px solid #CBD1E8", borderRadius: 4, padding: "2px 8px", color: "#252E52" }}>
+                                        👤 {c.firstName} {c.lastName}{c.title ? ` · ${c.title}` : ""}
+                                      </span>
+                                    ))}
+                                  </div>
+                                )}
+                                {bid && (
+                                  <div style={{ display: "flex", gap: 10, marginTop: 8, alignItems: "center" }}>
+                                    {annual > 0 && <span style={{ fontSize: 12, fontWeight: 700, color: "#4ADE80" }}>${Math.round(annual).toLocaleString()}<span style={{ fontSize: 10, fontWeight: 400, color: "#4A5278" }}>/yr lawn</span></span>}
+                                    {selectedSub && <span style={{ fontSize: 10, color: "#A78BFA", background: "#A78BFA10", border: "1px solid #A78BFA30", padding: "2px 8px", borderRadius: 4 }}>🔧 {selectedSub.name}</span>}
+                                    <span style={{ fontSize: 10, color: "#4A5278" }}>Bid: {bid.status}</span>
+                                  </div>
+                                )}
+                              </div>
+                              <div style={{ display: "flex", gap: 6 }}>
+                                <button className="btn-ghost" style={{ fontSize: 10 }} onClick={() => { setSelectedSite(site); }}>🔍 Detail</button>
+                                <button className="btn-ghost" style={{ fontSize: 10 }} onClick={() => { setSiteForm({ companyId: site.companyId, storeNumber: site.storeNumber, address: site.address, phone: site.phone, accessCode: site.accessCode, notes: site.notes, businessUnits: site.businessUnits||[], contactIds: site.contactIds||[] }); setEditSiteId(site.id); setShowSiteForm(true); }}>✎</button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {/* ── CONTACTS TAB ── */}
+                    {crmTab === "contacts" && (
+                      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                        {coContacts.length === 0 && (
+                          <div style={{ textAlign: "center", padding: "40px", color: "#4A5278", fontSize: 12, background: "#F5F7FC", borderRadius: 10, border: "1px dashed #CBD1E8" }}>
+                            No contacts yet — <button onClick={() => { setContactForm({ companyId: co.id, firstName: "", lastName: "", title: "", email: "", phone: "" }); setEditContactId(null); setShowContactForm(true); }} style={{ background: "none", border: "none", color: "#3B6FE8", cursor: "pointer", fontSize: 12, textDecoration: "underline" }}>add a contact</button>
+                          </div>
+                        )}
+                        {coContacts.map(contact => (
+                          <div key={contact.id} style={{ background: "#FFFFFF", border: "1px solid #D4D9EE", borderRadius: 8, padding: "14px 18px", display: "flex", alignItems: "center", gap: 14 }}>
+                            <div style={{ width: 38, height: 38, borderRadius: "50%", background: "#E8EEFA", border: "1px solid #3B6FE830", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 700, color: "#3B6FE8", flexShrink: 0 }}>
+                              {contact.firstName.charAt(0)}{contact.lastName.charAt(0)}
+                            </div>
+                            <div style={{ flex: 1 }}>
+                              <div style={{ fontSize: 13, fontWeight: 600, color: "#1A2240" }}>{contact.firstName} {contact.lastName}</div>
+                              <div style={{ display: "flex", gap: 12, marginTop: 3, flexWrap: "wrap" }}>
+                                {contact.title && <span style={{ fontSize: 11, color: "#4A5278" }}>{contact.title}</span>}
+                                {contact.email && <a href={"mailto:" + contact.email} style={{ fontSize: 11, color: "#3B6FE8" }}>✉ {contact.email}</a>}
+                                {contact.phone && <a href={"tel:" + contact.phone} style={{ fontSize: 11, color: "#4A5278" }}>📞 {contact.phone}</a>}
+                              </div>
+                              {/* Which sites this contact is linked to */}
+                              {coSites.filter(s => (s.contactIds||[]).includes(contact.id)).length > 0 && (
+                                <div style={{ display: "flex", gap: 5, marginTop: 6, flexWrap: "wrap" }}>
+                                  {coSites.filter(s => (s.contactIds||[]).includes(contact.id)).map(s => (
+                                    <span key={s.id} style={{ fontSize: 9, background: "#A78BFA10", border: "1px solid #A78BFA30", color: "#A78BFA", padding: "1px 6px", borderRadius: 3 }}>
+                                      📍 {s.storeNumber ? "#" + s.storeNumber + " " : ""}{s.address}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                            <button className="btn-ghost" style={{ fontSize: 10 }} onClick={() => { setEditContactId(contact.id); setContactForm({ ...contact }); setShowContactForm(true); }}>✎ Edit</button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* ── JOBS TAB ── */}
+                    {crmTab === "jobs" && (
+                      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                        {coJobs.length === 0 && <div style={{ textAlign: "center", padding: "40px", color: "#4A5278", fontSize: 12, background: "#F5F7FC", borderRadius: 10, border: "1px dashed #CBD1E8" }}>No jobs yet</div>}
+                        {coJobs.map(j => {
+                          const site = sites.find(s => s.id === j.siteId);
+                          const type = j.stage ? (j.stage === "do_work" || j.stage === "bill" ? "FM" : "CapEx") : "Major";
+                          const statusColor = j.status === "On Schedule" ? "#4ADE80" : j.status === "Behind Schedule" ? "#F87171" : "#FCD34D";
+                          return (
+                            <div key={j.id} style={{ background: "#FFFFFF", border: "1px solid #D4D9EE", borderRadius: 8, padding: "14px 18px", display: "flex", alignItems: "center", gap: 14 }}>
+                              <div style={{ flex: 1 }}>
+                                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                                  <span style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", background: type === "FM" ? "#60A5FA15" : type === "CapEx" ? "#FCD34D15" : "#4ADE8015", color: type === "FM" ? "#60A5FA" : type === "CapEx" ? "#FCD34D" : "#4ADE80", padding: "2px 6px", borderRadius: 3 }}>{type}</span>
+                                  <span style={{ fontSize: 13, fontWeight: 600, color: "#1A2240" }}>{j.name}</span>
+                                  {j.storeCode && <span style={{ fontSize: 10, color: "#4A5278" }}>#{j.storeCode}</span>}
+                                </div>
+                                <div style={{ display: "flex", gap: 14, fontSize: 11, color: "#4A5278", flexWrap: "wrap" }}>
+                                  {j.contractValue > 0 && <span style={{ fontWeight: 600, color: "#1A2240" }}>${(j.contractValue||0).toLocaleString()}</span>}
+                                  {site && <span>📍 {site.address}</span>}
+                                  {j.stage && <span style={{ textTransform: "uppercase", fontSize: 10, color: "#A78BFA" }}>{j.stage.replace(/_/g," ")}</span>}
+                                  {j.status && <span style={{ color: statusColor }}>{j.status}</span>}
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                        {coOpps.length > 0 && (
+                          <>
+                            <div style={{ fontSize: 11, fontWeight: 700, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.08em", marginTop: 8 }}>Pipeline Opportunities</div>
+                            {coOpps.map(o => {
+                              const sc = STAGE_COLORS[o.stage] || { color: "#4A5278", bg: "#4A527820" };
+                              return (
+                                <div key={o.id} style={{ background: "#FFFFFF", border: "1px solid #D4D9EE", borderRadius: 8, padding: "12px 18px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                                  <div>
+                                    <div style={{ fontSize: 13, fontWeight: 600, color: "#1A2240" }}>{o.name}</div>
+                                    <div style={{ fontSize: 11, color: "#4A5278", marginTop: 2 }}>Close: {o.closeDate || "TBD"}</div>
+                                  </div>
+                                  <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                                    <span style={{ fontSize: 13, fontWeight: 700, color: "#3B6FE8" }}>{fmt(o.value)}</span>
+                                    <span className="pill" style={{ background: sc.bg, color: sc.color }}>{o.stage}</span>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </>
+                        )}
+                      </div>
+                    )}
+
+                    {/* ── LAWN BIDS TAB ── */}
+                    {crmTab === "bids" && (
+                      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                        {lawnBidsForCo.length === 0 && <div style={{ textAlign: "center", padding: "40px", color: "#4A5278", fontSize: 12, background: "#F5F7FC", borderRadius: 10, border: "1px dashed #CBD1E8" }}>No lawn bids for this customer yet</div>}
+                        {lawnBidsForCo.map(bid => {
+                          const site = sites.find(s => s.id === bid.siteId);
+                          const annual = lawnBidAnnualOur(bid);
+                          const sub = bid.selectedSubId ? subcontractors.find(s => s.id === bid.selectedSubId) : null;
+                          const statusInfo = LAWN_BID_STATUSES.find(s => s.id === bid.status);
+                          return (
+                            <div key={bid.id} style={{ background: "#FFFFFF", border: "1px solid #D4D9EE", borderRadius: 8, padding: "14px 18px" }}>
+                              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+                                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                  {site?.storeNumber && <span style={{ fontSize: 11, fontWeight: 700, color: "#3B6FE8", background: "#3B6FE810", padding: "2px 8px", borderRadius: 4 }}>#{site.storeNumber}</span>}
+                                  <span style={{ fontSize: 13, fontWeight: 600, color: "#1A2240" }}>{site?.address || "Unknown site"}</span>
+                                  <span style={{ fontSize: 10, padding: "2px 7px", borderRadius: 3, background: (statusInfo?.color || "#4A5278") + "15", color: statusInfo?.color || "#4A5278", textTransform: "uppercase", letterSpacing: "0.06em" }}>{bid.status}</span>
+                                </div>
+                                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                                  {annual > 0 && <span style={{ fontSize: 14, fontWeight: 700, color: "#4ADE80" }}>${Math.round(annual).toLocaleString()}<span style={{ fontSize: 10, fontWeight: 400, color: "#4A5278" }}>/yr</span></span>}
+                                  <button className="btn-ghost" style={{ fontSize: 10 }} onClick={() => { setActiveNav("bids"); setEditLawnBidId(site?.id || null); }}>→ Bid</button>
+                                </div>
+                              </div>
+                              {sub && <div style={{ fontSize: 11, color: "#A78BFA" }}>🔧 {sub.name}</div>}
+                              {bid.notes && <div style={{ fontSize: 11, color: "#4A5278", fontStyle: "italic", marginTop: 4 }}>📝 {bid.notes}</div>}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    {/* ── OVERVIEW TAB ── */}
+                    {crmTab === "overview" && (
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+                        {/* Sites summary */}
+                        <div style={{ background: "#FFFFFF", border: "1px solid #D4D9EE", borderRadius: 10, padding: "18px 20px" }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                            <div style={{ fontSize: 12, fontWeight: 700, color: "#1A2240", textTransform: "uppercase", letterSpacing: "0.06em" }}>Sites</div>
+                            <button className="btn-ghost" style={{ fontSize: 10 }} onClick={() => setCrmTab("sites")}>View all →</button>
+                          </div>
+                          {coSites.length === 0 ? <div style={{ fontSize: 11, color: "#4A5278" }}>No sites yet</div> : coSites.slice(0, 4).map(s => (
+                            <div key={s.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 0", borderTop: "1px solid #EEF0F8" }}>
+                              {s.storeNumber && <span style={{ fontSize: 10, fontWeight: 700, color: "#3B6FE8", minWidth: 32 }}>#{s.storeNumber}</span>}
+                              <span style={{ fontSize: 11, color: "#252E52", flex: 1 }}>{s.address}</span>
+                              <div style={{ display: "flex", gap: 3 }}>
+                                {(s.businessUnits||[]).map(bu => <span key={bu} style={{ fontSize: 8, padding: "1px 5px", borderRadius: 2, background: BU_COLORS[bu]?.light || "#F0F2F8", color: BU_COLORS[bu]?.accent || "#4A5278", textTransform: "uppercase" }}>{bu}</span>)}
+                              </div>
+                            </div>
+                          ))}
+                          {coSites.length > 4 && <div style={{ fontSize: 11, color: "#4A5278", marginTop: 8 }}>+ {coSites.length - 4} more…</div>}
+                        </div>
+                        {/* Contacts summary */}
+                        <div style={{ background: "#FFFFFF", border: "1px solid #D4D9EE", borderRadius: 10, padding: "18px 20px" }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                            <div style={{ fontSize: 12, fontWeight: 700, color: "#1A2240", textTransform: "uppercase", letterSpacing: "0.06em" }}>Contacts</div>
+                            <button className="btn-ghost" style={{ fontSize: 10 }} onClick={() => setCrmTab("contacts")}>View all →</button>
+                          </div>
+                          {coContacts.length === 0 ? <div style={{ fontSize: 11, color: "#4A5278" }}>No contacts yet</div> : coContacts.slice(0, 4).map(c => (
+                            <div key={c.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "7px 0", borderTop: "1px solid #EEF0F8" }}>
+                              <div style={{ width: 26, height: 26, borderRadius: "50%", background: "#E8EEFA", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700, color: "#3B6FE8", flexShrink: 0 }}>{c.firstName.charAt(0)}{c.lastName.charAt(0)}</div>
+                              <div style={{ flex: 1 }}>
+                                <div style={{ fontSize: 11, fontWeight: 600, color: "#1A2240" }}>{c.firstName} {c.lastName}</div>
+                                {c.title && <div style={{ fontSize: 10, color: "#4A5278" }}>{c.title}</div>}
+                              </div>
+                              {c.email && <a href={"mailto:" + c.email} style={{ fontSize: 10, color: "#3B6FE8" }}>✉</a>}
+                            </div>
+                          ))}
+                        </div>
+                        {/* Jobs summary */}
+                        <div style={{ background: "#FFFFFF", border: "1px solid #D4D9EE", borderRadius: 10, padding: "18px 20px" }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                            <div style={{ fontSize: 12, fontWeight: 700, color: "#1A2240", textTransform: "uppercase", letterSpacing: "0.06em" }}>Jobs & Pipeline</div>
+                            <button className="btn-ghost" style={{ fontSize: 10 }} onClick={() => setCrmTab("jobs")}>View all →</button>
+                          </div>
+                          {coJobs.length === 0 && coOpps.length === 0 ? <div style={{ fontSize: 11, color: "#4A5278" }}>No jobs yet</div> : [...coJobs.slice(0,3), ...coOpps.slice(0,2)].map((j, i) => (
+                            <div key={j.id + i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 0", borderTop: "1px solid #EEF0F8" }}>
+                              <span style={{ fontSize: 11, color: "#252E52" }}>{j.name}</span>
+                              <span style={{ fontSize: 11, fontWeight: 600, color: "#3B6FE8" }}>${((j.contractValue || j.value) || 0).toLocaleString()}</span>
+                            </div>
+                          ))}
+                        </div>
+                        {/* Lawn bids summary */}
+                        {lawnBidsForCo.length > 0 && (
+                          <div style={{ background: "#FFFFFF", border: "1px solid #D4D9EE", borderRadius: 10, padding: "18px 20px" }}>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                              <div style={{ fontSize: 12, fontWeight: 700, color: "#1A2240", textTransform: "uppercase", letterSpacing: "0.06em" }}>Lawn Bids {lawnBidSeason}</div>
+                              <button className="btn-ghost" style={{ fontSize: 10 }} onClick={() => setCrmTab("bids")}>View all →</button>
+                            </div>
+                            {lawnBidsForCo.slice(0, 4).map(bid => {
+                              const site = sites.find(s => s.id === bid.siteId);
+                              const annual = lawnBidAnnualOur(bid);
+                              return (
+                                <div key={bid.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "7px 0", borderTop: "1px solid #EEF0F8" }}>
+                                  <span style={{ fontSize: 11, color: "#252E52" }}>{site?.storeNumber ? "#" + site.storeNumber + " " : ""}{site?.address?.split(",")[0]}</span>
+                                  {annual > 0 ? <span style={{ fontSize: 11, fontWeight: 700, color: "#4ADE80" }}>${Math.round(annual).toLocaleString()}</span> : <span style={{ fontSize: 10, color: "#4A5278" }}>{bid.status}</span>}
+                                </div>
+                              );
+                            })}
+                            <div style={{ paddingTop: 10, borderTop: "1px solid #EEF0F8", display: "flex", justifyContent: "space-between" }}>
+                              <span style={{ fontSize: 11, color: "#4A5278" }}>Total Annual</span>
+                              <span style={{ fontSize: 13, fontWeight: 700, color: "#4ADE80" }}>${Math.round(lawnAnnual).toLocaleString()}</span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })() : (
+              /* ── Customer List View ── */
+              <>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div>
                   <div style={{ fontSize: 22, fontWeight: 700, color: "#1A2240", letterSpacing: "-0.01em", textTransform: "uppercase" }}>Customers</div>
-                  <div style={{ fontSize: 11, color: "#4A5278", marginTop: 3, letterSpacing: "0.06em" }}>{companies.length} COMPANIES · {contacts.length} CONTACTS</div>
+                  <div style={{ fontSize: 11, color: "#4A5278", marginTop: 3, letterSpacing: "0.06em" }}>{companies.length} COMPANIES · {contacts.length} CONTACTS · {sites.length} SITES</div>
                 </div>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <input className="fi" style={{ width: 200 }} placeholder="Search companies…" value={crmSearch} onChange={e => setCrmSearch(e.target.value)} />
+                  <label className="btn-ghost" style={{ cursor: "pointer", display: "inline-flex", alignItems: "center", padding: "5px 10px", borderRadius: 5, border: "1px solid #CBD1E8", color: "#353C62", fontSize: 11, fontFamily: "inherit" }}>
+                    ↑ Import CSV
+                    <input type="file" accept=".csv" style={{ display: "none" }} onChange={e => {
+                      const file = e.target.files[0];
+                      if (!file) return;
+                      const reader = new FileReader();
+                      reader.onload = (evt) => {
+                        const lines = evt.target.result.split("\n").map(l => l.trim()).filter(Boolean);
+                        if (lines.length < 2) return;
+                        const headers = lines[0].split(",").map(h => h.trim().toLowerCase().replace(/[^a-z]/g, ""));
+                        const col = (name) => headers.indexOf(name);
+                        const newCompanies = [];
+                        const newContacts  = [];
+                        const companyMap   = {};
+                        companies.forEach(c => { companyMap[c.name.toLowerCase()] = c.id; });
+                        lines.slice(1).forEach(line => {
+                          const cells = line.split(",").map(c => c.trim().replace(/^"|"$/g, ""));
+                          const companyName = col("company")   >= 0 ? cells[col("company")]   : "";
+                          const firstName   = col("firstname") >= 0 ? cells[col("firstname")] : "";
+                          const lastName    = col("lastname")  >= 0 ? cells[col("lastname")]  : "";
+                          const email       = col("email")     >= 0 ? cells[col("email")]     : "";
+                          const phone       = col("phone")     >= 0 ? cells[col("phone")]     : "";
+                          const title       = col("title")     >= 0 ? cells[col("title")]     : "";
+                          if (!firstName && !email) return;
+                          let companyId = companyMap[companyName.toLowerCase()];
+                          if (!companyId && companyName) {
+                            companyId = "c" + Date.now() + Math.random().toString(36).slice(2, 6);
+                            newCompanies.push({ id: companyId, name: companyName, website: "", address: "", logo: "", notes: "" });
+                            companyMap[companyName.toLowerCase()] = companyId;
+                          }
+                          newContacts.push({ id: "p" + Date.now() + Math.random().toString(36).slice(2, 6), companyId: companyId || "", firstName, lastName, title, email, phone });
+                        });
+                        if (newCompanies.length) setCompanies(prev => [...prev, ...newCompanies]);
+                        if (newContacts.length)  setContacts(prev  => [...prev, ...newContacts]);
+                        alert("Imported " + newCompanies.length + " companies and " + newContacts.length + " contacts!");
+                        e.target.value = "";
+                      };
+                      reader.readAsText(file);
+                    }} />
+                  </label>
+                  <button className="btn-ghost" onClick={() => { setEditContactId(null); setContactForm({ companyId: "", firstName: "", lastName: "", title: "", email: "", phone: "" }); setShowContactForm(true); }}>+ Contact</button>
+                  <button className="btn-primary" onClick={() => { setEditCompanyId(null); setCompanyForm({ name: "", website: "", address: "", logo: "", notes: "" }); setShowCompanyForm(true); }}>+ Company</button>
+                </div>
+              </div>
                 <div style={{ display: "flex", gap: 8 }}>
                   <input className="fi" style={{ width: 200 }} placeholder="Search companies…" value={crmSearch} onChange={e => setCrmSearch(e.target.value)} />
                   <label className="btn-ghost" style={{ cursor: "pointer", display: "inline-flex", alignItems: "center", padding: "5px 10px", borderRadius: 5, border: "1px solid #CBD1E8", color: "#353C62", fontSize: 11, fontFamily: "inherit" }}>
@@ -1732,9 +2103,9 @@ Return ONLY valid JSON, no markdown, no extra text:
 
               <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 12 }}>
                 {[
-                  { label: "Total Companies",      value: companies.length,                                            color: "#3B6FE8" },
-                  { label: "Total Contacts",        value: contacts.length,                                             color: "#A78BFA" },
-                  { label: "Total Contract Value",  value: fmt(jobs.reduce((s, j) => s + j.contractValue, 0)),          color: "#4ADE80" },
+                  { label: "Total Companies",  value: companies.length,  color: "#3B6FE8" },
+                  { label: "Total Sites",       value: sites.length,      color: "#A78BFA" },
+                  { label: "Total Contacts",    value: contacts.length,   color: "#60A5FA" },
                 ].map(s => (
                   <div key={s.label} className="stat-card" style={{ position: "relative", overflow: "hidden", padding: "14px 18px" }}>
                     <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: s.color }} />
@@ -1747,12 +2118,14 @@ Return ONLY valid JSON, no markdown, no extra text:
               <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 12 }}>
                 {companies.filter(c => c.name.toLowerCase().includes(crmSearch.toLowerCase())).map(company => {
                   const cc  = getCompanyContacts(company.id);
-                  const cj  = getCompanyJobs(company.id);
+                  const cSites = sites.filter(s => s.companyId === company.id);
                   const tv  = getCompanyTotalValue(company.id);
+                  const lawnBidsForCo = lawnBids.filter(b => cSites.some(s => s.id === b.siteId));
+                  const lawnAnn = lawnBidsForCo.reduce((s, b) => s + lawnBidAnnualOur(b), 0);
                   return (
-                    <div key={company.id} className="company-card" onClick={() => setSelectedCompany(company)}>
+                    <div key={company.id} className="company-card" onClick={() => { setSelectedCustomer(company); setCrmTab("overview"); }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 12 }}>
-                        <div style={{ width: 40, height: 40, borderRadius: 8, background: "#E8EEFA", border: "1px solid #3D4570", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 700, color: "#3B6FE8", flexShrink: 0 }}>
+                        <div style={{ width: 40, height: 40, borderRadius: 8, background: "#E8EEFA", border: "1px solid #3B6FE840", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 700, color: "#3B6FE8", flexShrink: 0 }}>
                           {company.logo ? <img src={company.logo} style={{ width: 36, height: 36, borderRadius: 6, objectFit: "cover" }} alt="" /> : company.name.charAt(0).toUpperCase()}
                         </div>
                         <div style={{ minWidth: 0 }}>
@@ -1761,15 +2134,20 @@ Return ONLY valid JSON, no markdown, no extra text:
                         </div>
                       </div>
                       {company.address && <div style={{ fontSize: 11, color: "#4A5278", marginBottom: 10 }}>📍 {company.address}</div>}
-                      <div style={{ display: "flex", justifyContent: "space-between", paddingTop: 10, borderTop: "1px solid #CBD1E8" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", paddingTop: 10, borderTop: "1px solid #E8EBF4" }}>
+                        <div><div style={{ fontSize: 13, fontWeight: 600, color: "#252E52" }}>{cSites.length}</div><div style={{ fontSize: 10, color: "#4A5278" }}>Sites</div></div>
                         <div><div style={{ fontSize: 13, fontWeight: 600, color: "#252E52" }}>{cc.length}</div><div style={{ fontSize: 10, color: "#4A5278" }}>Contacts</div></div>
-                        <div><div style={{ fontSize: 13, fontWeight: 600, color: "#252E52" }}>{cj.length}</div><div style={{ fontSize: 10, color: "#4A5278" }}>Jobs</div></div>
-                        <div style={{ textAlign: "right" }}><div style={{ fontSize: 13, fontWeight: 600, color: "#3B6FE8" }}>{fmt(tv)}</div><div style={{ fontSize: 10, color: "#4A5278" }}>Contract Val.</div></div>
+                        {lawnAnn > 0
+                          ? <div style={{ textAlign: "right" }}><div style={{ fontSize: 13, fontWeight: 600, color: "#4ADE80" }}>${Math.round(lawnAnn/1000)}k</div><div style={{ fontSize: 10, color: "#4A5278" }}>Lawn/yr</div></div>
+                          : <div style={{ textAlign: "right" }}><div style={{ fontSize: 13, fontWeight: 600, color: "#3B6FE8" }}>{fmt(tv)}</div><div style={{ fontSize: 10, color: "#4A5278" }}>Contract Val.</div></div>
+                        }
                       </div>
                     </div>
                   );
                 })}
               </div>
+              </>
+              )}
             </div>
           )}
 
