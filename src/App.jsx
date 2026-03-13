@@ -2002,7 +2002,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                 );
               })() : (
               /* ── Customer List View ── */
-              <>
+              <div style={{ display: "flex", flexDirection: "column", gap: 22 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div>
                   <div style={{ fontSize: 22, fontWeight: 700, color: "#1A2240", letterSpacing: "-0.01em", textTransform: "uppercase" }}>Customers</div>
@@ -2146,7 +2146,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                   );
                 })}
               </div>
-              </>
+              </div>
               )}
             </div>
           )}
