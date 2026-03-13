@@ -3293,7 +3293,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                 </div>
 
                 {/* Kanban board */}
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, alignItems: "start" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 12, alignItems: "start" }}>
                   {COLS.map(col => {
                     const sites = colSites(col.id);
                     return (
@@ -3599,6 +3599,21 @@ Return ONLY valid JSON, no markdown, no extra text:
                                       <div style={{ fontSize: 9, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 4 }}>Notes</div>
                                       <input value={bid?.notes || ""} onChange={e => upsertLawnBid(site.id, b => ({ ...b, notes: e.target.value }))} placeholder="Notes…" style={{ width: "100%", background: "#0A0D16", border: "1px solid #1E2640", borderRadius: 5, padding: "5px 8px", fontSize: 11, color: "#E8ECF4", boxSizing: "border-box" }} />
                                     </div>
+
+                                    {/* Convert to Active Site — buyout stage + both contracts attached */}
+                                    {bid?.status === "buyout" && bid?.ownerContractFile && bid?.subcontractFile && (
+                                      <button onClick={() => {
+                                        setEditLawnBidId(null);
+                                        setTimeout(() => { setActiveNav("active-sites"); }, 150);
+                                      }} style={{ width: "100%", padding: "10px 0", background: "linear-gradient(135deg, #4ADE8025, #4ADE8015)", border: "2px solid #4ADE8060", borderRadius: 8, color: "#4ADE80", fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", letterSpacing: "0.04em" }}>
+                                        ✅ Convert to Active Site →
+                                      </button>
+                                    )}
+                                    {bid?.status === "buyout" && !(bid?.ownerContractFile && bid?.subcontractFile) && (
+                                      <div style={{ padding: "8px 10px", background: "#FBBF2410", border: "1px solid #FBBF2430", borderRadius: 7, fontSize: 9, color: "#FBBF24", textAlign: "center" }}>
+                                        ⚠ Attach {!bid?.ownerContractFile && !bid?.subcontractFile ? "both contracts" : !bid?.ownerContractFile ? "owner contract" : "signed subcontract"} above to convert to Active Site
+                                      </div>
+                                    )}
 
                                     {/* Actions */}
                                     <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
