@@ -3366,6 +3366,23 @@ Return ONLY valid JSON, no markdown, no extra text:
                                                 // If exactly one sub, auto-select it
                                                 const autoId = (bid?.subcontractorIds||[]).length === 1 ? bid.subcontractorIds[0] : bid?.selectedSubId || "";
                                                 upsertLawnBid(site.id, b => ({ ...b, status: opt.status, selectedSubId: autoId || b.selectedSubId }));
+                                              } else if (opt.status === "owner_accepted") {
+                                                // Require both signed contracts before accepting
+                                                if (!bid?.ownerContractUrl && !bid?.subcontractUrl) {
+                                                  alert("⚠ Cannot move to Owner Accepted — please upload both the owner-signed contract URL and the signed subcontract URL in the Contracts section below.");
+                                                  return;
+                                                }
+                                                if (!bid?.ownerContractUrl) {
+                                                  alert("⚠ Cannot move to Owner Accepted — please paste the owner-signed contract URL in the Contracts section below first.");
+                                                  return;
+                                                }
+                                                if (!bid?.subcontractUrl) {
+                                                  alert("⚠ Cannot move to Owner Accepted — please paste the signed subcontract URL in the Contracts section below first.");
+                                                  return;
+                                                }
+                                                upsertLawnBid(site.id, b => ({ ...b, status: opt.status }));
+                                                // Auto-navigate to Active Sites
+                                                setTimeout(() => { setActiveNav("active-sites"); setEditLawnBidId(null); }, 300);
                                               } else {
                                                 upsertLawnBid(site.id, b => ({ ...b, status: opt.status }));
                                               }
@@ -3376,6 +3393,11 @@ Return ONLY valid JSON, no markdown, no extra text:
                                           );
                                         })}
                                       </div>
+                                      {getCol(site) === "owner_approval" && !(bid?.ownerContractUrl && bid?.subcontractUrl) && (
+                                        <div style={{ marginTop: 6, padding: "5px 8px", background: "#A78BFA15", border: "1px solid #A78BFA40", borderRadius: 5, fontSize: 9, color: "#A78BFA" }}>
+                                          📋 To unlock Owner Accepted: paste {!bid?.ownerContractUrl && !bid?.subcontractUrl ? "both signed contract URLs" : !bid?.ownerContractUrl ? "owner-signed contract URL" : "signed subcontract URL"} below
+                                        </div>
+                                      )}
                                       {/* Contractor warning for owner_approval stage */}
                                       {getCol(site) === "owner_approval" && !(bid?.selectedSubId) && (bid?.subcontractorIds||[]).length > 0 && (
                                         <div style={{ marginTop: 6, padding: "5px 8px", background: "#FBBF2415", border: "1px solid #FBBF2440", borderRadius: 5, fontSize: 9, color: "#FBBF24" }}>
@@ -5659,7 +5681,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                           <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
                           <style>html,body,#map{margin:0;padding:0;height:100%;width:100%;}</style>
                         </head><body><div id="map"></div><script>
-                          var map = L.map('map', { zoomControl: false, attributionControl: false, dragging: false, scrollWheelZoom: false }).setView([${site.lat}, ${site.lng}], 17);
+                          var map = L.map('map', { zoomControl: false, attributionControl: false, dragging: false, scrollWheelZoom: false }).setView([${site.lat}, ${site.lng}], 15);
                           L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 20 }).addTo(map);
                           var icon = L.divIcon({ className: '', html: '<div style="width:14px;height:14px;border-radius:50%;background:#ef4444;border:3px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.6);"></div>', iconSize:[14,14], iconAnchor:[7,7] });
                           L.marker([${site.lat}, ${site.lng}], { icon: icon }).addTo(map);
