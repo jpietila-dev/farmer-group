@@ -873,6 +873,7 @@ export default function App() {
   const [acreageModalSiteId, setAcreageModalSiteId] = useState(null); // site id for mowing acreage calc
   const [acreageInput, setAcreageInput] = useState(""); // acreage input value
   const [ownerProposalSiteId, setOwnerProposalSiteId] = useState(null); // site id for owner proposal template picker
+  const [expandedActiveSiteId, setExpandedActiveSiteId] = useState(null); // active site expanded detail
   const [showBidArchive, setShowBidArchive] = useState(false);
   const [bidStatFilter,  setBidStatFilter]  = useState(null); // null | "all" | "bidding" | "locked"
 
@@ -3844,23 +3845,150 @@ Return ONLY valid JSON, no markdown, no extra text:
                       const bid = getLawnBid(site.id);
                       const co = companies.find(c => c.id === site.companyId);
                       const sub = bid?.selectedSubId ? subcontractors.find(s => s.id === bid.selectedSubId) : null;
+                      const allSubs = (bid?.subcontractorIds||[]).map(id => subcontractors.find(s => s.id === id)).filter(Boolean);
+                      const isExpanded = expandedActiveSiteId === site.id;
+                      const annualOur = lawnBidAnnualOur(bid);
+                      const annualSub = bid ? LAWN_SERVICES.reduce((sum, s) => {
+                        const sv = bid.services?.[s.id];
+                        if (!sv?.included || !sv.subPrice) return sum;
+                        if (s.unit === "per_cut") return sum + sv.subPrice * 28;
+                        if (s.unit === "monthly") return sum + sv.subPrice * 7;
+                        return sum + sv.subPrice;
+                      }, 0) : 0;
+                      const gp = annualOur - annualSub;
+                      const gpPct = annualOur > 0 ? Math.round(gp / annualOur * 100) : 0;
+                      const includedServices = LAWN_SERVICES.filter(s => bid?.services?.[s.id]?.included);
                       return (
-                        <div key={site.id} style={{ background: "#0F1117", border: "1px solid #4ADE8030", borderRadius: 10, padding: "14px 18px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16 }}>
-                          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                            <div style={{ width: 36, height: 36, borderRadius: 8, background: "#4ADE8015", border: "1px solid #4ADE8030", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}>✅</div>
-                            <div>
-                              <div style={{ fontSize: 14, fontWeight: 600, color: "#E8ECF4" }}>{co?.name || "Unknown"} — #{site.storeNumber || "—"}</div>
-                              <div style={{ fontSize: 11, color: "#3A4560" }}>{site.address}</div>
-                              {sub && <div style={{ fontSize: 10, color: "#4ADE80", marginTop: 2 }}>🔧 {sub.name}</div>}
+                        <div key={site.id} style={{ background: "#0F1117", border: "1px solid " + (isExpanded ? "#4ADE8060" : "#4ADE8030"), borderRadius: 10, overflow: "hidden", transition: "border-color 0.2s" }}>
+                          {/* Card header row — always visible, click to expand */}
+                          <div onClick={() => setExpandedActiveSiteId(isExpanded ? null : site.id)} style={{ padding: "14px 18px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, cursor: "pointer" }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                              <div style={{ width: 36, height: 36, borderRadius: 8, background: "#4ADE8015", border: "1px solid #4ADE8030", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, flexShrink: 0 }}>✅</div>
+                              <div>
+                                <div style={{ fontSize: 14, fontWeight: 600, color: "#E8ECF4" }}>{co?.name || "Unknown"}{site.storeNumber ? ` — #${site.storeNumber}` : ""}</div>
+                                <div style={{ fontSize: 11, color: "#3A4560" }}>{site.address}</div>
+                                {sub && <div style={{ fontSize: 10, color: "#4ADE80", marginTop: 2 }}>🔧 {sub.name}</div>}
+                              </div>
+                            </div>
+                            <div style={{ display: "flex", alignItems: "center", gap: 14, flexShrink: 0 }}>
+                              <div style={{ textAlign: "right" }}>
+                                <div style={{ fontSize: 15, fontWeight: 700, color: "#4ADE80" }}>${Math.round(annualOur).toLocaleString()}<span style={{ fontSize: 10, color: "#3A4560", fontWeight: 400 }}>/yr</span></div>
+                                <div style={{ fontSize: 10, color: gpPct >= 30 ? "#4ADE80" : "#FBBF24" }}>{gpPct}% GP</div>
+                              </div>
+                              <div style={{ fontSize: 16, color: "#3A4560", transform: isExpanded ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.2s" }}>▼</div>
                             </div>
                           </div>
-                          <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-                            <div style={{ fontSize: 15, fontWeight: 700, color: "#4ADE80" }}>${Math.round(lawnBidAnnualOur(bid)).toLocaleString()}<span style={{ fontSize: 10, color: "#3A4560", fontWeight: 400 }}>/yr</span></div>
-                            <div style={{ display: "flex", gap: 6 }}>
-                              {bid.subcontractFile && <a href={bid.subcontractFile} download={bid.subcontractFileName || "subcontract.pdf"} style={{ fontSize: 10, color: "#60A5FA", background: "#60A5FA10", border: "1px solid #60A5FA30", borderRadius: 4, padding: "3px 8px", textDecoration: "none" }}>📄 Sub</a>}
-                              {bid.ownerContractFile && <a href={bid.ownerContractFile} download={bid.ownerContractFileName || "owner_contract.pdf"} style={{ fontSize: 10, color: "#A78BFA", background: "#A78BFA10", border: "1px solid #A78BFA30", borderRadius: 4, padding: "3px 8px", textDecoration: "none" }}>📋 Owner</a>}
+
+                          {/* Expanded detail panel */}
+                          {isExpanded && (
+                            <div style={{ borderTop: "1px solid #1E2640", padding: "18px 20px", display: "flex", flexDirection: "column", gap: 16 }}>
+
+                              {/* Site info + financials */}
+                              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                                <div style={{ background: "#0A0D16", borderRadius: 8, padding: "12px 14px", border: "1px solid #1E2640" }}>
+                                  <div style={{ fontSize: 9, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>Site Info</div>
+                                  <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+                                    <div style={{ fontSize: 11, color: "#B8C4E0" }}><span style={{ color: "#3A4560" }}>Company: </span>{co?.name || "—"}</div>
+                                    {site.storeNumber && <div style={{ fontSize: 11, color: "#B8C4E0" }}><span style={{ color: "#3A4560" }}>Store #: </span>{site.storeNumber}</div>}
+                                    <div style={{ fontSize: 11, color: "#B8C4E0" }}><span style={{ color: "#3A4560" }}>Address: </span>{site.address}</div>
+                                    {site.phone && <div style={{ fontSize: 11, color: "#B8C4E0" }}><span style={{ color: "#3A4560" }}>Phone: </span>{site.phone}</div>}
+                                    {site.accessCode && <div style={{ fontSize: 11, color: "#B8C4E0" }}><span style={{ color: "#3A4560" }}>Access: </span>{site.accessCode}</div>}
+                                    {site.notes && <div style={{ fontSize: 11, color: "#B8C4E0" }}><span style={{ color: "#3A4560" }}>Notes: </span>{site.notes}</div>}
+                                    <div style={{ fontSize: 11, color: "#B8C4E0" }}><span style={{ color: "#3A4560" }}>Season: </span>{bid?.season || lawnBidSeason}</div>
+                                  </div>
+                                </div>
+                                <div style={{ background: "#0A0D16", borderRadius: 8, padding: "12px 14px", border: "1px solid #1E2640" }}>
+                                  <div style={{ fontSize: 9, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>Financials</div>
+                                  <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                                    <div style={{ display: "flex", justifyContent: "space-between" }}>
+                                      <span style={{ fontSize: 11, color: "#3A4560" }}>Sub Cost / yr</span>
+                                      <span style={{ fontSize: 12, color: "#FBBF24", fontWeight: 600 }}>${Math.round(annualSub).toLocaleString()}</span>
+                                    </div>
+                                    <div style={{ display: "flex", justifyContent: "space-between" }}>
+                                      <span style={{ fontSize: 11, color: "#3A4560" }}>Our Price / yr</span>
+                                      <span style={{ fontSize: 12, color: "#4ADE80", fontWeight: 700 }}>${Math.round(annualOur).toLocaleString()}</span>
+                                    </div>
+                                    <div style={{ borderTop: "1px solid #1E2640", paddingTop: 6, display: "flex", justifyContent: "space-between" }}>
+                                      <span style={{ fontSize: 11, color: "#3A4560" }}>Gross Profit</span>
+                                      <span style={{ fontSize: 12, color: gpPct >= 30 ? "#4ADE80" : "#FBBF24", fontWeight: 700 }}>${Math.round(gp).toLocaleString()} ({gpPct}%)</span>
+                                    </div>
+                                    {bid?.acreage && <div style={{ display: "flex", justifyContent: "space-between" }}>
+                                      <span style={{ fontSize: 11, color: "#3A4560" }}>Acreage</span>
+                                      <span style={{ fontSize: 11, color: "#B8C4E0" }}>{bid.acreage} acres</span>
+                                    </div>}
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Contractors */}
+                              <div style={{ background: "#0A0D16", borderRadius: 8, padding: "12px 14px", border: "1px solid #1E2640" }}>
+                                <div style={{ fontSize: 9, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>Contractors</div>
+                                {allSubs.length === 0 ? <div style={{ fontSize: 11, color: "#3A4560" }}>None assigned</div> : (
+                                  <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+                                    {allSubs.map(s => {
+                                      const isPrimary = bid?.selectedSubId === s.id;
+                                      return (
+                                        <div key={s.id} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                          <div style={{ width: 6, height: 6, borderRadius: "50%", background: isPrimary ? "#4ADE80" : "#3A4560", flexShrink: 0 }} />
+                                          <span style={{ fontSize: 11, color: isPrimary ? "#4ADE80" : "#B8C4E0", fontWeight: isPrimary ? 600 : 400 }}>{s.name}{isPrimary ? " ✓ Primary" : ""}</span>
+                                          {s.phone && <span style={{ fontSize: 10, color: "#3A4560" }}>· {s.phone}</span>}
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* Services table */}
+                              {includedServices.length > 0 && (
+                                <div style={{ background: "#0A0D16", borderRadius: 8, border: "1px solid #1E2640", overflow: "hidden" }}>
+                                  <div style={{ fontSize: 9, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.08em", padding: "10px 14px 6px" }}>Services</div>
+                                  <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                                    <thead>
+                                      <tr style={{ borderBottom: "1px solid #1E2640" }}>
+                                        <th style={{ fontSize: 9, color: "#3A4560", textAlign: "left", padding: "5px 14px", fontWeight: 400, textTransform: "uppercase", letterSpacing: "0.06em" }}>Service</th>
+                                        <th style={{ fontSize: 9, color: "#FBBF2480", textAlign: "right", padding: "5px 8px", fontWeight: 400 }}>Sub</th>
+                                        <th style={{ fontSize: 9, color: "#4ADE8080", textAlign: "right", padding: "5px 8px", fontWeight: 400 }}>Ours</th>
+                                        <th style={{ fontSize: 9, color: "#3A4560", textAlign: "right", padding: "5px 14px", fontWeight: 400 }}>Annual</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {includedServices.map(s => {
+                                        const sv = bid.services[s.id];
+                                        const freq = s.unit === "per_cut" ? 28 : s.unit === "monthly" ? 7 : 1;
+                                        return (
+                                          <tr key={s.id} style={{ borderBottom: "1px solid #0D1120" }}>
+                                            <td style={{ fontSize: 11, color: "#B8C4E0", padding: "6px 14px" }}>{s.label} <span style={{ fontSize: 9, color: "#3A4560" }}>×{freq}</span></td>
+                                            <td style={{ fontSize: 11, color: "#FBBF24", textAlign: "right", padding: "6px 8px" }}>${sv.subPrice?.toLocaleString() || "—"}</td>
+                                            <td style={{ fontSize: 11, color: "#4ADE80", textAlign: "right", padding: "6px 8px" }}>${sv.ourPrice?.toLocaleString() || "—"}</td>
+                                            <td style={{ fontSize: 11, color: "#4ADE80", textAlign: "right", padding: "6px 14px", fontWeight: 600 }}>${Math.round((sv.ourPrice||0) * freq).toLocaleString()}</td>
+                                          </tr>
+                                        );
+                                      })}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              )}
+
+                              {/* Contracts + notes */}
+                              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                                <div style={{ display: "flex", gap: 6 }}>
+                                  {bid.subcontractFile && <a href={bid.subcontractFile} download={bid.subcontractFileName || "subcontract.pdf"} style={{ flex: 1, fontSize: 11, color: "#60A5FA", background: "#60A5FA10", border: "1px solid #60A5FA30", borderRadius: 6, padding: "8px 10px", textDecoration: "none", textAlign: "center" }}>📄 Download Subcontract</a>}
+                                  {bid.ownerContractFile && <a href={bid.ownerContractFile} download={bid.ownerContractFileName || "owner_contract.pdf"} style={{ flex: 1, fontSize: 11, color: "#A78BFA", background: "#A78BFA10", border: "1px solid #A78BFA30", borderRadius: 6, padding: "8px 10px", textDecoration: "none", textAlign: "center" }}>📋 Download Owner Contract</a>}
+                                </div>
+                                <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
+                                  <button onClick={() => { setActiveNav("bids"); setEditLawnBidId(site.id); setExpandedActiveSiteId(null); }} style={{ fontSize: 11, color: "#60A5FA", background: "#60A5FA10", border: "1px solid #60A5FA30", borderRadius: 6, padding: "8px 12px", cursor: "pointer", fontFamily: "inherit" }}>✏️ Edit Bid</button>
+                                  <button onClick={() => { if (window.confirm("Move this site back to Bidding? This will remove it from Active Sites.")) { upsertLawnBid(site.id, b => ({ ...b, status: "bidding" })); setExpandedActiveSiteId(null); } }} style={{ fontSize: 11, color: "#F87171", background: "#F8717110", border: "1px solid #F8717130", borderRadius: 6, padding: "8px 12px", cursor: "pointer", fontFamily: "inherit" }}>↩ Move to Bidding</button>
+                                </div>
+                              </div>
+
+                              {bid?.notes && (
+                                <div style={{ background: "#0A0D16", borderRadius: 8, padding: "10px 14px", border: "1px solid #1E2640", fontSize: 11, color: "#B8C4E0" }}>
+                                  <span style={{ fontSize: 9, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.08em", marginRight: 8 }}>Notes:</span>{bid.notes}
+                                </div>
+                              )}
                             </div>
-                          </div>
+                          )}
                         </div>
                       );
                     })}
@@ -3886,10 +4014,10 @@ Return ONLY valid JSON, no markdown, no extra text:
                             <div style={{ fontSize: 11, color: "#3A4560" }}>{site.address}</div>
                           </div>
                           <div style={{ display: "flex", gap: 6, fontSize: 10, alignItems: "center" }}>
-                            <span style={{ color: bid?.subcontractUrl ? "#4ADE80" : "#F87171" }}>{bid?.subcontractUrl ? "✓" : "✗"} Subcontract</span>
+                            <span style={{ color: bid?.subcontractFile ? "#4ADE80" : "#F87171" }}>{bid?.subcontractFile ? "✓" : "✗"} Subcontract</span>
                             <span style={{ color: "#3A4560" }}>·</span>
-                            <span style={{ color: bid?.ownerContractUrl ? "#4ADE80" : "#F87171" }}>{bid?.ownerContractUrl ? "✓" : "✗"} Owner Contract</span>
-                            <button onClick={() => { setActiveNav("bids"); setEditLawnBidId(site.id); }} style={{ marginLeft: 8, fontSize: 10, color: "#60A5FA", background: "#60A5FA10", border: "1px solid #60A5FA30", borderRadius: 4, padding: "3px 8px", cursor: "pointer", fontFamily: "inherit" }}>Upload Docs →</button>
+                            <span style={{ color: bid?.ownerContractFile ? "#4ADE80" : "#F87171" }}>{bid?.ownerContractFile ? "✓" : "✗"} Owner Contract</span>
+                            <button onClick={() => { setActiveNav("bids"); setEditLawnBidId(site.id); }} style={{ marginLeft: 8, fontSize: 10, color: "#60A5FA", background: "#60A5FA10", border: "1px solid #60A5FA30", borderRadius: 4, padding: "3px 8px", cursor: "pointer", fontFamily: "inherit" }}>Attach Docs →</button>
                           </div>
                         </div>
                       );
