@@ -3393,29 +3393,82 @@ Return ONLY valid JSON, no markdown, no extra text:
                                       </div>
                                     </div>
 
-                                    {/* Pricing summary */}
-                                    {bid && (
-                                      <div>
-                                        <div style={{ fontSize: 9, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>Pricing</div>
-                                        <div style={{ background: "#0A0D16", borderRadius: 5, padding: "8px 10px", border: "1px solid #1E2640" }}>
-                                          {Object.entries(bid.services || {}).filter(([, svc]) => svc.subPrice || svc.perCut).map(([svcId, svc]) => {
-                                            const lawnSvc = LAWN_SERVICES.find(s => s.id === svcId);
-                                            if (!lawnSvc) return null;
-                                            const annualSvc = lawnBidAnnualOur({ services: { [svcId]: svc } });
-                                            return (
-                                              <div key={svcId} style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                                                <span style={{ fontSize: 10, color: "#6B7694" }}>{lawnSvc.label}</span>
-                                                <span style={{ fontSize: 10, color: "#4ADE80", fontWeight: 600 }}>${Math.round(annualSvc).toLocaleString()}</span>
+                                    {/* ── SERVICE LINE ITEM PRICING ── */}
+                                    <div>
+                                      <div style={{ fontSize: 9, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>Service Pricing</div>
+                                      <div style={{ background: "#0A0D16", borderRadius: 6, border: "1px solid #1E2640", overflow: "hidden" }}>
+                                        {/* Column headers */}
+                                        <div style={{ display: "grid", gridTemplateColumns: "16px 1fr 70px 70px 60px", gap: 4, padding: "5px 8px", borderBottom: "1px solid #1E2640", alignItems: "center" }}>
+                                          <div />
+                                          <div style={{ fontSize: 9, color: "#2A3560", textTransform: "uppercase", letterSpacing: "0.06em" }}>Service</div>
+                                          <div style={{ fontSize: 9, color: "#FBBF2480", textAlign: "right", textTransform: "uppercase", letterSpacing: "0.06em" }}>Sub $</div>
+                                          <div style={{ fontSize: 9, color: "#4ADE8080", textAlign: "right", textTransform: "uppercase", letterSpacing: "0.06em" }}>Our $</div>
+                                          <div style={{ fontSize: 9, color: "#3A4560", textAlign: "right", textTransform: "uppercase", letterSpacing: "0.06em" }}>Annual</div>
+                                        </div>
+                                        {LAWN_SERVICES.map(svc => {
+                                          const sv = bid?.services?.[svc.id] || { subPrice: 0, ourPrice: 0, included: false };
+                                          const annualLine = lawnBidAnnualOur({ services: { [svc.id]: { ...sv, included: true } } });
+                                          return (
+                                            <div key={svc.id} style={{ display: "grid", gridTemplateColumns: "16px 1fr 70px 70px 60px", gap: 4, padding: "5px 8px", borderBottom: "1px solid #0D1120", alignItems: "center", background: sv.included ? "#161B28" : "transparent" }}>
+                                              {/* Checkbox */}
+                                              <input type="checkbox" checked={!!sv.included} onChange={e => {
+                                                upsertLawnBid(site.id, b => ({
+                                                  ...b,
+                                                  services: { ...b.services, [svc.id]: { ...b.services[svc.id], included: e.target.checked } }
+                                                }));
+                                              }} style={{ accentColor: "#4ADE80", margin: 0, cursor: "pointer" }} />
+                                              {/* Label + freq */}
+                                              <div>
+                                                <div style={{ fontSize: 10, color: sv.included ? "#E8ECF4" : "#3A4560", fontWeight: sv.included ? 500 : 400 }}>{svc.label}</div>
+                                                <div style={{ fontSize: 8, color: "#2A3560" }}>{svc.freq}</div>
                                               </div>
-                                            );
-                                          })}
-                                          <div style={{ display: "flex", justifyContent: "space-between", borderTop: "1px solid #1E2640", paddingTop: 6, marginTop: 4 }}>
-                                            <span style={{ fontSize: 10, fontWeight: 600, color: "#3A4560" }}>Annual Total</span>
-                                            <span style={{ fontSize: 11, fontWeight: 700, color: "#4ADE80" }}>${Math.round(annualOur).toLocaleString()}</span>
+                                              {/* Sub price input */}
+                                              <input
+                                                type="number" min="0" step="1"
+                                                value={sv.subPrice || ""}
+                                                placeholder="0"
+                                                onChange={e => {
+                                                  const sub = parseFloat(e.target.value) || 0;
+                                                  const our = calcOurPrice(sub);
+                                                  upsertLawnBid(site.id, b => ({
+                                                    ...b,
+                                                    services: { ...b.services, [svc.id]: { ...b.services[svc.id], subPrice: sub, ourPrice: our, included: sub > 0 ? true : b.services[svc.id]?.included } }
+                                                  }));
+                                                }}
+                                                style={{ background: "#0A0D16", border: "1px solid #1E2640", borderRadius: 4, padding: "3px 5px", fontSize: 10, color: "#FBBF24", textAlign: "right", width: "100%", fontFamily: "inherit", boxSizing: "border-box" }}
+                                              />
+                                              {/* Our price input (auto-filled but overridable) */}
+                                              <input
+                                                type="number" min="0" step="1"
+                                                value={sv.ourPrice || ""}
+                                                placeholder="0"
+                                                onChange={e => {
+                                                  const our = parseFloat(e.target.value) || 0;
+                                                  upsertLawnBid(site.id, b => ({
+                                                    ...b,
+                                                    services: { ...b.services, [svc.id]: { ...b.services[svc.id], ourPrice: our } }
+                                                  }));
+                                                }}
+                                                style={{ background: "#0A0D16", border: "1px solid #1E2640", borderRadius: 4, padding: "3px 5px", fontSize: 10, color: "#4ADE80", textAlign: "right", width: "100%", fontFamily: "inherit", boxSizing: "border-box" }}
+                                              />
+                                              {/* Annual calc */}
+                                              <div style={{ fontSize: 10, color: sv.included && sv.ourPrice > 0 ? "#4ADE80" : "#2A3560", textAlign: "right", fontWeight: 600 }}>
+                                                {sv.included && sv.ourPrice > 0 ? "$" + Math.round(annualLine).toLocaleString() : "—"}
+                                              </div>
+                                            </div>
+                                          );
+                                        })}
+                                        {/* Annual total footer */}
+                                        <div style={{ display: "grid", gridTemplateColumns: "16px 1fr 70px 70px 60px", gap: 4, padding: "7px 8px", borderTop: "1px solid #1E2640", alignItems: "center", background: "#0A0D16" }}>
+                                          <div /><div style={{ fontSize: 9, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 600 }}>Annual Total</div>
+                                          <div style={{ fontSize: 10, color: "#FBBF24", textAlign: "right", fontWeight: 600 }}>
+                                            ${Math.round(bid ? LAWN_SERVICES.reduce((s, sv2) => { const sv3 = bid.services?.[sv2.id]; if (!sv3?.included || !sv3.subPrice) return s; return s + (sv2.unit==="per_cut" ? sv3.subPrice*28 : sv2.unit==="monthly" ? sv3.subPrice*7 : sv3.subPrice); }, 0) : 0).toLocaleString()}
                                           </div>
+                                          <div style={{ fontSize: 11, color: "#4ADE80", textAlign: "right", fontWeight: 700 }}>${Math.round(annualOur).toLocaleString()}</div>
+                                          <div />
                                         </div>
                                       </div>
-                                    )}
+                                    </div>
 
                                     {/* Contract URLs */}
                                     <div>
