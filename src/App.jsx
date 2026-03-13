@@ -5659,7 +5659,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                           <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
                           <style>html,body,#map{margin:0;padding:0;height:100%;width:100%;}</style>
                         </head><body><div id="map"></div><script>
-                          var map = L.map('map', { zoomControl: false, attributionControl: false, dragging: false, scrollWheelZoom: false }).setView([${site.lat}, ${site.lng}], 19);
+                          var map = L.map('map', { zoomControl: false, attributionControl: false, dragging: false, scrollWheelZoom: false }).setView([${site.lat}, ${site.lng}], 17);
                           L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 20 }).addTo(map);
                           var icon = L.divIcon({ className: '', html: '<div style="width:14px;height:14px;border-radius:50%;background:#ef4444;border:3px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.6);"></div>', iconSize:[14,14], iconAnchor:[7,7] });
                           L.marker([${site.lat}, ${site.lng}], { icon: icon }).addTo(map);
