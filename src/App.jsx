@@ -883,7 +883,7 @@ export default function App() {
   const initLawnBid = (siteId) => {
     const services = {};
     LAWN_SERVICES.forEach(s => { services[s.id] = { subPrice: 0, ourPrice: 0, included: false }; });
-    return { id: "lb_" + siteId + "_" + Date.now(), siteId, season: lawnBidSeason, services, locked: false, lockedDate: null, subcontractorIds: [], selectedSubId: "", notes: "", status: "bidding", subToken: null, subSentAt: null, ownerApprovedDate: null, subcontractUrl: "", ownerContractUrl: "", ownerContractFile: null, ownerContractFileName: "", subcontractFile: null, subcontractFileName: "", ownerProposalTemplateId: "" };
+    return { id: "lb_" + siteId + "_" + Date.now(), siteId, season: lawnBidSeason, services, locked: false, lockedDate: null, subcontractorIds: [], selectedSubId: "", notes: "", status: "bidding", subToken: null, subSentAt: null, ownerApprovedDate: null, subcontractUrl: "", ownerContractUrl: "", ownerContractFile: null, ownerContractFileName: "", subcontractFile: null, subcontractFileName: "", ownerProposalTemplateId: "", sitefotosUrl: "" };
   };
 
   const getLawnBid = (siteId) => lawnBids.find(b => b.siteId === siteId && b.season === lawnBidSeason) || null;
@@ -3205,8 +3205,7 @@ Return ONLY valid JSON, no markdown, no extra text:
               if (!b) return "untouched";
               const hasSubs = (b.subcontractorIds || []).length > 0;
               if (b.status === "owner_approved") return "owner_approval";
-              if (b.status === "owner_accepted") return "owner_accepted";
-              if (b.status === "buyout" || b.status === "contracted") return "buyout";
+              if (b.status === "owner_accepted" || b.status === "buyout" || b.status === "contracted") return "buyout";
               if (hasSubs) return "bidding";
               return "untouched";
             };
@@ -3214,7 +3213,6 @@ Return ONLY valid JSON, no markdown, no extra text:
               { id: "untouched",      label: "Not Touched",      color: "#3A4560",  icon: "○" },
               { id: "bidding",        label: "Bidding",           color: "#FCD34D",  icon: "🔧" },
               { id: "owner_approval", label: "Owner Approval",    color: "#60A5FA",  icon: "⏳" },
-              { id: "owner_accepted", label: "Owner Accepted",    color: "#A78BFA",  icon: "✓" },
               { id: "buyout",         label: "Buyout",            color: "#4ADE80",  icon: "💰" },
             ];
             const colSites = (colId) => currentSites.filter(s => getCol(s) === colId);
@@ -3237,7 +3235,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                   <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                     {notBiddingCount > 0 && (
                       <button onClick={() => setShowNotBidding(v => !v)} style={{ background: showNotBidding ? "#4A527020" : "transparent", border: "1px solid #4A527050", color: showNotBidding ? "#9CA3C0" : "#4A5270", borderRadius: 6, padding: "6px 12px", fontSize: 11, cursor: "pointer" }}>
-                        {showNotBidding ? "👁 Hiding not-bidding" : `🚫 ${notBiddingCount} not bidding`}
+                        {showNotBidding ? "👁 Hide Archived" : `📦 ${notBiddingCount} Archived`}
                       </button>
                     )}
                     <select value={lawnBidSeason} onChange={e => setLawnBidSeason(e.target.value)} style={{ background: "#141824", border: "1px solid #1E2640", color: "#B8C4E0", borderRadius: 6, padding: "6px 10px", fontSize: 13 }}>
@@ -3272,7 +3270,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                       const lngs = mapSitesWithCoords.map(s => s.lng);
                       const centerLat = (Math.min(...lats) + Math.max(...lats)) / 2;
                       const centerLng = (Math.min(...lngs) + Math.max(...lngs)) / 2;
-                      const colColors = { untouched: "gray", bidding: "yellow", owner_approval: "blue", owner_accepted: "purple", buyout: "green" };
+                      const colColors = { untouched: "gray", bidding: "yellow", owner_approval: "blue", buyout: "green" };
                       const markers = mapSitesWithCoords.map(s => {
                         const col = getCol(s);
                         const color = colColors[col] || "red";
@@ -3293,7 +3291,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                 </div>
 
                 {/* Kanban board */}
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 12, alignItems: "start" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, alignItems: "start" }}>
                   {COLS.map(col => {
                     const sites = colSites(col.id);
                     return (
@@ -3359,7 +3357,6 @@ Return ONLY valid JSON, no markdown, no extra text:
                                           { colId: "untouched",      status: null,             label: "Not Touched",     color: "#3A4560" },
                                           { colId: "bidding",        status: "bidding",         label: "Bidding",         color: "#FCD34D" },
                                           { colId: "owner_approval", status: "owner_approved",  label: "Owner Approval",  color: "#60A5FA" },
-                                          { colId: "owner_accepted", status: "owner_accepted",  label: "Owner Accepted",  color: "#A78BFA" },
                                           { colId: "buyout",         status: "buyout",          label: "Buyout",          color: "#4ADE80" },
                                         ].map(opt => {
                                           const active = getCol(site) === opt.colId;
@@ -3369,21 +3366,19 @@ Return ONLY valid JSON, no markdown, no extra text:
                                                 setLawnBids(prev => prev.filter(b => !(b.siteId === site.id && b.season === lawnBidSeason)));
                                               } else if (opt.status === "owner_approved") {
                                                 const hasSub = (bid?.subcontractorIds||[]).length > 0;
-                                                const hasSelected = !!bid?.selectedSubId;
                                                 if (!hasSub) {
                                                   if (!window.confirm("No contractor assigned yet. Move to Owner Approval anyway?")) return;
-                                                } else if (!hasSelected && (bid?.subcontractorIds||[]).length > 1) {
-                                                  if (!window.confirm("Multiple contractors but none selected as primary. Move to Owner Approval anyway?")) return;
+                                                } else if (!bid?.selectedSubId && (bid?.subcontractorIds||[]).length > 1) {
+                                                  if (!window.confirm("Multiple contractors but none selected as primary. Continue?")) return;
                                                 }
                                                 const autoId = (bid?.subcontractorIds||[]).length === 1 ? bid.subcontractorIds[0] : bid?.selectedSubId || "";
                                                 upsertLawnBid(site.id, b => ({ ...b, status: opt.status, selectedSubId: autoId || b.selectedSubId }));
-                                              } else if (opt.status === "owner_accepted") {
+                                              } else if (opt.status === "buyout") {
+                                                // Must have owner contract attached to move to Buyout
                                                 if (!bid?.ownerContractFile) {
-                                                  alert("⚠ Cannot move to Owner Accepted — attach the signed owner contract first (see Contracts section below).");
+                                                  alert("⚠ Attach the signed owner contract first (see Contracts section below) before moving to Buyout.");
                                                   return;
                                                 }
-                                                upsertLawnBid(site.id, b => ({ ...b, status: opt.status }));
-                                              } else if (opt.status === "buyout") {
                                                 upsertLawnBid(site.id, b => ({ ...b, status: opt.status }));
                                               } else {
                                                 upsertLawnBid(site.id, b => ({ ...b, status: opt.status }));
@@ -3395,20 +3390,20 @@ Return ONLY valid JSON, no markdown, no extra text:
                                           );
                                         })}
                                       </div>
-                                      {/* Stage-specific hints */}
+                                      {/* Stage hints */}
                                       {getCol(site) === "owner_approval" && !bid?.ownerContractFile && (
-                                        <div style={{ marginTop: 6, padding: "5px 8px", background: "#A78BFA15", border: "1px solid #A78BFA40", borderRadius: 5, fontSize: 9, color: "#A78BFA" }}>
-                                          📎 Attach signed owner contract below to unlock Owner Accepted
+                                        <div style={{ marginTop: 6, padding: "5px 8px", background: "#4ADE8015", border: "1px solid #4ADE8040", borderRadius: 5, fontSize: 9, color: "#4ADE80" }}>
+                                          📎 Attach signed owner contract below to unlock Buyout
                                         </div>
                                       )}
-                                      {getCol(site) === "owner_accepted" && !bid?.subcontractFile && (
+                                      {getCol(site) === "buyout" && !bid?.subcontractFile && (
                                         <div style={{ marginTop: 6, padding: "5px 8px", background: "#4ADE8015", border: "1px solid #4ADE8040", borderRadius: 5, fontSize: 9, color: "#4ADE80" }}>
-                                          📎 Attach signed subcontract below to move to Buyout
+                                          📎 Attach signed subcontract below to convert to Active Site
                                         </div>
                                       )}
                                       {getCol(site) === "owner_approval" && (bid?.subcontractorIds||[]).length === 0 && (
                                         <div style={{ marginTop: 6, padding: "5px 8px", background: "#F8717115", border: "1px solid #F8717140", borderRadius: 5, fontSize: 9, color: "#F87171" }}>
-                                          ⚠ No contractor assigned — add one in Contractors section
+                                          ⚠ No contractor assigned — add one below
                                         </div>
                                       )}
                                     </div>
@@ -3553,9 +3548,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                                               <span style={{ fontSize: 10, color: "#60A5FA", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>✓ {bid.subcontractFileName || "subcontract.pdf"}</span>
                                               <a href={bid.subcontractFile} download={bid.subcontractFileName || "subcontract.pdf"} style={{ fontSize: 9, color: "#60A5FA", textDecoration: "none" }}>⬇</a>
                                               <button onClick={() => {
-                                                if (bid.status === "owner_accepted" && window.confirm("Removing the signed subcontract will prevent moving to Buyout. Continue?")) {
-                                                  upsertLawnBid(site.id, b => ({ ...b, subcontractFile: null, subcontractFileName: "" }));
-                                                } else if (bid.status !== "owner_accepted") {
+                                                if (window.confirm("Remove the signed subcontract?")) {
                                                   upsertLawnBid(site.id, b => ({ ...b, subcontractFile: null, subcontractFileName: "" }));
                                                 }
                                               }} style={{ background: "none", border: "none", color: "#F87171", cursor: "pointer", fontSize: 11, padding: 0 }}>✕</button>
@@ -3569,26 +3562,10 @@ Return ONLY valid JSON, no markdown, no extra text:
                                                 const reader = new FileReader();
                                                 reader.onload = ev => {
                                                   upsertLawnBid(site.id, b => ({ ...b, subcontractFile: ev.target.result, subcontractFileName: file.name }));
-                                                  // If in owner_accepted, auto-advance to buyout and navigate to active sites
-                                                  if (bid.status === "owner_accepted") {
-                                                    setTimeout(() => {
-                                                      upsertLawnBid(site.id, b2 => ({ ...b2, status: "buyout" }));
-                                                      setActiveNav("active-sites");
-                                                      setEditLawnBidId(null);
-                                                    }, 200);
-                                                  }
                                                 };
                                                 reader.readAsDataURL(file);
                                               }} />
                                             </label>
-                                          )}
-                                          {bid?.status === "owner_accepted" && bid?.subcontractFile && (
-                                            <button onClick={() => {
-                                              upsertLawnBid(site.id, b => ({ ...b, status: "buyout" }));
-                                              setTimeout(() => { setActiveNav("active-sites"); setEditLawnBidId(null); }, 200);
-                                            }} style={{ marginTop: 5, width: "100%", padding: "6px 0", background: "#4ADE8020", border: "1px solid #4ADE8050", borderRadius: 5, color: "#4ADE80", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
-                                              ✓ Move to Buyout → Active Sites
-                                            </button>
                                           )}
                                         </div>
                                       </div>
@@ -3598,6 +3575,33 @@ Return ONLY valid JSON, no markdown, no extra text:
                                     <div>
                                       <div style={{ fontSize: 9, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 4 }}>Notes</div>
                                       <input value={bid?.notes || ""} onChange={e => upsertLawnBid(site.id, b => ({ ...b, notes: e.target.value }))} placeholder="Notes…" style={{ width: "100%", background: "#0A0D16", border: "1px solid #1E2640", borderRadius: 5, padding: "5px 8px", fontSize: 11, color: "#E8ECF4", boxSizing: "border-box" }} />
+                                    </div>
+
+                                    {/* Sitefotos link */}
+                                    <div>
+                                      <div style={{ fontSize: 9, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 4 }}>
+                                        📸 Sitefotos Link
+                                        <span style={{ marginLeft: 6, fontSize: 8, color: "#2A3560", textTransform: "none", fontWeight: 400 }}>paste your Sitefotos property URL</span>
+                                      </div>
+                                      <div style={{ display: "flex", gap: 5 }}>
+                                        <input value={bid?.sitefotosUrl || ""} onChange={e => upsertLawnBid(site.id, b => ({ ...b, sitefotosUrl: e.target.value }))} placeholder="https://app.sitefotos.com/property/…" style={{ flex: 1, background: "#0A0D16", border: "1px solid #1E2640", borderRadius: 5, padding: "5px 8px", fontSize: 10, color: "#60A5FA", boxSizing: "border-box" }} />
+                                        {bid?.sitefotosUrl && (
+                                          <a href={bid.sitefotosUrl} target="_blank" rel="noopener noreferrer" style={{ padding: "5px 10px", background: "#60A5FA15", border: "1px solid #60A5FA40", borderRadius: 5, color: "#60A5FA", fontSize: 11, textDecoration: "none", display: "flex", alignItems: "center" }}>Open →</a>
+                                        )}
+                                      </div>
+                                    </div>
+
+                                    {/* Archive / Not Bidding */}
+                                    <div style={{ borderTop: "1px solid #1E2640", paddingTop: 10 }}>
+                                      {bid?.status === "not_bidding" ? (
+                                        <button onClick={() => upsertLawnBid(site.id, b => ({ ...b, status: "bidding" }))} style={{ width: "100%", padding: "7px 0", background: "#4ADE8010", border: "1px solid #4ADE8030", borderRadius: 7, color: "#4ADE80", fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
+                                          ↩ Restore to Bidding
+                                        </button>
+                                      ) : (
+                                        <button onClick={() => { if (window.confirm("Archive this site? It will be hidden from the kanban but can be restored.")) upsertLawnBid(site.id, b => ({ ...b, status: "not_bidding" })); }} style={{ width: "100%", padding: "7px 0", background: "transparent", border: "1px solid #3A456040", borderRadius: 7, color: "#3A4560", fontSize: 11, cursor: "pointer", fontFamily: "inherit" }}>
+                                          📦 Archive (not bidding this season)
+                                        </button>
+                                      )}
                                     </div>
 
                                     {/* Convert to Active Site — buyout stage + both contracts attached */}
@@ -3622,7 +3626,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                                       <button className="btn-ghost" style={{ flex: 1, minWidth: 80, fontSize: 10, padding: "5px 0", color: "#A78BFA", borderColor: "#A78BFA30" }} onClick={() => { setEditLawnBidId(null); setSelectedSite(site); }}>🔍 Full Details</button>
                                       {!bid && <button className="btn-ghost" style={{ flex: 1, minWidth: 80, fontSize: 10, padding: "5px 0", color: "#4ADE80", borderColor: "#4ADE8030" }} onClick={() => upsertLawnBid(site.id, b => b)}>+ Start Bid</button>}
                                       <button className="btn-ghost" style={{ flex: 1, minWidth: 80, fontSize: 10, padding: "5px 0", color: "#FBBF24", borderColor: "#FBBF2430" }} onClick={() => { setAcreageInput(bid?.acreage ? String(bid.acreage) : ""); setAcreageModalSiteId(site.id); }}>📐 Calc Mowing</button>
-                                      {bid && (bid.status === "buyout" || bid.status === "owner_approved" || bid.status === "owner_accepted") && bid.selectedSubId && (
+                                      {bid && (bid.status === "buyout" || bid.status === "owner_approved") && bid.selectedSubId && (
                                         <button className="btn-ghost" style={{ flex: 1, minWidth: 80, fontSize: 10, padding: "5px 0", color: "#4ADE80", borderColor: "#4ADE8030", fontWeight: 700 }} onClick={() => setLawnSubcontractSiteId(site.id)}>📋 Subcontract</button>
                                       )}
                                     </div>
@@ -3658,7 +3662,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                   if (s.unit === "monthly") return sum + sv.subPrice * 7;
                   return sum + sv.subPrice;
                 }, 0) : 0;
-                const statusCol = !bid ? "untouched" : bid.status === "not_bidding" ? "not_bidding" : bid.status === "bidding" ? "bidding" : bid.status === "owner_approved" ? "owner_approval" : bid.status === "owner_accepted" ? "owner_accepted" : "untouched";
+                const statusCol = !bid ? "untouched" : bid.status === "not_bidding" ? "not_bidding" : bid.status === "bidding" ? "bidding" : bid.status === "owner_approved" ? "owner_approval" : (bid.status === "buyout" || bid.status === "contracted") ? "buyout" : "untouched";
                 return { site, co, bid, annual, annualSub, statusCol };
               })
               .filter(({ site, co, annual, bid }) => {
@@ -3677,8 +3681,8 @@ Return ONLY valid JSON, no markdown, no extra text:
             const grandSub = rows.reduce((s, r) => s + r.annualSub, 0);
             const pricedCount = rows.filter(r => r.annual > 0).length;
 
-            const colColors = { untouched: "#3A4560", bidding: "#FBBF24", owner_approval: "#60A5FA", owner_accepted: "#A78BFA", buyout: "#4ADE80", not_bidding: "#F87171" };
-            const colLabels = { untouched: "Not Touched", bidding: "Bidding", owner_approval: "Owner Appr.", owner_accepted: "Owner Accepted", buyout: "Buyout", not_bidding: "Not Bidding" };
+            const colColors = { untouched: "#3A4560", bidding: "#FBBF24", owner_approval: "#60A5FA", buyout: "#4ADE80", not_bidding: "#F87171" };
+            const colLabels = { untouched: "Not Touched", bidding: "Bidding", owner_approval: "Owner Appr.", buyout: "Buyout", not_bidding: "Not Bidding" };
 
             const exportCSV = () => {
               const svcCols = LAWN_SERVICES.map(s => s.label);
@@ -3824,7 +3828,7 @@ Return ONLY valid JSON, no markdown, no extra text:
             });
             const pendingSites = currentSites.filter(site => {
               const b = getLawnBid(site.id);
-              return b && (b.status === "buyout" || b.status === "owner_accepted" || b.status === "contracted") && !(b.ownerContractFile && b.subcontractFile);
+              return b && (b.status === "buyout" || b.status === "contracted") && !(b.ownerContractFile && b.subcontractFile);
             });
             const totalBook = activeSites.reduce((sum, s) => sum + lawnBidAnnualOur(getLawnBid(s.id)), 0);
 
@@ -3910,6 +3914,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                                     {site.accessCode && <div style={{ fontSize: 11, color: "#B8C4E0" }}><span style={{ color: "#3A4560" }}>Access: </span>{site.accessCode}</div>}
                                     {site.notes && <div style={{ fontSize: 11, color: "#B8C4E0" }}><span style={{ color: "#3A4560" }}>Notes: </span>{site.notes}</div>}
                                     <div style={{ fontSize: 11, color: "#B8C4E0" }}><span style={{ color: "#3A4560" }}>Season: </span>{bid?.season || lawnBidSeason}</div>
+                                    {bid?.sitefotosUrl && <a href={bid.sitefotosUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: 10, color: "#60A5FA", display: "flex", alignItems: "center", gap: 4, marginTop: 2 }}>📸 Sitefotos →</a>}
                                   </div>
                                 </div>
                                 <div style={{ background: "#0A0D16", borderRadius: 8, padding: "12px 14px", border: "1px solid #1E2640" }}>
@@ -4119,9 +4124,9 @@ Return ONLY valid JSON, no markdown, no extra text:
                   const assignedSubs = (bid.subcontractorIds || []).map(id => subcontractors.find(s => s.id === id)).filter(Boolean);
                   const selectedSub = bid.selectedSubId ? subcontractors.find(s => s.id === bid.selectedSubId) : null;
                   const annualOur = lawnBidAnnualOur ? lawnBidAnnualOur(bid) : 0;
-                  const COLS_LABELS = { untouched: "Not Touched", bidding: "Bidding", owner_approval: "Owner Approval", owner_accepted: "Owner Accepted", not_bidding: "Not Bidding" };
-                  const statusCol = bid.status === "bidding" ? "bidding" : bid.status === "owner_approved" ? "owner_approval" : bid.status === "owner_accepted" ? "owner_accepted" : bid.status === "buyout" ? "buyout" : bid.status === "contracted" ? "buyout" : bid.status === "not_bidding" ? "not_bidding" : "untouched";
-                  const colColors = { untouched: "#3A4560", bidding: "#FBBF24", owner_approval: "#60A5FA", owner_accepted: "#A78BFA", buyout: "#4ADE80", not_bidding: "#F87171" };
+                  const COLS_LABELS = { untouched: "Not Touched", bidding: "Bidding", owner_approval: "Owner Approval", not_bidding: "Not Bidding" };
+                  const statusCol = bid.status === "bidding" ? "bidding" : bid.status === "owner_approved" ? "owner_approval" : bid.status === "buyout" ? "buyout" : bid.status === "contracted" ? "buyout" : bid.status === "not_bidding" ? "not_bidding" : "untouched";
+                  const colColors = { untouched: "#3A4560", bidding: "#FBBF24", owner_approval: "#60A5FA", buyout: "#4ADE80", not_bidding: "#F87171" };
                   return (
                     <div>
                       <div style={{ fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "#3A4560", marginBottom: 10, fontWeight: 600 }}>Lawn Bid — {lawnBidSeason}</div>
