@@ -1782,7 +1782,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                                   <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
                                     {siteContacts.map(c => (
                                       <span key={c.id} style={{ fontSize: 10, background: "#F0F2F8", border: "1px solid #CBD1E8", borderRadius: 4, padding: "2px 8px", color: "#252E52" }}>
-                                        👤 {c.firstName} {c.lastName}{c.title ? ` · ${c.title}` : ""}
+                                        👤 {c.firstName} {c.lastName}{c.title ? " · " + c.title : ""}
                                       </span>
                                     ))}
                                   </div>
@@ -3488,7 +3488,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                   </div>
                   <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                     <button className="btn-ghost" style={{ fontSize: 11, color: "#4A5278" }} onClick={() => { /* show all toggle handled by rendering all */ }}>
-                      {visibleSubs.length < allCount ? `+ ${allCount - visibleSubs.length} hidden (other BUs)` : ""}
+                      {visibleSubs.length < allCount ? "+ " + (allCount - visibleSubs.length) + " hidden (other BUs)" : ""}
                     </button>
                     <button className="btn-primary" onClick={() => { setEditSubId(null); setSubForm({ name: "", trade: "", phone: "", email: "", msaStatus: "missing", coiExpiry: "", w9: false, notes: "", services: [activeBU === "facility" ? "fm" : activeBU] }); setShowSubForm(true); }}>+ Add Subcontractor</button>
                   </div>
@@ -3606,7 +3606,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                   <div>
                     <div style={{ fontSize: 22, fontWeight: 700, color: "#1A2240", letterSpacing: "-0.01em", textTransform: "uppercase" }}>Lawn Bids</div>
-                    <div style={{ fontSize: 11, color: "#4A5278", marginTop: 3, letterSpacing: "0.06em" }}>SEASON {lawnBidSeason} · {currentSites.length} SITES · ${Math.round(totalOur).toLocaleString()} BOOK VALUE{notBiddingCount > 0 && !showNotBidding ? ` · ${notBiddingCount} HIDDEN` : ""}</div>
+                    <div style={{ fontSize: 11, color: "#4A5278", marginTop: 3, letterSpacing: "0.06em" }}>SEASON {lawnBidSeason} · {currentSites.length} SITES · ${Math.round(totalOur).toLocaleString()} BOOK VALUE{notBiddingCount > 0 && !showNotBidding ? " · " + notBiddingCount + " HIDDEN" : ""}</div>
                   </div>
                   <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                     {notBiddingCount > 0 && (
