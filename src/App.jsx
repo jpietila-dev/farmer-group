@@ -260,6 +260,15 @@ const NEXT_STEP_OPTIONS = {
 const SITES_BUS = ["capital", "facility", "lawn", "snow"];
 const LAWN_SNOW_SITES_BUS = ["lawn", "snow"];
 
+// Owner proposal contract templates (5 preloaded by customer type)
+const OWNER_CONTRACT_TEMPLATES = [
+  { id: "cubesmart",   label: "CubeSmart",             color: "#F97316" },
+  { id: "extraspace",  label: "Extra Space Storage",   color: "#60A5FA" },
+  { id: "publicstor",  label: "Public Storage",        color: "#F87171" },
+  { id: "storageking", label: "Storage King USA",      color: "#4ADE80" },
+  { id: "generic",     label: "Standard / Generic",    color: "#A78BFA" },
+];
+
 const PIN_COLORS = ["#3B6FE8","#4ADE80","#F97316","#A78BFA","#F87171","#FCD34D","#60A5FA","#FB923C","#34D399","#E879F9","#F472B6","#38BDF8"];
 
 const INIT_LAWN_SITES = [
@@ -863,6 +872,7 @@ export default function App() {
   const [lawnSubcontractSiteId, setLawnSubcontractSiteId] = useState(null); // site id for subcontract modal
   const [acreageModalSiteId, setAcreageModalSiteId] = useState(null); // site id for mowing acreage calc
   const [acreageInput, setAcreageInput] = useState(""); // acreage input value
+  const [ownerProposalSiteId, setOwnerProposalSiteId] = useState(null); // site id for owner proposal template picker
   const [showBidArchive, setShowBidArchive] = useState(false);
   const [bidStatFilter,  setBidStatFilter]  = useState(null); // null | "all" | "bidding" | "locked"
 
@@ -872,7 +882,7 @@ export default function App() {
   const initLawnBid = (siteId) => {
     const services = {};
     LAWN_SERVICES.forEach(s => { services[s.id] = { subPrice: 0, ourPrice: 0, included: false }; });
-    return { id: "lb_" + siteId + "_" + Date.now(), siteId, season: lawnBidSeason, services, locked: false, lockedDate: null, subcontractorIds: [], selectedSubId: "", notes: "", status: "bidding", subToken: null, subSentAt: null, ownerApprovedDate: null, subcontractUrl: "", ownerContractUrl: "" };
+    return { id: "lb_" + siteId + "_" + Date.now(), siteId, season: lawnBidSeason, services, locked: false, lockedDate: null, subcontractorIds: [], selectedSubId: "", notes: "", status: "bidding", subToken: null, subSentAt: null, ownerApprovedDate: null, subcontractUrl: "", ownerContractUrl: "", ownerContractFile: null, ownerContractFileName: "", subcontractFile: null, subcontractFileName: "", ownerProposalTemplateId: "" };
   };
 
   const getLawnBid = (siteId) => lawnBids.find(b => b.siteId === siteId && b.season === lawnBidSeason) || null;
@@ -3194,7 +3204,8 @@ Return ONLY valid JSON, no markdown, no extra text:
               if (!b) return "untouched";
               const hasSubs = (b.subcontractorIds || []).length > 0;
               if (b.status === "owner_approved") return "owner_approval";
-              if (b.status === "owner_accepted" || b.status === "contracted") return "owner_accepted";
+              if (b.status === "owner_accepted") return "owner_accepted";
+              if (b.status === "buyout" || b.status === "contracted") return "buyout";
               if (hasSubs) return "bidding";
               return "untouched";
             };
@@ -3202,7 +3213,8 @@ Return ONLY valid JSON, no markdown, no extra text:
               { id: "untouched",      label: "Not Touched",      color: "#3A4560",  icon: "○" },
               { id: "bidding",        label: "Bidding",           color: "#FCD34D",  icon: "🔧" },
               { id: "owner_approval", label: "Owner Approval",    color: "#60A5FA",  icon: "⏳" },
-              { id: "owner_accepted", label: "Owner Accepted",    color: "#4ADE80",  icon: "✓" },
+              { id: "owner_accepted", label: "Owner Accepted",    color: "#A78BFA",  icon: "✓" },
+              { id: "buyout",         label: "Buyout",            color: "#4ADE80",  icon: "💰" },
             ];
             const colSites = (colId) => currentSites.filter(s => getCol(s) === colId);
             const totalOur = currentSites.reduce((sum, site) => sum + lawnBidAnnualOur(getLawnBid(site.id)), 0);
@@ -3259,7 +3271,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                       const lngs = mapSitesWithCoords.map(s => s.lng);
                       const centerLat = (Math.min(...lats) + Math.max(...lats)) / 2;
                       const centerLng = (Math.min(...lngs) + Math.max(...lngs)) / 2;
-                      const colColors = { untouched: "gray", bidding: "yellow", owner_approval: "blue", owner_accepted: "green" };
+                      const colColors = { untouched: "gray", bidding: "yellow", owner_approval: "blue", owner_accepted: "purple", buyout: "green" };
                       const markers = mapSitesWithCoords.map(s => {
                         const col = getCol(s);
                         const color = colColors[col] || "red";
@@ -3343,65 +3355,54 @@ Return ONLY valid JSON, no markdown, no extra text:
                                       <div style={{ fontSize: 9, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>Stage</div>
                                       <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                                         {[
-                                          { colId: "untouched",      status: null,             label: "Not Touched" },
-                                          { colId: "bidding",        status: "bidding",         label: "Bidding" },
-                                          { colId: "owner_approval", status: "owner_approved",  label: "Owner Approval" },
-                                          { colId: "owner_accepted", status: "owner_accepted",  label: "Owner Accepted" },
+                                          { colId: "untouched",      status: null,             label: "Not Touched",     color: "#3A4560" },
+                                          { colId: "bidding",        status: "bidding",         label: "Bidding",         color: "#FCD34D" },
+                                          { colId: "owner_approval", status: "owner_approved",  label: "Owner Approval",  color: "#60A5FA" },
+                                          { colId: "owner_accepted", status: "owner_accepted",  label: "Owner Accepted",  color: "#A78BFA" },
+                                          { colId: "buyout",         status: "buyout",          label: "Buyout",          color: "#4ADE80" },
                                         ].map(opt => {
                                           const active = getCol(site) === opt.colId;
-                                          const c = COLS.find(c => c.id === opt.colId);
                                           return (
                                             <button key={opt.colId} onClick={() => {
                                               if (opt.status === null) {
                                                 setLawnBids(prev => prev.filter(b => !(b.siteId === site.id && b.season === lawnBidSeason)));
                                               } else if (opt.status === "owner_approved") {
-                                                // Moving to Owner Approval — warn if no contractor selected
                                                 const hasSub = (bid?.subcontractorIds||[]).length > 0;
                                                 const hasSelected = !!bid?.selectedSubId;
                                                 if (!hasSub) {
-                                                  if (!window.confirm("No contractor assigned to this bid yet. Move to Owner Approval anyway?")) return;
+                                                  if (!window.confirm("No contractor assigned yet. Move to Owner Approval anyway?")) return;
                                                 } else if (!hasSelected && (bid?.subcontractorIds||[]).length > 1) {
-                                                  if (!window.confirm("You have multiple contractors but none selected as primary. Move to Owner Approval anyway?")) return;
+                                                  if (!window.confirm("Multiple contractors but none selected as primary. Move to Owner Approval anyway?")) return;
                                                 }
-                                                // If exactly one sub, auto-select it
                                                 const autoId = (bid?.subcontractorIds||[]).length === 1 ? bid.subcontractorIds[0] : bid?.selectedSubId || "";
                                                 upsertLawnBid(site.id, b => ({ ...b, status: opt.status, selectedSubId: autoId || b.selectedSubId }));
                                               } else if (opt.status === "owner_accepted") {
-                                                // Require both signed contracts before accepting
-                                                if (!bid?.ownerContractUrl && !bid?.subcontractUrl) {
-                                                  alert("⚠ Cannot move to Owner Accepted — please upload both the owner-signed contract URL and the signed subcontract URL in the Contracts section below.");
-                                                  return;
-                                                }
-                                                if (!bid?.ownerContractUrl) {
-                                                  alert("⚠ Cannot move to Owner Accepted — please paste the owner-signed contract URL in the Contracts section below first.");
-                                                  return;
-                                                }
-                                                if (!bid?.subcontractUrl) {
-                                                  alert("⚠ Cannot move to Owner Accepted — please paste the signed subcontract URL in the Contracts section below first.");
+                                                if (!bid?.ownerContractFile) {
+                                                  alert("⚠ Cannot move to Owner Accepted — attach the signed owner contract first (see Contracts section below).");
                                                   return;
                                                 }
                                                 upsertLawnBid(site.id, b => ({ ...b, status: opt.status }));
-                                                // Auto-navigate to Active Sites
-                                                setTimeout(() => { setActiveNav("active-sites"); setEditLawnBidId(null); }, 300);
+                                              } else if (opt.status === "buyout") {
+                                                upsertLawnBid(site.id, b => ({ ...b, status: opt.status }));
                                               } else {
                                                 upsertLawnBid(site.id, b => ({ ...b, status: opt.status }));
                                               }
-                                            }} style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 8px", background: active ? c.color + "15" : "transparent", border: "1px solid " + (active ? c.color + "40" : "#1E2640"), borderRadius: 5, cursor: "pointer", fontFamily: "inherit", fontSize: 10, color: active ? c.color : "#3A4560", textAlign: "left", transition: "all 0.15s" }}>
-                                              <div style={{ width: 6, height: 6, borderRadius: "50%", background: active ? c.color : "#2A3560", flexShrink: 0 }} />
+                                            }} style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 8px", background: active ? opt.color + "15" : "transparent", border: "1px solid " + (active ? opt.color + "40" : "#1E2640"), borderRadius: 5, cursor: "pointer", fontFamily: "inherit", fontSize: 10, color: active ? opt.color : "#3A4560", textAlign: "left", transition: "all 0.15s" }}>
+                                              <div style={{ width: 6, height: 6, borderRadius: "50%", background: active ? opt.color : "#2A3560", flexShrink: 0 }} />
                                               {opt.label}
                                             </button>
                                           );
                                         })}
                                       </div>
-                                      {getCol(site) === "owner_approval" && !(bid?.ownerContractUrl && bid?.subcontractUrl) && (
+                                      {/* Stage-specific hints */}
+                                      {getCol(site) === "owner_approval" && !bid?.ownerContractFile && (
                                         <div style={{ marginTop: 6, padding: "5px 8px", background: "#A78BFA15", border: "1px solid #A78BFA40", borderRadius: 5, fontSize: 9, color: "#A78BFA" }}>
-                                          📋 To unlock Owner Accepted: paste {!bid?.ownerContractUrl && !bid?.subcontractUrl ? "both signed contract URLs" : !bid?.ownerContractUrl ? "owner-signed contract URL" : "signed subcontract URL"} below
+                                          📎 Attach signed owner contract below to unlock Owner Accepted
                                         </div>
                                       )}
-                                      {/* Contractor warning for owner_approval stage */}
-                                      {getCol(site) === "owner_approval" && !(bid?.selectedSubId) && (bid?.subcontractorIds||[]).length > 0 && (
-                                        <div style={{ marginTop: 6, padding: "5px 8px", background: "#FBBF2415", border: "1px solid #FBBF2440", borderRadius: 5, fontSize: 9, color: "#FBBF24" }}>
-                                          ⚠ Select a primary contractor above before generating subcontract
+                                      {getCol(site) === "owner_accepted" && !bid?.subcontractFile && (
+                                        <div style={{ marginTop: 6, padding: "5px 8px", background: "#4ADE8015", border: "1px solid #4ADE8040", borderRadius: 5, fontSize: 9, color: "#4ADE80" }}>
+                                          📎 Attach signed subcontract below to move to Buyout
                                         </div>
                                       )}
                                       {getCol(site) === "owner_approval" && (bid?.subcontractorIds||[]).length === 0 && (
@@ -3517,20 +3518,78 @@ Return ONLY valid JSON, no markdown, no extra text:
                                       </div>
                                     </div>
 
-                                    {/* Contract URLs */}
+                                    {/* Contracts — file attachments */}
                                     <div>
                                       <div style={{ fontSize: 9, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>Contracts</div>
-                                      <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
-                                        {[
-                                          { key: "subcontractUrl", label: "📄 Subcontract URL", color: "#60A5FA" },
-                                          { key: "ownerContractUrl", label: "📋 Owner Contract URL", color: "#A78BFA" },
-                                        ].map(({ key, label, color }) => (
-                                          <div key={key}>
-                                            <div style={{ fontSize: 9, color: "#3A4560", marginBottom: 3 }}>{label}</div>
-                                            <input value={bid?.[key] || ""} onChange={e => upsertLawnBid(site.id, b => ({ ...b, [key]: e.target.value }))} placeholder="https://…" style={{ width: "100%", background: "#0A0D16", border: "1px solid #1E2640", borderRadius: 5, padding: "5px 8px", fontSize: 10, color, boxSizing: "border-box" }} />
-                                            {bid?.[key] && <a href={bid[key]} target="_blank" rel="noopener noreferrer" style={{ fontSize: 9, color, display: "block", marginTop: 2 }}>Open →</a>}
-                                          </div>
-                                        ))}
+                                      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                                        {/* Owner Contract */}
+                                        <div>
+                                          <div style={{ fontSize: 9, color: "#A78BFA", marginBottom: 4 }}>📋 Owner-Signed Contract</div>
+                                          {bid?.ownerContractFile ? (
+                                            <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 8px", background: "#A78BFA10", border: "1px solid #A78BFA40", borderRadius: 5 }}>
+                                              <span style={{ fontSize: 10, color: "#A78BFA", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>✓ {bid.ownerContractFileName || "owner_contract.pdf"}</span>
+                                              <a href={bid.ownerContractFile} download={bid.ownerContractFileName || "owner_contract.pdf"} style={{ fontSize: 9, color: "#A78BFA", textDecoration: "none" }}>⬇</a>
+                                              <button onClick={() => upsertLawnBid(site.id, b => ({ ...b, ownerContractFile: null, ownerContractFileName: "" }))} style={{ background: "none", border: "none", color: "#F87171", cursor: "pointer", fontSize: 11, padding: 0 }}>✕</button>
+                                            </div>
+                                          ) : (
+                                            <label style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 8px", background: "#0A0D16", border: "1px dashed #A78BFA50", borderRadius: 5, cursor: "pointer" }}>
+                                              <span style={{ fontSize: 10, color: "#3A4560" }}>📎 Attach signed owner contract…</span>
+                                              <input type="file" accept=".pdf,.doc,.docx,.jpg,.png" style={{ display: "none" }} onChange={e => {
+                                                const file = e.target.files?.[0];
+                                                if (!file) return;
+                                                const reader = new FileReader();
+                                                reader.onload = ev => upsertLawnBid(site.id, b => ({ ...b, ownerContractFile: ev.target.result, ownerContractFileName: file.name }));
+                                                reader.readAsDataURL(file);
+                                              }} />
+                                            </label>
+                                          )}
+                                        </div>
+                                        {/* Signed Subcontract */}
+                                        <div>
+                                          <div style={{ fontSize: 9, color: "#60A5FA", marginBottom: 4 }}>📄 Signed Subcontract</div>
+                                          {bid?.subcontractFile ? (
+                                            <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 8px", background: "#60A5FA10", border: "1px solid #60A5FA40", borderRadius: 5 }}>
+                                              <span style={{ fontSize: 10, color: "#60A5FA", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>✓ {bid.subcontractFileName || "subcontract.pdf"}</span>
+                                              <a href={bid.subcontractFile} download={bid.subcontractFileName || "subcontract.pdf"} style={{ fontSize: 9, color: "#60A5FA", textDecoration: "none" }}>⬇</a>
+                                              <button onClick={() => {
+                                                if (bid.status === "owner_accepted" && window.confirm("Removing the signed subcontract will prevent moving to Buyout. Continue?")) {
+                                                  upsertLawnBid(site.id, b => ({ ...b, subcontractFile: null, subcontractFileName: "" }));
+                                                } else if (bid.status !== "owner_accepted") {
+                                                  upsertLawnBid(site.id, b => ({ ...b, subcontractFile: null, subcontractFileName: "" }));
+                                                }
+                                              }} style={{ background: "none", border: "none", color: "#F87171", cursor: "pointer", fontSize: 11, padding: 0 }}>✕</button>
+                                            </div>
+                                          ) : (
+                                            <label style={{ display: "flex", alignItems: "center", gap: 6, padding: "6px 8px", background: "#0A0D16", border: "1px dashed #60A5FA50", borderRadius: 5, cursor: "pointer" }}>
+                                              <span style={{ fontSize: 10, color: "#3A4560" }}>📎 Attach signed subcontract…</span>
+                                              <input type="file" accept=".pdf,.doc,.docx,.jpg,.png" style={{ display: "none" }} onChange={e => {
+                                                const file = e.target.files?.[0];
+                                                if (!file) return;
+                                                const reader = new FileReader();
+                                                reader.onload = ev => {
+                                                  upsertLawnBid(site.id, b => ({ ...b, subcontractFile: ev.target.result, subcontractFileName: file.name }));
+                                                  // If in owner_accepted, auto-advance to buyout and navigate to active sites
+                                                  if (bid.status === "owner_accepted") {
+                                                    setTimeout(() => {
+                                                      upsertLawnBid(site.id, b2 => ({ ...b2, status: "buyout" }));
+                                                      setActiveNav("active-sites");
+                                                      setEditLawnBidId(null);
+                                                    }, 200);
+                                                  }
+                                                };
+                                                reader.readAsDataURL(file);
+                                              }} />
+                                            </label>
+                                          )}
+                                          {bid?.status === "owner_accepted" && bid?.subcontractFile && (
+                                            <button onClick={() => {
+                                              upsertLawnBid(site.id, b => ({ ...b, status: "buyout" }));
+                                              setTimeout(() => { setActiveNav("active-sites"); setEditLawnBidId(null); }, 200);
+                                            }} style={{ marginTop: 5, width: "100%", padding: "6px 0", background: "#4ADE8020", border: "1px solid #4ADE8050", borderRadius: 5, color: "#4ADE80", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
+                                              ✓ Move to Buyout → Active Sites
+                                            </button>
+                                          )}
+                                        </div>
                                       </div>
                                     </div>
 
@@ -3543,12 +3602,11 @@ Return ONLY valid JSON, no markdown, no extra text:
                                     {/* Actions */}
                                     <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                                       <button className="btn-primary" style={{ flex: 1, minWidth: 80, fontSize: 11, padding: "7px 0", background: "#60A5FA15", color: "#60A5FA", border: "1px solid #60A5FA40", borderRadius: 6, cursor: "pointer", fontWeight: 600 }} onClick={() => { setLawnBidDocSubId(null); setLawnBidDocSiteId(site.id); }}>📄 Bid Doc</button>
+                                      <button className="btn-ghost" style={{ flex: 1, minWidth: 80, fontSize: 10, padding: "5px 0", color: "#FCD34D", borderColor: "#FCD34D30" }} onClick={() => setOwnerProposalSiteId(site.id)}>📋 Owner Proposal</button>
                                       <button className="btn-ghost" style={{ flex: 1, minWidth: 80, fontSize: 10, padding: "5px 0", color: "#A78BFA", borderColor: "#A78BFA30" }} onClick={() => { setEditLawnBidId(null); setSelectedSite(site); }}>🔍 Full Details</button>
                                       {!bid && <button className="btn-ghost" style={{ flex: 1, minWidth: 80, fontSize: 10, padding: "5px 0", color: "#4ADE80", borderColor: "#4ADE8030" }} onClick={() => upsertLawnBid(site.id, b => b)}>+ Start Bid</button>}
-                                      {/* Acreage-based mowing calc */}
                                       <button className="btn-ghost" style={{ flex: 1, minWidth: 80, fontSize: 10, padding: "5px 0", color: "#FBBF24", borderColor: "#FBBF2430" }} onClick={() => { setAcreageInput(bid?.acreage ? String(bid.acreage) : ""); setAcreageModalSiteId(site.id); }}>📐 Calc Mowing</button>
-                                      {/* Generate Subcontract — shown when owner_accepted or owner_approval with sub selected */}
-                                      {bid && (bid.status === "owner_accepted" || bid.status === "owner_approved") && bid.selectedSubId && (
+                                      {bid && (bid.status === "buyout" || bid.status === "owner_approved" || bid.status === "owner_accepted") && bid.selectedSubId && (
                                         <button className="btn-ghost" style={{ flex: 1, minWidth: 80, fontSize: 10, padding: "5px 0", color: "#4ADE80", borderColor: "#4ADE8030", fontWeight: 700 }} onClick={() => setLawnSubcontractSiteId(site.id)}>📋 Subcontract</button>
                                       )}
                                     </div>
@@ -3603,8 +3661,8 @@ Return ONLY valid JSON, no markdown, no extra text:
             const grandSub = rows.reduce((s, r) => s + r.annualSub, 0);
             const pricedCount = rows.filter(r => r.annual > 0).length;
 
-            const colColors = { untouched: "#3A4560", bidding: "#FBBF24", owner_approval: "#60A5FA", owner_accepted: "#4ADE80", not_bidding: "#F87171" };
-            const colLabels = { untouched: "Not Touched", bidding: "Bidding", owner_approval: "Owner Appr.", owner_accepted: "Accepted", not_bidding: "Not Bidding" };
+            const colColors = { untouched: "#3A4560", bidding: "#FBBF24", owner_approval: "#60A5FA", owner_accepted: "#A78BFA", buyout: "#4ADE80", not_bidding: "#F87171" };
+            const colLabels = { untouched: "Not Touched", bidding: "Bidding", owner_approval: "Owner Appr.", owner_accepted: "Owner Accepted", buyout: "Buyout", not_bidding: "Not Bidding" };
 
             const exportCSV = () => {
               const svcCols = LAWN_SERVICES.map(s => s.label);
@@ -3746,11 +3804,11 @@ Return ONLY valid JSON, no markdown, no extra text:
             const currentSites = activeBU === "lawn" ? lawnSites : snowSites;
             const activeSites = currentSites.filter(site => {
               const b = getLawnBid(site.id);
-              return b && (b.status === "owner_accepted" || b.status === "contracted") && b.subcontractUrl && b.ownerContractUrl;
+              return b && (b.status === "buyout" || b.status === "contracted") && b.ownerContractFile && b.subcontractFile;
             });
             const pendingSites = currentSites.filter(site => {
               const b = getLawnBid(site.id);
-              return b && (b.status === "owner_accepted" || b.status === "contracted") && !(b.subcontractUrl && b.ownerContractUrl);
+              return b && (b.status === "buyout" || b.status === "owner_accepted" || b.status === "contracted") && !(b.ownerContractFile && b.subcontractFile);
             });
             const totalBook = activeSites.reduce((sum, s) => sum + lawnBidAnnualOur(getLawnBid(s.id)), 0);
 
@@ -3799,8 +3857,8 @@ Return ONLY valid JSON, no markdown, no extra text:
                           <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
                             <div style={{ fontSize: 15, fontWeight: 700, color: "#4ADE80" }}>${Math.round(lawnBidAnnualOur(bid)).toLocaleString()}<span style={{ fontSize: 10, color: "#3A4560", fontWeight: 400 }}>/yr</span></div>
                             <div style={{ display: "flex", gap: 6 }}>
-                              {bid.subcontractUrl && <a href={bid.subcontractUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: 10, color: "#60A5FA", background: "#60A5FA10", border: "1px solid #60A5FA30", borderRadius: 4, padding: "3px 8px", textDecoration: "none" }}>📄 Sub</a>}
-                              {bid.ownerContractUrl && <a href={bid.ownerContractUrl} target="_blank" rel="noopener noreferrer" style={{ fontSize: 10, color: "#A78BFA", background: "#A78BFA10", border: "1px solid #A78BFA30", borderRadius: 4, padding: "3px 8px", textDecoration: "none" }}>📋 Owner</a>}
+                              {bid.subcontractFile && <a href={bid.subcontractFile} download={bid.subcontractFileName || "subcontract.pdf"} style={{ fontSize: 10, color: "#60A5FA", background: "#60A5FA10", border: "1px solid #60A5FA30", borderRadius: 4, padding: "3px 8px", textDecoration: "none" }}>📄 Sub</a>}
+                              {bid.ownerContractFile && <a href={bid.ownerContractFile} download={bid.ownerContractFileName || "owner_contract.pdf"} style={{ fontSize: 10, color: "#A78BFA", background: "#A78BFA10", border: "1px solid #A78BFA30", borderRadius: 4, padding: "3px 8px", textDecoration: "none" }}>📋 Owner</a>}
                             </div>
                           </div>
                         </div>
@@ -3810,7 +3868,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                 ) : (
                   <div style={{ textAlign: "center", padding: "48px", color: "#2A3560", fontSize: 12, background: "#161B28", borderRadius: 10, border: "1px solid #1E2640" }}>
                     <div style={{ fontSize: 28, marginBottom: 12 }}>✅</div>
-                    No active sites yet. Sites move here automatically once Owner Accepted + both contracts are uploaded.
+                    No active sites yet. Sites move here automatically once they reach Buyout with both contracts attached.
                   </div>
                 )}
 
@@ -3919,8 +3977,8 @@ Return ONLY valid JSON, no markdown, no extra text:
                   const selectedSub = bid.selectedSubId ? subcontractors.find(s => s.id === bid.selectedSubId) : null;
                   const annualOur = lawnBidAnnualOur ? lawnBidAnnualOur(bid) : 0;
                   const COLS_LABELS = { untouched: "Not Touched", bidding: "Bidding", owner_approval: "Owner Approval", owner_accepted: "Owner Accepted", not_bidding: "Not Bidding" };
-                  const statusCol = bid.status === "bidding" ? "bidding" : bid.status === "owner_approved" ? "owner_approval" : bid.status === "owner_accepted" ? "owner_accepted" : bid.status === "not_bidding" ? "not_bidding" : "untouched";
-                  const colColors = { untouched: "#3A4560", bidding: "#FBBF24", owner_approval: "#60A5FA", owner_accepted: "#4ADE80", not_bidding: "#F87171" };
+                  const statusCol = bid.status === "bidding" ? "bidding" : bid.status === "owner_approved" ? "owner_approval" : bid.status === "owner_accepted" ? "owner_accepted" : bid.status === "buyout" ? "buyout" : bid.status === "contracted" ? "buyout" : bid.status === "not_bidding" ? "not_bidding" : "untouched";
+                  const colColors = { untouched: "#3A4560", bidding: "#FBBF24", owner_approval: "#60A5FA", owner_accepted: "#A78BFA", buyout: "#4ADE80", not_bidding: "#F87171" };
                   return (
                     <div>
                       <div style={{ fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "#3A4560", marginBottom: 10, fontWeight: 600 }}>Lawn Bid — {lawnBidSeason}</div>
@@ -5960,6 +6018,100 @@ Return ONLY valid JSON, no markdown, no extra text:
                   ✓ Apply to Mowing Service
                 </button>
               </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* ── OWNER PROPOSAL TEMPLATE PICKER ── */}
+      {ownerProposalSiteId && (() => {
+        const site = lawnSites.find(s => s.id === ownerProposalSiteId);
+        if (!site) { setOwnerProposalSiteId(null); return null; }
+        const bid = getLawnBid(site.id);
+        const co = companies.find(c => c.id === site.companyId);
+        const annualOur = lawnBidAnnualOur(bid);
+        const services = LAWN_SERVICES.filter(s => bid?.services?.[s.id]?.included);
+
+        const generateProposal = (template) => {
+          const today = new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+          const w = window.open("", "_blank");
+          w.document.write(`<!DOCTYPE html><html><head><title>Owner Proposal — ${site.address}</title><style>
+            *{box-sizing:border-box;margin:0;padding:0;}
+            body{font-family:Arial,sans-serif;font-size:11px;color:#000;padding:28px 36px;}
+            .header{display:flex;justify-content:space-between;align-items:flex-start;padding-bottom:12px;border-bottom:3px solid #1a3a6b;margin-bottom:20px;}
+            .logo{font-size:28px;font-weight:900;color:#1a3a6b;letter-spacing:0.05em;border:3px solid #1a3a6b;padding:6px 12px;}
+            .logo-sub{font-size:8px;color:#1a3a6b;letter-spacing:0.2em;text-transform:uppercase;}
+            h1{font-size:18px;font-weight:900;text-transform:uppercase;letter-spacing:0.05em;text-align:center;flex:1;padding:0 20px;}
+            .meta{font-size:9px;text-align:right;line-height:1.8;}
+            table{width:100%;border-collapse:collapse;margin-bottom:20px;}
+            th{background:#1a3a6b;color:#fff;padding:7px 10px;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:0.05em;}
+            td{padding:8px 10px;border-bottom:1px solid #e0e0e0;font-size:11px;}
+            .total-row td{background:#f5f5f5;font-weight:bold;font-size:12px;}
+            .sig{margin-top:30px;display:flex;gap:40px;}
+            .sig-block{flex:1;border-top:1px solid #000;padding-top:6px;font-size:10px;}
+            .badge{display:inline-block;padding:2px 8px;border-radius:3px;font-size:9px;font-weight:bold;text-transform:uppercase;letter-spacing:0.08em;}
+            @media print{body{padding:14px 24px;}@page{margin:1cm;}}
+          </style></head><body>
+            <div class="header">
+              <div><div class="logo">FARMER</div><div class="logo-sub">Development, Inc.</div></div>
+              <h1>Landscaping Services Proposal</h1>
+              <div class="meta"><div>124 N Grand Ave</div><div>Fowlerville, MI 48836</div><div>AP@FarmerDevelopment.com</div><div style="margin-top:6px"><strong>Date:</strong> ${today}</div><div><strong>Season:</strong> ${lawnBidSeason}</div></div>
+            </div>
+            <table style="margin-bottom:14px;border:1px solid #ddd;">
+              <tbody>
+                <tr><td style="width:50%;padding:8px 12px;border-right:1px solid #ddd;"><strong>Prepared For:</strong><br/><span style="font-size:14px;font-weight:bold;">${co?.name || "________________________"}</span></td>
+                <td style="padding:8px 12px;"><strong>Property Address:</strong><br/><span style="font-size:12px;">${site.address}</span>${site.storeNumber ? `<br/><span style="font-size:10px;color:#666;">Store #${site.storeNumber}</span>` : ""}</td></tr>
+                <tr><td style="padding:8px 12px;border-right:1px solid #ddd;" colspan="2"><strong>Contract Template:</strong> <span class="badge" style="background:#e8eef8;color:#1a3a6b;">${template.label}</span></td></tr>
+              </tbody>
+            </table>
+            <table>
+              <thead><tr><th>Service</th><th>Frequency</th><th style="text-align:right">Season Price</th></tr></thead>
+              <tbody>
+                ${services.map(s => {
+                  const sv = bid.services[s.id];
+                  const freq = s.unit === "per_cut" ? "28 cuts/season" : s.unit === "monthly" ? "7 months" : "Per Season";
+                  const price = s.unit === "per_cut" ? sv.ourPrice * 28 : s.unit === "monthly" ? sv.ourPrice * 7 : sv.ourPrice;
+                  return `<tr><td>${s.label}</td><td>${freq}</td><td style="text-align:right">$${Math.round(price).toLocaleString()}</td></tr>`;
+                }).join("")}
+                <tr class="total-row"><td colspan="2">Annual Contract Total</td><td style="text-align:right;font-size:14px;color:#1a3a6b;">$${Math.round(annualOur).toLocaleString()}</td></tr>
+              </tbody>
+            </table>
+            <p style="font-size:10px;color:#555;margin-bottom:24px;line-height:1.6;">This proposal is valid for 30 days from the date above. All services will be performed in a professional and workmanlike manner. Owner may terminate with 30 days written notice. Pricing is for the ${lawnBidSeason} season only.</p>
+            <div class="sig">
+              <div class="sig-block"><strong>Farmer Development, Inc.</strong><br/><br/><br/>Signature: ________________________<br/>Name: ________________________<br/>Date: ________________________</div>
+              <div class="sig-block"><strong>${co?.name || "Owner / Authorized Representative"}</strong><br/><br/><br/>Signature: ________________________<br/>Name: ________________________<br/>Date: ________________________</div>
+            </div>
+          </body></html>`);
+          w.document.close();
+          setTimeout(() => w.print(), 400);
+          setOwnerProposalSiteId(null);
+        };
+
+        return (
+          <div style={{ position: "fixed", inset: 0, background: "#00000090", zIndex: 1100, display: "flex", alignItems: "center", justifyContent: "center" }} onClick={e => { if (e.target === e.currentTarget) setOwnerProposalSiteId(null); }}>
+            <div style={{ background: "#0F1117", border: "1px solid #1E2640", borderRadius: 14, width: "min(460px, 95vw)", padding: 28, display: "flex", flexDirection: "column", gap: 20 }}>
+              <div>
+                <div style={{ fontSize: 16, fontWeight: 700, color: "#FFFFFF", marginBottom: 4 }}>📋 Generate Owner Proposal</div>
+                <div style={{ fontSize: 11, color: "#3A4560" }}>{site.address} · {co?.name || "—"} · {services.length} service{services.length !== 1 ? "s" : ""} · <span style={{ color: "#4ADE80", fontWeight: 600 }}>${Math.round(annualOur).toLocaleString()}/yr</span></div>
+              </div>
+              <div>
+                <div style={{ fontSize: 10, color: "#3A4560", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 10 }}>Select Contract Template</div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {OWNER_CONTRACT_TEMPLATES.map(t => (
+                    <button key={t.id} onClick={() => generateProposal(t)} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 16px", background: "#0A0D16", border: "1px solid " + t.color + "40", borderRadius: 8, cursor: "pointer", fontFamily: "inherit", textAlign: "left", transition: "all 0.15s" }}
+                      onMouseEnter={e => e.currentTarget.style.background = t.color + "15"}
+                      onMouseLeave={e => e.currentTarget.style.background = "#0A0D16"}>
+                      <div style={{ width: 10, height: 10, borderRadius: "50%", background: t.color, flexShrink: 0 }} />
+                      <div>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: "#E8ECF4" }}>{t.label}</div>
+                        <div style={{ fontSize: 10, color: "#3A4560", marginTop: 2 }}>Generates & prints proposal with {t.label} formatting</div>
+                      </div>
+                      <div style={{ marginLeft: "auto", fontSize: 12, color: t.color }}>Print →</div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <button onClick={() => setOwnerProposalSiteId(null)} style={{ padding: "9px 0", background: "transparent", border: "1px solid #1E2640", borderRadius: 7, color: "#6A7590", fontSize: 12, cursor: "pointer", fontFamily: "inherit" }}>Cancel</button>
             </div>
           </div>
         );
