@@ -5682,46 +5682,90 @@ Return ONLY valid JSON, no markdown, no extra text:
                       {/* ── PATH 3: SELF-ESTIMATE ── */}
                       {estPath === "self_estimate" && (() => {
                         const se = job.selfEstimate || {};
-                        const step = se.step || "category"; // category | abg | doors | summary
+                        const step = se.step || "category";
                         const updateSE = patch => update({ selfEstimate: { ...se, ...patch } });
 
-                        // ── ABG PRICING ──
+                        // ── ABG PRICING (tonnage-based) ──
+                        // 5x5 fully packed ≈ 0.5 ton → $300. Rate ~$600/ton.
+                        // Sqft ratio drives tonnage capacity vs 5x5 baseline.
                         const ABG_UNITS = [
-                          { size: "5x5",   sqft: 25,  pricePerSqft: 0.55 },
-                          { size: "5x10",  sqft: 50,  pricePerSqft: 0.50 },
-                          { size: "10x10", sqft: 100, pricePerSqft: 0.45 },
-                          { size: "10x15", sqft: 150, pricePerSqft: 0.42 },
-                          { size: "10x20", sqft: 200, pricePerSqft: 0.40 },
-                          { size: "10x30", sqft: 300, pricePerSqft: 0.38 },
+                          { size: "5x5",   sqft: 25,  baseTons: 0.50 },
+                          { size: "5x10",  sqft: 50,  baseTons: 1.00 },
+                          { size: "10x10", sqft: 100, baseTons: 2.00 },
+                          { size: "10x15", sqft: 150, baseTons: 3.00 },
+                          { size: "10x20", sqft: 200, baseTons: 4.00 },
+                          { size: "10x30", sqft: 300, baseTons: 6.00 },
                         ];
+                        const RATE_PER_TON = 600; // $600/ton → 5x5 full = $300 ✓
                         const abgUnits = se.abgUnits || {};
-                        const calcABG = () => ABG_UNITS.reduce((total, u) => {
+                        const calcABGRow = (u) => {
                           const row = abgUnits[u.size] || {};
                           const qty = Number(row.qty || 0);
-                          const pct = Number(row.pct || 100) / 100;
-                          return total + qty * pct * u.sqft * u.pricePerSqft;
-                        }, 0);
+                          const pct = Number(row.pct != null ? row.pct : 100) / 100;
+                          const tons = qty * u.baseTons * pct;
+                          const price = Math.round(tons * RATE_PER_TON);
+                          return { qty, pct: Number(row.pct != null ? row.pct : 100), tons, price };
+                        };
+                        const calcABG = () => ABG_UNITS.reduce((t, u) => t + calcABGRow(u).price, 0);
 
                         // ── DOOR PRICING ──
                         const DOOR_PRICE_SINGLE = 125;
                         const DOOR_PRICE_DOUBLE = 195;
-                        const doorQty = Number(se.doorQty || 0);
+                        const doorQty  = Number(se.doorQty || 0);
                         const doorType = se.doorType || "single";
                         const calcDoors = () => doorQty * (doorType === "double" ? DOOR_PRICE_DOUBLE : DOOR_PRICE_SINGLE);
 
-                        // ── COMBINED TOTAL ──
+                        // ── TOTALS ──
                         const categories = se.categories || [];
                         const abgTotal   = categories.includes("abg")   ? calcABG()   : 0;
                         const doorTotal  = categories.includes("doors") ? calcDoors() : 0;
                         const calcTotal  = abgTotal + doorTotal;
                         const finalPrice = se.overridePrice != null ? Number(se.overridePrice) : calcTotal;
 
+                        // ── BUILD PROPOSAL SECTIONS from line items ──
+                        const buildProposalSections = () => {
+                          const sections = [];
+                          if (categories.includes("abg")) {
+                            const items = ABG_UNITS
+                              .filter(u => calcABGRow(u).qty > 0)
+                              .map(u => {
+                                const row = calcABGRow(u);
+                                return {
+                                  id: "i_abg_" + u.size,
+                                  desc: "ABG — " + u.size + " units (" + row.pct + "% full, ~" + row.tons.toFixed(1) + " tons)",
+                                  unit: "EA",
+                                  qty: row.qty,
+                                  unitPrice: row.qty > 0 ? Math.round(row.price / row.qty) : 0,
+                                  labor: 0, material: 0, sub: row.price, misc: 0,
+                                };
+                              });
+                            if (items.length) sections.push({ id: "s_abg", name: "01 Abandoned Goods Removal", items });
+                          }
+                          if (categories.includes("doors")) {
+                            sections.push({
+                              id: "s_doors", name: "02 Coiling Door Spring Replacement",
+                              items: [{
+                                id: "i_doors",
+                                desc: "Coiling door spring replacement — " + doorType + " spring",
+                                unit: "EA",
+                                qty: doorQty,
+                                unitPrice: doorType === "double" ? DOOR_PRICE_DOUBLE : DOOR_PRICE_SINGLE,
+                                labor: 0, material: 0, sub: calcDoors(), misc: 0,
+                              }]
+                            });
+                          }
+                          if (!sections.length) {
+                            sections.push({ id: "s1", name: "01 General", items: [{ id: "i1", desc: job.scopeOfWork || job.name, unit: "LS", qty: 1, unitPrice: finalPrice, labor: 0, material: 0, sub: finalPrice, misc: 0 }] });
+                          }
+                          return sections;
+                        };
+
                         // ── STEP: CATEGORY SELECT ──
                         if (step === "category") return (
                           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                            <div style={{ fontSize: 10, color: "#4A5278", marginBottom: 2 }}>What work is involved? (select all that apply)</div>
+                            <div style={{ fontSize: 10, color: "#4A5278", marginBottom: 2 }}>What work is involved? Select all that apply.</div>
                             {[
-                              { id: "abg", label: "🏠 ABG (Above-Ground Units)", desc: "Paint, caulk, sealant by unit size" },
+                              { id: "abg",   label: "🗑 Abandoned Goods (ABG)", desc: "Trash removal priced by unit size & fill %" },
                               { id: "doors", label: "🚪 Coiling Doors", desc: "Spring replacement by door count" },
                               { id: "other", label: "📝 Other / Manual Entry", desc: "I'll enter the price directly" },
                             ].map(cat => {
@@ -5752,16 +5796,22 @@ Return ONLY valid JSON, no markdown, no extra text:
                         if (step === "abg") return (
                           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                              <div style={{ fontSize: 11, fontWeight: 700, color: "#818CF8" }}>🏠 ABG Units</div>
+                              <div style={{ fontSize: 11, fontWeight: 700, color: "#818CF8" }}>🗑 Abandoned Goods — Unit Breakdown</div>
                               <button onClick={() => updateSE({ step: "category" })} style={{ fontSize: 9, background: "transparent", border: "none", color: "#4A5278", cursor: "pointer", fontFamily: "inherit" }}>← Back</button>
                             </div>
-                            <div style={{ fontSize: 10, color: "#4A5278" }}>Enter unit count and % occupancy for each size.</div>
-                            <div style={{ display: "grid", gridTemplateColumns: "60px 1fr 1fr", gap: "6px 8px", alignItems: "center" }}>
+                            <div style={{ fontSize: 10, color: "#4A5278", lineHeight: 1.5 }}>Enter qty and fill % for each size. 5x5 @ 100% ≈ $300.</div>
+
+                            {/* Header */}
+                            <div style={{ display: "grid", gridTemplateColumns: "52px 1fr 1fr 60px", gap: "4px 6px", alignItems: "center" }}>
                               <div style={{ fontSize: 9, color: "#4A5278", textTransform: "uppercase" }}>Size</div>
                               <div style={{ fontSize: 9, color: "#4A5278", textTransform: "uppercase" }}># Units</div>
                               <div style={{ fontSize: 9, color: "#4A5278", textTransform: "uppercase" }}>% Full</div>
+                              <div style={{ fontSize: 9, color: "#4A5278", textTransform: "uppercase", textAlign: "right" }}>Price</div>
+
                               {ABG_UNITS.map(u => {
                                 const row = abgUnits[u.size] || {};
+                                const calc = calcABGRow(u);
+                                const hasData = calc.qty > 0;
                                 return [
                                   <div key={u.size + "l"} style={{ fontSize: 11, fontWeight: 600, color: "#1A2240" }}>{u.size}</div>,
                                   <input key={u.size + "q"} className="fi" type="number" min="0" placeholder="0"
@@ -5769,16 +5819,20 @@ Return ONLY valid JSON, no markdown, no extra text:
                                     onChange={e => updateSE({ abgUnits: { ...abgUnits, [u.size]: { ...row, qty: e.target.value } } })}
                                     style={{ padding: "6px 8px", fontSize: 12 }} />,
                                   <input key={u.size + "p"} className="fi" type="number" min="0" max="100" placeholder="100"
-                                    value={row.pct || ""}
+                                    value={row.pct != null ? row.pct : ""}
                                     onChange={e => updateSE({ abgUnits: { ...abgUnits, [u.size]: { ...row, pct: e.target.value } } })}
                                     style={{ padding: "6px 8px", fontSize: 12 }} />,
+                                  <div key={u.size + "p2"} style={{ fontSize: 11, fontWeight: 700, color: hasData ? "#818CF8" : "#CBD1E8", textAlign: "right" }}>
+                                    {hasData ? fmt(calc.price) : "—"}
+                                  </div>,
                                 ];
                               })}
                             </div>
+
                             {calcABG() > 0 && (
-                              <div style={{ background: "#818CF810", border: "1px solid #818CF830", borderRadius: 6, padding: "8px 12px", display: "flex", justifyContent: "space-between" }}>
-                                <span style={{ fontSize: 11, color: "#4A5278" }}>ABG Estimate</span>
-                                <span style={{ fontSize: 13, fontWeight: 700, color: "#818CF8" }}>{fmt(calcABG())}</span>
+                              <div style={{ background: "#818CF810", border: "1px solid #818CF830", borderRadius: 6, padding: "8px 12px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                <span style={{ fontSize: 11, color: "#4A5278" }}>ABG Subtotal</span>
+                                <span style={{ fontSize: 14, fontWeight: 700, color: "#818CF8" }}>{fmt(calcABG())}</span>
                               </div>
                             )}
                             <button onClick={() => updateSE({ step: categories.includes("doors") ? "doors" : "summary" })}
@@ -5821,9 +5875,9 @@ Return ONLY valid JSON, no markdown, no extra text:
                               </div>
                             </div>
                             {calcDoors() > 0 && (
-                              <div style={{ background: "#818CF810", border: "1px solid #818CF830", borderRadius: 6, padding: "8px 12px", display: "flex", justifyContent: "space-between" }}>
-                                <span style={{ fontSize: 11, color: "#4A5278" }}>Doors Estimate</span>
-                                <span style={{ fontSize: 13, fontWeight: 700, color: "#818CF8" }}>{fmt(calcDoors())}</span>
+                              <div style={{ background: "#818CF810", border: "1px solid #818CF830", borderRadius: 6, padding: "8px 12px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                <span style={{ fontSize: 11, color: "#4A5278" }}>Doors Subtotal</span>
+                                <span style={{ fontSize: 14, fontWeight: 700, color: "#818CF8" }}>{fmt(calcDoors())}</span>
                               </div>
                             )}
                             <button onClick={() => updateSE({ step: "summary" })}
@@ -5842,68 +5896,85 @@ Return ONLY valid JSON, no markdown, no extra text:
                                 style={{ fontSize: 9, background: "transparent", border: "none", color: "#4A5278", cursor: "pointer", fontFamily: "inherit" }}>← Back</button>
                             </div>
 
-                            {/* Line items */}
-                            <div style={{ background: "#ECEEF8", borderRadius: 6, padding: "10px 12px", display: "flex", flexDirection: "column", gap: 6 }}>
-                              {categories.includes("abg") && (
-                                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11 }}>
-                                  <span style={{ color: "#4A5278" }}>ABG Units</span>
-                                  <span style={{ fontWeight: 700, color: "#1A2240" }}>{fmt(abgTotal)}</span>
+                            {/* ABG breakdown */}
+                            {categories.includes("abg") && (
+                              <div style={{ background: "#ECEEF8", borderRadius: 6, padding: "10px 12px" }}>
+                                <div style={{ fontSize: 9, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 6 }}>Abandoned Goods</div>
+                                {ABG_UNITS.filter(u => calcABGRow(u).qty > 0).map(u => {
+                                  const r = calcABGRow(u);
+                                  return (
+                                    <div key={u.size} style={{ display: "flex", justifyContent: "space-between", fontSize: 11, marginBottom: 3 }}>
+                                      <span style={{ color: "#4A5278" }}>{r.qty} × {u.size} @ {r.pct}% full ({r.tons.toFixed(1)} tons)</span>
+                                      <span style={{ fontWeight: 700, color: "#1A2240" }}>{fmt(r.price)}</span>
+                                    </div>
+                                  );
+                                })}
+                                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, fontWeight: 700, borderTop: "1px solid #CBD1E8", paddingTop: 5, marginTop: 4 }}>
+                                  <span>ABG Total</span><span style={{ color: "#818CF8" }}>{fmt(abgTotal)}</span>
                                 </div>
-                              )}
-                              {categories.includes("doors") && (
+                              </div>
+                            )}
+
+                            {/* Doors breakdown */}
+                            {categories.includes("doors") && doorTotal > 0 && (
+                              <div style={{ background: "#ECEEF8", borderRadius: 6, padding: "10px 12px" }}>
+                                <div style={{ fontSize: 9, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 6 }}>Coiling Doors</div>
                                 <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11 }}>
-                                  <span style={{ color: "#4A5278" }}>Coiling Doors ({doorQty} × {doorType})</span>
+                                  <span style={{ color: "#4A5278" }}>{doorQty} door{doorQty !== 1 ? "s" : ""} × {doorType} spring @ {fmt(doorType === "double" ? DOOR_PRICE_DOUBLE : DOOR_PRICE_SINGLE)}</span>
                                   <span style={{ fontWeight: 700, color: "#1A2240" }}>{fmt(doorTotal)}</span>
                                 </div>
-                              )}
-                              {categories.includes("other") && (
-                                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11 }}>
-                                  <span style={{ color: "#4A5278" }}>Manual entry</span>
-                                  <span style={{ color: "#4A5278" }}>see override below</span>
-                                </div>
-                              )}
-                              {calcTotal > 0 && (
-                                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, fontWeight: 700, borderTop: "1px solid #CBD1E8", paddingTop: 6, marginTop: 2 }}>
-                                  <span style={{ color: "#1A2240" }}>Calculator Total</span>
-                                  <span style={{ color: "#818CF8" }}>{fmt(calcTotal)}</span>
-                                </div>
-                              )}
-                            </div>
+                              </div>
+                            )}
+
+                            {/* Grand total */}
+                            {calcTotal > 0 && (
+                              <div style={{ background: "#818CF815", border: "1px solid #818CF840", borderRadius: 6, padding: "10px 12px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                                <span style={{ fontSize: 12, fontWeight: 700, color: "#1A2240" }}>Calculator Total</span>
+                                <span style={{ fontSize: 16, fontWeight: 800, color: "#818CF8" }}>{fmt(calcTotal)}</span>
+                              </div>
+                            )}
 
                             {/* Override */}
                             <div>
-                              <div style={{ fontSize: 10, color: "#4A5278", marginBottom: 4 }}>
-                                Override Price <span style={{ color: "#818CF830", fontStyle: "italic" }}>(optional — leave blank to use calculator total)</span>
-                              </div>
+                              <div style={{ fontSize: 10, color: "#4A5278", marginBottom: 4 }}>Override Price <span style={{ fontStyle: "italic" }}>(optional)</span></div>
                               <div style={{ position: "relative" }}>
                                 <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "#4A5278", fontSize: 13 }}>$</span>
                                 <input className="fi" type="number" placeholder={calcTotal > 0 ? String(Math.round(calcTotal)) : "0.00"} style={{ paddingLeft: 22 }}
                                   value={se.overridePrice != null ? se.overridePrice : ""}
                                   onChange={e => updateSE({ overridePrice: e.target.value === "" ? null : e.target.value })} />
                               </div>
-                              {se.overridePrice != null && (
-                                <div style={{ fontSize: 10, color: "#FCD34D", marginTop: 3 }}>⚠ Using override price of {fmt(Number(se.overridePrice))}</div>
-                              )}
+                              {se.overridePrice != null && <div style={{ fontSize: 10, color: "#FCD34D", marginTop: 3 }}>⚠ Override: using {fmt(Number(se.overridePrice))} instead of {fmt(calcTotal)}</div>}
                             </div>
 
                             <div>
-                              <div style={{ fontSize: 10, color: "#4A5278", marginBottom: 4 }}>Scope Notes</div>
-                              <textarea className="fi" rows={2} placeholder="Materials, assumptions, access notes…"
+                              <div style={{ fontSize: 10, color: "#4A5278", marginBottom: 4 }}>Additional Scope Notes</div>
+                              <textarea className="fi" rows={2} placeholder="Access notes, conditions, exclusions…"
                                 value={se.notes || ""}
                                 onChange={e => updateSE({ notes: e.target.value })}
                                 style={{ resize: "vertical" }} />
                             </div>
 
-                            {finalPrice > 0 && (
+                            {finalPrice > 0 ? (
                               <button onClick={() => {
-                                const n = finalPrice;
+                                const n = se.overridePrice != null ? Number(se.overridePrice) : calcTotal;
                                 const gp = fmGrossProfit(n);
-                                update({ selfEstimate: { ...se, step: "summary" }, selfEstimatePrice: String(n), contractValue: n, grossProfit: gp, nte: String(n), vendorNTE: String(fmVendorNTE(n)), stage: "generate_proposal" });
-                              }} style={{ width: "100%", padding: "10px", borderRadius: 6, border: "none", background: "#818CF8", color: "#1A2240", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
-                                Use {fmt(finalPrice)} → Generate Proposal
+                                const sections = buildProposalSections();
+                                update({ selfEstimate: { ...se, step: "summary" }, selfEstimatePrice: String(n), contractValue: n, grossProfit: gp, nte: String(n), vendorNTE: String(fmVendorNTE(n)) });
+                                // Open proposal pre-populated with line items
+                                setProposalJob({ ...job, contractValue: n, grossProfit: gp });
+                                setProposalGrossValue(n);
+                                setProposalScope((job.scopeOfWork || job.name || "") + (se.notes ? "\n" + se.notes : ""));
+                                setProposalNum("");
+                                setProposalExtras({ laborBurden: 0, salesTax: 0, generalLiability: 0, permitCost: 0 });
+                                setProposalSections(sections);
+                                setShowProposal(true);
+                                update({ stage: "generate_proposal" });
+                              }} style={{ width: "100%", padding: "11px", borderRadius: 6, border: "none", background: "#818CF8", color: "#1A2240", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
+                                ✨ Use {fmt(finalPrice)} → Open Proposal
                               </button>
+                            ) : (
+                              <div style={{ fontSize: 10, color: "#3D4570", fontStyle: "italic" }}>Fill in quantities above or enter an override price</div>
                             )}
-                            {!finalPrice && <div style={{ fontSize: 10, color: "#3D4570", fontStyle: "italic" }}>Enter an override price or go back and fill in quantities</div>}
                           </div>
                         );
 
