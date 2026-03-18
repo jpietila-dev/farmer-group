@@ -5456,12 +5456,34 @@ Return ONLY valid JSON, no markdown, no extra text:
                   const nte      = Number(job.contractValue || job.nte || 0);
                   const gp       = job.grossProfit > 0 ? job.grossProfit : fmGrossProfit(nte);
                   const vendorNTE = job.vendorNTE ? Number(job.vendorNTE) : fmVendorNTE(nte);
+                  const estPath  = job.estimatingPath || null; // "known_vendor" | "bid_out" | "self_estimate"
+                  const bidInvites = job.bidInvites || []; // [{ subId, token, sentAt, price, status }]
+
                   return (
                     <div style={{ background: "#F0F2F8", border: "1px solid #818CF840", borderRadius: 8, padding: "14px" }}>
-                      <div style={{ fontSize: 10, color: "#818CF8", textTransform: "uppercase", letterSpacing: "0.07em", fontWeight: 700, marginBottom: 12 }}>📋 Estimating</div>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                        <div style={{ fontSize: 10, color: "#818CF8", textTransform: "uppercase", letterSpacing: "0.07em", fontWeight: 700 }}>📋 Estimating</div>
+                        {estPath && (
+                          <button onClick={() => update({ estimatingPath: null })}
+                            style={{ fontSize: 9, background: "transparent", border: "none", color: "#4A5278", cursor: "pointer", fontFamily: "inherit", padding: 0 }}>
+                            ← Change path
+                          </button>
+                        )}
+                      </div>
 
-                      {/* Margin breakdown */}
-                      {nte > 0 && (
+                      {/* NTE row */}
+                      {!nte ? (
+                        <div style={{ marginBottom: 12 }}>
+                          <div style={{ fontSize: 10, color: "#4A5278", marginBottom: 4 }}>Authorized Amount (NTE)</div>
+                          <input className="fi" type="number" placeholder="From the work order ticket"
+                            value={job.contractValue || job.nte || ""}
+                            onChange={e => {
+                              const n = Number(e.target.value||0);
+                              const gp = fmGrossProfit(n);
+                              update({ contractValue: n, grossProfit: gp, nte: String(n), vendorNTE: String(fmVendorNTE(n)) });
+                            }} />
+                        </div>
+                      ) : (
                         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 12, background: "#ECEEF8", borderRadius: 6, padding: "10px 12px" }}>
                           <div>
                             <div style={{ fontSize: 9, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 2 }}>Gross Value</div>
@@ -5470,7 +5492,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                           <div>
                             <div style={{ fontSize: 9, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 2 }}>Our GP</div>
                             <div style={{ fontSize: 15, fontWeight: 700, color: "#4ADE80" }}>{fmt(gp)}</div>
-                            <div style={{ fontSize: 9, color: "#4A5278" }}>{Math.round((gp/nte)*100)}% · {gp <= 125 && gp === fmGrossProfit(nte) ? "min $125" : "30%"}</div>
+                            <div style={{ fontSize: 9, color: "#4A5278" }}>{nte > 0 ? Math.round((gp/nte)*100) : 0}%</div>
                           </div>
                           <div>
                             <div style={{ fontSize: 9, color: "#FCD34D", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 2 }}>Vendor NTE</div>
@@ -5479,102 +5501,218 @@ Return ONLY valid JSON, no markdown, no extra text:
                         </div>
                       )}
 
-                      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                        {!nte && (
-                          <div>
-                            <div style={{ fontSize: 10, color: "#4A5278", marginBottom: 4 }}>Authorized Amount (NTE / Gross Value)</div>
-                            <input className="fi" type="number" placeholder="From the work order ticket"
-                              value={job.contractValue || job.nte || ""}
-                              onChange={e => {
-                                const n = Number(e.target.value||0);
-                                const gp = fmGrossProfit(n);
-                                update({ contractValue: n, grossProfit: gp, nte: String(n), vendorNTE: String(fmVendorNTE(n)) });
-                              }} />
-                          </div>
-                        )}
-                        <div>
-                          <div style={{ fontSize: 10, color: "#4A5278", marginBottom: 4 }}>Assign Subcontractor to Quote</div>
-                          <select className="fi" value={job.subcontractorId || ""} onChange={e => update({ subcontractorId: e.target.value })}>
-                            <option value="">Select sub…</option>
-                            {subcontractors.map(s => <option key={s.id} value={s.id}>{s.name}{s.trade ? " — " + s.trade : ""}</option>)}
-                          </select>
+                      {/* ── PATH SELECTOR ── */}
+                      {!estPath && (
+                        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                          <div style={{ fontSize: 10, color: "#4A5278", marginBottom: 2 }}>How are we estimating this job?</div>
+                          <button onClick={() => update({ estimatingPath: "known_vendor" })}
+                            style={{ width: "100%", padding: "10px 12px", borderRadius: 7, border: "1px solid #CBD1E8", background: "#FFF", cursor: "pointer", fontFamily: "inherit", textAlign: "left" }}>
+                            <div style={{ fontSize: 12, fontWeight: 700, color: "#1A2240" }}>👤 Known Vendor</div>
+                            <div style={{ fontSize: 10, color: "#4A5278", marginTop: 2 }}>I know who's doing this — send them the job directly</div>
+                          </button>
+                          <button onClick={() => update({ estimatingPath: "bid_out" })}
+                            style={{ width: "100%", padding: "10px 12px", borderRadius: 7, border: "1px solid #CBD1E8", background: "#FFF", cursor: "pointer", fontFamily: "inherit", textAlign: "left" }}>
+                            <div style={{ fontSize: 12, fontWeight: 700, color: "#1A2240" }}>🏁 Bid It Out</div>
+                            <div style={{ fontSize: 10, color: "#4A5278", marginTop: 2 }}>Send to multiple vendors, pick the best price</div>
+                          </button>
+                          <button onClick={() => update({ estimatingPath: "self_estimate" })}
+                            style={{ width: "100%", padding: "10px 12px", borderRadius: 7, border: "1px solid #CBD1E8", background: "#FFF", cursor: "pointer", fontFamily: "inherit", textAlign: "left" }}>
+                            <div style={{ fontSize: 12, fontWeight: 700, color: "#1A2240" }}>🧮 Self-Estimate</div>
+                            <div style={{ fontSize: 10, color: "#4A5278", marginTop: 2 }}>Use our calculators to build the price, find vendor post-approval</div>
+                          </button>
                         </div>
-                        {job.subcontractorId && (
-                          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                            {job.subSentAt ? (
-                              <div style={{ background: "#4ADE8015", border: "1px solid #4ADE8030", borderRadius: 6, padding: "10px 12px" }}>
-                                <div style={{ fontSize: 11, color: "#4ADE80", fontWeight: 600 }}>✓ Sent — {new Date(job.subSentAt).toLocaleDateString()}</div>
-                                {job.subToken && (
-                                  <button onClick={() => navigator.clipboard?.writeText(window.location.origin + "/?subtoken=" + job.subToken)}
-                                    style={{ marginTop: 6, fontSize: 10, background: "transparent", border: "1px solid #4ADE8030", borderRadius: 4, color: "#4ADE80", padding: "4px 8px", cursor: "pointer", fontFamily: "inherit" }}>
-                                    📋 Copy Link Again
-                                  </button>
-                                )}
-                              </div>
-                            ) : (
-                              <button
-                                onClick={() => {
-                                  const token = "sub" + Math.random().toString(36).slice(2, 10);
-                                  update({ subSentAt: new Date().toISOString(), stage: "waiting_quote", subToken: token });
-                                  navigator.clipboard?.writeText(window.location.origin + "/?subtoken=" + token);
-                                  alert("✅ Link copied to clipboard!\n\nSend this to " + (subcontractors.find(s => s.id === job.subcontractorId)?.name || "the sub") + ":\n\n" + window.location.origin + "/?subtoken=" + token);
-                                }}
-                                style={{ width: "100%", padding: "10px", borderRadius: 6, border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 12, fontWeight: 700, background: "#818CF8", color: "#1A2240" }}>
-                                📤 Send to Sub for Quote
-                              </button>
-                            )}
-                          </div>
-                        )}
-                        {!job.subcontractorId && <div style={{ fontSize: 10, color: "#3D4570", fontStyle: "italic" }}>Assign a sub above to send for quote</div>}
+                      )}
 
-                        {/* ── Vendor Portal Send ── */}
-                        {job.subcontractorId && (
-                          <div style={{ marginTop: 4, paddingTop: 12, borderTop: "1px solid #D4D9EE" }}>
-                            <div style={{ fontSize: 10, color: "#4A5278", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.07em" }}>Vendor Portal Link</div>
-                            {job.vendorPortalStatus === "scheduled" ? (
-                              <div style={{ background: "#4ADE8015", border: "1px solid #4ADE8030", borderRadius: 6, padding: "10px 12px" }}>
-                                <div style={{ fontSize: 11, color: "#4ADE80", fontWeight: 700, marginBottom: 2 }}>✅ Vendor Scheduled</div>
-                                <div style={{ fontSize: 11, color: "#1A2240" }}>Price: <strong>{fmt(Number(job.vendorPortalPrice||0))}</strong></div>
-                                <div style={{ fontSize: 11, color: "#1A2240" }}>Date: <strong>{job.vendorPortalDate}{job.vendorPortalTime ? " @ " + job.vendorPortalTime : ""}</strong></div>
-                                {job.vendorPortalNote && <div style={{ fontSize: 10, color: "#4A5278", marginTop: 4 }}>{job.vendorPortalNote}</div>}
-                              </div>
-                            ) : job.vendorPortalStatus === "quote_submitted" ? (
-                              <div style={{ background: "#3B6FE815", border: "1px solid #3B6FE840", borderRadius: 6, padding: "10px 12px" }}>
-                                <div style={{ fontSize: 11, color: "#3B6FE8", fontWeight: 700, marginBottom: 2 }}>📋 Quote Submitted — Needs Review</div>
-                                <div style={{ fontSize: 11, color: "#1A2240" }}>Vendor price: <strong style={{ color: "#F87171" }}>{fmt(Number(job.vendorPortalPrice||0))}</strong></div>
-                                {job.vendorPortalNote && <div style={{ fontSize: 10, color: "#4A5278", marginTop: 4 }}>{job.vendorPortalNote}</div>}
-                                <button onClick={() => update({ vendorPortalStatus: null, vendorToken: null, vendorSentAt: null })}
-                                  style={{ marginTop: 6, fontSize: 10, background: "transparent", border: "1px solid #3B6FE830", borderRadius: 4, color: "#3B6FE8", padding: "4px 8px", cursor: "pointer", fontFamily: "inherit" }}>
-                                  ↩ Reset & Resend
-                                </button>
-                              </div>
-                            ) : job.vendorSentAt ? (
-                              <div style={{ background: "#FCD34D10", border: "1px solid #FCD34D30", borderRadius: 6, padding: "10px 12px" }}>
-                                <div style={{ fontSize: 11, color: "#FCD34D", fontWeight: 600 }}>⏳ Sent — Awaiting Response</div>
-                                <div style={{ fontSize: 10, color: "#4A5278", marginTop: 2 }}>{new Date(job.vendorSentAt).toLocaleDateString()}</div>
-                                {job.vendorToken && (
+                      {/* ── PATH 1: KNOWN VENDOR ── */}
+                      {estPath === "known_vendor" && (
+                        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                          <div>
+                            <div style={{ fontSize: 10, color: "#4A5278", marginBottom: 4 }}>Assign Vendor</div>
+                            <select className="fi" value={job.subcontractorId || ""} onChange={e => update({ subcontractorId: e.target.value })}>
+                              <option value="">Select vendor…</option>
+                              {subcontractors.map(s => <option key={s.id} value={s.id}>{s.name}{s.trade ? " — " + s.trade : ""}</option>)}
+                            </select>
+                          </div>
+                          {job.subcontractorId && (
+                            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                              {/* Vendor portal status */}
+                              {job.vendorPortalStatus === "scheduled" ? (
+                                <div style={{ background: "#4ADE8015", border: "1px solid #4ADE8030", borderRadius: 6, padding: "10px 12px" }}>
+                                  <div style={{ fontSize: 11, color: "#4ADE80", fontWeight: 700 }}>✅ Vendor Scheduled</div>
+                                  <div style={{ fontSize: 11, color: "#1A2240", marginTop: 3 }}>Price: <strong>{fmt(Number(job.vendorPortalPrice||0))}</strong> · Date: <strong>{job.vendorPortalDate}</strong></div>
+                                  {job.vendorPortalNote && <div style={{ fontSize: 10, color: "#4A5278", marginTop: 3 }}>{job.vendorPortalNote}</div>}
+                                  <button onClick={() => update({ stage: "do_work", startDate: job.vendorPortalDate })}
+                                    style={{ marginTop: 8, width: "100%", padding: "8px", borderRadius: 6, border: "none", background: "#4ADE80", color: "#0A1F0A", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
+                                    ✅ Move to Do Work
+                                  </button>
+                                </div>
+                              ) : job.vendorPortalStatus === "quote_submitted" ? (
+                                <div style={{ background: "#F8717115", border: "1px solid #F8717130", borderRadius: 6, padding: "10px 12px" }}>
+                                  <div style={{ fontSize: 11, color: "#F87171", fontWeight: 700 }}>⚠ Over NTE — Quote Needs Review</div>
+                                  <div style={{ fontSize: 11, color: "#1A2240", marginTop: 3 }}>Vendor price: <strong>{fmt(Number(job.vendorPortalPrice||0))}</strong> vs NTE: {fmt(vendorNTE)}</div>
+                                  {job.vendorPortalNote && <div style={{ fontSize: 10, color: "#4A5278", marginTop: 3 }}>{job.vendorPortalNote}</div>}
+                                  <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
+                                    <button onClick={() => update({ stage: "generate_proposal", vendorQuotePrice: job.vendorPortalPrice })}
+                                      style={{ flex: 1, padding: "7px", borderRadius: 5, border: "none", background: "#3B6FE8", color: "#FFF", fontSize: 10, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
+                                      → Generate Proposal
+                                    </button>
+                                    <button onClick={() => update({ vendorPortalStatus: null, vendorToken: null, vendorSentAt: null })}
+                                      style={{ flex: 0, padding: "7px 10px", borderRadius: 5, border: "1px solid #CBD1E8", background: "transparent", color: "#4A5278", fontSize: 10, cursor: "pointer", fontFamily: "inherit" }}>
+                                      ↩ Reset
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : job.vendorSentAt && job.vendorToken ? (
+                                <div style={{ background: "#FCD34D10", border: "1px solid #FCD34D30", borderRadius: 6, padding: "10px 12px" }}>
+                                  <div style={{ fontSize: 11, color: "#FCD34D", fontWeight: 600 }}>⏳ Awaiting vendor response</div>
+                                  <div style={{ fontSize: 10, color: "#4A5278", marginTop: 2 }}>Sent {new Date(job.vendorSentAt).toLocaleDateString()}</div>
                                   <button onClick={() => navigator.clipboard?.writeText(window.location.origin + "/?vendortoken=" + job.vendorToken)}
                                     style={{ marginTop: 6, fontSize: 10, background: "transparent", border: "1px solid #FCD34D30", borderRadius: 4, color: "#FCD34D", padding: "4px 8px", cursor: "pointer", fontFamily: "inherit" }}>
                                     📋 Copy Link Again
                                   </button>
-                                )}
+                                </div>
+                              ) : (
+                                <button
+                                  onClick={() => {
+                                    const vt = "vendor" + Math.random().toString(36).slice(2, 10);
+                                    const link = window.location.origin + "/?vendortoken=" + vt;
+                                    update({ vendorToken: vt, vendorSentAt: new Date().toISOString(), vendorPortalStatus: "pending", stage: "waiting_quote" });
+                                    navigator.clipboard?.writeText(link);
+                                    alert("✅ Vendor portal link copied!\n\nSend to " + (subcontractors.find(s => s.id === job.subcontractorId)?.name || "vendor") + ":\n\n" + link);
+                                  }}
+                                  style={{ width: "100%", padding: "10px", borderRadius: 6, border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 12, fontWeight: 700, background: "#3B6FE8", color: "#FFF" }}>
+                                  🔗 Send Vendor Portal Link
+                                </button>
+                              )}
+                            </div>
+                          )}
+                          {!job.subcontractorId && <div style={{ fontSize: 10, color: "#3D4570", fontStyle: "italic" }}>Select a vendor above to send them the job</div>}
+                        </div>
+                      )}
+
+                      {/* ── PATH 2: BID OUT ── */}
+                      {estPath === "bid_out" && (() => {
+                        const invites = job.bidInvites || [];
+                        const responded = invites.filter(i => i.price);
+                        const lowestBid = responded.length ? responded.reduce((a, b) => Number(a.price) < Number(b.price) ? a : b) : null;
+                        return (
+                          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                            <div style={{ fontSize: 10, color: "#4A5278" }}>Add vendors to the bid list. Each gets their own portal link.</div>
+
+                            {/* Invite list */}
+                            {invites.map((inv, idx) => {
+                              const s = subcontractors.find(x => x.id === inv.subId);
+                              const isLow = lowestBid && inv.subId === lowestBid.subId;
+                              return (
+                                <div key={inv.subId} style={{ background: isLow ? "#4ADE8010" : "#ECEEF8", border: "1px solid " + (isLow ? "#4ADE8040" : "#CBD1E8"), borderRadius: 6, padding: "10px 12px" }}>
+                                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                                    <div>
+                                      <div style={{ fontSize: 11, fontWeight: 700, color: "#1A2240" }}>{s?.name || "Unknown"}{isLow && <span style={{ marginLeft: 6, fontSize: 9, background: "#4ADE8020", color: "#4ADE80", padding: "1px 6px", borderRadius: 3 }}>LOWEST</span>}</div>
+                                      {inv.sentAt && <div style={{ fontSize: 10, color: "#4A5278", marginTop: 1 }}>Sent {new Date(inv.sentAt).toLocaleDateString()}</div>}
+                                    </div>
+                                    <div style={{ textAlign: "right" }}>
+                                      {inv.price ? (
+                                        <div style={{ fontSize: 13, fontWeight: 700, color: isLow ? "#4ADE80" : "#1A2240" }}>{fmt(Number(inv.price))}</div>
+                                      ) : inv.sentAt ? (
+                                        <span style={{ fontSize: 10, color: "#FCD34D" }}>⏳ Waiting</span>
+                                      ) : null}
+                                    </div>
+                                  </div>
+                                  <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
+                                    {!inv.sentAt ? (
+                                      <button onClick={() => {
+                                        const vt = "vendor" + Math.random().toString(36).slice(2, 10);
+                                        const link = window.location.origin + "/?vendortoken=" + vt;
+                                        const updated = invites.map((x, i) => i === idx ? { ...x, token: vt, sentAt: new Date().toISOString() } : x);
+                                        update({ bidInvites: updated });
+                                        navigator.clipboard?.writeText(link);
+                                        alert("✅ Link copied for " + (s?.name || "vendor") + ":\n\n" + link);
+                                      }} style={{ flex: 1, padding: "6px", borderRadius: 5, border: "none", background: "#3B6FE8", color: "#FFF", fontSize: 10, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
+                                        🔗 Send Link
+                                      </button>
+                                    ) : inv.sentAt && !inv.price ? (
+                                      <button onClick={() => navigator.clipboard?.writeText(window.location.origin + "/?vendortoken=" + inv.token)}
+                                        style={{ flex: 1, padding: "6px", borderRadius: 5, border: "1px solid #FCD34D30", background: "transparent", color: "#FCD34D", fontSize: 10, cursor: "pointer", fontFamily: "inherit" }}>
+                                        📋 Resend Link
+                                      </button>
+                                    ) : isLow ? (
+                                      <button onClick={() => update({ subcontractorId: inv.subId, vendorPortalPrice: inv.price, vendorPortalStatus: "scheduled", estimatingPath: "known_vendor", bidInvites: invites })}
+                                        style={{ flex: 1, padding: "6px", borderRadius: 5, border: "none", background: "#4ADE80", color: "#0A1F0A", fontSize: 10, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
+                                        ✅ Select Winner
+                                      </button>
+                                    ) : (
+                                      <button onClick={() => update({ subcontractorId: inv.subId, vendorPortalPrice: inv.price, vendorPortalStatus: "scheduled", estimatingPath: "known_vendor", bidInvites: invites })}
+                                        style={{ flex: 1, padding: "6px", borderRadius: 5, border: "1px solid #CBD1E8", background: "transparent", color: "#4A5278", fontSize: 10, cursor: "pointer", fontFamily: "inherit" }}>
+                                        Select
+                                      </button>
+                                    )}
+                                    <button onClick={() => update({ bidInvites: invites.filter((_, i) => i !== idx) })}
+                                      style={{ padding: "6px 8px", borderRadius: 5, border: "1px solid #F8717130", background: "transparent", color: "#F87171", fontSize: 10, cursor: "pointer", fontFamily: "inherit" }}>
+                                      ✕
+                                    </button>
+                                  </div>
+                                </div>
+                              );
+                            })}
+
+                            {/* Add vendor to bid */}
+                            {(() => {
+                              const alreadyAdded = new Set(invites.map(i => i.subId));
+                              const available = subcontractors.filter(s => !alreadyAdded.has(s.id));
+                              return available.length > 0 ? (
+                                <select className="fi" value="" onChange={e => {
+                                  if (!e.target.value) return;
+                                  update({ bidInvites: [...invites, { subId: e.target.value, token: null, sentAt: null, price: null, status: "pending" }] });
+                                }}>
+                                  <option value="">+ Add vendor to bid list…</option>
+                                  {available.map(s => <option key={s.id} value={s.id}>{s.name}{s.trade ? " — " + s.trade : ""}</option>)}
+                                </select>
+                              ) : <div style={{ fontSize: 10, color: "#4A5278", fontStyle: "italic" }}>All vendors added</div>;
+                            })()}
+
+                            {responded.length > 0 && (
+                              <div style={{ background: "#FCD34D10", border: "1px solid #FCD34D30", borderRadius: 6, padding: "8px 12px", fontSize: 10, color: "#FCD34D" }}>
+                                {responded.length} of {invites.length} vendors responded · Lowest: {fmt(Number(lowestBid.price))}
                               </div>
-                            ) : (
-                              <button
-                                onClick={() => {
-                                  const vt = "vendor" + Math.random().toString(36).slice(2, 10);
-                                  const link = window.location.origin + "/?vendortoken=" + vt;
-                                  update({ vendorToken: vt, vendorSentAt: new Date().toISOString(), vendorPortalStatus: "pending" });
-                                  navigator.clipboard?.writeText(link);
-                                  alert("✅ Vendor portal link copied!\n\nSend this to " + (subcontractors.find(s => s.id === job.subcontractorId)?.name || "the vendor") + ":\n\n" + link);
-                                }}
-                                style={{ width: "100%", padding: "10px", borderRadius: 6, border: "2px solid #3B6FE8", cursor: "pointer", fontFamily: "inherit", fontSize: 12, fontWeight: 700, background: "#3B6FE810", color: "#3B6FE8" }}>
-                                🔗 Send Vendor Portal Link
-                              </button>
                             )}
                           </div>
-                        )}
-                      </div>
+                        );
+                      })()}
+
+                      {/* ── PATH 3: SELF-ESTIMATE ── */}
+                      {estPath === "self_estimate" && (
+                        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                          <div style={{ background: "#ECEEF8", borderRadius: 6, padding: "10px 12px", fontSize: 11, color: "#4A5278", lineHeight: 1.5 }}>
+                            Build your price using the calculators below, then generate a proposal for owner approval. You'll assign a vendor after they sign off.
+                          </div>
+                          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                            <div style={{ fontSize: 10, color: "#4A5278", marginBottom: 2 }}>Your Estimated Price</div>
+                            <div style={{ position: "relative" }}>
+                              <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "#4A5278", fontSize: 13 }}>$</span>
+                              <input className="fi" type="number" placeholder="0.00" style={{ paddingLeft: 22 }}
+                                value={job.selfEstimatePrice || ""}
+                                onChange={e => {
+                                  const n = Number(e.target.value||0);
+                                  const gp = fmGrossProfit(n);
+                                  update({ selfEstimatePrice: e.target.value, contractValue: n, grossProfit: gp, nte: String(n), vendorNTE: String(fmVendorNTE(n)) });
+                                }} />
+                            </div>
+                            <div style={{ fontSize: 10, color: "#4A5278", marginBottom: 2, marginTop: 4 }}>Scope Notes</div>
+                            <textarea className="fi" rows={3} placeholder="Describe the work, materials, labor assumptions…"
+                              value={job.selfEstimateNotes || ""}
+                              onChange={e => update({ selfEstimateNotes: e.target.value })}
+                              style={{ resize: "vertical" }} />
+                          </div>
+                          {job.selfEstimatePrice && (
+                            <button onClick={() => update({ stage: "generate_proposal" })}
+                              style={{ width: "100%", padding: "10px", borderRadius: 6, border: "none", background: "#818CF8", color: "#1A2240", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
+                              → Generate Proposal
+                            </button>
+                          )}
+                          {!job.selfEstimatePrice && <div style={{ fontSize: 10, color: "#3D4570", fontStyle: "italic" }}>Enter your price above to proceed to proposal</div>}
+                        </div>
+                      )}
+
                     </div>
                   );
                 })()}
