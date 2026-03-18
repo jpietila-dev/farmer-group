@@ -325,6 +325,289 @@ const INIT_FM_JOBS = [
   { id: "fm3", name: "Plumbing Leak Repair",  companyId: "c2", siteId: "s1", contractValue: 4500,  grossProfit: 1200, stage: "estimating", startDate: "",           endDate: "",           pm: "Mike Torres", pct: 0,   bidDueDate: "2026-03-19", quoteDueDate: "", proposalDate: "", followUpDate: "", buyoutDate: "", invoiceDate: "", notes: "Awaiting scope", storeCode: "001", projectNo: "260003", ownersProjectNo: "", vendorInvoiceAmount: 0, vendorInvoiceNumber: "", subcontractorId: "", vendorNextStep: "", vendorQuotePrice: "", vendorQuoteScope: "", scopeOfWork: "S207 pipe is leaking near unit 3B", coordinator: "" },
 ];
 
+// ── VENDOR PORTAL PAGE ───────────────────────────────────────────────────────
+function VendorPage({ token, fmJobs, setFmJobs, subcontractors, companies, sites }) {
+  const job  = fmJobs.find(j => j.vendorToken === token);
+  const sub  = subcontractors.find(s => s.id === job?.subcontractorId);
+  const co   = companies.find(c => c.id === job?.companyId);
+  const site = sites.find(s => s.id === job?.siteId);
+
+  const [view,      setView]      = useState("main"); // main | schedule | quote | done
+  const [price,     setPrice]     = useState("");
+  const [schedDate, setSchedDate] = useState("");
+  const [schedTime, setSchedTime] = useState("");
+  const [quoteNote, setQuoteNote] = useState("");
+
+  const nte       = job ? Number(job.vendorNTE || fmVendorNTE(Number(job.contractValue || 0))) : 0;
+  const priceNum  = Number(price) || 0;
+  const underNTE  = priceNum > 0 && priceNum <= nte;
+  const overNTE   = priceNum > 0 && priceNum > nte;
+
+  const update = patch => setFmJobs(prev => prev.map(j => j.id === job.id ? { ...j, ...patch } : j));
+
+  const fmt2 = v => "$" + Number(v||0).toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+
+  // ── Already responded ──
+  if (job?.vendorPortalStatus === "scheduled") return (
+    <div style={{ minHeight: "100vh", background: "#0F1729", display: "flex", alignItems: "center", justifyContent: "center", padding: 24, fontFamily: "'Inter','Segoe UI',sans-serif" }}>
+      <div style={{ maxWidth: 440, width: "100%", textAlign: "center" }}>
+        <div style={{ fontSize: 56, marginBottom: 16 }}>✅</div>
+        <div style={{ fontSize: 22, fontWeight: 700, color: "#F0F4FF", marginBottom: 8 }}>Job Scheduled!</div>
+        <div style={{ background: "#1E2A48", borderRadius: 12, padding: 20, border: "1px solid #2A3860", marginTop: 20, textAlign: "left" }}>
+          <div style={{ fontSize: 11, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 10 }}>Confirmation</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <div style={{ display: "flex", gap: 10 }}><span style={{ fontSize: 12, color: "#4A5278", width: 70 }}>Job</span><span style={{ fontSize: 12, color: "#BCC6D8" }}>{job.name}</span></div>
+            <div style={{ display: "flex", gap: 10 }}><span style={{ fontSize: 12, color: "#4A5278", width: 70 }}>Price</span><span style={{ fontSize: 12, color: "#4ADE80", fontWeight: 700 }}>{fmt2(job.vendorPortalPrice)}</span></div>
+            <div style={{ display: "flex", gap: 10 }}><span style={{ fontSize: 12, color: "#4A5278", width: 70 }}>Date</span><span style={{ fontSize: 12, color: "#BCC6D8" }}>{job.vendorPortalDate}{job.vendorPortalTime ? " at " + job.vendorPortalTime : ""}</span></div>
+            {site?.accessCode && (
+              <div style={{ marginTop: 8, background: "#4ADE8010", border: "1px solid #4ADE8030", borderRadius: 8, padding: "12px 14px" }}>
+                <div style={{ fontSize: 10, color: "#4ADE80", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 4 }}>🔐 Site Access Code</div>
+                <div style={{ fontSize: 24, fontWeight: 800, color: "#4ADE80", letterSpacing: "0.15em", fontFamily: "monospace" }}>{site.accessCode}</div>
+              </div>
+            )}
+          </div>
+        </div>
+        <div style={{ marginTop: 28, fontSize: 12, color: "#2A3860" }}>Farmer Development Inc. · farmerdevelopment.com</div>
+      </div>
+    </div>
+  );
+
+  if (job?.vendorPortalStatus === "quote_submitted") return (
+    <div style={{ minHeight: "100vh", background: "#0F1729", display: "flex", alignItems: "center", justifyContent: "center", padding: 24, fontFamily: "'Inter','Segoe UI',sans-serif" }}>
+      <div style={{ maxWidth: 440, width: "100%", textAlign: "center" }}>
+        <div style={{ fontSize: 56, marginBottom: 16 }}>📋</div>
+        <div style={{ fontSize: 22, fontWeight: 700, color: "#F0F4FF", marginBottom: 8 }}>Quote Submitted</div>
+        <div style={{ fontSize: 14, color: "#4A5278", marginBottom: 24 }}>Your quote of {fmt2(job.vendorPortalPrice)} has been sent to the team for review. We'll be in touch shortly.</div>
+        <div style={{ marginTop: 28, fontSize: 12, color: "#2A3860" }}>Farmer Development Inc. · farmerdevelopment.com</div>
+      </div>
+    </div>
+  );
+
+  if (!job) return (
+    <div style={{ minHeight: "100vh", background: "#0F1729", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Inter','Segoe UI',sans-serif" }}>
+      <div style={{ textAlign: "center" }}>
+        <div style={{ fontSize: 48, marginBottom: 16 }}>🔗</div>
+        <div style={{ fontSize: 18, color: "#4A5278" }}>Link not found or expired.</div>
+      </div>
+    </div>
+  );
+
+  // ── Schedule view (under NTE) ──
+  if (view === "schedule") return (
+    <div style={{ minHeight: "100vh", background: "#0F1729", padding: 24, fontFamily: "'Inter','Segoe UI',sans-serif" }}>
+      <div style={{ maxWidth: 500, margin: "0 auto" }}>
+        <div style={{ marginBottom: 24 }}>
+          <button onClick={() => setView("main")} style={{ background: "transparent", border: "none", color: "#4A5278", fontSize: 13, cursor: "pointer", fontFamily: "inherit", padding: 0, marginBottom: 16 }}>← Back</button>
+          <div style={{ fontSize: 11, color: "#3B6FE8", fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 4 }}>FARMER DEVELOPMENT INC.</div>
+          <div style={{ fontSize: 20, fontWeight: 700, color: "#F0F4FF" }}>Schedule the Job</div>
+          <div style={{ fontSize: 13, color: "#4A5278", marginTop: 4 }}>{job.name}</div>
+        </div>
+
+        <div style={{ background: "#4ADE8015", border: "1px solid #4ADE8040", borderRadius: 10, padding: "12px 16px", marginBottom: 20, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div style={{ fontSize: 11, color: "#4ADE80", textTransform: "uppercase", letterSpacing: "0.07em" }}>✓ Your Price — Within NTE</div>
+          <div style={{ fontSize: 20, fontWeight: 700, color: "#4ADE80" }}>{fmt2(price)}</div>
+        </div>
+
+        <div style={{ background: "#1E2A48", borderRadius: 12, padding: 24, border: "1px solid #2A3860", display: "flex", flexDirection: "column", gap: 18 }}>
+          <div>
+            <label style={{ display: "block", fontSize: 11, color: "#4A5278", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.07em" }}>Scheduled Date *</label>
+            <input type="date" value={schedDate} onChange={e => setSchedDate(e.target.value)}
+              style={{ width: "100%", boxSizing: "border-box", padding: "12px", background: "#0F1729", border: "1px solid #2A3860", borderRadius: 8, color: "#F0F4FF", fontSize: 15, fontFamily: "inherit", outline: "none" }} />
+          </div>
+          <div>
+            <label style={{ display: "block", fontSize: 11, color: "#4A5278", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.07em" }}>Arrival Time (optional)</label>
+            <input type="time" value={schedTime} onChange={e => setSchedTime(e.target.value)}
+              style={{ width: "100%", boxSizing: "border-box", padding: "12px", background: "#0F1729", border: "1px solid #2A3860", borderRadius: 8, color: "#F0F4FF", fontSize: 15, fontFamily: "inherit", outline: "none" }} />
+          </div>
+          <div>
+            <label style={{ display: "block", fontSize: 11, color: "#4A5278", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.07em" }}>Notes (optional)</label>
+            <textarea value={quoteNote} onChange={e => setQuoteNote(e.target.value)} rows={2} placeholder="Any prep needed, access notes, questions…"
+              style={{ width: "100%", boxSizing: "border-box", padding: "10px 12px", background: "#0F1729", border: "1px solid #2A3860", borderRadius: 8, color: "#F0F4FF", fontSize: 14, fontFamily: "inherit", outline: "none", resize: "vertical" }} />
+          </div>
+
+          {schedDate && site?.accessCode && (
+            <div style={{ background: "#4ADE8010", border: "1px solid #4ADE8030", borderRadius: 8, padding: "12px 14px" }}>
+              <div style={{ fontSize: 10, color: "#4ADE80", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 4 }}>🔐 Site Access Code — Save This!</div>
+              <div style={{ fontSize: 28, fontWeight: 800, color: "#4ADE80", letterSpacing: "0.15em", fontFamily: "monospace" }}>{site.accessCode}</div>
+            </div>
+          )}
+
+          <button disabled={!schedDate}
+            onClick={() => {
+              update({
+                vendorPortalPrice: price,
+                vendorPortalDate: schedDate,
+                vendorPortalTime: schedTime,
+                vendorPortalNote: quoteNote,
+                vendorPortalStatus: "scheduled",
+                vendorPortalRespondedAt: new Date().toISOString(),
+                stage: "do_work",
+                startDate: schedDate,
+                vendorInvoiceAmount: price,
+              });
+              setView("done");
+            }}
+            style={{ width: "100%", padding: "14px", borderRadius: 10, border: "none", background: !schedDate ? "#1E2A48" : "#4ADE80", color: !schedDate ? "#2A3860" : "#0A1F0A", fontSize: 15, fontWeight: 800, cursor: schedDate ? "pointer" : "not-allowed", fontFamily: "inherit" }}>
+            ✅ Confirm Schedule
+          </button>
+        </div>
+        <div style={{ marginTop: 24, textAlign: "center", fontSize: 11, color: "#2A3860" }}>Farmer Development Inc. · (810) 844-1544 · farmerdevelopment.com</div>
+      </div>
+    </div>
+  );
+
+  // ── Over-NTE quote view ──
+  if (view === "quote") return (
+    <div style={{ minHeight: "100vh", background: "#0F1729", padding: 24, fontFamily: "'Inter','Segoe UI',sans-serif" }}>
+      <div style={{ maxWidth: 500, margin: "0 auto" }}>
+        <div style={{ marginBottom: 24 }}>
+          <button onClick={() => setView("main")} style={{ background: "transparent", border: "none", color: "#4A5278", fontSize: 13, cursor: "pointer", fontFamily: "inherit", padding: 0, marginBottom: 16 }}>← Back</button>
+          <div style={{ fontSize: 11, color: "#3B6FE8", fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 4 }}>FARMER DEVELOPMENT INC.</div>
+          <div style={{ fontSize: 20, fontWeight: 700, color: "#F0F4FF" }}>Submit Your Quote</div>
+          <div style={{ fontSize: 13, color: "#4A5278", marginTop: 4 }}>{job.name}</div>
+        </div>
+
+        <div style={{ background: "#F8717115", border: "1px solid #F8717140", borderRadius: 10, padding: "12px 16px", marginBottom: 20 }}>
+          <div style={{ fontSize: 11, color: "#F87171", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 4 }}>⚠ Price Exceeds NTE by {fmt2(priceNum - nte)}</div>
+          <div style={{ fontSize: 12, color: "#BCC6D8" }}>Your quote will be submitted for management review before scheduling. We'll contact you within 1 business day.</div>
+        </div>
+
+        <div style={{ background: "#1E2A48", borderRadius: 12, padding: 24, border: "1px solid #2A3860", display: "flex", flexDirection: "column", gap: 18 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "#0F1729", borderRadius: 8, padding: "12px 14px" }}>
+            <span style={{ fontSize: 12, color: "#4A5278" }}>Your Quoted Price</span>
+            <span style={{ fontSize: 18, fontWeight: 700, color: "#F87171" }}>{fmt2(price)}</span>
+          </div>
+          <div>
+            <label style={{ display: "block", fontSize: 11, color: "#4A5278", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.07em" }}>Why does this exceed the NTE? *</label>
+            <textarea value={quoteNote} onChange={e => setQuoteNote(e.target.value)} rows={4} placeholder="Explain the additional cost — materials, labor, scope changes, access issues, etc."
+              style={{ width: "100%", boxSizing: "border-box", padding: "10px 12px", background: "#0F1729", border: "1px solid #2A3860", borderRadius: 8, color: "#F0F4FF", fontSize: 14, fontFamily: "inherit", outline: "none", resize: "vertical" }} />
+          </div>
+          <div style={{ display: "flex", gap: 10 }}>
+            <button onClick={() => setView("main")} style={{ flex: "0 0 auto", padding: "12px 18px", borderRadius: 8, border: "1px solid #2A3860", background: "transparent", color: "#4A5278", fontSize: 13, cursor: "pointer", fontFamily: "inherit" }}>← Back</button>
+            <button disabled={!quoteNote.trim()}
+              onClick={() => {
+                update({
+                  vendorPortalPrice: price,
+                  vendorPortalNote: quoteNote,
+                  vendorPortalStatus: "quote_submitted",
+                  vendorPortalRespondedAt: new Date().toISOString(),
+                  stage: "generate_proposal",
+                  vendorQuotePrice: price,
+                  vendorQuoteScope: quoteNote,
+                  subResponse: "quoted",
+                });
+                setView("done");
+              }}
+              style={{ flex: 1, padding: "12px", borderRadius: 8, border: "none", background: !quoteNote.trim() ? "#1E2A48" : "#3B6FE8", color: !quoteNote.trim() ? "#2A3860" : "#FFF", fontSize: 14, fontWeight: 700, cursor: quoteNote.trim() ? "pointer" : "not-allowed", fontFamily: "inherit" }}>
+              📋 Submit Quote for Review
+            </button>
+          </div>
+        </div>
+        <div style={{ marginTop: 24, textAlign: "center", fontSize: 11, color: "#2A3860" }}>Farmer Development Inc. · (810) 844-1544 · farmerdevelopment.com</div>
+      </div>
+    </div>
+  );
+
+  // ── Main view ──
+  return (
+    <div style={{ minHeight: "100vh", background: "#0F1729", padding: 24, fontFamily: "'Inter','Segoe UI',sans-serif" }}>
+      <div style={{ maxWidth: 500, margin: "0 auto" }}>
+        {/* Header */}
+        <div style={{ marginBottom: 28 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
+            <div style={{ width: 36, height: 36, background: "#3B6FE8", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 800, color: "#fff" }}>FG</div>
+            <div style={{ fontSize: 12, color: "#3B6FE8", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase" }}>FARMER DEVELOPMENT INC.</div>
+          </div>
+          <div style={{ fontSize: 24, fontWeight: 800, color: "#F0F4FF", lineHeight: 1.2, marginBottom: 6 }}>Work Assignment</div>
+          {sub && <div style={{ fontSize: 14, color: "#4A5278" }}>Hi {sub.name} — please review the job below and respond.</div>}
+        </div>
+
+        {/* Job Details Card */}
+        <div style={{ background: "#1E2A48", borderRadius: 12, padding: 22, border: "1px solid #2A3860", marginBottom: 16 }}>
+          <div style={{ fontSize: 11, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 10 }}>Job Details</div>
+          <div style={{ fontSize: 19, fontWeight: 700, color: "#F0F4FF", marginBottom: 14 }}>{job.name}</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
+            {co   && <div style={{ display: "flex", gap: 12 }}><span style={{ fontSize: 12, color: "#4A5278", width: 90, flexShrink: 0 }}>Client</span><span style={{ fontSize: 12, color: "#BCC6D8" }}>{co.name}</span></div>}
+            {site && <div style={{ display: "flex", gap: 12 }}><span style={{ fontSize: 12, color: "#4A5278", width: 90, flexShrink: 0 }}>Location</span><span style={{ fontSize: 12, color: "#BCC6D8" }}>{site.address}{site.storeNumber ? " (Store #" + site.storeNumber + ")" : ""}</span></div>}
+            {job.ownersProjectNo && <div style={{ display: "flex", gap: 12 }}><span style={{ fontSize: 12, color: "#4A5278", width: 90, flexShrink: 0 }}>Work Order</span><span style={{ fontSize: 12, color: "#BCC6D8" }}>{job.ownersProjectNo}</span></div>}
+            {job.bidDueDate && <div style={{ display: "flex", gap: 12 }}><span style={{ fontSize: 12, color: "#4A5278", width: 90, flexShrink: 0 }}>Respond By</span><span style={{ fontSize: 12, color: "#FCD34D", fontWeight: 600 }}>{new Date(job.bidDueDate + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}</span></div>}
+            {site?.phone && <div style={{ display: "flex", gap: 12 }}><span style={{ fontSize: 12, color: "#4A5278", width: 90, flexShrink: 0 }}>Site Phone</span><span style={{ fontSize: 12, color: "#BCC6D8" }}>{site.phone}</span></div>}
+          </div>
+          {job.scopeOfWork && (
+            <div style={{ marginTop: 14, paddingTop: 14, borderTop: "1px solid #2A3860" }}>
+              <div style={{ fontSize: 11, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 6 }}>Scope of Work</div>
+              <div style={{ fontSize: 13, color: "#BCC6D8", lineHeight: 1.7 }}>{job.scopeOfWork}</div>
+            </div>
+          )}
+          {job.notes && (
+            <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid #2A3860" }}>
+              <div style={{ fontSize: 11, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 4 }}>Notes from Team</div>
+              <div style={{ fontSize: 13, color: "#BCC6D8", lineHeight: 1.7 }}>{job.notes}</div>
+            </div>
+          )}
+        </div>
+
+        {/* Photos */}
+        {job.photos && job.photos.length > 0 && (
+          <div style={{ background: "#1E2A48", borderRadius: 12, padding: 20, border: "1px solid #2A3860", marginBottom: 16 }}>
+            <div style={{ fontSize: 11, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 12 }}>📸 Site Photos</div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 8 }}>
+              {job.photos.map((p, i) => (
+                <a key={i} href={p.data} target="_blank" rel="noreferrer">
+                  <img src={p.data} alt={p.name || "Photo " + (i+1)} style={{ width: "100%", borderRadius: 8, objectFit: "cover", aspectRatio: "4/3", display: "block" }} />
+                  {p.caption && <div style={{ fontSize: 11, color: "#4A5278", marginTop: 4 }}>{p.caption}</div>}
+                </a>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* NTE Banner */}
+        <div style={{ background: "#FCD34D10", border: "1px solid #FCD34D40", borderRadius: 12, padding: "18px 20px", marginBottom: 20, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div>
+            <div style={{ fontSize: 10, color: "#FCD34D", textTransform: "uppercase", letterSpacing: "0.09em", marginBottom: 4 }}>Authorized Amount (NTE)</div>
+            <div style={{ fontSize: 11, color: "#8A7030" }}>Enter a price at or below this amount to self-schedule</div>
+          </div>
+          <div style={{ fontSize: 32, fontWeight: 800, color: "#FCD34D", letterSpacing: "-0.02em" }}>{fmt2(nte)}</div>
+        </div>
+
+        {/* Price Entry */}
+        <div style={{ background: "#1E2A48", borderRadius: 12, padding: 22, border: "1px solid #2A3860", marginBottom: 16 }}>
+          <div style={{ fontSize: 11, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 12 }}>Your Price</div>
+          <div style={{ position: "relative", marginBottom: 10 }}>
+            <span style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: "#4A5278", fontSize: 16, fontWeight: 600 }}>$</span>
+            <input value={price} onChange={e => setPrice(e.target.value)} type="number" min="0" step="0.01" placeholder="0.00"
+              style={{ width: "100%", boxSizing: "border-box", padding: "14px 14px 14px 30px", background: "#0F1729", border: "1px solid " + (underNTE ? "#4ADE80" : overNTE ? "#F87171" : "#2A3860"), borderRadius: 10, color: "#F0F4FF", fontSize: 18, fontFamily: "inherit", outline: "none" }} />
+          </div>
+          {underNTE && <div style={{ fontSize: 12, fontWeight: 600, color: "#4ADE80", marginBottom: 4 }}>✓ Within NTE — you can self-schedule this job</div>}
+          {overNTE  && <div style={{ fontSize: 12, fontWeight: 600, color: "#F87171", marginBottom: 4 }}>⚠ Exceeds NTE by {fmt2(priceNum - nte)} — your quote will go to the team for approval</div>}
+        </div>
+
+        {/* Action buttons — change based on price */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {underNTE && (
+            <button onClick={() => setView("schedule")}
+              style={{ width: "100%", padding: "16px", borderRadius: 10, border: "none", background: "#4ADE80", color: "#0A1F0A", fontSize: 16, fontWeight: 800, cursor: "pointer", fontFamily: "inherit" }}>
+              📅 Continue to Schedule
+            </button>
+          )}
+          {overNTE && (
+            <button onClick={() => setView("quote")}
+              style={{ width: "100%", padding: "16px", borderRadius: 10, border: "none", background: "#3B6FE8", color: "#FFF", fontSize: 16, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
+              📋 Submit Quote for Approval
+            </button>
+          )}
+          {!price && (
+            <div style={{ textAlign: "center", fontSize: 12, color: "#2A3860", padding: "8px 0" }}>Enter your price above to continue</div>
+          )}
+        </div>
+
+        <div style={{ marginTop: 32, textAlign: "center", fontSize: 11, color: "#2A3860" }}>Farmer Development Inc. · (810) 844-1544 · farmerdevelopment.com</div>
+      </div>
+    </div>
+  );
+}
+
 // ── SUB-FACING RESPONSE PAGE ─────────────────────────────────────────────────
 function SubPage({ token, fmJobs, setFmJobs, subcontractors, companies, sites }) {
   const job = fmJobs.find(j => j.subToken === token);
@@ -733,6 +1016,7 @@ export default function App() {
   // URL routing — sub-facing page
   const urlToken  = useMemo(() => new URLSearchParams(window.location.search).get("subtoken"), []);
   const urlSched  = useMemo(() => new URLSearchParams(window.location.search).get("schedtoken"), []);
+  const urlVendor = useMemo(() => new URLSearchParams(window.location.search).get("vendortoken"), []);
 
   const [activeBU,  setActiveBU]  = useState("all");
   const [activeNav, setActiveNav] = useState("dashboard");
@@ -1533,8 +1817,9 @@ Return ONLY valid JSON, no markdown, no extra text:
   const panelOpen = selectedJob || selectedOpp || selectedCompany || selectedSite || selectedCapexJob || selectedFmJob;
 
   // Render sub-facing page if subtoken is in URL
-  if (urlToken) return <SubPage token={urlToken} fmJobs={fmJobs} setFmJobs={setFmJobs} subcontractors={subcontractors} companies={companies} sites={sites} />;
-  if (urlSched) return <SchedPage token={urlSched} fmJobs={fmJobs} setFmJobs={setFmJobs} subcontractors={subcontractors} companies={companies} sites={sites} />;
+  if (urlToken)  return <SubPage    token={urlToken}  fmJobs={fmJobs} setFmJobs={setFmJobs} subcontractors={subcontractors} companies={companies} sites={sites} />;
+  if (urlSched)  return <SchedPage  token={urlSched}  fmJobs={fmJobs} setFmJobs={setFmJobs} subcontractors={subcontractors} companies={companies} sites={sites} />;
+  if (urlVendor) return <VendorPage token={urlVendor} fmJobs={fmJobs} setFmJobs={setFmJobs} subcontractors={subcontractors} companies={companies} sites={sites} />;
 
   // Loading screen while Supabase fetches
   if (!supaReady && !dbError) return (
@@ -5241,6 +5526,54 @@ Return ONLY valid JSON, no markdown, no extra text:
                           </div>
                         )}
                         {!job.subcontractorId && <div style={{ fontSize: 10, color: "#3D4570", fontStyle: "italic" }}>Assign a sub above to send for quote</div>}
+
+                        {/* ── Vendor Portal Send ── */}
+                        {job.subcontractorId && (
+                          <div style={{ marginTop: 4, paddingTop: 12, borderTop: "1px solid #D4D9EE" }}>
+                            <div style={{ fontSize: 10, color: "#4A5278", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.07em" }}>Vendor Portal Link</div>
+                            {job.vendorPortalStatus === "scheduled" ? (
+                              <div style={{ background: "#4ADE8015", border: "1px solid #4ADE8030", borderRadius: 6, padding: "10px 12px" }}>
+                                <div style={{ fontSize: 11, color: "#4ADE80", fontWeight: 700, marginBottom: 2 }}>✅ Vendor Scheduled</div>
+                                <div style={{ fontSize: 11, color: "#1A2240" }}>Price: <strong>{fmt(Number(job.vendorPortalPrice||0))}</strong></div>
+                                <div style={{ fontSize: 11, color: "#1A2240" }}>Date: <strong>{job.vendorPortalDate}{job.vendorPortalTime ? " @ " + job.vendorPortalTime : ""}</strong></div>
+                                {job.vendorPortalNote && <div style={{ fontSize: 10, color: "#4A5278", marginTop: 4 }}>{job.vendorPortalNote}</div>}
+                              </div>
+                            ) : job.vendorPortalStatus === "quote_submitted" ? (
+                              <div style={{ background: "#3B6FE815", border: "1px solid #3B6FE840", borderRadius: 6, padding: "10px 12px" }}>
+                                <div style={{ fontSize: 11, color: "#3B6FE8", fontWeight: 700, marginBottom: 2 }}>📋 Quote Submitted — Needs Review</div>
+                                <div style={{ fontSize: 11, color: "#1A2240" }}>Vendor price: <strong style={{ color: "#F87171" }}>{fmt(Number(job.vendorPortalPrice||0))}</strong></div>
+                                {job.vendorPortalNote && <div style={{ fontSize: 10, color: "#4A5278", marginTop: 4 }}>{job.vendorPortalNote}</div>}
+                                <button onClick={() => update({ vendorPortalStatus: null, vendorToken: null, vendorSentAt: null })}
+                                  style={{ marginTop: 6, fontSize: 10, background: "transparent", border: "1px solid #3B6FE830", borderRadius: 4, color: "#3B6FE8", padding: "4px 8px", cursor: "pointer", fontFamily: "inherit" }}>
+                                  ↩ Reset & Resend
+                                </button>
+                              </div>
+                            ) : job.vendorSentAt ? (
+                              <div style={{ background: "#FCD34D10", border: "1px solid #FCD34D30", borderRadius: 6, padding: "10px 12px" }}>
+                                <div style={{ fontSize: 11, color: "#FCD34D", fontWeight: 600 }}>⏳ Sent — Awaiting Response</div>
+                                <div style={{ fontSize: 10, color: "#4A5278", marginTop: 2 }}>{new Date(job.vendorSentAt).toLocaleDateString()}</div>
+                                {job.vendorToken && (
+                                  <button onClick={() => navigator.clipboard?.writeText(window.location.origin + "/?vendortoken=" + job.vendorToken)}
+                                    style={{ marginTop: 6, fontSize: 10, background: "transparent", border: "1px solid #FCD34D30", borderRadius: 4, color: "#FCD34D", padding: "4px 8px", cursor: "pointer", fontFamily: "inherit" }}>
+                                    📋 Copy Link Again
+                                  </button>
+                                )}
+                              </div>
+                            ) : (
+                              <button
+                                onClick={() => {
+                                  const vt = "vendor" + Math.random().toString(36).slice(2, 10);
+                                  const link = window.location.origin + "/?vendortoken=" + vt;
+                                  update({ vendorToken: vt, vendorSentAt: new Date().toISOString(), vendorPortalStatus: "pending" });
+                                  navigator.clipboard?.writeText(link);
+                                  alert("✅ Vendor portal link copied!\n\nSend this to " + (subcontractors.find(s => s.id === job.subcontractorId)?.name || "the vendor") + ":\n\n" + link);
+                                }}
+                                style={{ width: "100%", padding: "10px", borderRadius: 6, border: "2px solid #3B6FE8", cursor: "pointer", fontFamily: "inherit", fontSize: 12, fontWeight: 700, background: "#3B6FE810", color: "#3B6FE8" }}>
+                                🔗 Send Vendor Portal Link
+                              </button>
+                            )}
+                          </div>
+                        )}
                       </div>
                     </div>
                   );
