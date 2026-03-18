@@ -332,59 +332,45 @@ function VendorPage({ token, fmJobs, setFmJobs, subcontractors, companies, sites
   const co   = companies.find(c => c.id === job?.companyId);
   const site = sites.find(s => s.id === job?.siteId);
 
-  const [view,      setView]      = useState("main"); // main | schedule | quote | done
-  const [price,     setPrice]     = useState("");
-  const [schedDate, setSchedDate] = useState("");
-  const [schedTime, setSchedTime] = useState("");
-  const [quoteNote, setQuoteNote] = useState("");
+  const [view,         setView]         = useState("main");
+  const [price,        setPrice]        = useState("");
+  const [schedDate,    setSchedDate]    = useState(job?.vendorPortalDate || "");
+  const [schedTime,    setSchedTime]    = useState(job?.vendorPortalTime || "");
+  const [schedNote,    setSchedNote]    = useState("");
+  const [quoteNote,    setQuoteNote]    = useState("");
+  const [accepted,     setAccepted]     = useState(false);
+  const [changeWarnOk, setChangeWarnOk] = useState(false);
 
-  const nte       = job ? Number(job.vendorNTE || fmVendorNTE(Number(job.contractValue || 0))) : 0;
-  const priceNum  = Number(price) || 0;
-  const underNTE  = priceNum > 0 && priceNum <= nte;
-  const overNTE   = priceNum > 0 && priceNum > nte;
+  const nte      = job ? Number(job.vendorNTE || fmVendorNTE(Number(job.contractValue || 0))) : 0;
+  const priceNum = Number(price) || 0;
+  const underNTE = priceNum > 0 && priceNum <= nte;
+  const overNTE  = priceNum > 0 && priceNum > nte;
+  const alreadyScheduled = !!(job?.vendorPortalDate);
+  const canChangeSchedule = alreadyScheduled && !job?.vendorScheduleChangedAt;
 
   const update = patch => setFmJobs(prev => prev.map(j => j.id === job.id ? { ...j, ...patch } : j));
-
   const fmt2 = v => "$" + Number(v||0).toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 
-  // ── Already responded ──
-  if (job?.vendorPortalStatus === "scheduled") return (
-    <div style={{ minHeight: "100vh", background: "#0F1729", display: "flex", alignItems: "center", justifyContent: "center", padding: 24, fontFamily: "'Inter','Segoe UI',sans-serif" }}>
-      <div style={{ maxWidth: 440, width: "100%", textAlign: "center" }}>
-        <div style={{ fontSize: 56, marginBottom: 16 }}>✅</div>
-        <div style={{ fontSize: 22, fontWeight: 700, color: "#F0F4FF", marginBottom: 8 }}>Job Scheduled!</div>
-        <div style={{ background: "#1E2A48", borderRadius: 12, padding: 20, border: "1px solid #2A3860", marginTop: 20, textAlign: "left" }}>
-          <div style={{ fontSize: 11, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 10 }}>Confirmation</div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            <div style={{ display: "flex", gap: 10 }}><span style={{ fontSize: 12, color: "#4A5278", width: 70 }}>Job</span><span style={{ fontSize: 12, color: "#BCC6D8" }}>{job.name}</span></div>
-            <div style={{ display: "flex", gap: 10 }}><span style={{ fontSize: 12, color: "#4A5278", width: 70 }}>Price</span><span style={{ fontSize: 12, color: "#4ADE80", fontWeight: 700 }}>{fmt2(job.vendorPortalPrice)}</span></div>
-            <div style={{ display: "flex", gap: 10 }}><span style={{ fontSize: 12, color: "#4A5278", width: 70 }}>Date</span><span style={{ fontSize: 12, color: "#BCC6D8" }}>{job.vendorPortalDate}{job.vendorPortalTime ? " at " + job.vendorPortalTime : ""}</span></div>
-            {site?.accessCode && (
-              <div style={{ marginTop: 8, background: "#4ADE8010", border: "1px solid #4ADE8030", borderRadius: 8, padding: "12px 14px" }}>
-                <div style={{ fontSize: 10, color: "#4ADE80", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 4 }}>🔐 Site Access Code</div>
-                <div style={{ fontSize: 24, fontWeight: 800, color: "#4ADE80", letterSpacing: "0.15em", fontFamily: "monospace" }}>{site.accessCode}</div>
-              </div>
-            )}
-          </div>
-        </div>
-        <div style={{ marginTop: 28, fontSize: 12, color: "#2A3860" }}>Farmer Development Inc. · farmerdevelopment.com</div>
+  const S = { // shared styles
+    page:   { minHeight: "100vh", background: "#0F1729", padding: "24px 20px", fontFamily: "'Inter','Segoe UI',sans-serif" },
+    wrap:   { maxWidth: 500, margin: "0 auto" },
+    card:   { background: "#1E2A48", borderRadius: 12, padding: 22, border: "1px solid #2A3860", marginBottom: 16 },
+    input:  { width: "100%", boxSizing: "border-box", padding: "13px 14px", background: "#0F1729", border: "1px solid #2A3860", borderRadius: 8, color: "#F0F4FF", fontSize: 15, fontFamily: "inherit", outline: "none" },
+    label:  { display: "block", fontSize: 11, color: "#4A5278", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.07em" },
+    btnGreen: { width: "100%", padding: "15px", borderRadius: 10, border: "none", background: "#4ADE80", color: "#0A1F0A", fontSize: 15, fontWeight: 800, cursor: "pointer", fontFamily: "inherit" },
+    btnBlue:  { width: "100%", padding: "15px", borderRadius: 10, border: "none", background: "#3B6FE8", color: "#FFF", fontSize: 15, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" },
+    footer: { marginTop: 28, textAlign: "center", fontSize: 11, color: "#2A3860" },
+    logo: (
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 20 }}>
+        <div style={{ width: 36, height: 36, background: "#3B6FE8", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 800, color: "#fff" }}>FG</div>
+        <div style={{ fontSize: 12, color: "#3B6FE8", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase" }}>FARMER DEVELOPMENT INC.</div>
       </div>
-    </div>
-  );
+    ),
+  };
 
-  if (job?.vendorPortalStatus === "quote_submitted") return (
-    <div style={{ minHeight: "100vh", background: "#0F1729", display: "flex", alignItems: "center", justifyContent: "center", padding: 24, fontFamily: "'Inter','Segoe UI',sans-serif" }}>
-      <div style={{ maxWidth: 440, width: "100%", textAlign: "center" }}>
-        <div style={{ fontSize: 56, marginBottom: 16 }}>📋</div>
-        <div style={{ fontSize: 22, fontWeight: 700, color: "#F0F4FF", marginBottom: 8 }}>Quote Submitted</div>
-        <div style={{ fontSize: 14, color: "#4A5278", marginBottom: 24 }}>Your quote of {fmt2(job.vendorPortalPrice)} has been sent to the team for review. We'll be in touch shortly.</div>
-        <div style={{ marginTop: 28, fontSize: 12, color: "#2A3860" }}>Farmer Development Inc. · farmerdevelopment.com</div>
-      </div>
-    </div>
-  );
-
+  // ── Not found ──
   if (!job) return (
-    <div style={{ minHeight: "100vh", background: "#0F1729", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'Inter','Segoe UI',sans-serif" }}>
+    <div style={{ ...S.page, display: "flex", alignItems: "center", justifyContent: "center" }}>
       <div style={{ textAlign: "center" }}>
         <div style={{ fontSize: 48, marginBottom: 16 }}>🔗</div>
         <div style={{ fontSize: 18, color: "#4A5278" }}>Link not found or expired.</div>
@@ -392,217 +378,394 @@ function VendorPage({ token, fmJobs, setFmJobs, subcontractors, companies, sites
     </div>
   );
 
-  // ── Schedule view (under NTE) ──
-  if (view === "schedule") return (
-    <div style={{ minHeight: "100vh", background: "#0F1729", padding: 24, fontFamily: "'Inter','Segoe UI',sans-serif" }}>
-      <div style={{ maxWidth: 500, margin: "0 auto" }}>
-        <div style={{ marginBottom: 24 }}>
-          <button onClick={() => setView("main")} style={{ background: "transparent", border: "none", color: "#4A5278", fontSize: 13, cursor: "pointer", fontFamily: "inherit", padding: 0, marginBottom: 16 }}>← Back</button>
-          <div style={{ fontSize: 11, color: "#3B6FE8", fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 4 }}>FARMER DEVELOPMENT INC.</div>
-          <div style={{ fontSize: 20, fontWeight: 700, color: "#F0F4FF" }}>Schedule the Job</div>
-          <div style={{ fontSize: 13, color: "#4A5278", marginTop: 4 }}>{job.name}</div>
+  // ── Job details card (reused across views) ──
+  const JobCard = () => (
+    <div style={S.card}>
+      <div style={{ fontSize: 11, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 10 }}>Job Details</div>
+      <div style={{ fontSize: 18, fontWeight: 700, color: "#F0F4FF", marginBottom: 12 }}>{job.name}</div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        {co   && <div style={{ display: "flex", gap: 12 }}><span style={{ fontSize: 12, color: "#4A5278", width: 90, flexShrink: 0 }}>Client</span><span style={{ fontSize: 12, color: "#BCC6D8" }}>{co.name}</span></div>}
+        {site && <div style={{ display: "flex", gap: 12 }}><span style={{ fontSize: 12, color: "#4A5278", width: 90, flexShrink: 0 }}>Location</span><span style={{ fontSize: 12, color: "#BCC6D8" }}>{site.address}{site.storeNumber ? " (Store #" + site.storeNumber + ")" : ""}</span></div>}
+        {job.ownersProjectNo && <div style={{ display: "flex", gap: 12 }}><span style={{ fontSize: 12, color: "#4A5278", width: 90, flexShrink: 0 }}>Work Order</span><span style={{ fontSize: 12, color: "#BCC6D8" }}>{job.ownersProjectNo}</span></div>}
+        {site?.phone && <div style={{ display: "flex", gap: 12 }}><span style={{ fontSize: 12, color: "#4A5278", width: 90, flexShrink: 0 }}>Site Phone</span><span style={{ fontSize: 12, color: "#BCC6D8" }}>{site.phone}</span></div>}
+      </div>
+      {job.scopeOfWork && (
+        <div style={{ marginTop: 14, paddingTop: 14, borderTop: "1px solid #2A3860" }}>
+          <div style={{ fontSize: 11, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 6 }}>Scope of Work</div>
+          <div style={{ fontSize: 13, color: "#BCC6D8", lineHeight: 1.7 }}>{job.scopeOfWork}</div>
         </div>
+      )}
+    </div>
+  );
 
-        <div style={{ background: "#4ADE8015", border: "1px solid #4ADE8040", borderRadius: 10, padding: "12px 16px", marginBottom: 20, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <div style={{ fontSize: 11, color: "#4ADE80", textTransform: "uppercase", letterSpacing: "0.07em" }}>✓ Your Price — Within NTE</div>
-          <div style={{ fontSize: 20, fontWeight: 700, color: "#4ADE80" }}>{fmt2(price)}</div>
-        </div>
+  // ════════════════════════════════════════════════════════
+  // ── BUYOUT STAGE FLOW ──────────────────────────────────
+  // ════════════════════════════════════════════════════════
+  if (job.stage === "buyout") {
 
-        <div style={{ background: "#1E2A48", borderRadius: 12, padding: 24, border: "1px solid #2A3860", display: "flex", flexDirection: "column", gap: 18 }}>
-          <div>
-            <label style={{ display: "block", fontSize: 11, color: "#4A5278", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.07em" }}>Scheduled Date *</label>
-            <input type="date" value={schedDate} onChange={e => setSchedDate(e.target.value)}
-              style={{ width: "100%", boxSizing: "border-box", padding: "12px", background: "#0F1729", border: "1px solid #2A3860", borderRadius: 8, color: "#F0F4FF", fontSize: 15, fontFamily: "inherit", outline: "none" }} />
+    // Already fully accepted + scheduled
+    if (job.vendorPortalStatus === "scheduled" && job.vendorPortalDate) return (
+      <div style={S.page}><div style={S.wrap}>
+        {S.logo}
+        <div style={{ fontSize: 22, fontWeight: 800, color: "#4ADE80", marginBottom: 20 }}>✅ You're All Set!</div>
+        <div style={S.card}>
+          <div style={{ fontSize: 11, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 10 }}>Confirmed</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <div style={{ display: "flex", gap: 10 }}><span style={{ fontSize: 12, color: "#4A5278", width: 80 }}>Job</span><span style={{ fontSize: 12, color: "#BCC6D8" }}>{job.name}</span></div>
+            <div style={{ display: "flex", gap: 10 }}><span style={{ fontSize: 12, color: "#4A5278", width: 80 }}>Price</span><span style={{ fontSize: 12, color: "#4ADE80", fontWeight: 700 }}>{fmt2(job.vendorPortalPrice)}</span></div>
+            <div style={{ display: "flex", gap: 10 }}><span style={{ fontSize: 12, color: "#4A5278", width: 80 }}>Scheduled</span><span style={{ fontSize: 12, color: "#F0F4FF", fontWeight: 600 }}>{job.vendorPortalDate}{job.vendorPortalTime ? " @ " + job.vendorPortalTime : ""}</span></div>
           </div>
-          <div>
-            <label style={{ display: "block", fontSize: 11, color: "#4A5278", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.07em" }}>Arrival Time (optional)</label>
-            <input type="time" value={schedTime} onChange={e => setSchedTime(e.target.value)}
-              style={{ width: "100%", boxSizing: "border-box", padding: "12px", background: "#0F1729", border: "1px solid #2A3860", borderRadius: 8, color: "#F0F4FF", fontSize: 15, fontFamily: "inherit", outline: "none" }} />
-          </div>
-          <div>
-            <label style={{ display: "block", fontSize: 11, color: "#4A5278", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.07em" }}>Notes (optional)</label>
-            <textarea value={quoteNote} onChange={e => setQuoteNote(e.target.value)} rows={2} placeholder="Any prep needed, access notes, questions…"
-              style={{ width: "100%", boxSizing: "border-box", padding: "10px 12px", background: "#0F1729", border: "1px solid #2A3860", borderRadius: 8, color: "#F0F4FF", fontSize: 14, fontFamily: "inherit", outline: "none", resize: "vertical" }} />
-          </div>
-
-          {schedDate && site?.accessCode && (
-            <div style={{ background: "#4ADE8010", border: "1px solid #4ADE8030", borderRadius: 8, padding: "12px 14px" }}>
-              <div style={{ fontSize: 10, color: "#4ADE80", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 4 }}>🔐 Site Access Code — Save This!</div>
+          {site?.accessCode && (
+            <div style={{ marginTop: 14, paddingTop: 14, borderTop: "1px solid #2A3860", background: "#4ADE8010", border: "1px solid #4ADE8030", borderRadius: 8, padding: "12px 14px", marginTop: 14 }}>
+              <div style={{ fontSize: 10, color: "#4ADE80", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 4 }}>🔐 Site Access Code</div>
               <div style={{ fontSize: 28, fontWeight: 800, color: "#4ADE80", letterSpacing: "0.15em", fontFamily: "monospace" }}>{site.accessCode}</div>
             </div>
           )}
-
-          <button disabled={!schedDate}
-            onClick={() => {
-              update({
-                vendorPortalPrice: price,
-                vendorPortalDate: schedDate,
-                vendorPortalTime: schedTime,
-                vendorPortalNote: quoteNote,
-                vendorPortalStatus: "scheduled",
-                vendorPortalRespondedAt: new Date().toISOString(),
-                stage: "do_work",
-                startDate: schedDate,
-                vendorInvoiceAmount: price,
-              });
-              setView("done");
-            }}
-            style={{ width: "100%", padding: "14px", borderRadius: 10, border: "none", background: !schedDate ? "#1E2A48" : "#4ADE80", color: !schedDate ? "#2A3860" : "#0A1F0A", fontSize: 15, fontWeight: 800, cursor: schedDate ? "pointer" : "not-allowed", fontFamily: "inherit" }}>
-            ✅ Confirm Schedule
-          </button>
         </div>
-        <div style={{ marginTop: 24, textAlign: "center", fontSize: 11, color: "#2A3860" }}>Farmer Development Inc. · (810) 844-1544 · farmerdevelopment.com</div>
+        <div style={S.footer}>Farmer Development Inc. · (810) 844-1544 · farmerdevelopment.com</div>
+      </div></div>
+    );
+
+    // Quote submitted (over NTE)
+    if (job.vendorPortalStatus === "quote_submitted") return (
+      <div style={{ ...S.page, display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <div style={{ maxWidth: 440, width: "100%", textAlign: "center" }}>
+          <div style={{ fontSize: 48, marginBottom: 12 }}>📋</div>
+          <div style={{ fontSize: 20, fontWeight: 700, color: "#F0F4FF", marginBottom: 8 }}>Quote Submitted</div>
+          <div style={{ fontSize: 13, color: "#4A5278" }}>Your quote of {fmt2(job.vendorPortalPrice)} is under review. We'll reach out within 1 business day.</div>
+          <div style={S.footer}>Farmer Development Inc. · farmerdevelopment.com</div>
+        </div>
       </div>
-    </div>
-  );
+    );
 
-  // ── Over-NTE quote view ──
-  if (view === "quote") return (
-    <div style={{ minHeight: "100vh", background: "#0F1729", padding: 24, fontFamily: "'Inter','Segoe UI',sans-serif" }}>
-      <div style={{ maxWidth: 500, margin: "0 auto" }}>
-        <div style={{ marginBottom: 24 }}>
-          <button onClick={() => setView("main")} style={{ background: "transparent", border: "none", color: "#4A5278", fontSize: 13, cursor: "pointer", fontFamily: "inherit", padding: 0, marginBottom: 16 }}>← Back</button>
-          <div style={{ fontSize: 11, color: "#3B6FE8", fontWeight: 700, letterSpacing: "0.1em", textTransform: "uppercase", marginBottom: 4 }}>FARMER DEVELOPMENT INC.</div>
-          <div style={{ fontSize: 20, fontWeight: 700, color: "#F0F4FF" }}>Submit Your Quote</div>
-          <div style={{ fontSize: 13, color: "#4A5278", marginTop: 4 }}>{job.name}</div>
-        </div>
+    // ── BUYOUT: Step 1 — Accept Job ──
+    if (view === "main") return (
+      <div style={S.page}><div style={S.wrap}>
+        {S.logo}
+        <div style={{ fontSize: 22, fontWeight: 800, color: "#F0F4FF", marginBottom: 4 }}>Job Offer</div>
+        {sub && <div style={{ fontSize: 14, color: "#4A5278", marginBottom: 20 }}>Hi {sub.name} — you've been selected for this job. Review the details and accept below.</div>}
 
-        <div style={{ background: "#F8717115", border: "1px solid #F8717140", borderRadius: 10, padding: "12px 16px", marginBottom: 20 }}>
-          <div style={{ fontSize: 11, color: "#F87171", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 4 }}>⚠ Price Exceeds NTE by {fmt2(priceNum - nte)}</div>
-          <div style={{ fontSize: 12, color: "#BCC6D8" }}>Your quote will be submitted for management review before scheduling. We'll contact you within 1 business day.</div>
-        </div>
-
-        <div style={{ background: "#1E2A48", borderRadius: 12, padding: 24, border: "1px solid #2A3860", display: "flex", flexDirection: "column", gap: 18 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "#0F1729", borderRadius: 8, padding: "12px 14px" }}>
-            <span style={{ fontSize: 12, color: "#4A5278" }}>Your Quoted Price</span>
-            <span style={{ fontSize: 18, fontWeight: 700, color: "#F87171" }}>{fmt2(price)}</span>
-          </div>
-          <div>
-            <label style={{ display: "block", fontSize: 11, color: "#4A5278", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.07em" }}>Why does this exceed the NTE? *</label>
-            <textarea value={quoteNote} onChange={e => setQuoteNote(e.target.value)} rows={4} placeholder="Explain the additional cost — materials, labor, scope changes, access issues, etc."
-              style={{ width: "100%", boxSizing: "border-box", padding: "10px 12px", background: "#0F1729", border: "1px solid #2A3860", borderRadius: 8, color: "#F0F4FF", fontSize: 14, fontFamily: "inherit", outline: "none", resize: "vertical" }} />
-          </div>
-          <div style={{ display: "flex", gap: 10 }}>
-            <button onClick={() => setView("main")} style={{ flex: "0 0 auto", padding: "12px 18px", borderRadius: 8, border: "1px solid #2A3860", background: "transparent", color: "#4A5278", fontSize: 13, cursor: "pointer", fontFamily: "inherit" }}>← Back</button>
-            <button disabled={!quoteNote.trim()}
-              onClick={() => {
-                update({
-                  vendorPortalPrice: price,
-                  vendorPortalNote: quoteNote,
-                  vendorPortalStatus: "quote_submitted",
-                  vendorPortalRespondedAt: new Date().toISOString(),
-                  stage: "generate_proposal",
-                  vendorQuotePrice: price,
-                  vendorQuoteScope: quoteNote,
-                  subResponse: "quoted",
-                });
-                setView("done");
-              }}
-              style={{ flex: 1, padding: "12px", borderRadius: 8, border: "none", background: !quoteNote.trim() ? "#1E2A48" : "#3B6FE8", color: !quoteNote.trim() ? "#2A3860" : "#FFF", fontSize: 14, fontWeight: 700, cursor: quoteNote.trim() ? "pointer" : "not-allowed", fontFamily: "inherit" }}>
-              📋 Submit Quote for Review
-            </button>
-          </div>
-        </div>
-        <div style={{ marginTop: 24, textAlign: "center", fontSize: 11, color: "#2A3860" }}>Farmer Development Inc. · (810) 844-1544 · farmerdevelopment.com</div>
-      </div>
-    </div>
-  );
-
-  // ── Main view ──
-  return (
-    <div style={{ minHeight: "100vh", background: "#0F1729", padding: 24, fontFamily: "'Inter','Segoe UI',sans-serif" }}>
-      <div style={{ maxWidth: 500, margin: "0 auto" }}>
-        {/* Header */}
-        <div style={{ marginBottom: 28 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
-            <div style={{ width: 36, height: 36, background: "#3B6FE8", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 800, color: "#fff" }}>FG</div>
-            <div style={{ fontSize: 12, color: "#3B6FE8", fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase" }}>FARMER DEVELOPMENT INC.</div>
-          </div>
-          <div style={{ fontSize: 24, fontWeight: 800, color: "#F0F4FF", lineHeight: 1.2, marginBottom: 6 }}>Work Assignment</div>
-          {sub && <div style={{ fontSize: 14, color: "#4A5278" }}>Hi {sub.name} — please review the job below and respond.</div>}
-        </div>
-
-        {/* Job Details Card */}
-        <div style={{ background: "#1E2A48", borderRadius: 12, padding: 22, border: "1px solid #2A3860", marginBottom: 16 }}>
-          <div style={{ fontSize: 11, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 10 }}>Job Details</div>
-          <div style={{ fontSize: 19, fontWeight: 700, color: "#F0F4FF", marginBottom: 14 }}>{job.name}</div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 9 }}>
-            {co   && <div style={{ display: "flex", gap: 12 }}><span style={{ fontSize: 12, color: "#4A5278", width: 90, flexShrink: 0 }}>Client</span><span style={{ fontSize: 12, color: "#BCC6D8" }}>{co.name}</span></div>}
-            {site && <div style={{ display: "flex", gap: 12 }}><span style={{ fontSize: 12, color: "#4A5278", width: 90, flexShrink: 0 }}>Location</span><span style={{ fontSize: 12, color: "#BCC6D8" }}>{site.address}{site.storeNumber ? " (Store #" + site.storeNumber + ")" : ""}</span></div>}
-            {job.ownersProjectNo && <div style={{ display: "flex", gap: 12 }}><span style={{ fontSize: 12, color: "#4A5278", width: 90, flexShrink: 0 }}>Work Order</span><span style={{ fontSize: 12, color: "#BCC6D8" }}>{job.ownersProjectNo}</span></div>}
-            {job.bidDueDate && <div style={{ display: "flex", gap: 12 }}><span style={{ fontSize: 12, color: "#4A5278", width: 90, flexShrink: 0 }}>Respond By</span><span style={{ fontSize: 12, color: "#FCD34D", fontWeight: 600 }}>{new Date(job.bidDueDate + "T12:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}</span></div>}
-            {site?.phone && <div style={{ display: "flex", gap: 12 }}><span style={{ fontSize: 12, color: "#4A5278", width: 90, flexShrink: 0 }}>Site Phone</span><span style={{ fontSize: 12, color: "#BCC6D8" }}>{site.phone}</span></div>}
-          </div>
-          {job.scopeOfWork && (
-            <div style={{ marginTop: 14, paddingTop: 14, borderTop: "1px solid #2A3860" }}>
-              <div style={{ fontSize: 11, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 6 }}>Scope of Work</div>
-              <div style={{ fontSize: 13, color: "#BCC6D8", lineHeight: 1.7 }}>{job.scopeOfWork}</div>
-            </div>
-          )}
-          {job.notes && (
-            <div style={{ marginTop: 10, paddingTop: 10, borderTop: "1px solid #2A3860" }}>
-              <div style={{ fontSize: 11, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 4 }}>Notes from Team</div>
-              <div style={{ fontSize: 13, color: "#BCC6D8", lineHeight: 1.7 }}>{job.notes}</div>
-            </div>
-          )}
-        </div>
+        <JobCard />
 
         {/* Photos */}
         {job.photos && job.photos.length > 0 && (
-          <div style={{ background: "#1E2A48", borderRadius: 12, padding: 20, border: "1px solid #2A3860", marginBottom: 16 }}>
+          <div style={{ ...S.card }}>
             <div style={{ fontSize: 11, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 12 }}>📸 Site Photos</div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: 8 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(2,1fr)", gap: 8 }}>
               {job.photos.map((p, i) => (
                 <a key={i} href={p.data} target="_blank" rel="noreferrer">
-                  <img src={p.data} alt={p.name || "Photo " + (i+1)} style={{ width: "100%", borderRadius: 8, objectFit: "cover", aspectRatio: "4/3", display: "block" }} />
-                  {p.caption && <div style={{ fontSize: 11, color: "#4A5278", marginTop: 4 }}>{p.caption}</div>}
+                  <img src={p.data} alt={"Photo " + (i+1)} style={{ width: "100%", borderRadius: 8, objectFit: "cover", aspectRatio: "4/3", display: "block" }} />
                 </a>
               ))}
             </div>
           </div>
         )}
 
-        {/* NTE Banner */}
-        <div style={{ background: "#FCD34D10", border: "1px solid #FCD34D40", borderRadius: 12, padding: "18px 20px", marginBottom: 20, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        {/* NTE */}
+        <div style={{ background: "#FCD34D10", border: "1px solid #FCD34D40", borderRadius: 12, padding: "16px 20px", marginBottom: 16, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div>
-            <div style={{ fontSize: 10, color: "#FCD34D", textTransform: "uppercase", letterSpacing: "0.09em", marginBottom: 4 }}>Authorized Amount (NTE)</div>
-            <div style={{ fontSize: 11, color: "#8A7030" }}>Enter a price at or below this amount to self-schedule</div>
+            <div style={{ fontSize: 10, color: "#FCD34D", textTransform: "uppercase", letterSpacing: "0.09em", marginBottom: 3 }}>Authorized Amount (NTE)</div>
+            <div style={{ fontSize: 11, color: "#8A7030" }}>Accept at this amount to self-schedule</div>
           </div>
-          <div style={{ fontSize: 32, fontWeight: 800, color: "#FCD34D", letterSpacing: "-0.02em" }}>{fmt2(nte)}</div>
+          <div style={{ fontSize: 30, fontWeight: 800, color: "#FCD34D" }}>{fmt2(nte)}</div>
         </div>
 
-        {/* Price Entry */}
-        <div style={{ background: "#1E2A48", borderRadius: 12, padding: 22, border: "1px solid #2A3860", marginBottom: 16 }}>
-          <div style={{ fontSize: 11, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 12 }}>Your Price</div>
-          <div style={{ position: "relative", marginBottom: 10 }}>
-            <span style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: "#4A5278", fontSize: 16, fontWeight: 600 }}>$</span>
+        {/* Terms */}
+        <div style={{ ...S.card }}>
+          <div style={{ fontSize: 11, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 10 }}>📄 Terms & Conditions</div>
+          <div style={{ fontSize: 12, color: "#BCC6D8", lineHeight: 1.7, marginBottom: 14 }}>
+            By accepting this job you agree to: complete the work described in the scope above, comply with all site rules and safety requirements, provide proof of insurance upon request, submit your invoice within 5 business days of job completion, and allow Farmer Development Inc. to inspect the work before final payment.
+          </div>
+          <label style={{ display: "flex", alignItems: "flex-start", gap: 10, cursor: "pointer" }}>
+            <input type="checkbox" checked={accepted} onChange={e => setAccepted(e.target.checked)}
+              style={{ marginTop: 3, width: 16, height: 16, accentColor: "#4ADE80", flexShrink: 0 }} />
+            <span style={{ fontSize: 12, color: "#F0F4FF", lineHeight: 1.5 }}>I have read and agree to these terms and conditions</span>
+          </label>
+        </div>
+
+        {/* Price entry */}
+        <div style={S.card}>
+          <div style={{ fontSize: 11, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 10 }}>Your Price</div>
+          <div style={{ position: "relative", marginBottom: 8 }}>
+            <span style={{ position: "absolute", left: 14, top: "50%", transform: "translateY(-50%)", color: "#4A5278", fontSize: 16 }}>$</span>
             <input value={price} onChange={e => setPrice(e.target.value)} type="number" min="0" step="0.01" placeholder="0.00"
-              style={{ width: "100%", boxSizing: "border-box", padding: "14px 14px 14px 30px", background: "#0F1729", border: "1px solid " + (underNTE ? "#4ADE80" : overNTE ? "#F87171" : "#2A3860"), borderRadius: 10, color: "#F0F4FF", fontSize: 18, fontFamily: "inherit", outline: "none" }} />
+              style={{ ...S.input, paddingLeft: 30, border: "1px solid " + (underNTE ? "#4ADE80" : overNTE ? "#F87171" : "#2A3860") }} />
           </div>
-          {underNTE && <div style={{ fontSize: 12, fontWeight: 600, color: "#4ADE80", marginBottom: 4 }}>✓ Within NTE — you can self-schedule this job</div>}
-          {overNTE  && <div style={{ fontSize: 12, fontWeight: 600, color: "#F87171", marginBottom: 4 }}>⚠ Exceeds NTE by {fmt2(priceNum - nte)} — your quote will go to the team for approval</div>}
+          {underNTE && <div style={{ fontSize: 11, color: "#4ADE80", fontWeight: 600 }}>✓ Within NTE — you can self-schedule</div>}
+          {overNTE  && <div style={{ fontSize: 11, color: "#F87171", fontWeight: 600 }}>⚠ Over NTE by {fmt2(priceNum - nte)} — will go to management review</div>}
         </div>
 
-        {/* Action buttons — change based on price */}
+        {/* Action */}
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-          {underNTE && (
-            <button onClick={() => setView("schedule")}
-              style={{ width: "100%", padding: "16px", borderRadius: 10, border: "none", background: "#4ADE80", color: "#0A1F0A", fontSize: 16, fontWeight: 800, cursor: "pointer", fontFamily: "inherit" }}>
-              📅 Continue to Schedule
-            </button>
+          {underNTE && accepted && (
+            <button onClick={() => setView("schedule")} style={S.btnGreen}>📅 Accept & Schedule</button>
           )}
-          {overNTE && (
-            <button onClick={() => setView("quote")}
-              style={{ width: "100%", padding: "16px", borderRadius: 10, border: "none", background: "#3B6FE8", color: "#FFF", fontSize: 16, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
-              📋 Submit Quote for Approval
-            </button>
+          {overNTE && accepted && (
+            <button onClick={() => setView("quote")} style={S.btnBlue}>📋 Accept & Submit Quote for Approval</button>
           )}
-          {!price && (
-            <div style={{ textAlign: "center", fontSize: 12, color: "#2A3860", padding: "8px 0" }}>Enter your price above to continue</div>
+          {(!price || !accepted) && (
+            <div style={{ textAlign: "center", fontSize: 12, color: "#2A3860", padding: "8px 0" }}>
+              {!accepted && !price && "Enter your price and accept the terms above to continue"}
+              {!accepted && price && "Please accept the terms above to continue"}
+              {accepted && !price && "Enter your price above to continue"}
+            </div>
+          )}
+        </div>
+        <div style={S.footer}>Farmer Development Inc. · (810) 844-1544 · farmerdevelopment.com</div>
+      </div></div>
+    );
+
+    // ── BUYOUT: Step 2 — Schedule (under NTE) ──
+    if (view === "schedule") return (
+      <div style={S.page}><div style={S.wrap}>
+        {S.logo}
+        <button onClick={() => setView("main")} style={{ background: "transparent", border: "none", color: "#4A5278", fontSize: 13, cursor: "pointer", fontFamily: "inherit", padding: 0, marginBottom: 20 }}>← Back</button>
+        <div style={{ fontSize: 20, fontWeight: 800, color: "#F0F4FF", marginBottom: 4 }}>Schedule the Job</div>
+        <div style={{ fontSize: 13, color: "#4A5278", marginBottom: 20 }}>{job.name}</div>
+
+        <div style={{ background: "#FCD34D10", border: "1px solid #FCD34D40", borderRadius: 8, padding: "10px 14px", marginBottom: 16, display: "flex", justifyContent: "space-between" }}>
+          <span style={{ fontSize: 11, color: "#FCD34D" }}>✓ Accepted at</span>
+          <span style={{ fontSize: 14, fontWeight: 700, color: "#4ADE80" }}>{fmt2(price)}</span>
+        </div>
+
+        {/* One-change warning */}
+        <div style={{ background: "#F8717110", border: "1px solid #F8717130", borderRadius: 8, padding: "12px 14px", marginBottom: 16 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: "#F87171", marginBottom: 4 }}>⚠ Schedule Change Policy</div>
+          <div style={{ fontSize: 11, color: "#BCC6D8", lineHeight: 1.6 }}>Once you submit a schedule date, you can only change it <strong style={{ color: "#F0F4FF" }}>one time</strong>. Please confirm your availability before submitting.</div>
+        </div>
+
+        <div style={{ ...S.card, display: "flex", flexDirection: "column", gap: 16 }}>
+          <div>
+            <label style={S.label}>Date *</label>
+            <input type="date" value={schedDate} onChange={e => setSchedDate(e.target.value)} style={S.input} />
+          </div>
+          <div>
+            <label style={S.label}>Arrival Time (optional)</label>
+            <input type="time" value={schedTime} onChange={e => setSchedTime(e.target.value)} style={S.input} />
+          </div>
+          <div>
+            <label style={S.label}>Notes (optional)</label>
+            <textarea value={schedNote} onChange={e => setSchedNote(e.target.value)} rows={2} placeholder="Access notes, prep needed, questions…"
+              style={{ ...S.input, resize: "vertical" }} />
+          </div>
+          {schedDate && site?.accessCode && (
+            <div style={{ background: "#4ADE8010", border: "1px solid #4ADE8030", borderRadius: 8, padding: "12px 14px" }}>
+              <div style={{ fontSize: 10, color: "#4ADE80", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 4 }}>🔐 Site Access Code — Save This!</div>
+              <div style={{ fontSize: 28, fontWeight: 800, color: "#4ADE80", letterSpacing: "0.15em", fontFamily: "monospace" }}>{site.accessCode}</div>
+            </div>
+          )}
+          <button disabled={!schedDate} onClick={() => {
+            update({
+              vendorPortalPrice: price,
+              vendorPortalDate: schedDate,
+              vendorPortalTime: schedTime,
+              vendorPortalNote: schedNote,
+              vendorPortalStatus: "scheduled",
+              vendorPortalRespondedAt: new Date().toISOString(),
+              vendorAcceptedAt: new Date().toISOString(),
+              stage: "do_work",
+              startDate: schedDate,
+              vendorInvoiceAmount: price,
+            });
+          }} style={{ ...S.btnGreen, opacity: schedDate ? 1 : 0.4, cursor: schedDate ? "pointer" : "not-allowed" }}>
+            ✅ Confirm Schedule
+          </button>
+        </div>
+        <div style={S.footer}>Farmer Development Inc. · (810) 844-1544 · farmerdevelopment.com</div>
+      </div></div>
+    );
+
+    // ── BUYOUT: Over-NTE Quote ──
+    if (view === "quote") return (
+      <div style={S.page}><div style={S.wrap}>
+        {S.logo}
+        <button onClick={() => setView("main")} style={{ background: "transparent", border: "none", color: "#4A5278", fontSize: 13, cursor: "pointer", fontFamily: "inherit", padding: 0, marginBottom: 20 }}>← Back</button>
+        <div style={{ fontSize: 20, fontWeight: 800, color: "#F0F4FF", marginBottom: 4 }}>Submit Quote for Approval</div>
+        <div style={{ background: "#F8717115", border: "1px solid #F8717140", borderRadius: 8, padding: "12px 14px", marginBottom: 16 }}>
+          <div style={{ fontSize: 11, color: "#F87171", fontWeight: 700, marginBottom: 3 }}>⚠ Over NTE by {fmt2(priceNum - nte)}</div>
+          <div style={{ fontSize: 11, color: "#BCC6D8" }}>Management will review within 1 business day.</div>
+        </div>
+        <div style={{ ...S.card, display: "flex", flexDirection: "column", gap: 16 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "#0F1729", borderRadius: 8, padding: "12px 14px" }}>
+            <span style={{ fontSize: 12, color: "#4A5278" }}>Your Price</span>
+            <span style={{ fontSize: 18, fontWeight: 700, color: "#F87171" }}>{fmt2(price)}</span>
+          </div>
+          <div>
+            <label style={S.label}>Why does this exceed the NTE? *</label>
+            <textarea value={quoteNote} onChange={e => setQuoteNote(e.target.value)} rows={4} placeholder="Materials, labor, scope changes, access issues…"
+              style={{ ...S.input, resize: "vertical" }} />
+          </div>
+          <div style={{ display: "flex", gap: 10 }}>
+            <button onClick={() => setView("main")} style={{ flex: "0 0 auto", padding: "12px 18px", borderRadius: 8, border: "1px solid #2A3860", background: "transparent", color: "#4A5278", fontSize: 13, cursor: "pointer", fontFamily: "inherit" }}>← Back</button>
+            <button disabled={!quoteNote.trim()} onClick={() => {
+              update({ vendorPortalPrice: price, vendorPortalNote: quoteNote, vendorPortalStatus: "quote_submitted", vendorPortalRespondedAt: new Date().toISOString(), vendorAcceptedAt: new Date().toISOString(), stage: "generate_proposal", vendorQuotePrice: price, vendorQuoteScope: quoteNote, subResponse: "quoted" });
+            }} style={{ flex: 1, padding: "12px", borderRadius: 8, border: "none", background: quoteNote.trim() ? "#3B6FE8" : "#1E2A48", color: quoteNote.trim() ? "#FFF" : "#2A3860", fontSize: 14, fontWeight: 700, cursor: quoteNote.trim() ? "pointer" : "not-allowed", fontFamily: "inherit" }}>
+              📋 Submit Quote
+            </button>
+          </div>
+        </div>
+        <div style={S.footer}>Farmer Development Inc. · (810) 844-1544 · farmerdevelopment.com</div>
+      </div></div>
+    );
+  }
+
+  // ════════════════════════════════════════════════════════
+  // ── DO WORK STAGE FLOW ─────────────────────────────────
+  // Job is signed off, just needs a schedule date
+  // ════════════════════════════════════════════════════════
+  if (job.stage === "do_work") {
+
+    // Already scheduled — show confirmation + optional change
+    if (job.vendorPortalDate && view === "main") return (
+      <div style={S.page}><div style={S.wrap}>
+        {S.logo}
+        <div style={{ fontSize: 22, fontWeight: 800, color: "#4ADE80", marginBottom: 20 }}>📅 Job Scheduled</div>
+        <div style={S.card}>
+          <div style={{ fontSize: 11, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 10 }}>Current Schedule</div>
+          <div style={{ fontSize: 20, fontWeight: 800, color: "#F0F4FF", marginBottom: 4 }}>{job.vendorPortalDate}</div>
+          {job.vendorPortalTime && <div style={{ fontSize: 14, color: "#BCC6D8" }}>Arrival: {job.vendorPortalTime}</div>}
+          <div style={{ fontSize: 12, color: "#4A5278", marginTop: 8 }}>{job.name}</div>
+          {site?.accessCode && (
+            <div style={{ marginTop: 14, paddingTop: 14, borderTop: "1px solid #2A3860", background: "#4ADE8010", border: "1px solid #4ADE8030", borderRadius: 8, padding: "12px 14px", marginTop: 14 }}>
+              <div style={{ fontSize: 10, color: "#4ADE80", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 4 }}>🔐 Site Access Code</div>
+              <div style={{ fontSize: 28, fontWeight: 800, color: "#4ADE80", letterSpacing: "0.15em", fontFamily: "monospace" }}>{site.accessCode}</div>
+            </div>
           )}
         </div>
 
-        <div style={{ marginTop: 32, textAlign: "center", fontSize: 11, color: "#2A3860" }}>Farmer Development Inc. · (810) 844-1544 · farmerdevelopment.com</div>
+        {/* Change schedule — only if not already changed */}
+        {!job.vendorScheduleChangedAt ? (
+          <div style={{ background: "#FCD34D10", border: "1px solid #FCD34D30", borderRadius: 8, padding: "12px 14px", marginBottom: 16 }}>
+            <div style={{ fontSize: 11, color: "#FCD34D", fontWeight: 700, marginBottom: 4 }}>⚠ Schedule Change — One Time Only</div>
+            <div style={{ fontSize: 11, color: "#BCC6D8", marginBottom: 12, lineHeight: 1.6 }}>You may change your schedule date <strong style={{ color: "#F0F4FF" }}>one time</strong>. After changing, the date will be locked. Please be sure before submitting.</div>
+            <button onClick={() => setView("change")} style={{ width: "100%", padding: "10px", borderRadius: 7, border: "1px solid #FCD34D40", background: "#FCD34D15", color: "#FCD34D", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
+              📅 Request Schedule Change
+            </button>
+          </div>
+        ) : (
+          <div style={{ background: "#F8717110", border: "1px solid #F8717130", borderRadius: 8, padding: "12px 14px", marginBottom: 16 }}>
+            <div style={{ fontSize: 11, color: "#F87171", fontWeight: 700 }}>🔒 Schedule Locked</div>
+            <div style={{ fontSize: 11, color: "#BCC6D8", marginTop: 4 }}>Your schedule has been changed once and is now locked. Please contact your coordinator for further changes.</div>
+          </div>
+        )}
+
+        <div style={S.footer}>Farmer Development Inc. · (810) 844-1544 · farmerdevelopment.com</div>
+      </div></div>
+    );
+
+    // Change schedule view
+    if (view === "change") return (
+      <div style={S.page}><div style={S.wrap}>
+        {S.logo}
+        <button onClick={() => setView("main")} style={{ background: "transparent", border: "none", color: "#4A5278", fontSize: 13, cursor: "pointer", fontFamily: "inherit", padding: 0, marginBottom: 20 }}>← Back</button>
+        <div style={{ fontSize: 20, fontWeight: 800, color: "#F0F4FF", marginBottom: 4 }}>Change Schedule Date</div>
+        <div style={{ fontSize: 13, color: "#4A5278", marginBottom: 16 }}>{job.name}</div>
+
+        <div style={{ background: "#F8717115", border: "1px solid #F8717140", borderRadius: 8, padding: "14px", marginBottom: 16 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: "#F87171", marginBottom: 6 }}>⚠ Final Warning — Last Change</div>
+          <div style={{ fontSize: 11, color: "#BCC6D8", lineHeight: 1.6, marginBottom: 10 }}>This is your <strong style={{ color: "#F0F4FF" }}>one and only</strong> schedule change. After submitting, your date will be locked and you must contact your coordinator directly for any further adjustments.</div>
+          <label style={{ display: "flex", alignItems: "flex-start", gap: 10, cursor: "pointer" }}>
+            <input type="checkbox" checked={changeWarnOk} onChange={e => setChangeWarnOk(e.target.checked)}
+              style={{ marginTop: 2, width: 16, height: 16, accentColor: "#F87171", flexShrink: 0 }} />
+            <span style={{ fontSize: 11, color: "#F0F4FF" }}>I understand this is my final allowed schedule change</span>
+          </label>
+        </div>
+
+        <div style={{ ...S.card, display: "flex", flexDirection: "column", gap: 16 }}>
+          <div style={{ background: "#0F1729", borderRadius: 6, padding: "8px 12px", fontSize: 11, color: "#4A5278" }}>
+            Current date: <strong style={{ color: "#F87171" }}>{job.vendorPortalDate}</strong>
+          </div>
+          <div>
+            <label style={S.label}>New Date *</label>
+            <input type="date" value={schedDate} onChange={e => setSchedDate(e.target.value)} style={S.input} />
+          </div>
+          <div>
+            <label style={S.label}>New Arrival Time (optional)</label>
+            <input type="time" value={schedTime} onChange={e => setSchedTime(e.target.value)} style={S.input} />
+          </div>
+          <div>
+            <label style={S.label}>Reason for Change</label>
+            <textarea value={schedNote} onChange={e => setSchedNote(e.target.value)} rows={2} placeholder="Brief reason for the change…"
+              style={{ ...S.input, resize: "vertical" }} />
+          </div>
+          <button disabled={!schedDate || !changeWarnOk} onClick={() => {
+            update({
+              vendorPortalDate: schedDate,
+              vendorPortalTime: schedTime,
+              vendorScheduleChangedAt: new Date().toISOString(),
+              vendorScheduleChangeReason: schedNote,
+              startDate: schedDate,
+            });
+            setView("main");
+          }} style={{ ...S.btnGreen, opacity: (schedDate && changeWarnOk) ? 1 : 0.4, cursor: (schedDate && changeWarnOk) ? "pointer" : "not-allowed" }}>
+            ✅ Confirm New Date
+          </button>
+        </div>
+        <div style={S.footer}>Farmer Development Inc. · (810) 844-1544 · farmerdevelopment.com</div>
+      </div></div>
+    );
+
+    // No date yet — prompt for schedule
+    return (
+      <div style={S.page}><div style={S.wrap}>
+        {S.logo}
+        <div style={{ fontSize: 22, fontWeight: 800, color: "#F0F4FF", marginBottom: 4 }}>Set Your Schedule</div>
+        {sub && <div style={{ fontSize: 14, color: "#4A5278", marginBottom: 20 }}>Hi {sub.name} — the job is confirmed. Please set your schedule date below.</div>}
+
+        <JobCard />
+
+        <div style={{ background: "#F8717110", border: "1px solid #F8717130", borderRadius: 8, padding: "12px 14px", marginBottom: 16 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: "#F87171", marginBottom: 4 }}>⚠ Schedule Change Policy</div>
+          <div style={{ fontSize: 11, color: "#BCC6D8", lineHeight: 1.6 }}>Once submitted, you may only change this date <strong style={{ color: "#F0F4FF" }}>one time</strong>. Please confirm your availability before submitting.</div>
+        </div>
+
+        <div style={{ ...S.card, display: "flex", flexDirection: "column", gap: 16 }}>
+          <div>
+            <label style={S.label}>Date *</label>
+            <input type="date" value={schedDate} onChange={e => setSchedDate(e.target.value)} style={S.input} />
+          </div>
+          <div>
+            <label style={S.label}>Arrival Time (optional)</label>
+            <input type="time" value={schedTime} onChange={e => setSchedTime(e.target.value)} style={S.input} />
+          </div>
+          <div>
+            <label style={S.label}>Notes (optional)</label>
+            <textarea value={schedNote} onChange={e => setSchedNote(e.target.value)} rows={2} placeholder="Access notes, questions…"
+              style={{ ...S.input, resize: "vertical" }} />
+          </div>
+          {schedDate && site?.accessCode && (
+            <div style={{ background: "#4ADE8010", border: "1px solid #4ADE8030", borderRadius: 8, padding: "12px 14px" }}>
+              <div style={{ fontSize: 10, color: "#4ADE80", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 4 }}>🔐 Site Access Code — Save This!</div>
+              <div style={{ fontSize: 28, fontWeight: 800, color: "#4ADE80", letterSpacing: "0.15em", fontFamily: "monospace" }}>{site.accessCode}</div>
+            </div>
+          )}
+          <button disabled={!schedDate} onClick={() => {
+            update({
+              vendorPortalDate: schedDate,
+              vendorPortalTime: schedTime,
+              vendorPortalNote: schedNote,
+              vendorPortalStatus: "scheduled",
+              vendorPortalRespondedAt: new Date().toISOString(),
+              startDate: schedDate,
+            });
+            setView("main");
+          }} style={{ ...S.btnGreen, opacity: schedDate ? 1 : 0.4, cursor: schedDate ? "pointer" : "not-allowed" }}>
+            📅 Confirm Schedule
+          </button>
+        </div>
+        <div style={S.footer}>Farmer Development Inc. · (810) 844-1544 · farmerdevelopment.com</div>
+      </div></div>
+    );
+  }
+
+  // ── Other stages — generic "link not ready" ──
+  return (
+    <div style={{ ...S.page, display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <div style={{ textAlign: "center" }}>
+        <div style={{ fontSize: 48, marginBottom: 12 }}>🕐</div>
+        <div style={{ fontSize: 18, color: "#F0F4FF", marginBottom: 8 }}>Not Ready Yet</div>
+        <div style={{ fontSize: 13, color: "#4A5278" }}>This job is still being processed. Check back soon or contact your coordinator.</div>
+        <div style={S.footer}>Farmer Development Inc. · farmerdevelopment.com</div>
       </div>
     </div>
   );
