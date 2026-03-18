@@ -5835,118 +5835,56 @@ Return ONLY valid JSON, no markdown, no extra text:
                   )}
                 </div>
 
-                {/* ── Vendor Portal ── always visible when sub assigned */}
-                {job.subcontractorId && (
-                  <div style={{ background: "#F0F2F8", border: "1px solid #3B6FE830", borderRadius: 8, padding: "12px 14px" }}>
-                    <div style={{ fontSize: 10, color: "#3B6FE8", textTransform: "uppercase", letterSpacing: "0.07em", fontWeight: 700, marginBottom: 8 }}>🔗 Vendor Portal</div>
-                    {job.vendorPortalStatus === "scheduled" ? (
-                      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                        <div style={{ fontSize: 11, color: "#4ADE80", fontWeight: 700 }}>✅ Vendor Scheduled</div>
-                        <div style={{ fontSize: 11, color: "#1A2240" }}>Price: <strong>{fmt(Number(job.vendorPortalPrice||0))}</strong></div>
-                        <div style={{ fontSize: 11, color: "#1A2240" }}>Date: <strong>{job.vendorPortalDate}{job.vendorPortalTime ? " @ " + job.vendorPortalTime : ""}</strong></div>
-                        {job.vendorPortalNote && <div style={{ fontSize: 10, color: "#4A5278", marginTop: 2 }}>{job.vendorPortalNote}</div>}
-                        <button onClick={() => update({ vendorPortalStatus: null, vendorToken: null, vendorSentAt: null })}
-                          style={{ marginTop: 6, fontSize: 10, background: "transparent", border: "1px solid #CBD1E8", borderRadius: 4, color: "#4A5278", padding: "4px 8px", cursor: "pointer", fontFamily: "inherit" }}>
-                          ↩ Reset
-                        </button>
-                      </div>
-                    ) : job.vendorPortalStatus === "quote_submitted" ? (
-                      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                        <div style={{ fontSize: 11, color: "#3B6FE8", fontWeight: 700 }}>📋 Quote Received — Needs Review</div>
-                        <div style={{ fontSize: 11, color: "#1A2240" }}>Price: <strong style={{ color: "#F87171" }}>{fmt(Number(job.vendorPortalPrice||0))}</strong></div>
-                        {job.vendorPortalNote && <div style={{ fontSize: 10, color: "#4A5278", marginTop: 2 }}>{job.vendorPortalNote}</div>}
-                        <button onClick={() => update({ vendorPortalStatus: null, vendorToken: null, vendorSentAt: null })}
-                          style={{ marginTop: 6, fontSize: 10, background: "transparent", border: "1px solid #CBD1E8", borderRadius: 4, color: "#4A5278", padding: "4px 8px", cursor: "pointer", fontFamily: "inherit" }}>
-                          ↩ Reset & Resend
-                        </button>
-                      </div>
-                    ) : job.vendorSentAt && job.vendorToken ? (
-                      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-                        <div style={{ fontSize: 11, color: "#FCD34D", fontWeight: 600 }}>⏳ Awaiting vendor response</div>
-                        <div style={{ fontSize: 10, color: "#4A5278" }}>Sent {new Date(job.vendorSentAt).toLocaleDateString()}</div>
-                        <button onClick={() => navigator.clipboard?.writeText(window.location.origin + "/?vendortoken=" + job.vendorToken)}
-                          style={{ marginTop: 4, fontSize: 10, background: "transparent", border: "1px solid #FCD34D30", borderRadius: 4, color: "#FCD34D", padding: "4px 8px", cursor: "pointer", fontFamily: "inherit" }}>
-                          📋 Copy Link Again
-                        </button>
-                      </div>
-                    ) : (
-                      <button
-                        onClick={() => {
-                          const vt = "vendor" + Math.random().toString(36).slice(2, 10);
-                          const link = window.location.origin + "/?vendortoken=" + vt;
-                          update({ vendorToken: vt, vendorSentAt: new Date().toISOString(), vendorPortalStatus: "pending" });
-                          navigator.clipboard?.writeText(link);
-                          alert("✅ Vendor portal link copied!\n\nSend this to " + (subcontractors.find(s => s.id === job.subcontractorId)?.name || "the vendor") + ":\n\n" + link);
-                        }}
-                        style={{ width: "100%", padding: "9px", borderRadius: 6, border: "2px solid #3B6FE8", cursor: "pointer", fontFamily: "inherit", fontSize: 12, fontWeight: 700, background: "#3B6FE810", color: "#3B6FE8" }}>
-                        🔗 Send Vendor Portal Link
-                      </button>
-                    )}
-                  </div>
-                )}
-
-                {/* Vendor next step */}
-                <div>
-                  <div style={{ fontSize: 10, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5 }}>Vendor Next Step</div>
-                  {job.stage === "owner_approval" ? (
-                    <div style={{ padding: "8px 12px", background: "#FCD34D10", border: "1px solid #FCD34D30", borderRadius: 6, fontSize: 12, color: "#FCD34D", fontWeight: 600 }}>
-                      🔒 Awaiting Confirmation
-                    </div>
-                  ) : (
-                    <select className="fi" value={job.vendorNextStep || ""}
-                      onChange={e => update({ vendorNextStep: e.target.value, vendorQuotePrice: e.target.value !== "need_quote" ? job.vendorQuotePrice : "", vendorQuoteScope: e.target.value !== "need_quote" ? job.vendorQuoteScope : "" })}>
-                      <option value="">— Select —</option>
-                      {VENDOR_NEXT_STEPS.map(v => <option key={v.id} value={v.id}>{v.label}</option>)}
-                    </select>
-                  )}
-                  {/* Quote fields — shown only when Need Quote is selected */}
-                  {job.vendorNextStep === "need_quote" && (
-                    <div style={{ marginTop: 10, background: "#F0F2F8", border: "1px solid #A78BFA40", borderRadius: 8, padding: "12px 14px", display: "flex", flexDirection: "column", gap: 10 }}>
-                      <div style={{ fontSize: 10, color: "#A78BFA", textTransform: "uppercase", letterSpacing: "0.07em", fontWeight: 600, marginBottom: 2 }}>Quote Details</div>
-                      <div>
-                        <div style={{ fontSize: 10, color: "#4A5278", marginBottom: 4 }}>Quote Price</div>
-                        <input className="fi" type="number" placeholder="0.00"
-                          value={job.vendorQuotePrice || ""}
-                          onChange={e => update({ vendorQuotePrice: e.target.value })} />
-                      </div>
-                      <div>
-                        <div style={{ fontSize: 10, color: "#4A5278", marginBottom: 4 }}>Quote Scope</div>
-                        <textarea className="fi" rows={3} placeholder="Describe what the vendor quoted…"
-                          value={job.vendorQuoteScope || ""}
-                          onChange={e => update({ vendorQuoteScope: e.target.value })}
-                          style={{ resize: "vertical" }} />
-                      </div>
-                      <div>
-                        <div style={{ fontSize: 10, color: "#4A5278", marginBottom: 4 }}>Attach File</div>
-                        <label style={{ display: "flex", alignItems: "center", gap: 8, background: "#ECEEF8", border: "1px solid #CBD1E8", borderRadius: 5, padding: "7px 12px", cursor: "pointer", fontSize: 11, color: "#353C62" }}>
-                          📎 {job.vendorQuoteFile ? job.vendorQuoteFile : "Choose file…"}
-                          <input type="file" style={{ display: "none" }} onChange={e => {
-                            if (e.target.files[0]) update({ vendorQuoteFile: e.target.files[0].name });
-                          }} />
-                        </label>
-                      </div>
-                      {/* Summary pill once filled */}
-                      {job.vendorQuotePrice && (
-                        <div style={{ background: "#A78BFA15", border: "1px solid #A78BFA30", borderRadius: 6, padding: "8px 12px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                          <span style={{ fontSize: 11, color: "#A78BFA", fontWeight: 600 }}>Quote received: {fmt(Number(job.vendorQuotePrice))}</span>
-                          {job.contractValue > 0 && (
-                            <span style={{ fontSize: 10, color: Number(job.vendorQuotePrice) < job.contractValue ? "#4ADE80" : "#F87171" }}>
-                              {Number(job.vendorQuotePrice) < job.contractValue ? "✓ Under budget" : "⚠ Over budget"}
-                            </span>
-                          )}
-                        </div>
+                {/* ── Vendor Status (auto-derived, read-only) ── */}
+                {job.subcontractorId && (() => {
+                  const vps = job.vendorPortalStatus;
+                  const stage = job.stage;
+                  // Derive status from actual job state
+                  let label, color, bg, border, detail = null;
+                  if (vps === "scheduled" || stage === "do_work") {
+                    label = "✅ Scheduled";
+                    color = "#4ADE80"; bg = "#4ADE8010"; border = "#4ADE8030";
+                    if (job.vendorPortalDate) detail = job.vendorPortalDate + (job.vendorPortalTime ? " @ " + job.vendorPortalTime : "");
+                  } else if (vps === "quote_submitted") {
+                    label = "📋 Quote Submitted — Needs Review";
+                    color = "#F87171"; bg = "#F8717110"; border = "#F8717130";
+                    if (job.vendorPortalPrice) detail = "Price: " + fmt(Number(job.vendorPortalPrice));
+                  } else if (vps === "pending" || job.vendorSentAt) {
+                    label = "⏳ Portal Link Sent — Awaiting Response";
+                    color = "#FCD34D"; bg = "#FCD34D10"; border = "#FCD34D30";
+                    if (job.vendorSentAt) detail = "Sent " + new Date(job.vendorSentAt).toLocaleDateString();
+                  } else if (stage === "bill") {
+                    label = "🧾 Work Complete — Awaiting Invoice";
+                    color = "#F97316"; bg = "#F9731610"; border = "#F9731630";
+                  } else if (stage === "buyout") {
+                    label = "📝 In Buyout";
+                    color = "#FCD34D"; bg = "#FCD34D10"; border = "#FCD34D30";
+                  } else if (stage === "owner_approval") {
+                    label = "🔒 Awaiting Owner Approval";
+                    color = "#60A5FA"; bg = "#60A5FA10"; border = "#60A5FA30";
+                  } else if (stage === "generate_proposal") {
+                    label = "📄 Proposal Being Generated";
+                    color = "#C084FC"; bg = "#C084FC10"; border = "#C084FC30";
+                  } else if (stage === "waiting_quote") {
+                    label = "⏳ Waiting for Quote";
+                    color = "#A78BFA"; bg = "#A78BFA10"; border = "#A78BFA30";
+                  } else if (stage === "estimating") {
+                    label = "📋 In Estimating";
+                    color = "#818CF8"; bg = "#818CF810"; border = "#818CF830";
+                  } else {
+                    return null;
+                  }
+                  return (
+                    <div style={{ background: bg, border: "1px solid " + border, borderRadius: 8, padding: "10px 14px" }}>
+                      <div style={{ fontSize: 10, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5 }}>Vendor Status</div>
+                      <div style={{ fontSize: 12, fontWeight: 700, color }}>{label}</div>
+                      {detail && <div style={{ fontSize: 11, color: "#4A5278", marginTop: 3 }}>{detail}</div>}
+                      {job.vendorPortalNote && (vps === "scheduled" || vps === "quote_submitted") && (
+                        <div style={{ fontSize: 10, color: "#4A5278", marginTop: 3, fontStyle: "italic" }}>{job.vendorPortalNote}</div>
                       )}
                     </div>
-                  )}
-                  {/* Show label for other statuses */}
-                  {job.vendorNextStep && job.vendorNextStep !== "need_quote" && (
-                    <div style={{ marginTop: 6 }}>
-                      <span style={{ fontSize: 11, background: "#3B6FE815", color: "#3B6FE8", border: "1px solid #3B6FE830", padding: "3px 10px", borderRadius: 4 }}>
-                        {VENDOR_NEXT_STEPS.find(v => v.id === job.vendorNextStep)?.label}
-                      </span>
-                    </div>
-                  )}
-                </div>
+                  );
+                })()}
 
                 {/* Financials */}
                 <div style={{ background: "#F0F2F8", borderRadius: 8, padding: "12px 14px", border: "1px solid #CBD1E8", display: "flex", gap: 20 }}>
