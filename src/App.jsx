@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useCallback } from "react";
+\import { useState, useMemo, useEffect, useCallback } from "react";
 
 // ── Supabase client ─────────────────────────────────────────
 const SUPA_URL = "https://bplleiwxbejqfinmyxnq.supabase.co";
@@ -3850,7 +3850,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                   <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                     {notBiddingCount > 0 && (
                       <button onClick={() => setShowNotBidding(v => !v)} style={{ background: showNotBidding ? "#353C6220" : "transparent", border: "1px solid #353C6250", color: showNotBidding ? "#9CA3C0" : "#353C62", borderRadius: 6, padding: "6px 12px", fontSize: 11, cursor: "pointer" }}>
-                        {showNotBidding ? "👁 Hide Archived" : `📦 ${notBiddingCount} Archived`}
+                        {showNotBidding ? "👁 Hide Archived" : "📦 " + notBiddingCount + " Archived"}
                       </button>
                     )}
                     <select value={lawnBidSeason} onChange={e => setLawnBidSeason(e.target.value)} style={{ background: "#F5F7FC", border: "1px solid #CBD1E8", color: "#252E52", borderRadius: 6, padding: "6px 10px", fontSize: 13 }}>
