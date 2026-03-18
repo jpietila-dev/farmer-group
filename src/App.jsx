@@ -5680,38 +5680,235 @@ Return ONLY valid JSON, no markdown, no extra text:
                       })()}
 
                       {/* ── PATH 3: SELF-ESTIMATE ── */}
-                      {estPath === "self_estimate" && (
-                        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                          <div style={{ background: "#ECEEF8", borderRadius: 6, padding: "10px 12px", fontSize: 11, color: "#4A5278", lineHeight: 1.5 }}>
-                            Build your price using the calculators below, then generate a proposal for owner approval. You'll assign a vendor after they sign off.
+                      {estPath === "self_estimate" && (() => {
+                        const se = job.selfEstimate || {};
+                        const step = se.step || "category"; // category | abg | doors | summary
+                        const updateSE = patch => update({ selfEstimate: { ...se, ...patch } });
+
+                        // ── ABG PRICING ──
+                        const ABG_UNITS = [
+                          { size: "5x5",   sqft: 25,  pricePerSqft: 0.55 },
+                          { size: "5x10",  sqft: 50,  pricePerSqft: 0.50 },
+                          { size: "10x10", sqft: 100, pricePerSqft: 0.45 },
+                          { size: "10x15", sqft: 150, pricePerSqft: 0.42 },
+                          { size: "10x20", sqft: 200, pricePerSqft: 0.40 },
+                          { size: "10x30", sqft: 300, pricePerSqft: 0.38 },
+                        ];
+                        const abgUnits = se.abgUnits || {};
+                        const calcABG = () => ABG_UNITS.reduce((total, u) => {
+                          const row = abgUnits[u.size] || {};
+                          const qty = Number(row.qty || 0);
+                          const pct = Number(row.pct || 100) / 100;
+                          return total + qty * pct * u.sqft * u.pricePerSqft;
+                        }, 0);
+
+                        // ── DOOR PRICING ──
+                        const DOOR_PRICE_SINGLE = 125;
+                        const DOOR_PRICE_DOUBLE = 195;
+                        const doorQty = Number(se.doorQty || 0);
+                        const doorType = se.doorType || "single";
+                        const calcDoors = () => doorQty * (doorType === "double" ? DOOR_PRICE_DOUBLE : DOOR_PRICE_SINGLE);
+
+                        // ── COMBINED TOTAL ──
+                        const categories = se.categories || [];
+                        const abgTotal   = categories.includes("abg")   ? calcABG()   : 0;
+                        const doorTotal  = categories.includes("doors") ? calcDoors() : 0;
+                        const calcTotal  = abgTotal + doorTotal;
+                        const finalPrice = se.overridePrice != null ? Number(se.overridePrice) : calcTotal;
+
+                        // ── STEP: CATEGORY SELECT ──
+                        if (step === "category") return (
+                          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                            <div style={{ fontSize: 10, color: "#4A5278", marginBottom: 2 }}>What work is involved? (select all that apply)</div>
+                            {[
+                              { id: "abg", label: "🏠 ABG (Above-Ground Units)", desc: "Paint, caulk, sealant by unit size" },
+                              { id: "doors", label: "🚪 Coiling Doors", desc: "Spring replacement by door count" },
+                              { id: "other", label: "📝 Other / Manual Entry", desc: "I'll enter the price directly" },
+                            ].map(cat => {
+                              const sel = categories.includes(cat.id);
+                              return (
+                                <button key={cat.id} onClick={() => {
+                                  const next = sel ? categories.filter(c => c !== cat.id) : [...categories, cat.id];
+                                  updateSE({ categories: next });
+                                }} style={{ width: "100%", padding: "10px 12px", borderRadius: 7,
+                                  border: "1px solid " + (sel ? "#3B6FE8" : "#CBD1E8"),
+                                  background: sel ? "#3B6FE810" : "#FFF",
+                                  cursor: "pointer", fontFamily: "inherit", textAlign: "left" }}>
+                                  <div style={{ fontSize: 12, fontWeight: 700, color: sel ? "#3B6FE8" : "#1A2240" }}>{sel ? "☑ " : ""}{cat.label}</div>
+                                  <div style={{ fontSize: 10, color: "#4A5278", marginTop: 1 }}>{cat.desc}</div>
+                                </button>
+                              );
+                            })}
+                            {categories.length > 0 && (
+                              <button onClick={() => updateSE({ step: categories.includes("abg") ? "abg" : categories.includes("doors") ? "doors" : "summary" })}
+                                style={{ width: "100%", padding: "10px", borderRadius: 6, border: "none", background: "#818CF8", color: "#1A2240", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit", marginTop: 4 }}>
+                                Next →
+                              </button>
+                            )}
                           </div>
-                          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                            <div style={{ fontSize: 10, color: "#4A5278", marginBottom: 2 }}>Your Estimated Price</div>
-                            <div style={{ position: "relative" }}>
-                              <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "#4A5278", fontSize: 13 }}>$</span>
-                              <input className="fi" type="number" placeholder="0.00" style={{ paddingLeft: 22 }}
-                                value={job.selfEstimatePrice || ""}
-                                onChange={e => {
-                                  const n = Number(e.target.value||0);
-                                  const gp = fmGrossProfit(n);
-                                  update({ selfEstimatePrice: e.target.value, contractValue: n, grossProfit: gp, nte: String(n), vendorNTE: String(fmVendorNTE(n)) });
-                                }} />
+                        );
+
+                        // ── STEP: ABG UNITS ──
+                        if (step === "abg") return (
+                          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                              <div style={{ fontSize: 11, fontWeight: 700, color: "#818CF8" }}>🏠 ABG Units</div>
+                              <button onClick={() => updateSE({ step: "category" })} style={{ fontSize: 9, background: "transparent", border: "none", color: "#4A5278", cursor: "pointer", fontFamily: "inherit" }}>← Back</button>
                             </div>
-                            <div style={{ fontSize: 10, color: "#4A5278", marginBottom: 2, marginTop: 4 }}>Scope Notes</div>
-                            <textarea className="fi" rows={3} placeholder="Describe the work, materials, labor assumptions…"
-                              value={job.selfEstimateNotes || ""}
-                              onChange={e => update({ selfEstimateNotes: e.target.value })}
-                              style={{ resize: "vertical" }} />
-                          </div>
-                          {job.selfEstimatePrice && (
-                            <button onClick={() => update({ stage: "generate_proposal" })}
+                            <div style={{ fontSize: 10, color: "#4A5278" }}>Enter unit count and % occupancy for each size.</div>
+                            <div style={{ display: "grid", gridTemplateColumns: "60px 1fr 1fr", gap: "6px 8px", alignItems: "center" }}>
+                              <div style={{ fontSize: 9, color: "#4A5278", textTransform: "uppercase" }}>Size</div>
+                              <div style={{ fontSize: 9, color: "#4A5278", textTransform: "uppercase" }}># Units</div>
+                              <div style={{ fontSize: 9, color: "#4A5278", textTransform: "uppercase" }}>% Full</div>
+                              {ABG_UNITS.map(u => {
+                                const row = abgUnits[u.size] || {};
+                                return [
+                                  <div key={u.size + "l"} style={{ fontSize: 11, fontWeight: 600, color: "#1A2240" }}>{u.size}</div>,
+                                  <input key={u.size + "q"} className="fi" type="number" min="0" placeholder="0"
+                                    value={row.qty || ""}
+                                    onChange={e => updateSE({ abgUnits: { ...abgUnits, [u.size]: { ...row, qty: e.target.value } } })}
+                                    style={{ padding: "6px 8px", fontSize: 12 }} />,
+                                  <input key={u.size + "p"} className="fi" type="number" min="0" max="100" placeholder="100"
+                                    value={row.pct || ""}
+                                    onChange={e => updateSE({ abgUnits: { ...abgUnits, [u.size]: { ...row, pct: e.target.value } } })}
+                                    style={{ padding: "6px 8px", fontSize: 12 }} />,
+                                ];
+                              })}
+                            </div>
+                            {calcABG() > 0 && (
+                              <div style={{ background: "#818CF810", border: "1px solid #818CF830", borderRadius: 6, padding: "8px 12px", display: "flex", justifyContent: "space-between" }}>
+                                <span style={{ fontSize: 11, color: "#4A5278" }}>ABG Estimate</span>
+                                <span style={{ fontSize: 13, fontWeight: 700, color: "#818CF8" }}>{fmt(calcABG())}</span>
+                              </div>
+                            )}
+                            <button onClick={() => updateSE({ step: categories.includes("doors") ? "doors" : "summary" })}
                               style={{ width: "100%", padding: "10px", borderRadius: 6, border: "none", background: "#818CF8", color: "#1A2240", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
-                              → Generate Proposal
+                              Next →
                             </button>
-                          )}
-                          {!job.selfEstimatePrice && <div style={{ fontSize: 10, color: "#3D4570", fontStyle: "italic" }}>Enter your price above to proceed to proposal</div>}
-                        </div>
-                      )}
+                          </div>
+                        );
+
+                        // ── STEP: COILING DOORS ──
+                        if (step === "doors") return (
+                          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                              <div style={{ fontSize: 11, fontWeight: 700, color: "#818CF8" }}>🚪 Coiling Doors</div>
+                              <button onClick={() => updateSE({ step: categories.includes("abg") ? "abg" : "category" })} style={{ fontSize: 9, background: "transparent", border: "none", color: "#4A5278", cursor: "pointer", fontFamily: "inherit" }}>← Back</button>
+                            </div>
+                            <div>
+                              <div style={{ fontSize: 10, color: "#4A5278", marginBottom: 4 }}>Number of Doors</div>
+                              <input className="fi" type="number" min="0" placeholder="0"
+                                value={se.doorQty || ""}
+                                onChange={e => updateSE({ doorQty: e.target.value })} />
+                            </div>
+                            <div>
+                              <div style={{ fontSize: 10, color: "#4A5278", marginBottom: 6 }}>Spring Type</div>
+                              <div style={{ display: "flex", gap: 8 }}>
+                                {[
+                                  { id: "single", label: "Single Spring", hint: "Small doors (5x5, 5x10)", price: DOOR_PRICE_SINGLE },
+                                  { id: "double", label: "Double Spring", hint: "Large doors (10x10+)", price: DOOR_PRICE_DOUBLE },
+                                ].map(t => (
+                                  <button key={t.id} onClick={() => updateSE({ doorType: t.id })}
+                                    style={{ flex: 1, padding: "10px 8px", borderRadius: 7,
+                                      border: "1px solid " + (doorType === t.id ? "#3B6FE8" : "#CBD1E8"),
+                                      background: doorType === t.id ? "#3B6FE810" : "#FFF",
+                                      cursor: "pointer", fontFamily: "inherit", textAlign: "center" }}>
+                                    <div style={{ fontSize: 11, fontWeight: 700, color: doorType === t.id ? "#3B6FE8" : "#1A2240" }}>{t.label}</div>
+                                    <div style={{ fontSize: 9, color: "#4A5278", marginTop: 2 }}>{t.hint}</div>
+                                    <div style={{ fontSize: 10, color: "#FCD34D", marginTop: 3 }}>{fmt(t.price)}/door</div>
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                            {calcDoors() > 0 && (
+                              <div style={{ background: "#818CF810", border: "1px solid #818CF830", borderRadius: 6, padding: "8px 12px", display: "flex", justifyContent: "space-between" }}>
+                                <span style={{ fontSize: 11, color: "#4A5278" }}>Doors Estimate</span>
+                                <span style={{ fontSize: 13, fontWeight: 700, color: "#818CF8" }}>{fmt(calcDoors())}</span>
+                              </div>
+                            )}
+                            <button onClick={() => updateSE({ step: "summary" })}
+                              style={{ width: "100%", padding: "10px", borderRadius: 6, border: "none", background: "#818CF8", color: "#1A2240", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
+                              Next →
+                            </button>
+                          </div>
+                        );
+
+                        // ── STEP: SUMMARY + OVERRIDE ──
+                        if (step === "summary") return (
+                          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                              <div style={{ fontSize: 11, fontWeight: 700, color: "#818CF8" }}>📊 Estimate Summary</div>
+                              <button onClick={() => updateSE({ step: categories.includes("doors") ? "doors" : categories.includes("abg") ? "abg" : "category" })}
+                                style={{ fontSize: 9, background: "transparent", border: "none", color: "#4A5278", cursor: "pointer", fontFamily: "inherit" }}>← Back</button>
+                            </div>
+
+                            {/* Line items */}
+                            <div style={{ background: "#ECEEF8", borderRadius: 6, padding: "10px 12px", display: "flex", flexDirection: "column", gap: 6 }}>
+                              {categories.includes("abg") && (
+                                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11 }}>
+                                  <span style={{ color: "#4A5278" }}>ABG Units</span>
+                                  <span style={{ fontWeight: 700, color: "#1A2240" }}>{fmt(abgTotal)}</span>
+                                </div>
+                              )}
+                              {categories.includes("doors") && (
+                                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11 }}>
+                                  <span style={{ color: "#4A5278" }}>Coiling Doors ({doorQty} × {doorType})</span>
+                                  <span style={{ fontWeight: 700, color: "#1A2240" }}>{fmt(doorTotal)}</span>
+                                </div>
+                              )}
+                              {categories.includes("other") && (
+                                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11 }}>
+                                  <span style={{ color: "#4A5278" }}>Manual entry</span>
+                                  <span style={{ color: "#4A5278" }}>see override below</span>
+                                </div>
+                              )}
+                              {calcTotal > 0 && (
+                                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, fontWeight: 700, borderTop: "1px solid #CBD1E8", paddingTop: 6, marginTop: 2 }}>
+                                  <span style={{ color: "#1A2240" }}>Calculator Total</span>
+                                  <span style={{ color: "#818CF8" }}>{fmt(calcTotal)}</span>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Override */}
+                            <div>
+                              <div style={{ fontSize: 10, color: "#4A5278", marginBottom: 4 }}>
+                                Override Price <span style={{ color: "#818CF830", fontStyle: "italic" }}>(optional — leave blank to use calculator total)</span>
+                              </div>
+                              <div style={{ position: "relative" }}>
+                                <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: "#4A5278", fontSize: 13 }}>$</span>
+                                <input className="fi" type="number" placeholder={calcTotal > 0 ? String(Math.round(calcTotal)) : "0.00"} style={{ paddingLeft: 22 }}
+                                  value={se.overridePrice != null ? se.overridePrice : ""}
+                                  onChange={e => updateSE({ overridePrice: e.target.value === "" ? null : e.target.value })} />
+                              </div>
+                              {se.overridePrice != null && (
+                                <div style={{ fontSize: 10, color: "#FCD34D", marginTop: 3 }}>⚠ Using override price of {fmt(Number(se.overridePrice))}</div>
+                              )}
+                            </div>
+
+                            <div>
+                              <div style={{ fontSize: 10, color: "#4A5278", marginBottom: 4 }}>Scope Notes</div>
+                              <textarea className="fi" rows={2} placeholder="Materials, assumptions, access notes…"
+                                value={se.notes || ""}
+                                onChange={e => updateSE({ notes: e.target.value })}
+                                style={{ resize: "vertical" }} />
+                            </div>
+
+                            {finalPrice > 0 && (
+                              <button onClick={() => {
+                                const n = finalPrice;
+                                const gp = fmGrossProfit(n);
+                                update({ selfEstimate: { ...se, step: "summary" }, selfEstimatePrice: String(n), contractValue: n, grossProfit: gp, nte: String(n), vendorNTE: String(fmVendorNTE(n)), stage: "generate_proposal" });
+                              }} style={{ width: "100%", padding: "10px", borderRadius: 6, border: "none", background: "#818CF8", color: "#1A2240", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
+                                Use {fmt(finalPrice)} → Generate Proposal
+                              </button>
+                            )}
+                            {!finalPrice && <div style={{ fontSize: 10, color: "#3D4570", fontStyle: "italic" }}>Enter an override price or go back and fill in quantities</div>}
+                          </div>
+                        );
+
+                        return null;
+                      })()}
 
                     </div>
                   );
@@ -5809,16 +6006,12 @@ Return ONLY valid JSON, no markdown, no extra text:
                     </div>
                   </div>
                 )}
-                <div>
-                  <div style={{ fontSize: 10, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5 }}>Subcontractor / Vendor</div>
-                  <select className="fi" value={job.subcontractorId || ""} onChange={e => update({ subcontractorId: e.target.value })}>
-                    <option value="">Unassigned</option>
-                    {subcontractors.map(s => (
-                      <option key={s.id} value={s.id}>{s.name}{s.trade ? " — " + s.trade : ""}</option>
-                    ))}
-                  </select>
-                  {sub && (
-                    <div style={{ marginTop: 6, background: "#F0F2F8", borderRadius: 6, padding: "8px 12px", border: "1px solid #CBD1E8" }}>
+                {/* Vendor shown read-only when assigned via Known Vendor path */}
+                {sub && (
+                  <div>
+                    <div style={{ fontSize: 10, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5 }}>Assigned Vendor</div>
+                    <div style={{ background: "#F0F2F8", borderRadius: 6, padding: "8px 12px", border: "1px solid #CBD1E8" }}>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: "#1A2240", marginBottom: 4 }}>{sub.name}</div>
                       {(() => {
                         const coiDate = sub.coiExpiry ? new Date(sub.coiExpiry) : null;
                         const coiExpiring = coiDate && coiDate > new Date() && coiDate <= new Date(Date.now() + 30*86400000);
@@ -5832,8 +6025,8 @@ Return ONLY valid JSON, no markdown, no extra text:
                         );
                       })()}
                     </div>
-                  )}
-                </div>
+                  </div>
+                )}
 
                 {/* ── Vendor Status (auto-derived, read-only) ── */}
                 {job.subcontractorId && (() => {
