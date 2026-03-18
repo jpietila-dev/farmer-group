@@ -5697,6 +5697,56 @@ Return ONLY valid JSON, no markdown, no extra text:
                   )}
                 </div>
 
+                {/* ── Vendor Portal ── always visible when sub assigned */}
+                {job.subcontractorId && (
+                  <div style={{ background: "#F0F2F8", border: "1px solid #3B6FE830", borderRadius: 8, padding: "12px 14px" }}>
+                    <div style={{ fontSize: 10, color: "#3B6FE8", textTransform: "uppercase", letterSpacing: "0.07em", fontWeight: 700, marginBottom: 8 }}>🔗 Vendor Portal</div>
+                    {job.vendorPortalStatus === "scheduled" ? (
+                      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                        <div style={{ fontSize: 11, color: "#4ADE80", fontWeight: 700 }}>✅ Vendor Scheduled</div>
+                        <div style={{ fontSize: 11, color: "#1A2240" }}>Price: <strong>{fmt(Number(job.vendorPortalPrice||0))}</strong></div>
+                        <div style={{ fontSize: 11, color: "#1A2240" }}>Date: <strong>{job.vendorPortalDate}{job.vendorPortalTime ? " @ " + job.vendorPortalTime : ""}</strong></div>
+                        {job.vendorPortalNote && <div style={{ fontSize: 10, color: "#4A5278", marginTop: 2 }}>{job.vendorPortalNote}</div>}
+                        <button onClick={() => update({ vendorPortalStatus: null, vendorToken: null, vendorSentAt: null })}
+                          style={{ marginTop: 6, fontSize: 10, background: "transparent", border: "1px solid #CBD1E8", borderRadius: 4, color: "#4A5278", padding: "4px 8px", cursor: "pointer", fontFamily: "inherit" }}>
+                          ↩ Reset
+                        </button>
+                      </div>
+                    ) : job.vendorPortalStatus === "quote_submitted" ? (
+                      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                        <div style={{ fontSize: 11, color: "#3B6FE8", fontWeight: 700 }}>📋 Quote Received — Needs Review</div>
+                        <div style={{ fontSize: 11, color: "#1A2240" }}>Price: <strong style={{ color: "#F87171" }}>{fmt(Number(job.vendorPortalPrice||0))}</strong></div>
+                        {job.vendorPortalNote && <div style={{ fontSize: 10, color: "#4A5278", marginTop: 2 }}>{job.vendorPortalNote}</div>}
+                        <button onClick={() => update({ vendorPortalStatus: null, vendorToken: null, vendorSentAt: null })}
+                          style={{ marginTop: 6, fontSize: 10, background: "transparent", border: "1px solid #CBD1E8", borderRadius: 4, color: "#4A5278", padding: "4px 8px", cursor: "pointer", fontFamily: "inherit" }}>
+                          ↩ Reset & Resend
+                        </button>
+                      </div>
+                    ) : job.vendorSentAt && job.vendorToken ? (
+                      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                        <div style={{ fontSize: 11, color: "#FCD34D", fontWeight: 600 }}>⏳ Awaiting vendor response</div>
+                        <div style={{ fontSize: 10, color: "#4A5278" }}>Sent {new Date(job.vendorSentAt).toLocaleDateString()}</div>
+                        <button onClick={() => navigator.clipboard?.writeText(window.location.origin + "/?vendortoken=" + job.vendorToken)}
+                          style={{ marginTop: 4, fontSize: 10, background: "transparent", border: "1px solid #FCD34D30", borderRadius: 4, color: "#FCD34D", padding: "4px 8px", cursor: "pointer", fontFamily: "inherit" }}>
+                          📋 Copy Link Again
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => {
+                          const vt = "vendor" + Math.random().toString(36).slice(2, 10);
+                          const link = window.location.origin + "/?vendortoken=" + vt;
+                          update({ vendorToken: vt, vendorSentAt: new Date().toISOString(), vendorPortalStatus: "pending" });
+                          navigator.clipboard?.writeText(link);
+                          alert("✅ Vendor portal link copied!\n\nSend this to " + (subcontractors.find(s => s.id === job.subcontractorId)?.name || "the vendor") + ":\n\n" + link);
+                        }}
+                        style={{ width: "100%", padding: "9px", borderRadius: 6, border: "2px solid #3B6FE8", cursor: "pointer", fontFamily: "inherit", fontSize: 12, fontWeight: 700, background: "#3B6FE810", color: "#3B6FE8" }}>
+                        🔗 Send Vendor Portal Link
+                      </button>
+                    )}
+                  </div>
+                )}
+
                 {/* Vendor next step */}
                 <div>
                   <div style={{ fontSize: 10, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5 }}>Vendor Next Step</div>
