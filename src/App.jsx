@@ -1627,8 +1627,8 @@ export default function App() {
   const moveCapexStage = (id, dir) => setCapexJobs(capexJobs.map(j => { if (j.id !== id) return j; const idx = CAPEX_FM_STAGES.findIndex(s => s.id === j.stage); return { ...j, stage: CAPEX_FM_STAGES[Math.max(0, Math.min(CAPEX_FM_STAGES.length - 1, idx + dir))].id }; }));
 
   // FM job helpers
-  const openAddFm = () => { setEditFmId(null); setFmForm({ name: "", companyId: "", siteId: "", contractValue: "", grossProfit: "", stage: "estimating", startDate: "", endDate: "", pm: "", pct: 0, bidDueDate: "", quoteDueDate: "", proposalDate: "", followUpDate: "", buyoutDate: "", invoiceDate: "", notes: "", storeCode: "", projectNo: "", ownersProjectNo: "", vendorInvoiceAmount: "", vendorInvoiceNumber: "", subcontractorId: "", vendorNextStep: "", vendorQuotePrice: "", vendorQuoteScope: "", scopeOfWork: "", coordinator: "" }); setShowFmForm(true); };
-  const openEditFm = (j) => { setEditFmId(j.id); setFmForm({ ...j, contractValue: String(j.contractValue) }); setShowFmForm(true); };
+  const openAddFm = () => { setEditFmId(null); setFmForm({ name: "", companyId: "", siteId: "", contractValue: "", grossProfit: "", stage: "estimating", startDate: "", endDate: "", pm: "", pct: 0, bidDueDate: "", quoteDueDate: "", proposalDate: "", followUpDate: "", buyoutDate: "", invoiceDate: "", notes: "", storeCode: "", projectNo: "", ownersProjectNo: "", vendorInvoiceAmount: "", vendorInvoiceNumber: "", subcontractorId: "", vendorNextStep: "", vendorQuotePrice: "", vendorQuoteScope: "", scopeOfWork: "", coordinator: "" }); setFmCompanySearch(""); setFmSiteSearch(""); setShowFmForm(true); };
+  const openEditFm = (j) => { setEditFmId(j.id); setFmForm({ ...j, contractValue: String(j.contractValue) }); setFmCompanySearch(""); setFmSiteSearch(""); setShowFmForm(true); };
   const saveFm = () => {
     if (!fmForm.name.trim()) return;
     const entry = { ...fmForm, contractValue: Number(fmForm.contractValue||0), grossProfit: Number(fmForm.grossProfit||0), vendorInvoiceAmount: Number(fmForm.vendorInvoiceAmount||0), pct: Number(fmForm.pct || 0) };
@@ -2050,8 +2050,8 @@ Return ONLY valid JSON, no markdown, no extra text:
     .pill{display:inline-flex;align-items:center;padding:3px 9px;border-radius:20px;font-size:10px;letter-spacing:0.05em;white-space:nowrap;font-weight:500}
     .opp-row{background:#FFFFFF;border:1px solid #D4D9EE;border-radius:8px;padding:14px 16px;transition:all 0.15s;cursor:pointer}
     .opp-row:hover{border-color:#3B6FE8;background:#F5F7FE}
-    .modal-bg{position:fixed;inset:0;background:rgba(30,38,80,0.45);display:flex;align-items:center;justify-content:center;z-index:9000;backdrop-filter:blur(4px)}
-    .modal{background:#FFFFFF;border:1px solid #D4D9EE;border-radius:12px;padding:28px;width:540px;max-height:90vh;overflow-y:auto;box-shadow:0 8px 32px rgba(30,38,80,0.12)}
+    .modal-bg{position:fixed;inset:0;background:rgba(30,38,80,0.45);display:flex;align-items:flex-start;justify-content:center;z-index:9000;backdrop-filter:blur(4px);overflow-y:auto;padding:24px 16px}
+    .modal{background:#FFFFFF;border:1px solid #D4D9EE;border-radius:12px;padding:28px;width:540px;box-shadow:0 8px 32px rgba(30,38,80,0.12);margin:auto}
     .g2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
     .side-panel{position:fixed;right:0;top:52px;bottom:0;width:400px;background:#FFFFFF;border-left:1px solid #D4D9EE;padding:24px;overflow-y:auto;z-index:40;box-shadow:-4px 0 20px rgba(30,38,80,0.07)}
     @keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
@@ -6520,7 +6520,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                   <input className="fi" value={fmCompanySearch || (companies.find(c => c.id === fmForm.companyId)?.name || "")}
                     onChange={e => { setFmCompanySearch(e.target.value); if (!e.target.value) setFmForm(f => ({ ...f, companyId: "", siteId: "" })); }}
                     placeholder="Type company name…" autoComplete="off" />
-                  {fmCompanySearch && (() => {
+                  {fmCompanySearch !== "" && (() => {
                     const matches = companies.filter(c => c.name.toLowerCase().includes(fmCompanySearch.toLowerCase())).slice(0, 8);
                     if (!matches.length) return null;
                     return (
@@ -6538,10 +6538,12 @@ Return ONLY valid JSON, no markdown, no extra text:
                 <div style={{ position: "relative" }}><label className="lbl">Site — Type store # to search</label>
                   <input className="fi"
                     value={fmSiteSearch !== "" ? fmSiteSearch : (fmForm.siteId ? (() => { const s = sites.find(x => x.id === fmForm.siteId); return s ? "Store #" + s.storeNumber + (s.address ? " — " + s.address : "") : ""; })() : "")}
+                    onFocus={e => { if (fmForm.siteId) { setFmSiteSearch(""); } }}
                     onChange={e => { setFmSiteSearch(e.target.value); if (!e.target.value) setFmForm(f => ({ ...f, siteId: "" })); }}
+                    onBlur={() => setTimeout(() => setFmSiteSearch(s => s), 150)}
                     placeholder={fmForm.companyId ? "Type store # or address…" : "Select company first…"}
                     disabled={!fmForm.companyId} autoComplete="off" />
-                  {fmSiteSearch && fmForm.companyId && (() => {
+                  {fmSiteSearch !== "" && fmForm.companyId && (() => {
                     const q = fmSiteSearch.toLowerCase();
                     const matches = sites.filter(s => s.companyId === fmForm.companyId && ((s.storeNumber||"").toLowerCase().includes(q) || (s.address||"").toLowerCase().includes(q))).slice(0, 10);
                     if (!matches.length) return <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "#fff", border: "1px solid #CBD1E8", borderRadius: 6, padding: "10px 12px", fontSize: 12, color: "#4A5278", zIndex: 200 }}>No sites match "{fmSiteSearch}"</div>;
