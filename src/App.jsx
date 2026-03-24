@@ -2928,7 +2928,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                 <div>
                   <div style={{ fontSize: 22, fontWeight: 700, color: "#1A2240", letterSpacing: "-0.01em", textTransform: "uppercase" }}>Sites</div>
                   <div style={{ fontSize: 11, color: "#4A5278", marginTop: 3, letterSpacing: "0.06em" }}>
-                    {BUSINESS_UNITS.find(b => b.id === activeBU)?.label.toUpperCase()} · {sites.length} SITES
+                    {BUSINESS_UNITS.find(b => b.id === activeBU)?.label.toUpperCase()} · {activeBU === "all" ? sites.length : sites.filter(s => (s.businessUnits||[]).includes(activeBU === "facility" ? "facility" : activeBU)).length} SITES
                   </div>
                 </div>
                 <div style={{ display: "flex", gap: 8 }}>
@@ -2999,11 +2999,14 @@ Return ONLY valid JSON, no markdown, no extra text:
                   <button className="btn-primary" onClick={openAddSite}>+ Add Site</button>
                 </div>
               </div>
+              {(() => {
+                const visibleSites = activeBU === "all" ? sites : sites.filter(s => (s.businessUnits||[]).includes(activeBU === "facility" ? "facility" : activeBU));
+                return (
               <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 12 }}>
                 {[
-                  { label: "Total Sites", value: sites.length, color: buColor.accent },
-                  { label: "Companies",   value: [...new Set(sites.map(s => s.companyId))].length, color: "#A78BFA" },
-                  { label: "Contacts",    value: [...new Set(sites.flatMap(s => s.contactIds || []))].length, color: "#4ADE80" },
+                  { label: activeBU === "all" ? "All Sites" : (BUSINESS_UNITS.find(b => b.id === activeBU)?.label || "") + " Sites", value: visibleSites.length, color: buColor.accent },
+                  { label: "Companies",   value: [...new Set(visibleSites.map(s => s.companyId))].length, color: "#A78BFA" },
+                  { label: "Contacts",    value: [...new Set(visibleSites.flatMap(s => s.contactIds || []))].length, color: "#4ADE80" },
                 ].map(s => (
                   <div key={s.label} className="stat-card" style={{ position: "relative", overflow: "hidden", padding: "14px 18px" }}>
                     <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: s.color }} />
@@ -3012,8 +3015,10 @@ Return ONLY valid JSON, no markdown, no extra text:
                   </div>
                 ))}
               </div>
+                );
+              })()}
               <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 12 }}>
-                {sites.filter(site => { const co = companies.find(c => c.id === site.companyId); const q = siteSearch.toLowerCase(); return !q || (site.storeNumber||"").toLowerCase().includes(q) || (site.address||"").toLowerCase().includes(q) || (co?.name||"").toLowerCase().includes(q); }).map(site => {
+                {sites.filter(site => { const buMatch = activeBU === "all" || (site.businessUnits || []).includes(activeBU === "facility" ? "facility" : activeBU); const co = companies.find(c => c.id === site.companyId); const q = siteSearch.toLowerCase(); const textMatch = !q || (site.storeNumber||"").toLowerCase().includes(q) || (site.address||"").toLowerCase().includes(q) || (co?.name||"").toLowerCase().includes(q); return buMatch && textMatch; }).map(site => {
                   const co = companies.find(c => c.id === site.companyId);
                   const siteContacts = contacts.filter(p => (site.contactIds||[]).includes(p.id));
                   return (
@@ -3044,10 +3049,9 @@ Return ONLY valid JSON, no markdown, no extra text:
 
           {/* ── SITES (Lawn / Snow) — Hierarchy View ── */}
           {activeNav === "sites" && LAWN_SNOW_SITES_BUS.includes(activeBU) && (() => {
-            // Show all sites - fall back to ALL sites if none tagged with this BU yet
+            // Only show sites tagged for this specific BU — no fallback to all
             const buTag = activeBU;
-            const taggedSites = sites.filter(s => (s.businessUnits||[]).includes(buTag));
-            const currentSites = taggedSites.length > 0 ? taggedSites : sites;
+            const currentSites = sites.filter(s => (s.businessUnits||[]).includes(buTag));
             const isContracted = (site) => { const b = getLawnBid(site.id); return b && (b.locked || b.status === "owner_approved" || b.status === "contracted" || b.status === "owner_accepted"); };
 
             // Parse state from address — "City, ST XXXXX" → "ST"
