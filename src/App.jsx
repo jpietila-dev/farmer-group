@@ -2757,7 +2757,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                   {/* Add lead modal */}
                   {showInboxForm && (
                     <div className="modal-bg" onClick={e => e.target === e.currentTarget && setShowInboxForm(false)}>
-                      <div className="modal fade-in" style={{ maxHeight: "90vh", overflowY: "auto" }}>
+                      <div className="modal fade-in">
                         <div style={{ fontSize: 15, fontWeight: 700, color: "#FCD34D", marginBottom: 18, textTransform: "uppercase", letterSpacing: "0.05em" }}>New Lead</div>
 
                         {/* Email parse box */}
@@ -6498,7 +6498,7 @@ Return ONLY valid JSON, no markdown, no extra text:
       {/* ── FM JOB FORM ── */}
       {showFmForm && (
         <div className="modal-bg" onClick={e => e.target === e.currentTarget && (setShowFmForm(false), setFmCompanySearch(""), setFmSiteSearch(""))}>
-          <div className="modal fade-in" style={{ maxHeight: "90vh", overflowY: "auto" }}>
+          <div className="modal fade-in">
             <div style={{ fontSize: 16, fontWeight: 700, color: "#1A2240", marginBottom: 22, textTransform: "uppercase" }}>{editFmId ? "Edit FM Job" : "Add FM Job"}</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
               <div><label className="lbl">Scope of Work / Job Name *</label><input className="fi" value={fmForm.name} onChange={e => setFmForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Door Lock Replacement" /></div>
@@ -7329,7 +7329,7 @@ Return ONLY valid JSON, no markdown, no extra text:
       {/* ── TEAM MEMBER FORM MODAL ── */}
       {showTeamForm && (
         <div style={{ position: "fixed", inset: 0, background: "#00000090", zIndex: 9000, display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <div style={{ background: "#ECEEF8", border: "1px solid #CBD1E8", borderRadius: 12, padding: 28, width: 400, maxHeight: "90vh", overflowY: "auto" }}>
+          <div style={{ background: "#ECEEF8", border: "1px solid #CBD1E8", borderRadius: 12, padding: 28, width: 400 }}>
             <div style={{ fontSize: 14, fontWeight: 600, color: "#1A2240", marginBottom: 20 }}>{editTeamId ? "Edit" : "Add"} Team Member</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               {[["Name", "name"], ["Phone", "phone"], ["Email", "email"]].map(([label, key]) => (
@@ -7355,7 +7355,7 @@ Return ONLY valid JSON, no markdown, no extra text:
       {/* ── SUBCONTRACTOR FORM MODAL ── */}
       {showSubForm && (
         <div style={{ position: "fixed", inset: 0, background: "#00000090", zIndex: 9000, display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <div style={{ background: "#ECEEF8", border: "1px solid #CBD1E8", borderRadius: 12, padding: 28, width: 480, maxHeight: "90vh", overflowY: "auto" }}>
+          <div style={{ background: "#ECEEF8", border: "1px solid #CBD1E8", borderRadius: 12, padding: 28, width: 480 }}>
             <div style={{ fontSize: 14, fontWeight: 600, color: "#1A2240", marginBottom: 20 }}>{editSubId ? "Edit" : "Add"} Subcontractor</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
               {[["Name", "name"], ["Trade / Specialty", "trade"], ["Phone", "phone"], ["Email", "email"]].map(([label, key]) => (
