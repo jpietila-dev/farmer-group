@@ -1240,6 +1240,8 @@ export default function App() {
   const [fmJobs,        setFmJobs]        = useState(INIT_FM_JOBS);
   const [showFmForm,    setShowFmForm]    = useState(false);
   const [editFmId,      setEditFmId]      = useState(null);
+  const [fmCompanySearch, setFmCompanySearch] = useState("");
+  const [fmSiteSearch,    setFmSiteSearch]    = useState("");
   const [fmForm,        setFmForm]        = useState({ name: "", companyId: "", siteId: "", contractValue: "", grossProfit: "", nte: "", stage: "estimating", startDate: "", endDate: "", pm: "", pct: 0, bidDueDate: "", quoteDueDate: "", proposalDate: "", followUpDate: "", buyoutDate: "", invoiceDate: "", notes: "", storeCode: "", projectNo: "", ownersProjectNo: "", vendorInvoiceAmount: "", vendorInvoiceNumber: "", subcontractorId: "", vendorNextStep: "", vendorQuotePrice: "", vendorQuoteScope: "", scopeOfWork: "", coordinator: "" });
   const [selectedFmJob, setSelectedFmJob] = useState(null);
   const [fmSearch,      setFmSearch]      = useState("");
@@ -1375,7 +1377,7 @@ export default function App() {
   const navItems = NAV_ITEMS[activeBU] || NAV_ITEMS.all;
   const buColor  = BU_COLORS[activeBU];
 
-  const handleBUChange = (id) => { setActiveBU(id); setActiveNav("dashboard"); setSelectedCoord(null); };
+  const handleBUChange = (id) => { setActiveBU(id); setActiveNav("dashboard"); setSelectedCoord(null); setCrmTagFilter(null); setSelectedCustomer(null); };
 
   // Punch list
   const dynamicPunchList = useMemo(() => {
@@ -1571,9 +1573,24 @@ export default function App() {
   const saveFm = () => {
     if (!fmForm.name.trim()) return;
     const entry = { ...fmForm, contractValue: Number(fmForm.contractValue||0), grossProfit: Number(fmForm.grossProfit||0), vendorInvoiceAmount: Number(fmForm.vendorInvoiceAmount||0), pct: Number(fmForm.pct || 0) };
-    if (editFmId) setFmJobs(fmJobs.map(j => j.id === editFmId ? { ...entry, id: editFmId } : j));
-    else setFmJobs([...fmJobs, { ...entry, id: "fm" + Date.now() }]);
+    if (editFmId) {
+      setFmJobs(fmJobs.map(j => j.id === editFmId ? { ...entry, id: editFmId } : j));
+    } else {
+      setFmJobs([...fmJobs, { ...entry, id: "fm" + Date.now() }]);
+      // Auto-tag site with "facility" so it shows under FM tab immediately
+      if (entry.siteId) {
+        setSites(prev => prev.map(s => {
+          if (s.id !== entry.siteId) return s;
+          const bus = s.businessUnits || [];
+          if (bus.includes("facility")) return s;
+          const updated = { ...s, businessUnits: [...bus, "facility"] };
+          try { supa.from("sites").update(siteToDB(updated)).eq("id", s.id); } catch(e) {}
+          return updated;
+        }));
+      }
+    }
     setShowFmForm(false);
+    setFmCompanySearch(""); setFmSiteSearch("");
   };
   const deleteFm = (id) => { setFmJobs(fmJobs.filter(j => j.id !== id)); setSelectedFmJob(null); };
 
@@ -2383,8 +2400,12 @@ Return ONLY valid JSON, no markdown, no extra text:
             }
 
             // ── Customer List View ──
+            // On non-ALL BU tabs, auto-filter by that BU — no toggle pills shown
+            const buToTag = { facility: "FM", capital: "CapEx", major: "Major", lawn: "Lawn", snow: "Snow" };
+            const autoTag = activeBU !== "all" ? buToTag[activeBU] : null;
+
             const allCompanies = companies.filter(c => c.name.toLowerCase().includes(crmSearch.toLowerCase()));
-            const tagFilter = crmTagFilter || "all";
+            const tagFilter = autoTag || crmTagFilter || "all";
 
             const filteredCompanies = tagFilter === "all"
               ? allCompanies
@@ -2394,8 +2415,8 @@ Return ONLY valid JSON, no markdown, no extra text:
               <div style={{ display: "flex", flexDirection: "column", gap: 22 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div>
-                  <div style={{ fontSize: 22, fontWeight: 700, color: "#1A2240", letterSpacing: "-0.01em", textTransform: "uppercase" }}>Customers</div>
-                  <div style={{ fontSize: 11, color: "#4A5278", marginTop: 3, letterSpacing: "0.06em" }}>{companies.length} COMPANIES · {contacts.length} CONTACTS · {sites.length} SITES</div>
+                  <div style={{ fontSize: 22, fontWeight: 700, color: "#1A2240", letterSpacing: "-0.01em", textTransform: "uppercase" }}>{autoTag ? autoTag + " Customers" : "Customers"}</div>
+                  <div style={{ fontSize: 11, color: "#4A5278", marginTop: 3, letterSpacing: "0.06em" }}>{filteredCompanies.length} COMPANIES{autoTag ? " · " + autoTag + " ONLY" : " · " + contacts.length + " CONTACTS · " + sites.length + " SITES"}</div>
                 </div>
                 <div style={{ display: "flex", gap: 8 }}>
                   <input className="fi" style={{ width: 200 }} placeholder="Search companies…" value={crmSearch} onChange={e => setCrmSearch(e.target.value)} />
@@ -2447,7 +2468,7 @@ Return ONLY valid JSON, no markdown, no extra text:
               {/* Stats */}
               <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 12 }}>
                 {[
-                  { label: "Total Companies",  value: companies.length,  color: "#3B6FE8" },
+                  { label: autoTag ? autoTag + " Customers" : "Total Companies",  value: filteredCompanies.length,  color: "#3B6FE8" },
                   { label: "Total Sites",       value: sites.length,      color: "#A78BFA" },
                   { label: "Total Contacts",    value: contacts.length,   color: "#60A5FA" },
                 ].map(s => (
@@ -2459,7 +2480,8 @@ Return ONLY valid JSON, no markdown, no extra text:
                 ))}
               </div>
 
-              {/* Service type filter pills */}
+              {/* Service type filter pills — only on ALL tab */}
+              {activeBU === "all" && (
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                 {["all","FM","CapEx","Major","Lawn","Snow"].map(tag => (
                   <button key={tag} onClick={() => setCrmTagFilter(tag === "all" ? null : tag)}
@@ -2468,6 +2490,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                   </button>
                 ))}
               </div>
+              )}
 
               {/* Company grid */}
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 14 }}>
@@ -6392,7 +6415,7 @@ Return ONLY valid JSON, no markdown, no extra text:
 
       {/* ── FM JOB FORM ── */}
       {showFmForm && (
-        <div className="modal-bg" onClick={e => e.target === e.currentTarget && setShowFmForm(false)}>
+        <div className="modal-bg" onClick={e => e.target === e.currentTarget && (setShowFmForm(false), setFmCompanySearch(""), setFmSiteSearch(""))}>
           <div className="modal fade-in" style={{ maxHeight: "90vh", overflowY: "auto" }}>
             <div style={{ fontSize: 16, fontWeight: 700, color: "#1A2240", marginBottom: 22, textTransform: "uppercase" }}>{editFmId ? "Edit FM Job" : "Add FM Job"}</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
@@ -6411,17 +6434,47 @@ Return ONLY valid JSON, no markdown, no extra text:
                 </div>
               </div>
               <div className="g2">
-                <div><label className="lbl">Company</label>
-                  <select className="fi" value={fmForm.companyId} onChange={e => setFmForm(f => ({ ...f, companyId: e.target.value, siteId: "" }))}>
-                    <option value="">Select company…</option>
-                    {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                  </select>
+                <div style={{ position: "relative" }}><label className="lbl">Company</label>
+                  <input className="fi" value={fmCompanySearch || (companies.find(c => c.id === fmForm.companyId)?.name || "")}
+                    onChange={e => { setFmCompanySearch(e.target.value); if (!e.target.value) setFmForm(f => ({ ...f, companyId: "", siteId: "" })); }}
+                    placeholder="Type company name…" autoComplete="off" />
+                  {fmCompanySearch && (() => {
+                    const matches = companies.filter(c => c.name.toLowerCase().includes(fmCompanySearch.toLowerCase())).slice(0, 8);
+                    if (!matches.length) return null;
+                    return (
+                      <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "#fff", border: "1px solid #CBD1E8", borderRadius: 6, boxShadow: "0 4px 16px rgba(0,0,0,0.12)", zIndex: 200, maxHeight: 200, overflowY: "auto" }}>
+                        {matches.map(c => (
+                          <div key={c.id} style={{ padding: "8px 12px", cursor: "pointer", fontSize: 13, color: "#1A2240" }}
+                            onMouseDown={() => { setFmForm(f => ({ ...f, companyId: c.id, siteId: "" })); setFmCompanySearch(""); setFmSiteSearch(""); }}>
+                            {c.name}
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })()}
                 </div>
-                <div><label className="lbl">Site</label>
-                  <select className="fi" value={fmForm.siteId} onChange={e => setFmForm(f => ({ ...f, siteId: e.target.value }))}>
-                    <option value="">Select site…</option>
-                    {sites.filter(s => !fmForm.companyId || s.companyId === fmForm.companyId).map(s => <option key={s.id} value={s.id}>Store #{s.storeNumber} — {s.address}</option>)}
-                  </select>
+                <div style={{ position: "relative" }}><label className="lbl">Site — Type store # to search</label>
+                  <input className="fi"
+                    value={fmSiteSearch !== "" ? fmSiteSearch : (fmForm.siteId ? (() => { const s = sites.find(x => x.id === fmForm.siteId); return s ? "Store #" + s.storeNumber + (s.address ? " — " + s.address : "") : ""; })() : "")}
+                    onChange={e => { setFmSiteSearch(e.target.value); if (!e.target.value) setFmForm(f => ({ ...f, siteId: "" })); }}
+                    placeholder={fmForm.companyId ? "Type store # or address…" : "Select company first…"}
+                    disabled={!fmForm.companyId} autoComplete="off" />
+                  {fmSiteSearch && fmForm.companyId && (() => {
+                    const q = fmSiteSearch.toLowerCase();
+                    const matches = sites.filter(s => s.companyId === fmForm.companyId && ((s.storeNumber||"").toLowerCase().includes(q) || (s.address||"").toLowerCase().includes(q))).slice(0, 10);
+                    if (!matches.length) return <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "#fff", border: "1px solid #CBD1E8", borderRadius: 6, padding: "10px 12px", fontSize: 12, color: "#4A5278", zIndex: 200 }}>No sites match "{fmSiteSearch}"</div>;
+                    return (
+                      <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "#fff", border: "1px solid #CBD1E8", borderRadius: 6, boxShadow: "0 4px 16px rgba(0,0,0,0.12)", zIndex: 200, maxHeight: 220, overflowY: "auto" }}>
+                        {matches.map(s => (
+                          <div key={s.id} style={{ padding: "8px 12px", cursor: "pointer", fontSize: 13, borderBottom: "1px solid #F0F2F8" }}
+                            onMouseDown={() => { setFmForm(f => ({ ...f, siteId: s.id, storeCode: s.storeNumber ? "Store #" + s.storeNumber : f.storeCode })); setFmSiteSearch(""); }}>
+                            <span style={{ fontWeight: 700, color: "#3B6FE8" }}>#{s.storeNumber}</span>
+                            <span style={{ color: "#4A5278", marginLeft: 8, fontSize: 12 }}>{s.address}</span>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })()}
                 </div>
               </div>
               <div><label className="lbl">Subcontractor / Vendor</label>
@@ -6472,7 +6525,7 @@ Return ONLY valid JSON, no markdown, no extra text:
               )}
               <div><label className="lbl">Notes</label><textarea className="fi" rows={3} value={fmForm.notes} onChange={e => setFmForm(f => ({ ...f, notes: e.target.value }))} style={{ resize: "vertical" }} /></div>
               <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-                <button className="btn-ghost" style={{ padding: "8px 16px" }} onClick={() => setShowFmForm(false)}>Cancel</button>
+                <button className="btn-ghost" style={{ padding: "8px 16px" }} onClick={() => { setShowFmForm(false); setFmCompanySearch(""); setFmSiteSearch(""); }}>Cancel</button>
                 <button className="btn-primary" onClick={saveFm}>{editFmId ? "Save Changes" : "Add Job"}</button>
               </div>
             </div>
@@ -7715,5 +7768,3 @@ Return ONLY valid JSON, no markdown, no extra text:
     </div>
   );
 }
-
-                                                                                                                                                                    
