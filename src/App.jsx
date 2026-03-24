@@ -6538,24 +6538,48 @@ Return ONLY valid JSON, no markdown, no extra text:
                 <div style={{ position: "relative" }}><label className="lbl">Site — Type store # to search</label>
                   <input className="fi"
                     value={fmSiteSearch !== "" ? fmSiteSearch : (fmForm.siteId ? (() => { const s = sites.find(x => x.id === fmForm.siteId); return s ? "Store #" + s.storeNumber + (s.address ? " — " + s.address : "") : ""; })() : "")}
-                    onFocus={e => { if (fmForm.siteId) { setFmSiteSearch(""); } }}
+                    onFocus={() => { if (fmForm.siteId) setFmSiteSearch(""); }}
                     onChange={e => { setFmSiteSearch(e.target.value); if (!e.target.value) setFmForm(f => ({ ...f, siteId: "" })); }}
-                    onBlur={() => setTimeout(() => setFmSiteSearch(s => s), 150)}
-                    placeholder={fmForm.companyId ? "Type store # or address…" : "Select company first…"}
-                    disabled={!fmForm.companyId} autoComplete="off" />
-                  {fmSiteSearch !== "" && fmForm.companyId && (() => {
+                    placeholder="Type store # or address…"
+                    autoComplete="off" />
+                  {fmSiteSearch !== "" && (() => {
                     const q = fmSiteSearch.toLowerCase();
-                    const matches = sites.filter(s => s.companyId === fmForm.companyId && ((s.storeNumber||"").toLowerCase().includes(q) || (s.address||"").toLowerCase().includes(q))).slice(0, 10);
-                    if (!matches.length) return <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "#fff", border: "1px solid #CBD1E8", borderRadius: 6, padding: "10px 12px", fontSize: 12, color: "#4A5278", zIndex: 200 }}>No sites match "{fmSiteSearch}"</div>;
+                    // Search ALL sites — no company filter (IDs may not match after import)
+                    const compSites = fmForm.companyId
+                      ? sites.filter(s => s.companyId === fmForm.companyId)
+                      : sites;
+                    // If company selected but no matches with that company, fall back to all sites
+                    const pool = (fmForm.companyId && compSites.length > 0) ? compSites : sites;
+                    const matches = pool.filter(s =>
+                      (s.storeNumber||"").toLowerCase().includes(q) ||
+                      (s.address||"").toLowerCase().includes(q)
+                    ).slice(0, 12);
+                    if (!matches.length) return (
+                      <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "#fff", border: "1px solid #CBD1E8", borderRadius: 6, padding: "10px 12px", fontSize: 12, color: "#4A5278", zIndex: 200 }}>
+                        No sites match "{fmSiteSearch}"
+                      </div>
+                    );
                     return (
-                      <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "#fff", border: "1px solid #CBD1E8", borderRadius: 6, boxShadow: "0 4px 16px rgba(0,0,0,0.12)", zIndex: 200, maxHeight: 220, overflowY: "auto" }}>
-                        {matches.map(s => (
-                          <div key={s.id} style={{ padding: "8px 12px", cursor: "pointer", fontSize: 13, borderBottom: "1px solid #F0F2F8" }}
-                            onMouseDown={() => { setFmForm(f => ({ ...f, siteId: s.id, storeCode: s.storeNumber ? "Store #" + s.storeNumber : f.storeCode })); setFmSiteSearch(""); }}>
-                            <span style={{ fontWeight: 700, color: "#3B6FE8" }}>#{s.storeNumber}</span>
-                            <span style={{ color: "#4A5278", marginLeft: 8, fontSize: 12 }}>{s.address}</span>
-                          </div>
-                        ))}
+                      <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "#fff", border: "1px solid #CBD1E8", borderRadius: 6, boxShadow: "0 4px 16px rgba(0,0,0,0.12)", zIndex: 200, maxHeight: 260, overflowY: "auto" }}>
+                        {matches.map(s => {
+                          const siteCo = companies.find(c => c.id === s.companyId);
+                          return (
+                            <div key={s.id} style={{ padding: "9px 12px", cursor: "pointer", borderBottom: "1px solid #F0F2F8" }}
+                              onMouseDown={() => {
+                                // Auto-fill company if site has one and company field is empty
+                                const newCompanyId = s.companyId && companies.find(c => c.id === s.companyId) ? s.companyId : fmForm.companyId;
+                                setFmForm(f => ({ ...f, siteId: s.id, companyId: newCompanyId, storeCode: s.storeNumber || f.storeCode }));
+                                setFmSiteSearch("");
+                                setFmCompanySearch("");
+                              }}>
+                              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                <span style={{ fontWeight: 700, color: "#3B6FE8", fontSize: 13, minWidth: 50 }}>#{s.storeNumber}</span>
+                                <span style={{ color: "#1A2240", fontSize: 12, flex: 1 }}>{s.address}</span>
+                                {siteCo && <span style={{ fontSize: 10, color: "#fff", background: "#3B6FE8", borderRadius: 3, padding: "1px 6px", flexShrink: 0 }}>{siteCo.name}</span>}
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
                     );
                   })()}
