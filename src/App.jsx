@@ -2759,7 +2759,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                   {/* Add lead modal */}
                   {showInboxForm && (
                     <div className="modal-bg" onClick={e => e.target === e.currentTarget && (setShowInboxForm(false), setInboxStoreSearch(""), setInboxShowParser(false))}>
-                      <div className="modal fade-in" style={{ width: 620 }}>
+                      <div className="modal fade-in">
                         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
                           <div style={{ fontSize: 15, fontWeight: 700, color: "#FCD34D", textTransform: "uppercase", letterSpacing: "0.05em" }}>📥 New Lead</div>
                           <button onClick={() => setInboxShowParser(p => !p)}
