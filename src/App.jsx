@@ -51,6 +51,51 @@ const lsSiteToDB = s => siteToDB(s);
 const dbToSub = r => ({ id: r.id, name: r.name||"", trade: r.trade||"", phone: r.phone||"", email: r.email||"", msaStatus: r.msa_status||"missing", coiExpiry: r.coi_expiry||"", w9: r.w9||false, notes: r.notes||"", services: r.services||[] });
 const subToDB = s => ({ id: s.id, name: s.name||"", trade: s.trade||"", phone: s.phone||"", email: s.email||"", msa_status: s.msaStatus||"missing", coi_expiry: s.coiExpiry||null, w9: s.w9||false, notes: s.notes||"", services: s.services||[] });
 
+const dbToFmJob = r => ({
+  id: r.id, name: r.name||"", companyId: r.company_id||"", siteId: r.site_id||"",
+  contractValue: Number(r.contract_value||0), grossProfit: Number(r.gross_profit||0),
+  nte: Number(r.nte||0), stage: r.stage||"estimating",
+  startDate: r.start_date||"", endDate: r.end_date||"", pm: r.pm||"", pct: Number(r.pct||0),
+  bidDueDate: r.bid_due_date||"", quoteDueDate: r.quote_due_date||"",
+  proposalDate: r.proposal_date||"", followUpDate: r.follow_up_date||"",
+  buyoutDate: r.buyout_date||"", invoiceDate: r.invoice_date||"",
+  notes: r.notes||"", storeCode: r.store_code||"", projectNo: r.project_no||"",
+  ownersProjectNo: r.owners_project_no||"", vendorInvoiceAmount: Number(r.vendor_invoice_amount||0),
+  vendorInvoiceNumber: r.vendor_invoice_number||"", subcontractorId: r.subcontractor_id||"",
+  vendorNextStep: r.vendor_next_step||"", vendorQuotePrice: r.vendor_quote_price||"",
+  vendorQuoteScope: r.vendor_quote_scope||"", scopeOfWork: r.scope_of_work||"",
+  coordinator: r.coordinator||"",
+  vendorToken: r.vendor_token||"", vendorSentAt: r.vendor_sent_at||"",
+  vendorPortalStatus: r.vendor_portal_status||"", vendorPortalPrice: r.vendor_portal_price||"",
+  vendorPortalDate: r.vendor_portal_date||"", vendorPortalTime: r.vendor_portal_time||"",
+  vendorPortalNote: r.vendor_portal_note||"", vendorPortalRespondedAt: r.vendor_portal_responded_at||"",
+  vendorAcceptedAt: r.vendor_accepted_at||"", vendorScheduleChangedAt: r.vendor_schedule_changed_at||"",
+  vendorScheduleChangeReason: r.vendor_schedule_change_reason||"",
+  photos: r.photos||[],
+});
+const fmJobToDB = j => ({
+  id: j.id, name: j.name||"", company_id: j.companyId||null, site_id: j.siteId||null,
+  contract_value: j.contractValue||0, gross_profit: j.grossProfit||0, nte: j.nte||0,
+  stage: j.stage||"estimating", start_date: j.startDate||null, end_date: j.endDate||null,
+  pm: j.pm||"", pct: j.pct||0,
+  bid_due_date: j.bidDueDate||null, quote_due_date: j.quoteDueDate||null,
+  proposal_date: j.proposalDate||null, follow_up_date: j.followUpDate||null,
+  buyout_date: j.buyoutDate||null, invoice_date: j.invoiceDate||null,
+  notes: j.notes||"", store_code: j.storeCode||"", project_no: j.projectNo||"",
+  owners_project_no: j.ownersProjectNo||"", vendor_invoice_amount: j.vendorInvoiceAmount||0,
+  vendor_invoice_number: j.vendorInvoiceNumber||"", subcontractor_id: j.subcontractorId||null,
+  vendor_next_step: j.vendorNextStep||"", vendor_quote_price: j.vendorQuotePrice||"",
+  vendor_quote_scope: j.vendorQuoteScope||"", scope_of_work: j.scopeOfWork||"",
+  coordinator: j.coordinator||"",
+  vendor_token: j.vendorToken||null, vendor_sent_at: j.vendorSentAt||null,
+  vendor_portal_status: j.vendorPortalStatus||null, vendor_portal_price: j.vendorPortalPrice||null,
+  vendor_portal_date: j.vendorPortalDate||null, vendor_portal_time: j.vendorPortalTime||null,
+  vendor_portal_note: j.vendorPortalNote||null, vendor_portal_responded_at: j.vendorPortalRespondedAt||null,
+  vendor_accepted_at: j.vendorAcceptedAt||null, vendor_schedule_changed_at: j.vendorScheduleChangedAt||null,
+  vendor_schedule_change_reason: j.vendorScheduleChangeReason||null,
+  photos: j.photos||[],
+});
+
 const BUSINESS_UNITS = [
   { id: "all", label: "All", short: "ALL" },
   { id: "major", label: "Major Projects", short: "MP" },
@@ -348,7 +393,11 @@ function VendorPage({ token, fmJobs, setFmJobs, subcontractors, companies, sites
   const alreadyScheduled = !!(job?.vendorPortalDate);
   const canChangeSchedule = alreadyScheduled && !job?.vendorScheduleChangedAt;
 
-  const update = patch => setFmJobs(prev => prev.map(j => j.id === job.id ? { ...j, ...patch } : j));
+  const update = patch => {
+    const updated = { ...job, ...patch };
+    setFmJobs(prev => prev.map(j => j.id === job.id ? updated : j));
+    try { supa.from("fm_jobs").update(fmJobToDB(updated)).eq("id", job.id); } catch(e) {}
+  };
   const fmt2 = v => "$" + Number(v||0).toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 
   const S = { // shared styles
@@ -786,7 +835,11 @@ function SubPage({ token, fmJobs, setFmJobs, subcontractors, companies, sites })
 
   const vendorNTE = job ? (job.vendorNTE ? Number(job.vendorNTE) : fmVendorNTE(Number(job.contractValue||0))) : 0;
 
-  const update = (patch) => setFmJobs(prev => prev.map(j => j.id === job.id ? { ...j, ...patch } : j));
+  const update = (patch) => {
+    const updated = { ...job, ...patch };
+    setFmJobs(prev => prev.map(j => j.id === job.id ? updated : j));
+    try { supa.from("fm_jobs").update(fmJobToDB(updated)).eq("id", job.id); } catch(e) {}
+  };
 
   if (!job) return (
     <div style={{ minHeight: "100vh", background: "#1A2240", display: "flex", alignItems: "center", justifyContent: "center" }}>
@@ -993,7 +1046,11 @@ function SchedPage({ token, fmJobs, setFmJobs, subcontractors, companies, sites 
   const [invoicePhotos,setInvoicePhotos]= useState([]);
   const [uploading,    setUploading]    = useState(false);
 
-  const update = (patch) => setFmJobs(prev => prev.map(j => j.id === job.id ? { ...j, ...patch } : j));
+  const update = (patch) => {
+    const updated = { ...job, ...patch };
+    setFmJobs(prev => prev.map(j => j.id === job.id ? updated : j));
+    try { supa.from("fm_jobs").update(fmJobToDB(updated)).eq("id", job.id); } catch(e) {}
+  };
 
   const today = new Date(); today.setHours(0,0,0,0);
   const schedDt = job?.scheduledDate ? new Date(job.scheduledDate + "T12:00:00") : null;
@@ -1454,14 +1511,16 @@ export default function App() {
     const load = async () => {
       setDbLoading(l => ({ ...l, companies: true, sites: true, lawnSites: true, subcontractors: true }));
       try {
-        const [coRes, siteRes, subRes] = await Promise.all([
+        const [coRes, siteRes, subRes, fmRes] = await Promise.all([
           supa.from("companies").select("*"),
           supa.from("sites").select("*"),
           supa.from("subcontractors").select("*"),
+          supa.from("fm_jobs").select("*"),
         ]);
         if (coRes.data?.length)   setCompanies(coRes.data.map(dbToCompany));
         if (siteRes.data?.length) setSites(siteRes.data.map(dbToSite));
         if (subRes.data?.length)  setSubcontractors(subRes.data.map(dbToSub));
+        if (fmRes.data?.length)   setFmJobs(fmRes.data.map(dbToFmJob));
         setSupaReady(true);
       } catch(e) {
         setDbError("Could not connect to database.");
@@ -1574,9 +1633,14 @@ export default function App() {
     if (!fmForm.name.trim()) return;
     const entry = { ...fmForm, contractValue: Number(fmForm.contractValue||0), grossProfit: Number(fmForm.grossProfit||0), vendorInvoiceAmount: Number(fmForm.vendorInvoiceAmount||0), pct: Number(fmForm.pct || 0) };
     if (editFmId) {
-      setFmJobs(fmJobs.map(j => j.id === editFmId ? { ...entry, id: editFmId } : j));
+      const updated = { ...entry, id: editFmId };
+      setFmJobs(fmJobs.map(j => j.id === editFmId ? updated : j));
+      try { supa.from("fm_jobs").update(fmJobToDB(updated)).eq("id", editFmId); } catch(e) {}
     } else {
-      setFmJobs([...fmJobs, { ...entry, id: "fm" + Date.now() }]);
+      const newId = "fm" + Date.now();
+      const newJob = { ...entry, id: newId };
+      setFmJobs([...fmJobs, newJob]);
+      try { supa.from("fm_jobs").insert(fmJobToDB(newJob)); } catch(e) {}
       // Auto-tag site with "facility" so it shows under FM tab immediately
       if (entry.siteId) {
         setSites(prev => prev.map(s => {
@@ -1592,7 +1656,16 @@ export default function App() {
     setShowFmForm(false);
     setFmCompanySearch(""); setFmSiteSearch("");
   };
-  const deleteFm = (id) => { setFmJobs(fmJobs.filter(j => j.id !== id)); setSelectedFmJob(null); };
+  const deleteFm = (id) => { setFmJobs(fmJobs.filter(j => j.id !== id)); setSelectedFmJob(null); try { supa.from("fm_jobs").delete().eq("id", id); } catch(e) {} };
+  // Persist a patch to an FM job in both state and DB
+  const updateFmJobPersist = (id, patch) => {
+    setFmJobs(prev => prev.map(j => {
+      if (j.id !== id) return j;
+      const updated = { ...j, ...patch };
+      try { supa.from("fm_jobs").update(fmJobToDB(updated)).eq("id", id); } catch(e) {}
+      return updated;
+    }));
+  };
 
   const parseInboxEmail = async () => {
     if (!inboxParseText.trim()) return;
@@ -2848,14 +2921,14 @@ Return ONLY valid JSON, no markdown, no extra text:
                                     <div style={{ display: "flex", gap: 5 }} onClick={e => e.stopPropagation()}>
                                       {FM_PIPELINE_STAGES.map((s, i) => {
                                         const curIdx = FM_PIPELINE_STAGES.findIndex(x => x.id === job.stage);
-                                        if (i === curIdx - 1) return <button key="prev" className="btn-ghost" style={{ flex: 1, fontSize: 11 }} onClick={() => setFmJobs(fmJobs.map(j => j.id === job.id ? { ...j, stage: s.id } : j))}>←</button>;
-                                        if (i === curIdx + 1) return <button key="next" className="btn-ghost" style={{ flex: 1, fontSize: 11 }} onClick={() => setFmJobs(fmJobs.map(j => j.id === job.id ? { ...j, stage: s.id } : j))}>→</button>;
+                                        if (i === curIdx - 1) return <button key="prev" className="btn-ghost" style={{ flex: 1, fontSize: 11 }} onClick={() => updateFmJobPersist(job.id, { stage: s.id })}>←</button>;
+                                        if (i === curIdx + 1) return <button key="next" className="btn-ghost" style={{ flex: 1, fontSize: 11 }} onClick={() => updateFmJobPersist(job.id, { stage: s.id })}>→</button>;
                                         return null;
                                       })}
                                       {/* Promote to Active */}
                                       {job.stage === "owner_approval" && (
                                         <button className="btn-ghost" style={{ fontSize: 10, color: "#4ADE80", borderColor: "#4ADE8040", whiteSpace: "nowrap" }}
-                                          onClick={() => setFmJobs(fmJobs.map(j => j.id === job.id ? { ...j, stage: "buyout" } : j))}>
+                                          onClick={() => updateFmJobPersist(job.id, { stage: "buyout" })}>
                                           → Active ✓
                                         </button>
                                       )}
@@ -5452,6 +5525,7 @@ Return ONLY valid JSON, no markdown, no extra text:
               const updated = { ...job, ...fields };
               setFmJobs(fmJobs.map(j => j.id === job.id ? updated : j));
               setSelectedFmJob(updated);
+              try { supa.from("fm_jobs").update(fmJobToDB(updated)).eq("id", job.id); } catch(e) {}
             };
             return (
               <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -5716,10 +5790,16 @@ Return ONLY valid JSON, no markdown, no extra text:
                                 <div style={{ background: "#FCD34D10", border: "1px solid #FCD34D30", borderRadius: 6, padding: "10px 12px" }}>
                                   <div style={{ fontSize: 11, color: "#FCD34D", fontWeight: 600 }}>⏳ Awaiting vendor response</div>
                                   <div style={{ fontSize: 10, color: "#4A5278", marginTop: 2 }}>Sent {new Date(job.vendorSentAt).toLocaleDateString()}</div>
-                                  <button onClick={() => navigator.clipboard?.writeText(window.location.origin + "/?vendortoken=" + job.vendorToken)}
-                                    style={{ marginTop: 6, fontSize: 10, background: "transparent", border: "1px solid #FCD34D30", borderRadius: 4, color: "#FCD34D", padding: "4px 8px", cursor: "pointer", fontFamily: "inherit" }}>
-                                    📋 Copy Link Again
-                                  </button>
+                                  <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
+                                    <button onClick={() => navigator.clipboard?.writeText(window.location.origin + "/?vendortoken=" + job.vendorToken)}
+                                      style={{ flex: 1, fontSize: 10, background: "transparent", border: "1px solid #FCD34D30", borderRadius: 4, color: "#FCD34D", padding: "4px 8px", cursor: "pointer", fontFamily: "inherit" }}>
+                                      📋 Copy Link
+                                    </button>
+                                    <button onClick={() => window.open(window.location.origin + "/?vendortoken=" + job.vendorToken, "_blank")}
+                                      style={{ flex: 1, fontSize: 10, background: "#3B6FE820", border: "1px solid #3B6FE840", borderRadius: 4, color: "#3B6FE8", padding: "4px 8px", cursor: "pointer", fontFamily: "inherit" }}>
+                                      👁 Preview Portal
+                                    </button>
+                                  </div>
                                 </div>
                               ) : (
                                 <button
@@ -5728,7 +5808,9 @@ Return ONLY valid JSON, no markdown, no extra text:
                                     const link = window.location.origin + "/?vendortoken=" + vt;
                                     update({ vendorToken: vt, vendorSentAt: new Date().toISOString(), vendorPortalStatus: "pending", stage: "waiting_quote" });
                                     navigator.clipboard?.writeText(link);
-                                    alert("✅ Vendor portal link copied!\n\nSend to " + (subcontractors.find(s => s.id === job.subcontractorId)?.name || "vendor") + ":\n\n" + link);
+                                    if (window.confirm("✅ Link copied!\n\nOpen a preview of the vendor portal now?")) {
+                                      window.open(link, "_blank");
+                                    }
                                   }}
                                   style={{ width: "100%", padding: "10px", borderRadius: 6, border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 12, fontWeight: 700, background: "#3B6FE8", color: "#FFF" }}>
                                   🔗 Send Vendor Portal Link
