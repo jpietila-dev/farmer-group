@@ -1309,6 +1309,8 @@ export default function App() {
   const [inboxParseText,setInboxParseText]= useState("");
   const [inboxParsing,  setInboxParsing]  = useState(false);
   const [inboxForm,     setInboxForm]     = useState({ name: "", companyId: "", storeId: "", address: "", scopeOfWork: "", ownersProjectNo: "", bidDueDate: "", authorizedAmount: "", contactName: "", contactPhone: "", notes: "", source: "manual" });
+  const [inboxStoreSearch,   setInboxStoreSearch]   = useState("");
+  const [inboxShowParser,    setInboxShowParser]    = useState(false);
   const [showProposal,  setShowProposal]  = useState(false);
   const [proposalJob,   setProposalJob]   = useState(null);
   const [proposalNum,   setProposalNum]   = useState("");
@@ -2756,30 +2758,37 @@ Return ONLY valid JSON, no markdown, no extra text:
 
                   {/* Add lead modal */}
                   {showInboxForm && (
-                    <div className="modal-bg" onClick={e => e.target === e.currentTarget && setShowInboxForm(false)}>
-                      <div className="modal fade-in">
-                        <div style={{ fontSize: 15, fontWeight: 700, color: "#FCD34D", marginBottom: 18, textTransform: "uppercase", letterSpacing: "0.05em" }}>New Lead</div>
-
-                        {/* Email parse box */}
-                        <div style={{ background: "#F8F9FD", border: "1px solid #3B6FE840", borderRadius: 8, padding: 14, marginBottom: 18 }}>
-                          <div style={{ fontSize: 10, color: "#3B6FE8", textTransform: "uppercase", letterSpacing: "0.07em", fontWeight: 600, marginBottom: 8 }}>⚡ Parse from Email</div>
-                          <textarea
-                            className="fi" rows={5}
-                            placeholder="Paste the email text here and click Parse — Claude will extract the lead details automatically…"
-                            value={inboxParseText}
-                            onChange={e => setInboxParseText(e.target.value)}
-                            style={{ resize: "vertical", fontSize: 12 }} />
-                          <button
-                            className="btn-primary" style={{ marginTop: 8, width: "100%", opacity: inboxParsing ? 0.6 : 1 }}
-                            onClick={parseInboxEmail} disabled={inboxParsing || !inboxParseText.trim()}>
-                            {inboxParsing ? "Parsing…" : "⚡ Parse Email"}
+                    <div className="modal-bg" onClick={e => e.target === e.currentTarget && (setShowInboxForm(false), setInboxStoreSearch(""), setInboxShowParser(false))}>
+                      <div className="modal fade-in" style={{ width: 620 }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
+                          <div style={{ fontSize: 15, fontWeight: 700, color: "#FCD34D", textTransform: "uppercase", letterSpacing: "0.05em" }}>📥 New Lead</div>
+                          <button onClick={() => setInboxShowParser(p => !p)}
+                            style={{ fontSize: 11, background: inboxShowParser ? "#3B6FE820" : "#F0F2F8", border: "1px solid #3B6FE840", borderRadius: 6, padding: "4px 10px", cursor: "pointer", color: "#3B6FE8", fontFamily: "inherit", fontWeight: 600 }}>
+                            {inboxShowParser ? "▲ Hide Email Parser" : "⚡ Parse from Email"}
                           </button>
                         </div>
 
-                        <div style={{ fontSize: 10, color: "#3D4570", textTransform: "uppercase", letterSpacing: "0.1em", textAlign: "center", marginBottom: 14 }}>— or fill in manually —</div>
+                        {/* Collapsible email parse box */}
+                        {inboxShowParser && (
+                          <div style={{ background: "#F8F9FD", border: "1px solid #3B6FE840", borderRadius: 8, padding: 14, marginBottom: 16 }}>
+                            <textarea className="fi" rows={4}
+                              placeholder="Paste the email text here and click Parse — Claude will extract the lead details automatically…"
+                              value={inboxParseText} onChange={e => setInboxParseText(e.target.value)}
+                              style={{ resize: "vertical", fontSize: 12 }} />
+                            <button className="btn-primary" style={{ marginTop: 8, width: "100%", opacity: inboxParsing ? 0.6 : 1 }}
+                              onClick={parseInboxEmail} disabled={inboxParsing || !inboxParseText.trim()}>
+                              {inboxParsing ? "Parsing…" : "⚡ Parse Email"}
+                            </button>
+                          </div>
+                        )}
 
-                        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                          <div><label className="lbl">Job Title / Name *</label><input className="fi" value={inboxForm.name} onChange={e => setInboxForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Roof Leak Repair" /></div>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 11 }}>
+                          {/* Row 1: Job name */}
+                          <div><label className="lbl">Job Title / Name *</label>
+                            <input className="fi" value={inboxForm.name} onChange={e => setInboxForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Roof Leak Repair" autoFocus />
+                          </div>
+
+                          {/* Row 2: Company + Store side by side */}
                           <div className="g2">
                             <div><label className="lbl">Client / Company</label>
                               <select className="fi" value={inboxForm.companyId} onChange={e => setInboxForm(f => ({ ...f, companyId: e.target.value, storeId: "", address: "" }))}>
@@ -2787,53 +2796,97 @@ Return ONLY valid JSON, no markdown, no extra text:
                                 {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                               </select>
                             </div>
-                            <div><label className="lbl">Store / Site</label>
-                              <select className="fi" value={inboxForm.storeId} onChange={e => {
-                                const s = sites.find(x => x.id === e.target.value);
-                                setInboxForm(f => ({ ...f, storeId: e.target.value, address: s?.address || f.address }));
-                              }}>
-                                <option value="">Select store…</option>
-                                {sites.filter(s => !inboxForm.companyId || s.companyId === inboxForm.companyId).map(s => <option key={s.id} value={s.id}>#{s.storeNumber} — {s.address}</option>)}
-                              </select>
+                            <div style={{ position: "relative" }}><label className="lbl">Store # — type to search</label>
+                              <input className="fi"
+                                value={inboxStoreSearch !== "" ? inboxStoreSearch : (inboxForm.storeId ? (() => { const s = sites.find(x => x.id === inboxForm.storeId); return s ? "#" + s.storeNumber + (s.address ? " — " + s.address.split(",")[0] : "") : ""; })() : "")}
+                                onFocus={() => { if (inboxForm.storeId) setInboxStoreSearch(""); }}
+                                onChange={e => { setInboxStoreSearch(e.target.value); if (!e.target.value) setInboxForm(f => ({ ...f, storeId: "", address: "" })); }}
+                                placeholder="Type store # or address…"
+                                autoComplete="off" />
+                              {inboxStoreSearch !== "" && (() => {
+                                const q = inboxStoreSearch.toLowerCase();
+                                const pool = inboxForm.companyId
+                                  ? sites.filter(s => s.companyId === inboxForm.companyId)
+                                  : sites;
+                                const searchPool = (inboxForm.companyId && pool.length > 0) ? pool : sites;
+                                const matches = searchPool.filter(s =>
+                                  (s.storeNumber||"").toLowerCase().includes(q) ||
+                                  (s.address||"").toLowerCase().includes(q)
+                                ).slice(0, 10);
+                                if (!matches.length) return (
+                                  <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "#fff", border: "1px solid #CBD1E8", borderRadius: 6, padding: "10px 12px", fontSize: 12, color: "#4A5278", zIndex: 200 }}>
+                                    No stores match "{inboxStoreSearch}"
+                                  </div>
+                                );
+                                return (
+                                  <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "#fff", border: "1px solid #CBD1E8", borderRadius: 6, boxShadow: "0 4px 16px rgba(0,0,0,0.12)", zIndex: 200, maxHeight: 220, overflowY: "auto" }}>
+                                    {matches.map(s => {
+                                      const siteCo = companies.find(c => c.id === s.companyId);
+                                      return (
+                                        <div key={s.id} style={{ padding: "8px 12px", cursor: "pointer", borderBottom: "1px solid #F0F2F8" }}
+                                          onMouseDown={() => {
+                                            const newCoId = s.companyId && companies.find(c => c.id === s.companyId) ? s.companyId : inboxForm.companyId;
+                                            setInboxForm(f => ({ ...f, storeId: s.id, companyId: newCoId, address: s.address || f.address }));
+                                            setInboxStoreSearch("");
+                                          }}>
+                                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                                            <span style={{ fontWeight: 700, color: "#3B6FE8", fontSize: 13, minWidth: 45 }}>#{s.storeNumber}</span>
+                                            <span style={{ color: "#1A2240", fontSize: 12, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.address}</span>
+                                            {siteCo && <span style={{ fontSize: 10, color: "#fff", background: "#3B6FE8", borderRadius: 3, padding: "1px 6px", flexShrink: 0 }}>{siteCo.name}</span>}
+                                          </div>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                );
+                              })()}
                             </div>
                           </div>
+
+                          {/* Row 3: Address auto-fill */}
                           <div><label className="lbl">Site Address {inboxForm.storeId && <span style={{ color: "#4ADE80", fontSize: 9 }}>● AUTO-FILLED</span>}</label>
                             <input className="fi" value={inboxForm.address} onChange={e => setInboxForm(f => ({ ...f, address: e.target.value }))} placeholder="Auto-fills from store selection" />
                           </div>
-                          <div><label className="lbl">Scope of Work</label><textarea className="fi" rows={3} value={inboxForm.scopeOfWork} onChange={e => setInboxForm(f => ({ ...f, scopeOfWork: e.target.value }))} style={{ resize: "vertical" }} /></div>
-                          <div className="g2">
-                            <div><label className="lbl">Owner's Project / WO #</label><input className="fi" value={inboxForm.ownersProjectNo} onChange={e => setInboxForm(f => ({ ...f, ownersProjectNo: e.target.value }))} /></div>
-                            <div><label className="lbl">Bid Due Date</label><input className="fi" type="date" value={inboxForm.bidDueDate} onChange={e => setInboxForm(f => ({ ...f, bidDueDate: e.target.value }))} /></div>
+
+                          {/* Row 4: Scope */}
+                          <div><label className="lbl">Scope of Work</label>
+                            <textarea className="fi" rows={2} value={inboxForm.scopeOfWork} onChange={e => setInboxForm(f => ({ ...f, scopeOfWork: e.target.value }))} style={{ resize: "vertical" }} />
                           </div>
-                          <div>
-                            <label className="lbl">Authorized Amount (NTE)</label>
-                            <input className="fi" type="number" placeholder="e.g. 400" value={inboxForm.authorizedAmount} onChange={e => setInboxForm(f => ({ ...f, authorizedAmount: e.target.value }))} />
-                            {inboxForm.authorizedAmount && Number(inboxForm.authorizedAmount) > 0 && (() => {
-                              const nte = Number(inboxForm.authorizedAmount);
-                              const gp  = fmGrossProfit(nte);
-                              const vnte = fmVendorNTE(nte);
-                              return (
-                                <div style={{ marginTop: 8, background: "#F0F2F8", border: "1px solid #CBD1E8", borderRadius: 6, padding: "10px 14px", display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
-                                  <div>
-                                    <div style={{ fontSize: 9, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 3 }}>Gross Value</div>
-                                    <div style={{ fontSize: 14, fontWeight: 700, color: "#1A2240" }}>{fmt(nte)}</div>
-                                  </div>
-                                  <div>
-                                    <div style={{ fontSize: 9, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 3 }}>Our GP</div>
-                                    <div style={{ fontSize: 14, fontWeight: 700, color: "#4ADE80" }}>{fmt(gp)}</div>
-                                    <div style={{ fontSize: 9, color: "#4A5278" }}>{Math.round((gp/nte)*100)}% · {gp === 125 ? "min $125" : "30%"}</div>
-                                  </div>
-                                  <div>
-                                    <div style={{ fontSize: 9, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 3 }}>Vendor NTE</div>
-                                    <div style={{ fontSize: 14, fontWeight: 700, color: "#FCD34D" }}>{fmt(vnte)}</div>
-                                  </div>
-                                </div>
-                              );
-                            })()}
+
+                          {/* Row 5: WO# + Bid Date + NTE in one row */}
+                          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
+                            <div><label className="lbl">Owner's WO #</label>
+                              <input className="fi" value={inboxForm.ownersProjectNo} onChange={e => setInboxForm(f => ({ ...f, ownersProjectNo: e.target.value }))} />
+                            </div>
+                            <div><label className="lbl">Bid Due Date</label>
+                              <input className="fi" type="date" value={inboxForm.bidDueDate} onChange={e => setInboxForm(f => ({ ...f, bidDueDate: e.target.value }))} />
+                            </div>
+                            <div><label className="lbl">Auth. Amount (NTE)</label>
+                              <input className="fi" type="number" placeholder="e.g. 400" value={inboxForm.authorizedAmount} onChange={e => setInboxForm(f => ({ ...f, authorizedAmount: e.target.value }))} />
+                            </div>
                           </div>
-                          <div><label className="lbl">Notes</label><textarea className="fi" rows={2} value={inboxForm.notes} onChange={e => setInboxForm(f => ({ ...f, notes: e.target.value }))} style={{ resize: "vertical" }} /></div>
+
+                          {/* NTE breakdown — only when filled */}
+                          {inboxForm.authorizedAmount && Number(inboxForm.authorizedAmount) > 0 && (() => {
+                            const nte = Number(inboxForm.authorizedAmount);
+                            const gp  = fmGrossProfit(nte);
+                            const vnte = fmVendorNTE(nte);
+                            return (
+                              <div style={{ background: "#F0F2F8", border: "1px solid #CBD1E8", borderRadius: 6, padding: "8px 14px", display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8 }}>
+                                <div><div style={{ fontSize: 9, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 2 }}>Gross Value</div><div style={{ fontSize: 13, fontWeight: 700, color: "#1A2240" }}>{fmt(nte)}</div></div>
+                                <div><div style={{ fontSize: 9, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 2 }}>Our GP</div><div style={{ fontSize: 13, fontWeight: 700, color: "#4ADE80" }}>{fmt(gp)}</div></div>
+                                <div><div style={{ fontSize: 9, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 2 }}>Vendor NTE</div><div style={{ fontSize: 13, fontWeight: 700, color: "#FCD34D" }}>{fmt(vnte)}</div></div>
+                              </div>
+                            );
+                          })()}
+
+                          {/* Row 6: Notes */}
+                          <div><label className="lbl">Notes</label>
+                            <textarea className="fi" rows={2} value={inboxForm.notes} onChange={e => setInboxForm(f => ({ ...f, notes: e.target.value }))} style={{ resize: "vertical" }} />
+                          </div>
+
                           <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", paddingTop: 4 }}>
-                            <button className="btn-ghost" style={{ padding: "8px 16px" }} onClick={() => setShowInboxForm(false)}>Cancel</button>
+                            <button className="btn-ghost" style={{ padding: "8px 16px" }} onClick={() => { setShowInboxForm(false); setInboxStoreSearch(""); setInboxShowParser(false); }}>Cancel</button>
                             <button className="btn-primary" onClick={saveInboxLead}>Add to Inbox</button>
                           </div>
                         </div>
