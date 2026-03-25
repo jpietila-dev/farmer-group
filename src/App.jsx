@@ -2052,8 +2052,8 @@ Return ONLY valid JSON, no markdown, no extra text:
     .pill{display:inline-flex;align-items:center;padding:3px 9px;border-radius:20px;font-size:10px;letter-spacing:0.05em;white-space:nowrap;font-weight:500}
     .opp-row{background:#FFFFFF;border:1px solid #D4D9EE;border-radius:8px;padding:14px 16px;transition:all 0.15s;cursor:pointer}
     .opp-row:hover{border-color:#3B6FE8;background:#F5F7FE}
-    .modal-bg{position:fixed;inset:0;background:rgba(30,38,80,0.45);display:flex;align-items:flex-start;justify-content:center;z-index:9000;backdrop-filter:blur(4px);overflow-y:auto;padding:24px 16px}
-    .modal{background:#FFFFFF;border:1px solid #D4D9EE;border-radius:12px;padding:28px;width:540px;box-shadow:0 8px 32px rgba(30,38,80,0.12);margin:auto}
+    .modal-bg{position:fixed;inset:0;background:rgba(30,38,80,0.45);display:flex;align-items:center;justify-content:center;z-index:9000;backdrop-filter:blur(4px);overflow-y:auto;padding:24px 16px}
+    .modal{background:#FFFFFF;border:1px solid #D4D9EE;border-radius:12px;padding:28px;width:540px;max-height:calc(100vh - 48px);overflow-y:auto;box-shadow:0 8px 32px rgba(30,38,80,0.12);margin:auto}
     .g2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
     .side-panel{position:fixed;right:0;top:52px;bottom:0;width:400px;background:#FFFFFF;border-left:1px solid #D4D9EE;padding:24px;overflow-y:auto;z-index:40;box-shadow:-4px 0 20px rgba(30,38,80,0.07)}
     @keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
