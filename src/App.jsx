@@ -131,16 +131,13 @@ const NAV_ITEMS = {
     { id: "customers", label: "Customers", icon: "🤝" },
   ],
   facility: [
-    { id: "dashboard", label: "Dashboard", icon: "⊞" },
-    { id: "calendar", label: "Calendar", icon: "📅" },
-    { id: "jobs", label: "Active Jobs", icon: "🔨" },
-    { id: "sites", label: "Sites", icon: "📍" },
-    { id: "bids", label: "Bids", icon: "📋" },
-    { id: "pipeline", label: "Pipeline", icon: "◈" },
-    { id: "budgeting", label: "Budgeting", icon: "💲" },
-    { id: "team", label: "Team", icon: "👥" },
+    { id: "dashboard",      label: "Dashboard",      icon: "⊞" },
+    { id: "pipeline",       label: "Pipeline",       icon: "◈" },
+    { id: "jobs",           label: "Active Jobs",    icon: "🔨" },
+    { id: "sites",          label: "Sites",          icon: "📍" },
+    { id: "customers",      label: "Customers",      icon: "🤝" },
     { id: "subcontractors", label: "Subcontractors", icon: "🔧" },
-    { id: "customers", label: "Customers", icon: "🤝" },
+    { id: "calendar",       label: "Calendar",       icon: "📅" },
   ],
   lawn: [
     { id: "dashboard",    label: "Dashboard",    icon: "⊞" },
@@ -1303,6 +1300,7 @@ export default function App() {
   const [selectedFmJob, setSelectedFmJob] = useState(null);
   const [fmSearch,      setFmSearch]      = useState("");
   const [fmCoordFilter, setFmCoordFilter] = useState("all");
+  const [selectedPM,    setSelectedPM]    = useState(null);
   const [selectedCoord, setSelectedCoord] = useState(null); // coordinator report
   const [fmInbox,       setFmInbox]       = useState([]);   // unassigned leads
   const [showInboxForm, setShowInboxForm] = useState(false);
@@ -2140,6 +2138,237 @@ Return ONLY valid JSON, no markdown, no extra text:
           {/* ── DASHBOARD ── */}
           {activeNav === "dashboard" && (
             <div className="fade-in" style={{ display: "flex", flexDirection: "column", gap: 28 }}>
+
+              {/* ══ FM DASHBOARD ══ */}
+              {activeBU === "facility" && (() => {
+                // Build monthly data from fmJobs
+                const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+                const now = new Date();
+                const last6 = Array.from({ length: 6 }, (_, i) => {
+                  const d = new Date(now.getFullYear(), now.getMonth() - 5 + i, 1);
+                  return { month: MONTHS[d.getMonth()], year: d.getFullYear(), key: d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") };
+                });
+
+                // Revenue & GP per month from fmJobs (use startDate or createdAt)
+                const monthlyRevenue = last6.map(m => {
+                  const jobs = fmJobs.filter(j => {
+                    const d = j.startDate || j.invoiceDate || "";
+                    return d.startsWith(m.key);
+                  });
+                  return { ...m, revenue: jobs.reduce((s,j) => s + (j.contractValue||0), 0), gp: jobs.reduce((s,j) => s + (j.grossProfit||0), 0), jobs: jobs.length };
+                });
+
+                // Budgets (hardcoded targets — can be made editable later)
+                const REVENUE_BUDGET = 15000; // per month target
+                const GP_BUDGET      = 4500;  // per month target
+
+                // Current month stats
+                const curKey = now.getFullYear() + "-" + String(now.getMonth()+1).padStart(2,"0");
+                const curMonthJobs = fmJobs.filter(j => (j.startDate||"").startsWith(curKey));
+                const totalRevMTD  = curMonthJobs.reduce((s,j) => s + (j.contractValue||0), 0);
+                const totalGpMTD   = curMonthJobs.reduce((s,j) => s + (j.grossProfit||0), 0);
+                const openJobs     = fmJobs.filter(j => ["estimating","waiting_quote","owner_approval","buyout","do_work"].includes(j.stage));
+                const billJobs     = fmJobs.filter(j => j.stage === "bill");
+
+                // Bar chart helper — simple SVG bars
+                const BarChart = ({ data, valueKey, budgetKey, color, label }) => {
+                  const maxV = Math.max(...data.map(d => Math.max(d[valueKey]||0, budgetKey)), budgetKey * 1.2, 1);
+                  const W = 460, H = 120, barW = 40, gap = 26;
+                  return (
+                    <div>
+                      <div style={{ fontSize: 10, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 8, fontWeight: 600 }}>{label}</div>
+                      <svg width={W} height={H + 30} style={{ overflow: "visible" }}>
+                        {data.map((d, i) => {
+                          const x = i * (barW + gap) + 10;
+                          const actualH = Math.round(((d[valueKey]||0) / maxV) * H);
+                          const budgetH = Math.round((budgetKey / maxV) * H);
+                          return (
+                            <g key={d.key}>
+                              {/* budget line bar (outline) */}
+                              <rect x={x} y={H - budgetH} width={barW} height={budgetH}
+                                fill="none" stroke="#CBD1E8" strokeWidth={1} strokeDasharray="3,2" rx={3} />
+                              {/* actual bar */}
+                              <rect x={x} y={H - actualH} width={barW} height={actualH}
+                                fill={(d[valueKey]||0) >= budgetKey ? "#4ADE80" : color} rx={3} opacity={0.9} />
+                              {/* value label */}
+                              {(d[valueKey]||0) > 0 && <text x={x + barW/2} y={H - actualH - 4} textAnchor="middle" fontSize={9} fill="#4A5278">${Math.round((d[valueKey]||0)/1000)}k</text>}
+                              {/* month label */}
+                              <text x={x + barW/2} y={H + 16} textAnchor="middle" fontSize={10} fill="#4A5278">{d.month}</text>
+                            </g>
+                          );
+                        })}
+                        {/* budget line */}
+                        <line x1={10} x2={data.length*(barW+gap)+10} y1={H - Math.round((budgetKey/maxV)*H)} y2={H - Math.round((budgetKey/maxV)*H)} stroke="#FCD34D" strokeWidth={1.5} strokeDasharray="4,3" />
+                        <text x={data.length*(barW+gap)+14} y={H - Math.round((budgetKey/maxV)*H) + 4} fontSize={9} fill="#FCD34D">Budget</text>
+                      </svg>
+                    </div>
+                  );
+                };
+
+                // PM breakdown
+                const pms = [...new Set(fmJobs.map(j => j.pm||"Unassigned").filter(Boolean))];
+                const pmStats = pms.map(pm => {
+                  const pmJobs = fmJobs.filter(j => (j.pm||"Unassigned") === pm);
+                  return {
+                    pm,
+                    total: pmJobs.length,
+                    open: pmJobs.filter(j => !["bill","invoiced"].includes(j.stage)).length,
+                    revenue: pmJobs.reduce((s,j) => s + (j.contractValue||0), 0),
+                    gp: pmJobs.reduce((s,j) => s + (j.grossProfit||0), 0),
+                  };
+                });
+
+                // Logged-in "PM" — for now use coordinator filter or show personal stats
+                // In future: tie to actual login. For now show a PM selector at top.
+                const myJobs = selectedPM ? fmJobs.filter(j => (j.pm||j.coordinator||"") === selectedPM) : null;
+
+                return (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+                    {/* Header */}
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
+                      <div>
+                        <div style={{ fontSize: 24, fontWeight: 800, color: "#1A2240", letterSpacing: "-0.02em" }}>FM DASHBOARD</div>
+                        <div style={{ fontSize: 11, color: "#4A5278", marginTop: 3, letterSpacing: "0.06em" }}>FACILITY MAINTENANCE · {new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" }).toUpperCase()}</div>
+                      </div>
+                      <div style={{ display: "flex", align: "center", gap: 8 }}>
+                        <select value={selectedPM || ""} onChange={e => setSelectedPM(e.target.value || null)}
+                          style={{ fontSize: 11, padding: "6px 12px", borderRadius: 6, border: "1px solid #CBD1E8", background: selectedPM ? "#3B6FE8" : "#fff", color: selectedPM ? "#fff" : "#4A5278", fontFamily: "inherit", cursor: "pointer" }}>
+                          <option value="">👥 Org View</option>
+                          {pms.map(pm => <option key={pm} value={pm}>👤 {pm}</option>)}
+                        </select>
+                      </div>
+                    </div>
+
+                    {/* KPI row */}
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: 12 }}>
+                      {[
+                        { label: "MTD Revenue",   value: fmt(totalRevMTD),                                   color: "#3B6FE8", sub: `vs ${fmt(REVENUE_BUDGET)} budget` },
+                        { label: "MTD Gross Profit", value: fmt(totalGpMTD),                                 color: "#4ADE80", sub: totalRevMTD > 0 ? Math.round((totalGpMTD/totalRevMTD)*100) + "% margin" : "—" },
+                        { label: "Open Jobs",     value: openJobs.length,                                    color: "#FCD34D", sub: "Estimating → Do Work" },
+                        { label: "Ready to Bill", value: billJobs.length,                                    color: "#F97316", sub: "Awaiting invoice" },
+                        { label: "Total Jobs",    value: fmJobs.length,                                      color: "#818CF8", sub: "All time" },
+                      ].map(s => (
+                        <div key={s.label} className="stat-card" style={{ position: "relative", overflow: "hidden", padding: "14px 16px" }}>
+                          <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, background: s.color }} />
+                          <div style={{ fontSize: 9, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>{s.label}</div>
+                          <div style={{ fontSize: 22, fontWeight: 800, color: s.color }}>{s.value}</div>
+                          <div style={{ fontSize: 10, color: "#4A5278", marginTop: 3 }}>{s.sub}</div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Charts row */}
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+                      <div className="stat-card" style={{ padding: 20 }}>
+                        <BarChart data={monthlyRevenue} valueKey="revenue" budgetKey={REVENUE_BUDGET} color="#3B6FE8" label="Revenue per Month vs Budget" />
+                        <div style={{ display: "flex", gap: 16, marginTop: 10, fontSize: 10, color: "#4A5278" }}>
+                          <span><span style={{ display: "inline-block", width: 10, height: 10, background: "#3B6FE8", borderRadius: 2, marginRight: 4 }}></span>Actual</span>
+                          <span><span style={{ display: "inline-block", width: 10, height: 4, borderTop: "2px dashed #FCD34D", marginRight: 4, verticalAlign: "middle" }}></span>Budget ${(REVENUE_BUDGET/1000).toFixed(0)}k/mo</span>
+                          <span><span style={{ display: "inline-block", width: 10, height: 10, background: "#4ADE80", borderRadius: 2, marginRight: 4 }}></span>At/over budget</span>
+                        </div>
+                      </div>
+                      <div className="stat-card" style={{ padding: 20 }}>
+                        <BarChart data={monthlyRevenue} valueKey="gp" budgetKey={GP_BUDGET} color="#60A5FA" label="Gross Profit per Month vs Budget" />
+                        <div style={{ display: "flex", gap: 16, marginTop: 10, fontSize: 10, color: "#4A5278" }}>
+                          <span><span style={{ display: "inline-block", width: 10, height: 10, background: "#60A5FA", borderRadius: 2, marginRight: 4 }}></span>Actual GP</span>
+                          <span><span style={{ display: "inline-block", width: 10, height: 4, borderTop: "2px dashed #FCD34D", marginRight: 4, verticalAlign: "middle" }}></span>Budget ${(GP_BUDGET/1000).toFixed(0)}k/mo</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* PM Personal View — shows when a PM is selected */}
+                    {selectedPM && myJobs && (
+                      <div style={{ background: "#F5F7FC", borderRadius: 12, padding: 20, border: "2px solid #3B6FE840" }}>
+                        <div style={{ fontSize: 14, fontWeight: 700, color: "#1A2240", marginBottom: 16 }}>👤 {selectedPM}'s Jobs</div>
+                        <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 10, marginBottom: 16 }}>
+                          {[
+                            { label: "Total Jobs",   value: myJobs.length,                                                                         color: "#3B6FE8" },
+                            { label: "Open",         value: myJobs.filter(j => !["bill"].includes(j.stage)).length,                                color: "#FCD34D" },
+                            { label: "Revenue",      value: fmt(myJobs.reduce((s,j) => s + (j.contractValue||0), 0)),                              color: "#818CF8" },
+                            { label: "Gross Profit", value: fmt(myJobs.reduce((s,j) => s + (j.grossProfit||0), 0)),                               color: "#4ADE80" },
+                          ].map(s => (
+                            <div key={s.label} style={{ background: "#fff", borderRadius: 8, padding: "12px 14px", border: "1px solid #D4D9EE" }}>
+                              <div style={{ fontSize: 9, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 4 }}>{s.label}</div>
+                              <div style={{ fontSize: 18, fontWeight: 700, color: s.color }}>{s.value}</div>
+                            </div>
+                          ))}
+                        </div>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                          {myJobs.slice(0,8).map(j => {
+                            const site = sites.find(s => s.id === j.siteId);
+                            const co = companies.find(c => c.id === j.companyId);
+                            const stg = FM_STAGES.find(s => s.id === j.stage);
+                            return (
+                              <div key={j.id} style={{ background: "#fff", borderRadius: 6, padding: "10px 14px", display: "flex", alignItems: "center", gap: 12, border: "1px solid #E8EBF4", cursor: "pointer" }}
+                                onClick={() => setSelectedFmJob(j)}>
+                                <span style={{ fontSize: 11, fontWeight: 700, color: stg?.color || "#4A5278", background: (stg?.color||"#4A5278") + "15", padding: "2px 8px", borderRadius: 4, minWidth: 80, textAlign: "center" }}>{stg?.label || j.stage}</span>
+                                <div style={{ flex: 1 }}>
+                                  <div style={{ fontSize: 12, fontWeight: 600, color: "#1A2240" }}>{j.name}</div>
+                                  <div style={{ fontSize: 10, color: "#4A5278" }}>{co?.name}{site ? " · #" + site.storeNumber : ""}</div>
+                                </div>
+                                <div style={{ fontSize: 12, fontWeight: 700, color: "#4ADE80" }}>{fmt(j.contractValue)}</div>
+                              </div>
+                            );
+                          })}
+                          {myJobs.length > 8 && <div style={{ fontSize: 11, color: "#3B6FE8", textAlign: "center", cursor: "pointer" }} onClick={() => setActiveNav("jobs")}>+ {myJobs.length - 8} more → View All Jobs</div>}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* PM breakdown table — org view */}
+                    {!selectedPM && pmStats.length > 0 && (
+                      <div className="stat-card" style={{ padding: 20 }}>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 14 }}>Project Manager Breakdown</div>
+                        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                          <thead>
+                            <tr style={{ borderBottom: "2px solid #EEF0F8" }}>
+                              {["PM","Total Jobs","Open","Revenue","Gross Profit","GP %"].map(h => (
+                                <th key={h} style={{ textAlign: "left", padding: "6px 10px", fontSize: 10, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em" }}>{h}</th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {pmStats.map((p, i) => (
+                              <tr key={p.pm} style={{ borderBottom: "1px solid #F0F2F8", cursor: "pointer", background: i % 2 === 0 ? "#fff" : "#FAFBFD" }}
+                                onClick={() => setSelectedPM(p.pm)}>
+                                <td style={{ padding: "8px 10px", fontWeight: 600, color: "#1A2240" }}>{p.pm}</td>
+                                <td style={{ padding: "8px 10px", color: "#4A5278" }}>{p.total}</td>
+                                <td style={{ padding: "8px 10px" }}><span style={{ background: "#FCD34D20", color: "#78600A", borderRadius: 4, padding: "2px 8px", fontSize: 11 }}>{p.open}</span></td>
+                                <td style={{ padding: "8px 10px", fontWeight: 600, color: "#1A2240" }}>{fmt(p.revenue)}</td>
+                                <td style={{ padding: "8px 10px", fontWeight: 600, color: "#4ADE80" }}>{fmt(p.gp)}</td>
+                                <td style={{ padding: "8px 10px", color: "#818CF8" }}>{p.revenue > 0 ? Math.round((p.gp/p.revenue)*100) + "%" : "—"}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+
+                    {/* Punch list */}
+                    <div>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em" }}>Today's Punch List</div>
+                        <div style={{ fontSize: 11, color: "#4A5278" }}>{new Date().toLocaleDateString("en-US", { month: "short", day: "numeric" })}</div>
+                      </div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+                        {dynamicPunchList.filter(p => p.bu === "facility").map(item => (
+                          <div key={item.id} className="punch-item">
+                            <div className="priority-dot" style={{ background: item.priority === "high" ? "#F87171" : "#FCD34D" }} />
+                            <span style={{ fontSize: 13, color: "#252E52", flex: 1 }}>{item.text}</span>
+                            {item.dueDate && <span style={{ fontSize: 10, color: "#4A5278" }}>{item.dueDate}</span>}
+                          </div>
+                        ))}
+                        {dynamicPunchList.filter(p => p.bu === "facility").length === 0 && (
+                          <div style={{ textAlign: "center", padding: "20px", color: "#3D4570", fontSize: 12, background: "#F5F7FC", borderRadius: 8 }}>No FM reminders in the next 7 days.</div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* ══ ALL OTHER BU DASHBOARDS ══ */}
+              {activeBU !== "facility" && (<>
               <div>
                 <div style={{ fontSize: 28, fontWeight: 700, color: "#1A2240", letterSpacing: "-0.02em" }}>GOOD MORNING, FARMER GROUP</div>
                 <div style={{ fontSize: 12, color: "#4A5278", marginTop: 4, letterSpacing: "0.06em" }}>{dayName().toUpperCase()}</div>
@@ -2219,6 +2448,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                   </div>
                 </div>
               )}
+              </>)}
             </div>
           )}
 
