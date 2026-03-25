@@ -50,6 +50,8 @@ const lsSiteToDB = s => siteToDB(s);
 
 const dbToSub = r => ({ id: r.id, name: r.name||"", trade: r.trade||"", phone: r.phone||"", email: r.email||"", msaStatus: r.msa_status||"missing", coiExpiry: r.coi_expiry||"", w9: r.w9||false, notes: r.notes||"", services: r.services||[] });
 const subToDB = s => ({ id: s.id, name: s.name||"", trade: s.trade||"", phone: s.phone||"", email: s.email||"", msa_status: s.msaStatus||"missing", coi_expiry: s.coiExpiry||null, w9: s.w9||false, notes: s.notes||"", services: s.services||[] });
+const dbToTeamMember = r => ({ id: r.id, name: r.name||"", role: r.role||"", phone: r.phone||"", email: r.email||"", division: r.division||"facility", initials: r.initials||"" });
+const teamMemberToDB = m => ({ id: m.id, name: m.name||"", role: m.role||"", phone: m.phone||"", email: m.email||"", division: m.division||"facility", initials: m.initials||"" });
 
 const dbToFmJob = r => ({
   id: r.id, name: r.name||"", companyId: r.company_id||"", siteId: r.site_id||"",
@@ -137,6 +139,7 @@ const NAV_ITEMS = {
     { id: "sites",          label: "Sites",          icon: "📍" },
     { id: "customers",      label: "Customers",      icon: "🤝" },
     { id: "subcontractors", label: "Subcontractors", icon: "🔧" },
+    { id: "team",           label: "Team",           icon: "👥" },
     { id: "calendar",       label: "Calendar",       icon: "📅" },
   ],
   lawn: [
@@ -1511,16 +1514,18 @@ export default function App() {
     const load = async () => {
       setDbLoading(l => ({ ...l, companies: true, sites: true, lawnSites: true, subcontractors: true }));
       try {
-        const [coRes, siteRes, subRes, fmRes] = await Promise.all([
+        const [coRes, siteRes, subRes, fmRes, teamRes] = await Promise.all([
           supa.from("companies").select("*"),
           supa.from("sites").select("*"),
           supa.from("subcontractors").select("*"),
           supa.from("fm_jobs").select("*"),
+          supa.from("fm_team").select("*"),
         ]);
         if (coRes.data?.length)   setCompanies(coRes.data.map(dbToCompany));
         if (siteRes.data?.length) setSites(siteRes.data.map(dbToSite));
         if (subRes.data?.length)  setSubcontractors(subRes.data.map(dbToSub));
         if (fmRes.data?.length)   setFmJobs(fmRes.data.map(dbToFmJob));
+        if (teamRes.data?.length) setFmTeam(teamRes.data.map(dbToTeamMember));
         setSupaReady(true);
       } catch(e) {
         setDbError("Could not connect to database.");
@@ -3987,50 +3992,81 @@ Return ONLY valid JSON, no markdown, no extra text:
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div>
                   <div style={{ fontSize: 22, fontWeight: 700, color: "#1A2240", letterSpacing: "-0.01em", textTransform: "uppercase" }}>Team</div>
-                  <div style={{ fontSize: 11, color: "#4A5278", marginTop: 3, letterSpacing: "0.06em" }}>{BUSINESS_UNITS.find(b => b.id === activeBU)?.label.toUpperCase()} · {fmTeam.length} MEMBERS · CLICK A NAME TO SEE THEIR DAILY REPORT</div>
+                  <div style={{ fontSize: 11, color: "#4A5278", marginTop: 3, letterSpacing: "0.06em" }}>FM TEAM · {fmTeam.length} MEMBERS · CLICK TO VIEW PERSONAL DASHBOARD</div>
                 </div>
-                <button className="btn-primary" onClick={() => { setEditTeamId(null); setTeamForm({ name: "", phone: "", email: "" }); setShowTeamForm(true); }}>+ Add Member</button>
+                <button className="btn-primary" onClick={() => { setEditTeamId(null); setTeamForm({ name: "", role: "", phone: "", email: "" }); setShowTeamForm(true); }}>+ Add Member</button>
               </div>
 
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                {fmTeam.length === 0 && (
-                  <div style={{ textAlign: "center", padding: "48px", color: "#3D4570", fontSize: 12, background: "#ECEEF8", borderRadius: 10, border: "1px solid #CBD1E8" }}>No team members yet — add your first one</div>
-                )}
+              {fmTeam.length === 0 && (
+                <div style={{ textAlign: "center", padding: "48px", color: "#3D4570", fontSize: 12, background: "#ECEEF8", borderRadius: 10, border: "1px solid #CBD1E8" }}>No team members yet — add your first one</div>
+              )}
+
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: 14 }}>
                 {fmTeam.map(m => {
-                  const myJobs   = fmJobs.filter(j => j.coordinator === m.name);
-                  const active   = myJobs.filter(j => FM_ACTIVE_STAGES.some(s => s.id === j.stage));
-                  const pipeline = myJobs.filter(j => FM_PIPELINE_STAGES.some(s => s.id === j.stage));
+                  // Match jobs by pm field (primary) or coordinator field
+                  const myJobs   = fmJobs.filter(j => j.pm === m.name || j.coordinator === m.name);
+                  const active   = myJobs.filter(j => ["buyout","do_work","bill"].includes(j.stage));
+                  const pipeline = myJobs.filter(j => ["estimating","waiting_quote"].includes(j.stage));
+                  const revenue  = myJobs.reduce((s,j) => s + (j.contractValue||0), 0);
+                  const gp       = myJobs.reduce((s,j) => s + (j.grossProfit||0), 0);
                   const urgentCount = myJobs.filter(j => {
                     const st = FM_STAGES.find(s => s.id === j.stage);
                     if (!st) return false;
                     const d = j[st.actionKey];
                     return d && new Date(d) <= new Date(Date.now() + 3*86400000);
                   }).length;
+                  const initials = m.initials || m.name.split(" ").map(w=>w[0]).join("").toUpperCase().slice(0,2);
                   return (
-                    <div key={m.id} className="opp-row" style={{ cursor: "pointer" }} onClick={() => setSelectedCoord(m.name)}>
-                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-                          <div style={{ width: 44, height: 44, borderRadius: "50%", background: buColor.light, border: "1px solid " + buColor.accent + "40", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 17, fontWeight: 700, color: buColor.accent, flexShrink: 0 }}>
-                            {m.name.charAt(0).toUpperCase()}
-                          </div>
-                          <div>
-                            <div style={{ fontSize: 14, color: buColor.accent, fontWeight: 600, textDecoration: "underline", textDecorationColor: buColor.accent + "60" }}>{m.name}</div>
-                            <div style={{ display: "flex", gap: 14, marginTop: 3, flexWrap: "wrap" }}>
-                              {m.phone && <span style={{ fontSize: 11, color: "#4A5278" }}>📞 {m.phone}</span>}
-                              {m.email && <span style={{ fontSize: 11, color: "#4A5278" }}>✉ {m.email}</span>}
-                            </div>
-                          </div>
+                    <div key={m.id} className="company-card" style={{ cursor: "pointer", padding: 0, overflow: "hidden" }} onClick={() => setSelectedCoord(m.name)}>
+                      {/* Header */}
+                      <div style={{ background: "linear-gradient(135deg, #1E2A48, #252E52)", padding: "18px 20px", display: "flex", alignItems: "center", gap: 14 }}>
+                        <div style={{ width: 50, height: 50, borderRadius: "50%", background: buColor.accent + "25", border: "2px solid " + buColor.accent + "60", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, fontWeight: 800, color: buColor.accent, flexShrink: 0 }}>
+                          {initials}
                         </div>
-                        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                          {/* Job count pills */}
-                          <div style={{ display: "flex", gap: 6 }}>
-                            <span style={{ fontSize: 10, background: "#4ADE8020", color: "#4ADE80", border: "1px solid #4ADE8040", padding: "3px 9px", borderRadius: 12, fontWeight: 600 }}>{active.length} active</span>
-                            <span style={{ fontSize: 10, background: "#818CF820", color: "#818CF8", border: "1px solid #818CF840", padding: "3px 9px", borderRadius: 12, fontWeight: 600 }}>{pipeline.length} pipeline</span>
-                            {urgentCount > 0 && <span style={{ fontSize: 10, background: "#F8717120", color: "#F87171", border: "1px solid #F8717140", padding: "3px 9px", borderRadius: 12, fontWeight: 600 }}>⚠ {urgentCount} urgent</span>}
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 15, fontWeight: 700, color: "#F0F4FF" }}>{m.name}</div>
+                          <div style={{ fontSize: 11, color: "#7BA7F5", marginTop: 2 }}>{m.role || "Project Manager"}</div>
+                        </div>
+                        {urgentCount > 0 && <div style={{ background: "#F8717125", border: "1px solid #F8717150", borderRadius: 6, padding: "3px 8px", fontSize: 10, color: "#F87171", fontWeight: 700 }}>⚠ {urgentCount} urgent</div>}
+                      </div>
+                      {/* Stats */}
+                      <div style={{ padding: "14px 20px" }}>
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 8, marginBottom: 14 }}>
+                          {[
+                            { label: "Pipeline", value: pipeline.length, color: "#818CF8" },
+                            { label: "Active",   value: active.length,   color: "#4ADE80" },
+                            { label: "Revenue",  value: "$" + (revenue >= 1000 ? (revenue/1000).toFixed(0)+"k" : revenue), color: "#3B6FE8" },
+                            { label: "GP",       value: "$" + (gp >= 1000 ? (gp/1000).toFixed(0)+"k" : gp),             color: "#FCD34D" },
+                          ].map(s => (
+                            <div key={s.label} style={{ textAlign: "center" }}>
+                              <div style={{ fontSize: 16, fontWeight: 700, color: s.color }}>{s.value}</div>
+                              <div style={{ fontSize: 9, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.06em", marginTop: 2 }}>{s.label}</div>
+                            </div>
+                          ))}
+                        </div>
+                        {/* Recent jobs preview */}
+                        {myJobs.length > 0 && (
+                          <div style={{ display: "flex", flexDirection: "column", gap: 5 }}>
+                            {myJobs.slice(0,3).map(j => {
+                              const stg = FM_STAGES.find(s => s.id === j.stage);
+                              return (
+                                <div key={j.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 0", borderBottom: "1px solid #F0F2F8" }}>
+                                  <span style={{ fontSize: 9, fontWeight: 700, color: stg?.color || "#4A5278", background: (stg?.color||"#4A5278") + "15", padding: "2px 6px", borderRadius: 3, flexShrink: 0 }}>{stg?.label || j.stage}</span>
+                                  <span style={{ fontSize: 11, color: "#252E52", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{j.name}</span>
+                                  <span style={{ fontSize: 11, color: "#4A5278", flexShrink: 0 }}>{j.storeCode || ""}</span>
+                                </div>
+                              );
+                            })}
+                            {myJobs.length > 3 && <div style={{ fontSize: 11, color: "#3B6FE8", textAlign: "center", paddingTop: 4 }}>+ {myJobs.length - 3} more jobs</div>}
                           </div>
-                          <div style={{ display: "flex", gap: 5 }} onClick={e => e.stopPropagation()}>
-                            <button className="btn-ghost" style={{ fontSize: 11 }} onClick={() => { setEditTeamId(m.id); setTeamForm({ name: m.name, phone: m.phone, email: m.email }); setShowTeamForm(true); }}>✎</button>
-                            <button className="btn-ghost" style={{ fontSize: 11, color: "#F87171", borderColor: "#F8717120" }} onClick={() => setFmTeam(fmTeam.filter(x => x.id !== m.id))}>✕</button>
+                        )}
+                        {myJobs.length === 0 && <div style={{ fontSize: 11, color: "#4A5278", textAlign: "center", padding: "8px 0" }}>No jobs assigned yet</div>}
+                        {/* Contact */}
+                        <div style={{ display: "flex", gap: 12, marginTop: 12, paddingTop: 10, borderTop: "1px solid #F0F2F8" }}>
+                          {m.phone && <span style={{ fontSize: 10, color: "#4A5278" }}>📞 {m.phone}</span>}
+                          {m.email && <span style={{ fontSize: 10, color: "#4A5278", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>✉ {m.email}</span>}
+                          <div style={{ flex: 1 }} onClick={e => e.stopPropagation()}>
+                            <button className="btn-ghost" style={{ fontSize: 10, padding: "2px 8px", float: "right" }} onClick={() => { setEditTeamId(m.id); setTeamForm({ name: m.name, role: m.role||"", phone: m.phone, email: m.email }); setShowTeamForm(true); }}>✎ Edit</button>
                           </div>
                         </div>
                       </div>
@@ -4038,15 +4074,13 @@ Return ONLY valid JSON, no markdown, no extra text:
                   );
                 })}
               </div>
-
-              {/* showTeamForm rendered at root level */}
             </div>
           )}
 
           {/* ── COORDINATOR DAILY REPORT ── */}
           {activeNav === "team" && selectedCoord && (() => {
             const today      = new Date();
-            const myJobs     = fmJobs.filter(j => j.coordinator === selectedCoord);
+            const myJobs     = fmJobs.filter(j => j.pm === selectedCoord || j.coordinator === selectedCoord);
             const totalGross  = myJobs.reduce((s,j) => s + (j.contractValue||0), 0);
             const totalProfit = myJobs.reduce((s,j) => s + (j.grossProfit||0), 0);
 
@@ -7615,10 +7649,10 @@ Return ONLY valid JSON, no markdown, no extra text:
           <div style={{ background: "#ECEEF8", border: "1px solid #CBD1E8", borderRadius: 12, padding: 28, width: 400 }}>
             <div style={{ fontSize: 14, fontWeight: 600, color: "#1A2240", marginBottom: 20 }}>{editTeamId ? "Edit" : "Add"} Team Member</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              {[["Name", "name"], ["Phone", "phone"], ["Email", "email"]].map(([label, key]) => (
+              {[["Full Name *", "name"], ["Role / Title", "role"], ["Phone", "phone"], ["Email", "email"]].map(([label, key]) => (
                 <div key={key}>
                   <div style={{ fontSize: 10, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5 }}>{label}</div>
-                  <input className="fi" style={{ width: "100%", boxSizing: "border-box" }} value={teamForm[key]} onChange={e => setTeamForm({ ...teamForm, [key]: e.target.value })} />
+                  <input className="fi" style={{ width: "100%", boxSizing: "border-box" }} value={teamForm[key]||""} onChange={e => setTeamForm({ ...teamForm, [key]: e.target.value })} placeholder={key === "role" ? "e.g. Project Manager, Coordinator" : ""} />
                 </div>
               ))}
             </div>
@@ -7626,8 +7660,15 @@ Return ONLY valid JSON, no markdown, no extra text:
               <button className="btn-ghost" style={{ flex: 1 }} onClick={() => setShowTeamForm(false)}>Cancel</button>
               <button className="btn-primary" style={{ flex: 1 }} onClick={() => {
                 if (!teamForm.name) return;
-                if (editTeamId) setFmTeam(fmTeam.map(m => m.id === editTeamId ? { ...m, ...teamForm } : m));
-                else setFmTeam([...fmTeam, { id: "tm" + Date.now(), ...teamForm }]);
+                if (editTeamId) {
+                  const updated = { ...fmTeam.find(m => m.id === editTeamId), ...teamForm };
+                  setFmTeam(fmTeam.map(m => m.id === editTeamId ? updated : m));
+                  try { supa.from("fm_team").update(teamMemberToDB(updated)).eq("id", editTeamId); } catch(e) {}
+                } else {
+                  const newM = { id: "tm" + Date.now(), division: "facility", initials: teamForm.name.split(" ").map(w=>w[0]).join("").toUpperCase().slice(0,2), ...teamForm };
+                  setFmTeam([...fmTeam, newM]);
+                  try { supa.from("fm_team").insert(teamMemberToDB(newM)); } catch(e) {}
+                }
                 setShowTeamForm(false);
               }}>Save</button>
             </div>
