@@ -341,16 +341,14 @@ const INIT_JOBS = [
     km1: "Fire Suppression Wet Tap",         km1Date: "2026-04-15",
     km2: "Fire Suppression Final Inspection", km2Date: "2026-04-22",
     km3: "Building & Life Safety Finals",     km3Date: "2026-04-22",
-    currentWeekActivities: "HVAC
-Electrical", nextWeekActivities: "Site Preparation and Clearing",
+    currentWeekActivities: "HVAC\nElectrical", nextWeekActivities: "Site Preparation and Clearing",
     criticalPath: "Yes", changeOrderStatus: "Yes", budgetStatus: "Yes", billingStatus: "Yes",
     dailyReports: "Yes", lookahead: "Yes", cleanliness: "Four", nextOwnerComms: "2026-03-27", notes: "", bu: "major" },
   { id: 2, name: "AAA - Busch Blvd Conversion", companyId: "c1", client: "AAA", contractValue: 0, startDate: "2026-01-15", endDate: "2026-04-16", pm: "Zak Kranich", pct: 80, status: "On Schedule", daysAhead: 0, gpm: 0.13, completionSchedule: "Hold",
     km1: "HVAC & Electrical Final Inspections", km1Date: "2026-04-03",
     km2: "Final Cleaning & Floor Seal",         km2Date: "2026-04-10",
     km3: "Fire Suppression & Final Building Inspections", km3Date: "2026-04-16",
-    currentWeekActivities: "Electrical", nextWeekActivities: "HVAC
-Electrical",
+    currentWeekActivities: "Electrical", nextWeekActivities: "HVAC\nElectrical",
     criticalPath: "Yes", changeOrderStatus: "Yes", budgetStatus: "No", billingStatus: "Yes",
     dailyReports: "Yes", lookahead: "Yes", cleanliness: "Three", nextOwnerComms: "2026-03-27", notes: "", bu: "major" },
   { id: 3, name: "AAA - Ulmerton Conversion",  companyId: "c1", client: "AAA",  contractValue: 0, startDate: "2026-01-10", endDate: "2026-04-15", pm: "Zak Kranich",    pct: 60, status: "Behind Schedule", daysAhead: -58, gpm: 0.20, completionSchedule: "Hold",
@@ -364,21 +362,13 @@ Electrical",
     km1: "Keypad Install",                      km1Date: "2026-04-03",
     km2: "Back Wall Replacement",               km2Date: "2026-03-27",
     km3: "Complete OM Manual",                  km3Date: "2026-04-03",
-    currentWeekActivities: "Concrete Wall
-Unit Plaques", nextWeekActivities: "Punchlist / Change Order Items",
+    currentWeekActivities: "Concrete Wall\nUnit Plaques", nextWeekActivities: "Punchlist / Change Order Items",
     criticalPath: "No", changeOrderStatus: "Yes", longLeadItems: "Other", budgetStatus: "Yes", billingStatus: "Yes",
     dailyReports: "Yes", lookahead: "Yes", cleanliness: "Five", nextOwnerComms: "2026-03-26", notes: "", bu: "major" },
   { id: 5, name: "NCD - Pontiac Conversion",   companyId: "c1", client: "NCD",  contractValue: 0, startDate: "2025-11-01", endDate: "2026-05-15", pm: "Connor Thomas",   pct: 55, status: "At Risk", daysAhead: 0, gpm: 0.15, completionSchedule: "Hold",
     km1: "", km1Date: "", km2: "", km2Date: "", km3: "", km3Date: "",
-    currentWeekActivities: "Masonry
-Janus Hallway Systems
-Fire Suppression
-HVAC
-Electrical",
-    nextWeekActivities: "Roll Up Doors
-Janus Hallway Systems
-Fire Suppression
-Electrical",
+    currentWeekActivities: "Masonry\nJanus Hallway Systems\nFire Suppression\nHVAC\nElectrical",
+    nextWeekActivities: "Roll Up Doors\nJanus Hallway Systems\nFire Suppression\nElectrical",
     criticalPath: "Yes", changeOrderStatus: "Hold", longLeadItems: "Janus", budgetStatus: "Yes", billingStatus: "No",
     dailyReports: "No", lookahead: "Yes", cleanliness: "Four", nextOwnerComms: "", notes: "", bu: "major" },
 ];
