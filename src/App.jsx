@@ -1307,6 +1307,7 @@ export default function App() {
   const [crmDivFilter,   setCrmDivFilter]   = useState("all");
   const [crmSearchQ,     setCrmSearchQ]     = useState("");
   const [newActivity,    setNewActivity]    = useState("");
+  const [showCustomCo,   setShowCustomCo]   = useState(false);
 
   // CRM
   const [companies,       setCompanies]       = useState([]);
@@ -2476,115 +2477,151 @@ Return ONLY valid JSON, no markdown, no extra text:
             const f = crmFormData;
             const set = (k, v) => setCrmFormData(prev => ({ ...prev, [k]: v }));
             const toggleDiv = (d) => set("divisions", (f.divisions||[]).includes(d) ? (f.divisions||[]).filter(x=>x!==d) : [...(f.divisions||[]), d]);
-            const toggleState = (s) => set("states", (f.states||[]).includes(s) ? (f.states||[]).filter(x=>x!==s) : [...(f.states||[]), s]);
-            const CRM_STATUSES_LOCAL = [
-              { id: "prospect", label: "Prospect" }, { id: "contacted", label: "Contacted" },
-              { id: "meeting", label: "Meeting" }, { id: "active", label: "Active" },
-              { id: "at_risk", label: "At Risk" }, { id: "dormant", label: "Dormant" },
+            const DIVS = [
+              { id:"FM",    label:"Facility Maintenance", color:"#3B6FE8" },
+              { id:"CapEx", label:"Capital Improvements",  color:"#8B5CF6" },
+              { id:"MP",    label:"Major Projects",        color:"#F97316" },
+              { id:"Lawn",  label:"Lawn",                  color:"#4ADE80" },
+              { id:"Snow",  label:"Snow",                  color:"#60A5FA" },
             ];
-            const CRM_DIVS_LOCAL = ["FM","CapEx","MP","Lawn","Snow"];
-            const US_STATES_LOCAL = ["AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA","HI","ID","IL","IN","IA","KS","KY","LA","ME","MD","MA","MI","MN","MS","MO","MT","NE","NV","NH","NJ","NM","NY","NC","ND","OH","OK","OR","PA","RI","SC","SD","TN","TX","UT","VT","VA","WA","WV","WI","WY"];
+            // Company dropdown: known companies + free-text fallback
+            const isValid = (f.firstName||"").trim() || (f.lastName||"").trim();
             return (
               <div className="modal-bg" onClick={e => e.target === e.currentTarget && (setShowCrmForm(false), setCrmFormData({}))}>
-                <div className="modal fade-in" style={{ width: 620 }}>
-                  <div style={{ fontSize: 15, fontWeight: 800, color: "#1A2240", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 20 }}>
-                    {editCrmId ? "Edit Contact" : "New CRM Contact"}
+                <div className="modal fade-in" style={{ width: 580, maxHeight: "90vh", overflowY: "auto" }}>
+
+                  {/* Header */}
+                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:22 }}>
+                    <div style={{ fontSize:15, fontWeight:800, color:"#1A2240", textTransform:"uppercase", letterSpacing:"0.05em" }}>
+                      {editCrmId ? "Edit Contact" : "Add Contact"}
+                    </div>
+                    <button className="btn-ghost" style={{ fontSize:16, padding:"2px 8px" }} onClick={()=>{setShowCrmForm(false);setCrmFormData({});}}>✕</button>
                   </div>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-                    {/* Name + Title */}
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-                      <div><label className="lbl">First Name *</label><input className="fi" value={f.firstName||""} onChange={e=>set("firstName",e.target.value)} /></div>
-                      <div><label className="lbl">Last Name *</label><input className="fi" value={f.lastName||""} onChange={e=>set("lastName",e.target.value)} /></div>
-                    </div>
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-                      <div><label className="lbl">Title / Role</label><input className="fi" value={f.title||""} onChange={e=>set("title",e.target.value)} placeholder="e.g. District Manager" /></div>
-                      <div><label className="lbl">Company</label>
-                        <select className="fi" value={f.companyId||""} onChange={e => { set("companyId", e.target.value); set("company", companies.find(c=>c.id===e.target.value)?.name||""); }}>
-                          <option value="">Select or type below…</option>
-                          {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                        </select>
+
+                  <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
+
+                    {/* ── NAME ROW ── */}
+                    <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+                      <div>
+                        <label className="lbl">First Name <span style={{color:"#F87171"}}>*</span></label>
+                        <input className="fi" autoFocus value={f.firstName||""} onChange={e=>set("firstName",e.target.value)} placeholder="First" />
+                      </div>
+                      <div>
+                        <label className="lbl">Last Name <span style={{color:"#F87171"}}>*</span></label>
+                        <input className="fi" value={f.lastName||""} onChange={e=>set("lastName",e.target.value)} placeholder="Last" />
                       </div>
                     </div>
-                    {/* Contact info */}
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-                      <div><label className="lbl">Email</label><input className="fi" type="email" value={f.email||""} onChange={e=>set("email",e.target.value)} /></div>
-                      <div><label className="lbl">Phone</label><input className="fi" value={f.phone||""} onChange={e=>set("phone",e.target.value)} /></div>
-                    </div>
-                    {/* Territory */}
-                    <div><label className="lbl">Territory / Areas Covered</label><input className="fi" value={f.territory||""} onChange={e=>set("territory",e.target.value)} placeholder="e.g. Great Lakes Region, Midwest District 3" /></div>
-                    {/* States */}
-                    <div>
-                      <label className="lbl">States Covered</label>
-                      <div style={{ display: "flex", flexWrap: "wrap", gap: 4, maxHeight: 100, overflowY: "auto", background: "#F8F9FD", borderRadius: 6, padding: 8, border: "1px solid #CBD1E8" }}>
-                        {US_STATES_LOCAL.map(s => (
-                          <button key={s} onClick={() => toggleState(s)}
-                            style={{ padding: "2px 7px", borderRadius: 4, border: "1px solid " + ((f.states||[]).includes(s) ? "#3B6FE8" : "#CBD1E8"), background: (f.states||[]).includes(s) ? "#3B6FE8" : "#fff", color: (f.states||[]).includes(s) ? "#fff" : "#4A5278", fontSize: 10, cursor: "pointer", fontFamily: "inherit", fontWeight: (f.states||[]).includes(s) ? 700 : 400 }}>
-                            {s}
-                          </button>
-                        ))}
+
+                    {/* ── POSITION + COMPANY ── */}
+                    <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+                      <div>
+                        <label className="lbl">Position / Title</label>
+                        <input className="fi" value={f.title||""} onChange={e=>set("title",e.target.value)} placeholder="e.g. District Manager" />
                       </div>
-                    </div>
-                    {/* Divisions */}
-                    <div>
-                      <label className="lbl">Divisions</label>
-                      <div style={{ display: "flex", gap: 6 }}>
-                        {CRM_DIVS_LOCAL.map(d => (
-                          <button key={d} onClick={() => toggleDiv(d)}
-                            style={{ padding: "5px 12px", borderRadius: 20, border: "1px solid " + ((f.divisions||[]).includes(d) ? "#3B6FE8" : "#CBD1E8"), background: (f.divisions||[]).includes(d) ? "#3B6FE8" : "transparent", color: (f.divisions||[]).includes(d) ? "#fff" : "#4A5278", fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
-                            {d}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                    {/* Status + Decision maker */}
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
-                      <div><label className="lbl">Status</label>
-                        <select className="fi" value={f.status||"prospect"} onChange={e=>set("status",e.target.value)}>
-                          {CRM_STATUSES_LOCAL.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
-                        </select>
-                      </div>
-                      <div><label className="lbl">Relationship Owner</label>
-                        <select className="fi" value={f.relationshipOwner||""} onChange={e=>set("relationshipOwner",e.target.value)}>
-                          <option value="">Unassigned</option>
-                          {fmTeam.map(m => <option key={m.id} value={m.name}>{m.name}</option>)}
-                        </select>
-                      </div>
-                      <div><label className="lbl">Contract Type</label>
-                        <select className="fi" value={f.contractType||""} onChange={e=>set("contractType",e.target.value)}>
-                          <option value="">—</option>
-                          {["MSA","Time & Material","One-off","Retainer"].map(t => <option key={t} value={t}>{t}</option>)}
-                        </select>
-                      </div>
-                    </div>
-                    {/* Lead source + spend + DM flag */}
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
-                      <div><label className="lbl">Lead Source</label>
-                        <select className="fi" value={f.source||""} onChange={e=>set("source",e.target.value)}>
-                          <option value="">—</option>
-                          {["Referral","Cold Outreach","Existing Relationship","Bid Portal","Trade Show","Other"].map(s => <option key={s} value={s}>{s}</option>)}
-                        </select>
-                      </div>
-                      <div><label className="lbl">Est. Annual Spend ($)</label><input className="fi" type="number" value={f.annualSpendEst||""} onChange={e=>set("annualSpendEst",Number(e.target.value))} placeholder="0" /></div>
-                      <div style={{ display: "flex", flexDirection: "column", justifyContent: "flex-end" }}>
-                        <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", paddingBottom: 8 }}>
-                          <input type="checkbox" checked={f.isDecisionMaker||false} onChange={e=>set("isDecisionMaker",e.target.checked)} style={{ width: 16, height: 16, accentColor: "#3B6FE8" }} />
-                          <span style={{ fontSize: 12, color: "#1A2240" }}>Decision Maker</span>
+                      <div>
+                        <label className="lbl" style={{ display:"flex", justifyContent:"space-between" }}>
+                          Company
+                          <span style={{ fontSize:9, color:"#3B6FE8", cursor:"pointer", textTransform:"none", letterSpacing:0, fontWeight:500 }}
+                            onClick={()=>setShowCustomCo(!showCustomCo)}>
+                            {showCustomCo ? "← Pick from list" : "Not in list? Type it →"}
+                          </span>
                         </label>
+                        {showCustomCo
+                          ? <input className="fi" value={f.company||""} onChange={e=>{set("company",e.target.value);set("companyId","");}} placeholder="Type company name…" />
+                          : <select className="fi" value={f.companyId||""} onChange={e=>{set("companyId",e.target.value);set("company",companies.find(c=>c.id===e.target.value)?.name||"");}}>
+                              <option value="">— Select company —</option>
+                              {companies.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}
+                            </select>
+                        }
                       </div>
                     </div>
-                    {/* Follow-up dates */}
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-                      <div><label className="lbl">Last Contact Date</label><input className="fi" type="date" value={f.lastContactDate||""} onChange={e=>set("lastContactDate",e.target.value)} /></div>
-                      <div><label className="lbl">Next Follow-up</label><input className="fi" type="date" value={f.nextFollowUp||""} onChange={e=>set("nextFollowUp",e.target.value)} /></div>
+
+                    {/* ── CONTACT INFO ── */}
+                    <div style={{ background:"#F8F9FD", borderRadius:10, padding:"14px 16px", display:"flex", flexDirection:"column", gap:12 }}>
+                      <div style={{ fontSize:10, fontWeight:700, color:"#4A5278", textTransform:"uppercase", letterSpacing:"0.07em" }}>Contact Info</div>
+                      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+                        <div>
+                          <label className="lbl">Email</label>
+                          <input className="fi" type="email" value={f.email||""} onChange={e=>set("email",e.target.value)} placeholder="name@company.com" />
+                        </div>
+                        <div>
+                          <label className="lbl">Phone</label>
+                          <input className="fi" type="tel" value={f.phone||""} onChange={e=>set("phone",e.target.value)} placeholder="(555) 000-0000" />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="lbl">LinkedIn</label>
+                        <input className="fi" value={f.linkedIn||""} onChange={e=>set("linkedIn",e.target.value)} placeholder="https://linkedin.com/in/their-name" />
+                      </div>
                     </div>
-                    {/* LinkedIn + notes */}
-                    <div><label className="lbl">LinkedIn URL</label><input className="fi" value={f.linkedIn||""} onChange={e=>set("linkedIn",e.target.value)} placeholder="https://linkedin.com/in/…" /></div>
-                    <div><label className="lbl">Notes</label><textarea className="fi" rows={2} value={f.notes||""} onChange={e=>set("notes",e.target.value)} style={{ resize: "vertical" }} /></div>
-                    {/* Buttons */}
-                    <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", paddingTop: 4 }}>
-                      <button className="btn-ghost" onClick={() => { setShowCrmForm(false); setCrmFormData({}); }}>Cancel</button>
-                      <button className="btn-primary" onClick={saveCrmContact}>{editCrmId ? "Save Changes" : "Add Contact"}</button>
+
+                    {/* ── DIVISIONS ── */}
+                    <div>
+                      <label className="lbl">Departments <span style={{color:"#F87171"}}>*</span> <span style={{color:"#9BA3BF",fontWeight:400,textTransform:"none",letterSpacing:0}}>Select all that apply</span></label>
+                      <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginTop:6 }}>
+                        {DIVS.map(d => {
+                          const on = (f.divisions||[]).includes(d.id);
+                          return (
+                            <button key={d.id} onClick={()=>toggleDiv(d.id)} type="button"
+                              style={{ padding:"8px 16px", borderRadius:8, border:"2px solid "+(on?d.color:"#E8EBF4"), background:on?d.color+"18":"#fff", color:on?d.color:"#4A5278", fontSize:12, fontWeight:700, cursor:"pointer", fontFamily:"inherit", transition:"all 0.15s", display:"flex", alignItems:"center", gap:6 }}>
+                              {on && <span style={{ fontSize:10 }}>✓</span>}
+                              {d.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      {(f.divisions||[]).length === 0 && <div style={{ fontSize:10, color:"#F87171", marginTop:5 }}>Please select at least one department</div>}
                     </div>
+
+                    {/* ── OPTIONAL FIELDS (collapsed) ── */}
+                    <details style={{ borderTop:"1px solid #EEF0F8", paddingTop:14 }}>
+                      <summary style={{ fontSize:11, color:"#4A5278", cursor:"pointer", fontWeight:600, userSelect:"none", letterSpacing:"0.04em", listStyle:"none", display:"flex", alignItems:"center", gap:6 }}>
+                        <span>▸</span> More details (relationship, follow-up, notes)
+                      </summary>
+                      <div style={{ display:"flex", flexDirection:"column", gap:12, marginTop:14 }}>
+                        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+                          <div>
+                            <label className="lbl">Relationship Owner</label>
+                            <select className="fi" value={f.relationshipOwner||""} onChange={e=>set("relationshipOwner",e.target.value)}>
+                              <option value="">Unassigned</option>
+                              {fmTeam.map(m=><option key={m.id} value={m.name}>{m.name}</option>)}
+                            </select>
+                          </div>
+                          <div>
+                            <label className="lbl">Est. Annual Spend ($)</label>
+                            <input className="fi" type="number" value={f.annualSpendEst||""} onChange={e=>set("annualSpendEst",Number(e.target.value))} placeholder="0" />
+                          </div>
+                        </div>
+                        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+                          <div>
+                            <label className="lbl">Last Contact Date</label>
+                            <input className="fi" type="date" value={f.lastContactDate||""} onChange={e=>set("lastContactDate",e.target.value)} />
+                          </div>
+                          <div>
+                            <label className="lbl">Next Follow-up</label>
+                            <input className="fi" type="date" value={f.nextFollowUp||""} onChange={e=>set("nextFollowUp",e.target.value)} />
+                          </div>
+                        </div>
+                        <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                          <input type="checkbox" id="dm-check" checked={f.isDecisionMaker||false} onChange={e=>set("isDecisionMaker",e.target.checked)} style={{ width:16, height:16, accentColor:"#3B6FE8", cursor:"pointer" }} />
+                          <label htmlFor="dm-check" style={{ fontSize:12, color:"#1A2240", cursor:"pointer" }}>⭐ Decision Maker</label>
+                        </div>
+                        <div>
+                          <label className="lbl">Notes</label>
+                          <textarea className="fi" rows={3} value={f.notes||""} onChange={e=>set("notes",e.target.value)} placeholder="Any context about this contact…" style={{ resize:"vertical" }} />
+                        </div>
+                      </div>
+                    </details>
+
+                    {/* ── BUTTONS ── */}
+                    <div style={{ display:"flex", gap:8, justifyContent:"flex-end", paddingTop:4, borderTop:"1px solid #EEF0F8" }}>
+                      <button className="btn-ghost" onClick={()=>{setShowCrmForm(false);setCrmFormData({});}}>Cancel</button>
+                      <button className="btn-primary" style={{ opacity: isValid ? 1 : 0.5, cursor: isValid ? "pointer" : "not-allowed" }}
+                        onClick={()=>{ if(!isValid) return; saveCrmContact(); }}>
+                        {editCrmId ? "Save Changes" : "Add Contact"}
+                      </button>
+                    </div>
+
                   </div>
                 </div>
               </div>
