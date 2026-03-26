@@ -53,6 +53,59 @@ const subToDB = s => ({ id: s.id, name: s.name||"", trade: s.trade||"", phone: s
 const dbToTeamMember = r => ({ id: r.id, name: r.name||"", role: r.role||"", phone: r.phone||"", email: r.email||"", division: r.division||"facility", initials: r.initials||"" });
 const teamMemberToDB = m => ({ id: m.id, name: m.name||"", role: m.role||"", phone: m.phone||"", email: m.email||"", division: m.division||"facility", initials: m.initials||"" });
 
+// CRM Contact helpers
+const dbToCrmContact = r => ({
+  id: r.id,
+  firstName:      r.first_name||"",
+  lastName:       r.last_name||"",
+  title:          r.title||"",
+  company:        r.company||"",
+  companyId:      r.company_id||"",
+  email:          r.email||"",
+  phone:          r.phone||"",
+  divisions:      r.divisions||[],          // ["FM","CapEx","MP","Lawn","Snow"]
+  territory:      r.territory||"",          // geographic areas covered
+  states:         r.states||[],             // ["MI","OH","IN",...]
+  status:         r.status||"prospect",     // prospect|contacted|meeting|active|dormant|at_risk
+  isDecisionMaker:r.is_decision_maker||false,
+  relationshipOwner: r.relationship_owner||"",
+  annualSpendEst: Number(r.annual_spend_est||0),
+  lastContactDate:r.last_contact_date||"",
+  nextFollowUp:   r.next_follow_up||"",
+  contractType:   r.contract_type||"",      // MSA|T&M|one-off
+  linkedIn:       r.linked_in||"",
+  source:         r.source||"",             // referral|cold|existing|bid portal
+  notes:          r.notes||"",
+  activityLog:    r.activity_log||[],       // [{date, type, note, by}]
+  tags:           r.tags||[],
+  createdAt:      r.created_at||"",
+});
+const crmContactToDB = c => ({
+  id: c.id,
+  first_name:       c.firstName||"",
+  last_name:        c.lastName||"",
+  title:            c.title||"",
+  company:          c.company||"",
+  company_id:       c.companyId||null,
+  email:            c.email||"",
+  phone:            c.phone||"",
+  divisions:        c.divisions||[],
+  territory:        c.territory||"",
+  states:           c.states||[],
+  status:           c.status||"prospect",
+  is_decision_maker: c.isDecisionMaker||false,
+  relationship_owner: c.relationshipOwner||"",
+  annual_spend_est: c.annualSpendEst||0,
+  last_contact_date: c.lastContactDate||null,
+  next_follow_up:   c.nextFollowUp||null,
+  contract_type:    c.contractType||"",
+  linked_in:        c.linkedIn||"",
+  source:           c.source||"",
+  notes:            c.notes||"",
+  activity_log:     c.activityLog||[],
+  tags:             c.tags||[],
+});
+
 const dbToFmJob = r => ({
   id: r.id, name: r.name||"", companyId: r.company_id||"", siteId: r.site_id||"",
   contractValue: Number(r.contract_value||0), grossProfit: Number(r.gross_profit||0),
@@ -1244,6 +1297,16 @@ export default function App() {
   const [crmMode, setCrmMode] = useState(false); // top-level CRM/Sales view
   const [salesTab, setSalesTab] = useState("major"); // major | capex | acquisition
   const [crmTagFilter, setCrmTagFilter] = useState(null); // null | "FM" | "CapEx" | "Major" | "Lawn" | "Snow"
+  // CRM module state
+  const [crmContacts,    setCrmContacts]    = useState([]);
+  const [crmView,        setCrmView]        = useState("contacts"); // contacts | pipeline | dashboard
+  const [selectedCrmContact, setSelectedCrmContact] = useState(null);
+  const [showCrmForm,    setShowCrmForm]    = useState(false);
+  const [editCrmId,      setEditCrmId]      = useState(null);
+  const [crmFormData,    setCrmFormData]    = useState({});
+  const [crmDivFilter,   setCrmDivFilter]   = useState("all");
+  const [crmSearchQ,     setCrmSearchQ]     = useState("");
+  const [newActivity,    setNewActivity]    = useState("");
 
   // CRM
   const [companies,       setCompanies]       = useState([]);
@@ -1304,6 +1367,7 @@ export default function App() {
   const [fmSearch,      setFmSearch]      = useState("");
   const [fmCoordFilter, setFmCoordFilter] = useState("all");
   const [selectedPM,    setSelectedPM]    = useState(null);
+  const [openSections,   setOpenSections]   = useState(new Set(["do_work","bill"]));
   const [selectedCoord, setSelectedCoord] = useState(null); // coordinator report
   const [fmInbox,       setFmInbox]       = useState([]);   // unassigned leads
   const [showInboxForm, setShowInboxForm] = useState(false);
@@ -1514,18 +1578,20 @@ export default function App() {
     const load = async () => {
       setDbLoading(l => ({ ...l, companies: true, sites: true, lawnSites: true, subcontractors: true }));
       try {
-        const [coRes, siteRes, subRes, fmRes, teamRes] = await Promise.all([
+        const [coRes, siteRes, subRes, fmRes, teamRes, crmRes] = await Promise.all([
           supa.from("companies").select("*"),
           supa.from("sites").select("*"),
           supa.from("subcontractors").select("*"),
           supa.from("fm_jobs").select("*"),
           supa.from("fm_team").select("*"),
+          supa.from("crm_contacts").select("*"),
         ]);
         if (coRes.data?.length)   setCompanies(coRes.data.map(dbToCompany));
         if (siteRes.data?.length) setSites(siteRes.data.map(dbToSite));
         if (subRes.data?.length)  setSubcontractors(subRes.data.map(dbToSub));
         if (fmRes.data?.length)   setFmJobs(fmRes.data.map(dbToFmJob));
         if (teamRes.data?.length) setFmTeam(teamRes.data.map(dbToTeamMember));
+        if (crmRes.data?.length)  setCrmContacts(crmRes.data.map(dbToCrmContact));
         setSupaReady(true);
       } catch(e) {
         setDbError("Could not connect to database.");
@@ -2140,102 +2206,697 @@ Return ONLY valid JSON, no markdown, no extra text:
         {/* Content */}
         <div style={{ flex: 1, padding: "28px 32px", overflowY: "auto", paddingRight: panelOpen ? "calc(32px + 420px)" : "32px", transition: "padding-right 0.2s" }}>
 
+          {/* ══════════════════════════════════════════
+               CRM MODULE — renders when crmMode === true
+          ══════════════════════════════════════════ */}
+          {crmMode && (() => {
+
+            // ── CRM constants ──
+            const CRM_STATUSES = [
+              { id: "prospect",   label: "Prospect",   color: "#818CF8" },
+              { id: "contacted",  label: "Contacted",  color: "#60A5FA" },
+              { id: "meeting",    label: "Meeting",    color: "#FCD34D" },
+              { id: "active",     label: "Active",     color: "#4ADE80" },
+              { id: "at_risk",    label: "At Risk",    color: "#F97316" },
+              { id: "dormant",    label: "Dormant",    color: "#9BA3BF" },
+            ];
+            const CRM_DIVS = ["FM","CapEx","MP","Lawn","Snow"];
+            const CRM_SOURCES = ["Referral","Cold Outreach","Existing Relationship","Bid Portal","Trade Show","Other"];
+            const CRM_CONTRACT = ["MSA","Time & Material","One-off","Retainer"];
+            const US_STATES = ["AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA","HI","ID","IL","IN","IA","KS","KY","LA","ME","MD","MA","MI","MN","MS","MO","MT","NE","NV","NH","NJ","NM","NY","NC","ND","OH","OK","OR","PA","RI","SC","SD","TN","TX","UT","VT","VA","WA","WV","WI","WY"];
+
+            // ── Save / update contact ──
+            const saveCrmContact = () => {
+              if (!crmFormData.firstName && !crmFormData.lastName) return;
+              if (editCrmId) {
+                const updated = { ...crmContacts.find(c => c.id === editCrmId), ...crmFormData };
+                setCrmContacts(prev => prev.map(c => c.id === editCrmId ? updated : c));
+                try { supa.from("crm_contacts").update(crmContactToDB(updated)).eq("id", editCrmId); } catch(e) {}
+              } else {
+                const newC = { id: "crm_" + Date.now(), createdAt: new Date().toISOString(), activityLog: [], ...crmFormData };
+                setCrmContacts(prev => [...prev, newC]);
+                try { supa.from("crm_contacts").insert(crmContactToDB(newC)); } catch(e) {}
+              }
+              setShowCrmForm(false); setEditCrmId(null); setCrmFormData({});
+            };
+
+            // ── Add activity log entry ──
+            const addActivity = (contactId, type, note) => {
+              if (!note.trim()) return;
+              const entry = { id: "act_" + Date.now(), date: new Date().toISOString(), type, note, by: "Owner" };
+              setCrmContacts(prev => prev.map(c => {
+                if (c.id !== contactId) return c;
+                const updated = { ...c, activityLog: [entry, ...(c.activityLog||[])], lastContactDate: new Date().toISOString().slice(0,10) };
+                try { supa.from("crm_contacts").update(crmContactToDB(updated)).eq("id", contactId); } catch(e) {}
+                return updated;
+              }));
+              if (selectedCrmContact?.id === contactId) {
+                setSelectedCrmContact(prev => ({ ...prev, activityLog: [entry, ...(prev.activityLog||[])], lastContactDate: new Date().toISOString().slice(0,10) }));
+              }
+              setNewActivity("");
+            };
+
+            // ── Filtered contacts ──
+            const filtered = crmContacts.filter(c => {
+              const divMatch = crmDivFilter === "all" || (c.divisions||[]).includes(crmDivFilter);
+              const q = crmSearchQ.toLowerCase();
+              const textMatch = !q || (c.firstName||"").toLowerCase().includes(q) || (c.lastName||"").toLowerCase().includes(q) || (c.company||"").toLowerCase().includes(q) || (c.title||"").toLowerCase().includes(q) || (c.territory||"").toLowerCase().includes(q);
+              return divMatch && textMatch;
+            });
+
+            // ── Dashboard stats ──
+            const totalActive    = crmContacts.filter(c => c.status === "active").length;
+            const totalProspects = crmContacts.filter(c => c.status === "prospect").length;
+            const followUpsToday = crmContacts.filter(c => c.nextFollowUp && c.nextFollowUp <= new Date().toISOString().slice(0,10)).length;
+            const totalAnnualEst = crmContacts.reduce((s,c) => s + (c.annualSpendEst||0), 0);
+
+            // ── Status color helper ──
+            const stColor = (id) => CRM_STATUSES.find(s => s.id === id)?.color || "#9BA3BF";
+
+            // ── DETAIL VIEW ──
+            if (selectedCrmContact) {
+              const c = selectedCrmContact;
+              const st = CRM_STATUSES.find(s => s.id === c.status);
+              return (
+                <div className="fade-in" style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+                  {/* Header */}
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <button className="btn-ghost" onClick={() => setSelectedCrmContact(null)} style={{ padding: "8px 14px" }}>← Back to CRM</button>
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <button className="btn-ghost" onClick={() => { setEditCrmId(c.id); setCrmFormData({...c}); setShowCrmForm(true); }}>✎ Edit</button>
+                      <button className="btn-ghost" style={{ color: "#F87171", borderColor: "#F8717120" }} onClick={() => {
+                        if (!window.confirm("Delete this contact?")) return;
+                        setCrmContacts(prev => prev.filter(x => x.id !== c.id));
+                        try { supa.from("crm_contacts").delete().eq("id", c.id); } catch(e) {}
+                        setSelectedCrmContact(null);
+                      }}>✕ Delete</button>
+                    </div>
+                  </div>
+
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 340px", gap: 20, alignItems: "start" }}>
+                    {/* LEFT: Contact info */}
+                    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                      {/* Identity card */}
+                      <div className="stat-card" style={{ padding: 24 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 18 }}>
+                          <div style={{ width: 60, height: 60, borderRadius: "50%", background: (st?.color||"#3B6FE8") + "20", border: "2px solid " + (st?.color||"#3B6FE8") + "50", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, fontWeight: 800, color: st?.color||"#3B6FE8", flexShrink: 0 }}>
+                            {(c.firstName?.[0]||"")}{(c.lastName?.[0]||"")}
+                          </div>
+                          <div>
+                            <div style={{ fontSize: 22, fontWeight: 800, color: "#1A2240" }}>{c.firstName} {c.lastName}</div>
+                            <div style={{ fontSize: 13, color: "#4A5278", marginTop: 2 }}>{c.title}{c.company ? " · " + c.company : ""}</div>
+                            <div style={{ display: "flex", gap: 6, marginTop: 6, flexWrap: "wrap" }}>
+                              <span style={{ fontSize: 10, fontWeight: 700, background: (st?.color||"#9BA3BF")+"20", color: st?.color||"#9BA3BF", padding: "2px 8px", borderRadius: 4 }}>{st?.label||c.status}</span>
+                              {c.isDecisionMaker && <span style={{ fontSize: 10, fontWeight: 700, background: "#FCD34D20", color: "#78600A", padding: "2px 8px", borderRadius: 4 }}>⭐ Decision Maker</span>}
+                              {(c.divisions||[]).map(d => <span key={d} style={{ fontSize: 10, fontWeight: 700, background: "#3B6FE820", color: "#3B6FE8", padding: "2px 8px", borderRadius: 4 }}>{d}</span>)}
+                            </div>
+                          </div>
+                        </div>
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                          {[
+                            { label: "Email",        value: c.email,    icon: "✉" },
+                            { label: "Phone",        value: c.phone,    icon: "📞" },
+                            { label: "Territory",    value: c.territory, icon: "📍" },
+                            { label: "States",       value: (c.states||[]).join(", "), icon: "🗺" },
+                            { label: "Contract Type",value: c.contractType, icon: "📋" },
+                            { label: "Source",       value: c.source,   icon: "🔗" },
+                            { label: "Rel. Owner",   value: c.relationshipOwner, icon: "👤" },
+                            { label: "Annual Spend", value: c.annualSpendEst > 0 ? "$" + c.annualSpendEst.toLocaleString() : "", icon: "💰" },
+                          ].filter(f => f.value).map(f => (
+                            <div key={f.label}>
+                              <div style={{ fontSize: 9, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 2 }}>{f.icon} {f.label}</div>
+                              <div style={{ fontSize: 12, color: "#1A2240", fontWeight: 500 }}>{f.value}</div>
+                            </div>
+                          ))}
+                        </div>
+                        {c.notes && (
+                          <div style={{ marginTop: 14, paddingTop: 14, borderTop: "1px solid #EEF0F8" }}>
+                            <div style={{ fontSize: 9, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 4 }}>📝 Notes</div>
+                            <div style={{ fontSize: 12, color: "#252E52", lineHeight: 1.6 }}>{c.notes}</div>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Follow-up */}
+                      <div className="stat-card" style={{ padding: 16, display: "flex", gap: 16, alignItems: "center" }}>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontSize: 9, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 3 }}>Last Contact</div>
+                          <div style={{ fontSize: 13, fontWeight: 600, color: "#1A2240" }}>{c.lastContactDate || "—"}</div>
+                        </div>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontSize: 9, color: c.nextFollowUp && c.nextFollowUp <= new Date().toISOString().slice(0,10) ? "#F87171" : "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 3 }}>
+                            {c.nextFollowUp && c.nextFollowUp <= new Date().toISOString().slice(0,10) ? "⚠ FOLLOW-UP OVERDUE" : "Next Follow-up"}
+                          </div>
+                          <div style={{ fontSize: 13, fontWeight: 600, color: c.nextFollowUp && c.nextFollowUp <= new Date().toISOString().slice(0,10) ? "#F87171" : "#1A2240" }}>{c.nextFollowUp || "—"}</div>
+                        </div>
+                        {c.linkedIn && (
+                          <a href={c.linkedIn} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: "#3B6FE8", textDecoration: "none", background: "#3B6FE810", border: "1px solid #3B6FE830", borderRadius: 6, padding: "6px 12px" }}>
+                            LinkedIn →
+                          </a>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* RIGHT: Activity log */}
+                    <div className="stat-card" style={{ padding: 16 }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: "#1A2240", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 14 }}>Activity Log</div>
+
+                      {/* New activity input */}
+                      <div style={{ marginBottom: 14 }}>
+                        <div style={{ display: "flex", gap: 6, marginBottom: 6 }}>
+                          {["📞 Call","📧 Email","🤝 Meeting","📝 Note"].map(t => (
+                            <button key={t} className="btn-ghost" style={{ fontSize: 10, padding: "3px 8px" }}
+                              onClick={() => setNewActivity(t + " — ")}>
+                              {t.split(" ")[0]}
+                            </button>
+                          ))}
+                        </div>
+                        <textarea className="fi" rows={2} value={newActivity} onChange={e => setNewActivity(e.target.value)}
+                          placeholder="Log a call, email, meeting…"
+                          style={{ resize: "none", fontSize: 12 }} />
+                        <button className="btn-primary" style={{ width: "100%", marginTop: 6, fontSize: 11, padding: "7px" }}
+                          onClick={() => addActivity(c.id, "note", newActivity)}>
+                          + Add Entry
+                        </button>
+                      </div>
+
+                      {/* Log entries */}
+                      <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 400, overflowY: "auto" }}>
+                        {(c.activityLog||[]).length === 0 && (
+                          <div style={{ fontSize: 11, color: "#4A5278", textAlign: "center", padding: "20px 0" }}>No activity yet</div>
+                        )}
+                        {(c.activityLog||[]).map((a, i) => (
+                          <div key={a.id||i} style={{ background: "#F8F9FD", borderRadius: 8, padding: "10px 12px" }}>
+                            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                              <span style={{ fontSize: 10, color: "#3B6FE8", fontWeight: 600 }}>{a.by || "Team"}</span>
+                              <span style={{ fontSize: 10, color: "#9BA3BF" }}>{a.date ? new Date(a.date).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"}) : ""}</span>
+                            </div>
+                            <div style={{ fontSize: 12, color: "#252E52", lineHeight: 1.5 }}>{a.note}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            }
+
+            // ── PIPELINE VIEW ──
+            if (crmView === "pipeline") {
+              return (
+                <div className="fade-in" style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <div>
+                      <div style={{ fontSize: 22, fontWeight: 800, color: "#1A2240" }}>CRM PIPELINE</div>
+                      <div style={{ fontSize: 11, color: "#4A5278", marginTop: 3 }}>{crmContacts.length} contacts · drag to change stage</div>
+                    </div>
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <button className={crmView==="contacts"?"btn-ghost":"btn-primary"} style={{ fontSize: 11 }} onClick={() => setCrmView("contacts")}>👥 Contacts</button>
+                      <button className={crmView==="dashboard"?"btn-primary":"btn-ghost"} style={{ fontSize: 11 }} onClick={() => setCrmView("dashboard")}>📊 Dashboard</button>
+                    </div>
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(6,1fr)", gap: 10, alignItems: "start" }}>
+                    {CRM_STATUSES.map(st => {
+                      const stContacts = crmContacts.filter(c => c.status === st.id);
+                      return (
+                        <div key={st.id} style={{ background: "#F8F9FD", borderRadius: 10, padding: 10, border: "1px solid #E8EBF4" }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                            <span style={{ fontSize: 10, fontWeight: 700, color: st.color, textTransform: "uppercase", letterSpacing: "0.07em" }}>{st.label}</span>
+                            <span style={{ fontSize: 11, color: "#9BA3BF", fontWeight: 600 }}>{stContacts.length}</span>
+                          </div>
+                          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                            {stContacts.map(c => (
+                              <div key={c.id} style={{ background: "#fff", borderRadius: 8, padding: "10px 12px", cursor: "pointer", border: "1px solid #E8EBF4", borderLeft: "3px solid " + st.color }}
+                                onClick={() => setSelectedCrmContact(c)}>
+                                <div style={{ fontSize: 12, fontWeight: 700, color: "#1A2240" }}>{c.firstName} {c.lastName}</div>
+                                <div style={{ fontSize: 10, color: "#4A5278", marginTop: 2 }}>{c.title}</div>
+                                <div style={{ fontSize: 10, color: "#3B6FE8", marginTop: 1 }}>{c.company}</div>
+                                {(c.divisions||[]).length > 0 && (
+                                  <div style={{ display: "flex", gap: 3, marginTop: 5, flexWrap: "wrap" }}>
+                                    {(c.divisions||[]).map(d => <span key={d} style={{ fontSize: 9, background: "#3B6FE815", color: "#3B6FE8", padding: "1px 5px", borderRadius: 3 }}>{d}</span>)}
+                                  </div>
+                                )}
+                                {c.nextFollowUp && (
+                                  <div style={{ fontSize: 9, marginTop: 5, color: c.nextFollowUp <= new Date().toISOString().slice(0,10) ? "#F87171" : "#4A5278" }}>
+                                    📅 {c.nextFollowUp}
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                            {stContacts.length === 0 && <div style={{ fontSize: 10, color: "#CBD1E8", textAlign: "center", padding: "12px 0" }}>Empty</div>}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            }
+
+            // ── DASHBOARD VIEW ──
+            if (crmView === "dashboard") {
+              const byDiv = {};
+              CRM_DIVS.forEach(d => { byDiv[d] = crmContacts.filter(c => (c.divisions||[]).includes(d)).length; });
+              const overdue = crmContacts.filter(c => c.nextFollowUp && c.nextFollowUp <= new Date().toISOString().slice(0,10));
+              return (
+                <div className="fade-in" style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <div style={{ fontSize: 22, fontWeight: 800, color: "#1A2240" }}>CRM DASHBOARD</div>
+                    <div style={{ display: "flex", gap: 8 }}>
+                      <button className="btn-ghost" style={{ fontSize: 11 }} onClick={() => setCrmView("contacts")}>👥 Contacts</button>
+                      <button className="btn-ghost" style={{ fontSize: 11 }} onClick={() => setCrmView("pipeline")}>⬦ Pipeline</button>
+                    </div>
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 12 }}>
+                    {[
+                      { label: "Total Contacts",      value: crmContacts.length,    color: "#3B6FE8" },
+                      { label: "Active Customers",     value: totalActive,            color: "#4ADE80" },
+                      { label: "Follow-ups Due",       value: followUpsToday,         color: followUpsToday > 0 ? "#F87171" : "#FCD34D" },
+                      { label: "Est. Annual Spend",    value: "$" + (totalAnnualEst/1000).toFixed(0) + "k", color: "#818CF8" },
+                    ].map(s => (
+                      <div key={s.label} className="stat-card" style={{ padding: "16px 20px", position: "relative", overflow: "hidden" }}>
+                        <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, background: s.color }} />
+                        <div style={{ fontSize: 9, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>{s.label}</div>
+                        <div style={{ fontSize: 26, fontWeight: 800, color: s.color }}>{s.value}</div>
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+                    {/* By Division */}
+                    <div className="stat-card" style={{ padding: 20 }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 14 }}>Contacts by Division</div>
+                      {CRM_DIVS.map(d => {
+                        const count = byDiv[d] || 0;
+                        const pct = crmContacts.length > 0 ? (count/crmContacts.length)*100 : 0;
+                        return (
+                          <div key={d} style={{ marginBottom: 10 }}>
+                            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+                              <span style={{ fontSize: 12, color: "#1A2240", fontWeight: 600 }}>{d}</span>
+                              <span style={{ fontSize: 12, color: "#4A5278" }}>{count}</span>
+                            </div>
+                            <div style={{ background: "#EEF0F8", borderRadius: 4, height: 6 }}>
+                              <div style={{ background: "#3B6FE8", borderRadius: 4, height: 6, width: pct + "%" }} />
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    {/* Follow-ups due */}
+                    <div className="stat-card" style={{ padding: 20 }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 14 }}>
+                        {overdue.length > 0 ? "⚠ Follow-ups Due" : "Upcoming Follow-ups"}
+                      </div>
+                      {overdue.length === 0 && <div style={{ fontSize: 12, color: "#4A5278", textAlign: "center", padding: "24px 0" }}>All caught up! 🎉</div>}
+                      {overdue.slice(0,6).map(c => (
+                        <div key={c.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: "1px solid #F0F2F8", cursor: "pointer" }}
+                          onClick={() => setSelectedCrmContact(c)}>
+                          <div>
+                            <div style={{ fontSize: 12, fontWeight: 600, color: "#1A2240" }}>{c.firstName} {c.lastName}</div>
+                            <div style={{ fontSize: 10, color: "#4A5278" }}>{c.company}</div>
+                          </div>
+                          <span style={{ fontSize: 10, color: "#F87171", fontWeight: 700 }}>{c.nextFollowUp}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  {/* Status breakdown */}
+                  <div className="stat-card" style={{ padding: 20 }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 14 }}>Pipeline by Stage</div>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(6,1fr)", gap: 10 }}>
+                      {CRM_STATUSES.map(st => {
+                        const count = crmContacts.filter(c => c.status === st.id).length;
+                        return (
+                          <div key={st.id} style={{ textAlign: "center", cursor: "pointer" }} onClick={() => setCrmView("pipeline")}>
+                            <div style={{ fontSize: 28, fontWeight: 800, color: st.color }}>{count}</div>
+                            <div style={{ fontSize: 10, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.06em", marginTop: 3 }}>{st.label}</div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              );
+            }
+
+            // ── CONTACTS LIST VIEW (default) ──
+            return (
+              <div className="fade-in" style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+                {/* Header */}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div>
+                    <div style={{ fontSize: 22, fontWeight: 800, color: "#1A2240" }}>CRM</div>
+                    <div style={{ fontSize: 11, color: "#4A5278", marginTop: 3 }}>{filtered.length} contacts{crmDivFilter !== "all" ? " · " + crmDivFilter : ""}</div>
+                  </div>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button className="btn-ghost" style={{ fontSize: 11 }} onClick={() => setCrmView("pipeline")}>⬦ Pipeline</button>
+                    <button className="btn-ghost" style={{ fontSize: 11 }} onClick={() => setCrmView("dashboard")}>📊 Dashboard</button>
+                    <button className="btn-primary" onClick={() => { setEditCrmId(null); setCrmFormData({ status: "prospect", divisions: [], states: [], isDecisionMaker: false }); setShowCrmForm(true); }}>+ Add Contact</button>
+                  </div>
+                </div>
+
+                {/* Search + filters */}
+                <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+                  <input className="fi" style={{ width: 220 }} placeholder="Search name, company, territory…" value={crmSearchQ} onChange={e => setCrmSearchQ(e.target.value)} />
+                  <div style={{ display: "flex", gap: 5 }}>
+                    {["all",...CRM_DIVS].map(d => (
+                      <button key={d} onClick={() => setCrmDivFilter(d)}
+                        style={{ padding: "4px 11px", borderRadius: 20, border: "1px solid " + (crmDivFilter===d ? "#3B6FE8" : "#CBD1E8"), background: crmDivFilter===d ? "#3B6FE8" : "transparent", color: crmDivFilter===d ? "#fff" : "#4A5278", fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
+                        {d === "all" ? "All" : d}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Contacts grid */}
+                {filtered.length === 0 && (
+                  <div style={{ textAlign: "center", padding: "60px", color: "#4A5278", fontSize: 13, background: "#F8F9FD", borderRadius: 12, border: "1px dashed #CBD1E8" }}>
+                    No contacts yet — click <strong>+ Add Contact</strong> to start building your CRM
+                  </div>
+                )}
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 12 }}>
+                  {filtered.map(c => {
+                    const st = CRM_STATUSES.find(s => s.id === c.status);
+                    const overdue = c.nextFollowUp && c.nextFollowUp <= new Date().toISOString().slice(0,10);
+                    return (
+                      <div key={c.id} className="company-card" style={{ cursor: "pointer", padding: 16, position: "relative", overflow: "hidden" }}
+                        onClick={() => setSelectedCrmContact(c)}>
+                        <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, background: st?.color||"#9BA3BF" }} />
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
+                          <div>
+                            <div style={{ fontSize: 14, fontWeight: 700, color: "#1A2240" }}>{c.firstName} {c.lastName}</div>
+                            <div style={{ fontSize: 11, color: "#4A5278", marginTop: 1 }}>{c.title}</div>
+                            <div style={{ fontSize: 11, color: "#3B6FE8", marginTop: 1, fontWeight: 500 }}>{c.company}</div>
+                          </div>
+                          <span style={{ fontSize: 9, fontWeight: 700, background: (st?.color||"#9BA3BF")+"20", color: st?.color||"#9BA3BF", padding: "2px 7px", borderRadius: 10, flexShrink: 0 }}>{st?.label}</span>
+                        </div>
+                        {c.territory && <div style={{ fontSize: 10, color: "#4A5278", marginBottom: 6 }}>📍 {c.territory}</div>}
+                        {(c.states||[]).length > 0 && <div style={{ fontSize: 10, color: "#4A5278", marginBottom: 6 }}>🗺 {c.states.slice(0,5).join(", ")}{c.states.length > 5 ? " +" + (c.states.length-5) : ""}</div>}
+                        <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginBottom: 8 }}>
+                          {(c.divisions||[]).map(d => <span key={d} style={{ fontSize: 9, background: "#3B6FE815", color: "#3B6FE8", padding: "1px 6px", borderRadius: 3 }}>{d}</span>)}
+                          {c.isDecisionMaker && <span style={{ fontSize: 9, background: "#FCD34D20", color: "#78600A", padding: "1px 6px", borderRadius: 3 }}>⭐ DM</span>}
+                        </div>
+                        <div style={{ display: "flex", justifyContent: "space-between", paddingTop: 8, borderTop: "1px solid #EEF0F8", fontSize: 10 }}>
+                          <span style={{ color: "#4A5278" }}>{c.phone || c.email || ""}</span>
+                          {c.nextFollowUp && <span style={{ color: overdue ? "#F87171" : "#4A5278", fontWeight: overdue ? 700 : 400 }}>{overdue ? "⚠ " : "📅 "}{c.nextFollowUp}</span>}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* CRM CONTACT FORM MODAL */}
+          {crmMode && showCrmForm && (() => {
+            const f = crmFormData;
+            const set = (k, v) => setCrmFormData(prev => ({ ...prev, [k]: v }));
+            const toggleDiv = (d) => set("divisions", (f.divisions||[]).includes(d) ? (f.divisions||[]).filter(x=>x!==d) : [...(f.divisions||[]), d]);
+            const toggleState = (s) => set("states", (f.states||[]).includes(s) ? (f.states||[]).filter(x=>x!==s) : [...(f.states||[]), s]);
+            const CRM_STATUSES_LOCAL = [
+              { id: "prospect", label: "Prospect" }, { id: "contacted", label: "Contacted" },
+              { id: "meeting", label: "Meeting" }, { id: "active", label: "Active" },
+              { id: "at_risk", label: "At Risk" }, { id: "dormant", label: "Dormant" },
+            ];
+            const CRM_DIVS_LOCAL = ["FM","CapEx","MP","Lawn","Snow"];
+            const US_STATES_LOCAL = ["AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA","HI","ID","IL","IN","IA","KS","KY","LA","ME","MD","MA","MI","MN","MS","MO","MT","NE","NV","NH","NJ","NM","NY","NC","ND","OH","OK","OR","PA","RI","SC","SD","TN","TX","UT","VT","VA","WA","WV","WI","WY"];
+            return (
+              <div className="modal-bg" onClick={e => e.target === e.currentTarget && (setShowCrmForm(false), setCrmFormData({}))}>
+                <div className="modal fade-in" style={{ width: 620 }}>
+                  <div style={{ fontSize: 15, fontWeight: 800, color: "#1A2240", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 20 }}>
+                    {editCrmId ? "Edit Contact" : "New CRM Contact"}
+                  </div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                    {/* Name + Title */}
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                      <div><label className="lbl">First Name *</label><input className="fi" value={f.firstName||""} onChange={e=>set("firstName",e.target.value)} /></div>
+                      <div><label className="lbl">Last Name *</label><input className="fi" value={f.lastName||""} onChange={e=>set("lastName",e.target.value)} /></div>
+                    </div>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                      <div><label className="lbl">Title / Role</label><input className="fi" value={f.title||""} onChange={e=>set("title",e.target.value)} placeholder="e.g. District Manager" /></div>
+                      <div><label className="lbl">Company</label>
+                        <select className="fi" value={f.companyId||""} onChange={e => { set("companyId", e.target.value); set("company", companies.find(c=>c.id===e.target.value)?.name||""); }}>
+                          <option value="">Select or type below…</option>
+                          {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                        </select>
+                      </div>
+                    </div>
+                    {/* Contact info */}
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                      <div><label className="lbl">Email</label><input className="fi" type="email" value={f.email||""} onChange={e=>set("email",e.target.value)} /></div>
+                      <div><label className="lbl">Phone</label><input className="fi" value={f.phone||""} onChange={e=>set("phone",e.target.value)} /></div>
+                    </div>
+                    {/* Territory */}
+                    <div><label className="lbl">Territory / Areas Covered</label><input className="fi" value={f.territory||""} onChange={e=>set("territory",e.target.value)} placeholder="e.g. Great Lakes Region, Midwest District 3" /></div>
+                    {/* States */}
+                    <div>
+                      <label className="lbl">States Covered</label>
+                      <div style={{ display: "flex", flexWrap: "wrap", gap: 4, maxHeight: 100, overflowY: "auto", background: "#F8F9FD", borderRadius: 6, padding: 8, border: "1px solid #CBD1E8" }}>
+                        {US_STATES_LOCAL.map(s => (
+                          <button key={s} onClick={() => toggleState(s)}
+                            style={{ padding: "2px 7px", borderRadius: 4, border: "1px solid " + ((f.states||[]).includes(s) ? "#3B6FE8" : "#CBD1E8"), background: (f.states||[]).includes(s) ? "#3B6FE8" : "#fff", color: (f.states||[]).includes(s) ? "#fff" : "#4A5278", fontSize: 10, cursor: "pointer", fontFamily: "inherit", fontWeight: (f.states||[]).includes(s) ? 700 : 400 }}>
+                            {s}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    {/* Divisions */}
+                    <div>
+                      <label className="lbl">Divisions</label>
+                      <div style={{ display: "flex", gap: 6 }}>
+                        {CRM_DIVS_LOCAL.map(d => (
+                          <button key={d} onClick={() => toggleDiv(d)}
+                            style={{ padding: "5px 12px", borderRadius: 20, border: "1px solid " + ((f.divisions||[]).includes(d) ? "#3B6FE8" : "#CBD1E8"), background: (f.divisions||[]).includes(d) ? "#3B6FE8" : "transparent", color: (f.divisions||[]).includes(d) ? "#fff" : "#4A5278", fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
+                            {d}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    {/* Status + Decision maker */}
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
+                      <div><label className="lbl">Status</label>
+                        <select className="fi" value={f.status||"prospect"} onChange={e=>set("status",e.target.value)}>
+                          {CRM_STATUSES_LOCAL.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
+                        </select>
+                      </div>
+                      <div><label className="lbl">Relationship Owner</label>
+                        <select className="fi" value={f.relationshipOwner||""} onChange={e=>set("relationshipOwner",e.target.value)}>
+                          <option value="">Unassigned</option>
+                          {fmTeam.map(m => <option key={m.id} value={m.name}>{m.name}</option>)}
+                        </select>
+                      </div>
+                      <div><label className="lbl">Contract Type</label>
+                        <select className="fi" value={f.contractType||""} onChange={e=>set("contractType",e.target.value)}>
+                          <option value="">—</option>
+                          {["MSA","Time & Material","One-off","Retainer"].map(t => <option key={t} value={t}>{t}</option>)}
+                        </select>
+                      </div>
+                    </div>
+                    {/* Lead source + spend + DM flag */}
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
+                      <div><label className="lbl">Lead Source</label>
+                        <select className="fi" value={f.source||""} onChange={e=>set("source",e.target.value)}>
+                          <option value="">—</option>
+                          {["Referral","Cold Outreach","Existing Relationship","Bid Portal","Trade Show","Other"].map(s => <option key={s} value={s}>{s}</option>)}
+                        </select>
+                      </div>
+                      <div><label className="lbl">Est. Annual Spend ($)</label><input className="fi" type="number" value={f.annualSpendEst||""} onChange={e=>set("annualSpendEst",Number(e.target.value))} placeholder="0" /></div>
+                      <div style={{ display: "flex", flexDirection: "column", justifyContent: "flex-end" }}>
+                        <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", paddingBottom: 8 }}>
+                          <input type="checkbox" checked={f.isDecisionMaker||false} onChange={e=>set("isDecisionMaker",e.target.checked)} style={{ width: 16, height: 16, accentColor: "#3B6FE8" }} />
+                          <span style={{ fontSize: 12, color: "#1A2240" }}>Decision Maker</span>
+                        </label>
+                      </div>
+                    </div>
+                    {/* Follow-up dates */}
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                      <div><label className="lbl">Last Contact Date</label><input className="fi" type="date" value={f.lastContactDate||""} onChange={e=>set("lastContactDate",e.target.value)} /></div>
+                      <div><label className="lbl">Next Follow-up</label><input className="fi" type="date" value={f.nextFollowUp||""} onChange={e=>set("nextFollowUp",e.target.value)} /></div>
+                    </div>
+                    {/* LinkedIn + notes */}
+                    <div><label className="lbl">LinkedIn URL</label><input className="fi" value={f.linkedIn||""} onChange={e=>set("linkedIn",e.target.value)} placeholder="https://linkedin.com/in/…" /></div>
+                    <div><label className="lbl">Notes</label><textarea className="fi" rows={2} value={f.notes||""} onChange={e=>set("notes",e.target.value)} style={{ resize: "vertical" }} /></div>
+                    {/* Buttons */}
+                    <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", paddingTop: 4 }}>
+                      <button className="btn-ghost" onClick={() => { setShowCrmForm(false); setCrmFormData({}); }}>Cancel</button>
+                      <button className="btn-primary" onClick={saveCrmContact}>{editCrmId ? "Save Changes" : "Add Contact"}</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+
           {/* ── DASHBOARD ── */}
-          {activeNav === "dashboard" && (
+          {!crmMode && activeNav === "dashboard" && (
             <div className="fade-in" style={{ display: "flex", flexDirection: "column", gap: 28 }}>
 
               {/* ══ FM DASHBOARD ══ */}
               {activeBU === "facility" && (() => {
-                // Build monthly data from fmJobs
                 const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
                 const now = new Date();
-                const last6 = Array.from({ length: 6 }, (_, i) => {
-                  const d = new Date(now.getFullYear(), now.getMonth() - 5 + i, 1);
-                  return { month: MONTHS[d.getMonth()], year: d.getFullYear(), key: d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") };
+                const curYear = now.getFullYear();
+                const curMonth = now.getMonth(); // 0-indexed
+
+                // ── Monthly aggregation ──
+                const getMonthKey = (j) => (j.startDate || j.invoiceDate || "").slice(0,7);
+                const monthData = {};
+                fmJobs.forEach(j => {
+                  const k = getMonthKey(j);
+                  if (!k) return;
+                  if (!monthData[k]) monthData[k] = { rev: 0, gp: 0, count: 0 };
+                  monthData[k].rev += j.contractValue || 0;
+                  monthData[k].gp  += j.grossProfit  || 0;
+                  monthData[k].count++;
                 });
 
-                // Revenue & GP per month from fmJobs (use startDate or createdAt)
-                const monthlyRevenue = last6.map(m => {
-                  const jobs = fmJobs.filter(j => {
-                    const d = j.startDate || j.invoiceDate || "";
-                    return d.startsWith(m.key);
-                  });
-                  return { ...m, revenue: jobs.reduce((s,j) => s + (j.contractValue||0), 0), gp: jobs.reduce((s,j) => s + (j.grossProfit||0), 0), jobs: jobs.length };
-                });
+                // ── YTD stats ──
+                const ytdJobs  = fmJobs.filter(j => (j.startDate||"").startsWith(String(curYear)));
+                const ytdRev   = ytdJobs.reduce((s,j) => s + (j.contractValue||0), 0);
+                const ytdGP    = ytdJobs.reduce((s,j) => s + (j.grossProfit||0), 0);
+                const ytdMargin = ytdRev > 0 ? Math.round((ytdGP/ytdRev)*100) : 0;
+                const pipeline  = fmJobs.filter(j => ["estimating","waiting_quote"].includes(j.stage));
+                const pipelineVal = pipeline.reduce((s,j) => s + (j.contractValue||0), 0);
 
-                // Budgets (hardcoded targets — can be made editable later)
-                const REVENUE_BUDGET = 15000; // per month target
-                const GP_BUDGET      = 4500;  // per month target
+                // ── Quarterly budgets (targets from Smartsheet screenshot) ──
+                const Q_TARGETS = { 1: 87750, 2: 140400, 3: 193050, 4: 163800 };
+                const getQ = (monthIdx) => Math.floor(monthIdx / 3) + 1;
 
-                // Current month stats
-                const curKey = now.getFullYear() + "-" + String(now.getMonth()+1).padStart(2,"0");
-                const curMonthJobs = fmJobs.filter(j => (j.startDate||"").startsWith(curKey));
-                const totalRevMTD  = curMonthJobs.reduce((s,j) => s + (j.contractValue||0), 0);
-                const totalGpMTD   = curMonthJobs.reduce((s,j) => s + (j.grossProfit||0), 0);
-                const openJobs     = fmJobs.filter(j => ["estimating","waiting_quote","owner_approval","buyout","do_work"].includes(j.stage));
-                const billJobs     = fmJobs.filter(j => j.stage === "bill");
-
-                // Bar chart helper — simple SVG bars
-                const BarChart = ({ data, valueKey, budgetKey, color, label }) => {
-                  const maxV = Math.max(...data.map(d => Math.max(d[valueKey]||0, budgetKey)), budgetKey * 1.2, 1);
-                  const W = 460, H = 120, barW = 40, gap = 26;
-                  return (
-                    <div>
-                      <div style={{ fontSize: 10, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 8, fontWeight: 600 }}>{label}</div>
-                      <svg width={W} height={H + 30} style={{ overflow: "visible" }}>
-                        {data.map((d, i) => {
-                          const x = i * (barW + gap) + 10;
-                          const actualH = Math.round(((d[valueKey]||0) / maxV) * H);
-                          const budgetH = Math.round((budgetKey / maxV) * H);
-                          return (
-                            <g key={d.key}>
-                              {/* budget line bar (outline) */}
-                              <rect x={x} y={H - budgetH} width={barW} height={budgetH}
-                                fill="none" stroke="#CBD1E8" strokeWidth={1} strokeDasharray="3,2" rx={3} />
-                              {/* actual bar */}
-                              <rect x={x} y={H - actualH} width={barW} height={actualH}
-                                fill={(d[valueKey]||0) >= budgetKey ? "#4ADE80" : color} rx={3} opacity={0.9} />
-                              {/* value label */}
-                              {(d[valueKey]||0) > 0 && <text x={x + barW/2} y={H - actualH - 4} textAnchor="middle" fontSize={9} fill="#4A5278">${Math.round((d[valueKey]||0)/1000)}k</text>}
-                              {/* month label */}
-                              <text x={x + barW/2} y={H + 16} textAnchor="middle" fontSize={10} fill="#4A5278">{d.month}</text>
-                            </g>
-                          );
-                        })}
-                        {/* budget line */}
-                        <line x1={10} x2={data.length*(barW+gap)+10} y1={H - Math.round((budgetKey/maxV)*H)} y2={H - Math.round((budgetKey/maxV)*H)} stroke="#FCD34D" strokeWidth={1.5} strokeDasharray="4,3" />
-                        <text x={data.length*(barW+gap)+14} y={H - Math.round((budgetKey/maxV)*H) + 4} fontSize={9} fill="#FCD34D">Budget</text>
-                      </svg>
-                    </div>
-                  );
-                };
-
-                // PM breakdown
-                const pms = [...new Set(fmJobs.map(j => j.pm||"Unassigned").filter(Boolean))];
-                const pmStats = pms.map(pm => {
-                  const pmJobs = fmJobs.filter(j => (j.pm||"Unassigned") === pm);
+                // ── Build 12-month arrays for current year ──
+                const months12 = Array.from({length:12}, (_,i) => {
+                  const k = curYear + "-" + String(i+1).padStart(2,"0");
+                  const prev = (curYear-1) + "-" + String(i+1).padStart(2,"0");
                   return {
-                    pm,
-                    total: pmJobs.length,
-                    open: pmJobs.filter(j => !["bill","invoiced"].includes(j.stage)).length,
-                    revenue: pmJobs.reduce((s,j) => s + (j.contractValue||0), 0),
-                    gp: pmJobs.reduce((s,j) => s + (j.grossProfit||0), 0),
+                    label: MONTHS[i],
+                    thisRev: monthData[k]?.rev || 0,
+                    thisGP:  monthData[k]?.gp  || 0,
+                    thisCount: monthData[k]?.count || 0,
+                    lastRev: monthData[prev]?.rev || 0,
+                    lastGP:  monthData[prev]?.gp  || 0,
                   };
                 });
 
-                // Logged-in "PM" — for now use coordinator filter or show personal stats
-                // In future: tie to actual login. For now show a PM selector at top.
-                const myJobs = selectedPM ? fmJobs.filter(j => (j.pm||j.coordinator||"") === selectedPM) : null;
+                // ── Quarterly data ──
+                const quarters = [1,2,3,4].map(q => {
+                  const mIdxs = [0,1,2].map(i => (q-1)*3+i);
+                  return {
+                    q,
+                    thisGP:  mIdxs.reduce((s,i) => s + months12[i].thisGP,  0),
+                    lastGP:  mIdxs.reduce((s,i) => s + months12[i].lastGP,  0),
+                    target:  Q_TARGETS[q],
+                  };
+                });
+
+                // ── Revenue budgets (monthly) ──
+                const MONTHLY_REV_BUDGET = 15000;
+                const MONTHLY_GP_BUDGET  = 4500;
+
+                // ── Current month projection ──
+                const curKey = curYear + "-" + String(curMonth+1).padStart(2,"0");
+                const curMthJobs = fmJobs.filter(j => (j.startDate||"").startsWith(curKey));
+                const curMthRev  = curMthJobs.reduce((s,j) => s + (j.contractValue||0), 0);
+                const curMthGP   = curMthJobs.reduce((s,j) => s + (j.grossProfit||0), 0);
+
+                // Days in current month for projection
+                const daysInMonth = new Date(curYear, curMonth+1, 0).getDate();
+                const dayOfMonth  = now.getDate();
+                const projRev = dayOfMonth > 0 ? Math.round(curMthRev / dayOfMonth * daysInMonth) : 0;
+                const projGP  = dayOfMonth > 0 ? Math.round(curMthGP  / dayOfMonth * daysInMonth) : 0;
+
+                // ── SVG Line Chart helper ──
+                const LineChart = ({ series, labels, title, height=130, yFmt }) => {
+                  const allVals = series.flatMap(s => s.data);
+                  const maxV = Math.max(...allVals, 1);
+                  const W = 500, H = height, padL = 60, padB = 24, padT = 10, padR = 20;
+                  const innerW = W - padL - padR;
+                  const innerH = H - padB - padT;
+                  const xStep = innerW / Math.max(labels.length - 1, 1);
+                  const toY = v => H - padB - Math.round((v/maxV)*innerH);
+                  const toX = i => padL + Math.round(i * xStep);
+                  const fmt2 = v => yFmt ? yFmt(v) : "$" + (v>=1000 ? (v/1000).toFixed(0)+"k" : v);
+                  // Y axis ticks
+                  const ticks = [0, 0.25, 0.5, 0.75, 1].map(t => Math.round(t * maxV));
+                  return (
+                    <svg viewBox={`0 0 ${W} ${H}`} style={{width:"100%", height:H+20, overflow:"visible"}}>
+                      {/* Grid lines */}
+                      {ticks.map((t,i) => (
+                        <g key={i}>
+                          <line x1={padL} x2={W-padR} y1={toY(t)} y2={toY(t)} stroke="#E8EBF4" strokeWidth={1} />
+                          <text x={padL-6} y={toY(t)+4} textAnchor="end" fontSize={9} fill="#9BA3BF">{fmt2(t)}</text>
+                        </g>
+                      ))}
+                      {/* X axis labels */}
+                      {labels.map((l,i) => (
+                        <text key={i} x={toX(i)} y={H-padB+14} textAnchor="middle" fontSize={9} fill="#9BA3BF">{l}</text>
+                      ))}
+                      {/* Series lines */}
+                      {series.map((s, si) => {
+                        const pts = s.data.map((v,i) => `${toX(i)},${toY(v)}`).join(" ");
+                        const futureIdx = labels.findIndex((_,i) => i > curMonth && s.isCurrent);
+                        return (
+                          <g key={si}>
+                            <polyline points={pts} fill="none" stroke={s.color} strokeWidth={2} strokeDasharray={s.dashed ? "5,3" : "none"} strokeLinecap="round" strokeLinejoin="round" />
+                            {s.data.map((v,i) => v > 0 && (
+                              <circle key={i} cx={toX(i)} cy={toY(v)} r={3} fill={s.color} />
+                            ))}
+                          </g>
+                        );
+                      })}
+                    </svg>
+                  );
+                };
+
+                // ── Horizontal Bar Chart for Quarters ──
+                const QBarChart = ({ data }) => {
+                  const maxV = Math.max(...data.flatMap(q => [q.thisGP, q.lastGP, q.target]), 1);
+                  const BAR_H = 14, GAP = 6, GROUP = BAR_H*3 + GAP*4, W = 480, LABEL_W = 30;
+                  const toW = v => Math.round((v/maxV)*(W-LABEL_W-80));
+                  const colors = { last: "#BCC6D8", this: "#F87171", target: "#4ADE80" };
+                  return (
+                    <svg viewBox={`0 0 ${W} ${data.length*GROUP+30}`} style={{width:"100%"}}>
+                      {data.map((q, qi) => {
+                        const y0 = qi * GROUP + 10;
+                        return (
+                          <g key={q.q}>
+                            <text x={0} y={y0 + BAR_H} fontSize={11} fill="#4A5278" fontWeight={600}>Q{q.q}</text>
+                            {/* Last year */}
+                            <rect x={LABEL_W} y={y0} width={toW(q.lastGP)} height={BAR_H} fill={colors.last} rx={2} />
+                            {q.lastGP > 0 && <text x={LABEL_W + toW(q.lastGP) + 4} y={y0+BAR_H-2} fontSize={9} fill="#4A5278">${q.lastGP.toLocaleString()}</text>}
+                            {/* This year */}
+                            <rect x={LABEL_W} y={y0+BAR_H+GAP} width={toW(q.thisGP)} height={BAR_H} fill={colors.this} rx={2} />
+                            {q.thisGP > 0 && <text x={LABEL_W + toW(q.thisGP) + 4} y={y0+BAR_H*2+GAP-2} fontSize={9} fill="#1A2240">${q.thisGP.toLocaleString()}</text>}
+                            {/* Target */}
+                            <rect x={LABEL_W} y={y0+BAR_H*2+GAP*2} width={toW(q.target)} height={BAR_H} fill={colors.target} rx={2} opacity={0.7} />
+                            {<text x={LABEL_W + toW(q.target) + 4} y={y0+BAR_H*3+GAP*2-2} fontSize={9} fill="#4A5278">${q.target.toLocaleString()}</text>}
+                          </g>
+                        );
+                      })}
+                      {/* Legend */}
+                      <g transform={`translate(0, ${data.length*GROUP+5})`}>
+                        {[["#BCC6D8","Last Year"],["#F87171","This Year"],["#4ADE80","Target"]].map(([c,l],i) => (
+                          <g key={i} transform={`translate(${i*110},0)`}>
+                            <rect width={10} height={10} fill={c} rx={2} />
+                            <text x={14} y={9} fontSize={9} fill="#4A5278">{l}</text>
+                          </g>
+                        ))}
+                      </g>
+                    </svg>
+                  );
+                };
+
+                // ── PM selector ──
+                const pms = [...new Set(fmJobs.map(j => j.pm||"").filter(Boolean))];
 
                 return (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+
                     {/* Header */}
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
                       <div>
-                        <div style={{ fontSize: 24, fontWeight: 800, color: "#1A2240", letterSpacing: "-0.02em" }}>FM DASHBOARD</div>
-                        <div style={{ fontSize: 11, color: "#4A5278", marginTop: 3, letterSpacing: "0.06em" }}>FACILITY MAINTENANCE · {new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" }).toUpperCase()}</div>
+                        <div style={{ fontSize: 26, fontWeight: 800, color: "#1A2240", letterSpacing: "-0.02em" }}>FM DASHBOARD</div>
+                        <div style={{ fontSize: 11, color: "#4A5278", marginTop: 3, letterSpacing: "0.06em" }}>FACILITY MAINTENANCE · {new Date().toLocaleDateString("en-US", { weekday:"long", month:"long", day:"numeric" }).toUpperCase()}</div>
                       </div>
-                      <div style={{ display: "flex", align: "center", gap: 8 }}>
+                      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                         <select value={selectedPM || ""} onChange={e => setSelectedPM(e.target.value || null)}
                           style={{ fontSize: 11, padding: "6px 12px", borderRadius: 6, border: "1px solid #CBD1E8", background: selectedPM ? "#3B6FE8" : "#fff", color: selectedPM ? "#fff" : "#4A5278", fontFamily: "inherit", cursor: "pointer" }}>
                           <option value="">👥 Org View</option>
@@ -2244,133 +2905,155 @@ Return ONLY valid JSON, no markdown, no extra text:
                       </div>
                     </div>
 
-                    {/* KPI row */}
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: 12 }}>
-                      {[
-                        { label: "MTD Revenue",   value: fmt(totalRevMTD),                                   color: "#3B6FE8", sub: `vs ${fmt(REVENUE_BUDGET)} budget` },
-                        { label: "MTD Gross Profit", value: fmt(totalGpMTD),                                 color: "#4ADE80", sub: totalRevMTD > 0 ? Math.round((totalGpMTD/totalRevMTD)*100) + "% margin" : "—" },
-                        { label: "Open Jobs",     value: openJobs.length,                                    color: "#FCD34D", sub: "Estimating → Do Work" },
-                        { label: "Ready to Bill", value: billJobs.length,                                    color: "#F97316", sub: "Awaiting invoice" },
-                        { label: "Total Jobs",    value: fmJobs.length,                                      color: "#818CF8", sub: "All time" },
-                      ].map(s => (
-                        <div key={s.label} className="stat-card" style={{ position: "relative", overflow: "hidden", padding: "14px 16px" }}>
-                          <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, background: s.color }} />
-                          <div style={{ fontSize: 9, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>{s.label}</div>
-                          <div style={{ fontSize: 22, fontWeight: 800, color: s.color }}>{s.value}</div>
-                          <div style={{ fontSize: 10, color: "#4A5278", marginTop: 3 }}>{s.sub}</div>
-                        </div>
-                      ))}
+                    {/* ── TOP ROW: KPIs left + GP by Quarter right ── */}
+                    <div style={{ display: "grid", gridTemplateColumns: "280px 1fr", gap: 16 }}>
+
+                      {/* KPI stack */}
+                      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                        {[
+                          { label: "FM Revenue",         value: "$" + Math.round(ytdRev).toLocaleString(),          sub: "ACTUAL YTD",         accent: "#4ADE80",  bg: "#4ADE8012" },
+                          { label: "FM Profit",          value: "$" + Math.round(ytdGP).toLocaleString(),           sub: "ACTUAL YTD",         accent: "#3B6FE8",  bg: "#3B6FE812" },
+                          { label: "FM Pipeline Potential", value: "$" + Math.round(pipelineVal).toLocaleString(),  sub: "CURRENT POTENTIAL",  accent: "#60A5FA",  bg: "#60A5FA12" },
+                          { label: "FM Average Margin",  value: ytdMargin + "%",                                   sub: "ACTUAL YTD",         accent: "#FCD34D",  bg: "#FCD34D12" },
+                        ].map(s => (
+                          <div key={s.label} style={{ background: s.bg, border: "1px solid " + s.accent + "30", borderRadius: 8, padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                            <div style={{ fontSize: 10, color: s.accent, textTransform: "uppercase", letterSpacing: "0.07em", fontWeight: 700, background: s.accent+"20", padding: "2px 8px", borderRadius: 4 }}>{s.label}</div>
+                            <div style={{ textAlign: "right" }}>
+                              <div style={{ fontSize: 20, fontWeight: 800, color: "#1A2240" }}>{s.value}</div>
+                              <div style={{ fontSize: 9, color: "#4A5278", letterSpacing: "0.08em" }}>{s.sub}</div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* GP per Quarter horizontal bars */}
+                      <div className="stat-card" style={{ padding: 20 }}>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 16 }}>2026 FM Gross Profit per QTR</div>
+                        <QBarChart data={quarters} />
+                      </div>
                     </div>
 
-                    {/* Charts row */}
+                    {/* ── CHARTS ROW 1: FM Opportunities YOY (count by month) ── */}
+                    <div className="stat-card" style={{ padding: 20 }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 8 }}>FM Opportunities YOY</div>
+                      <LineChart
+                        labels={MONTHS}
+                        series={[
+                          { label: "Last Year",  color: "#3B6FE8", data: months12.map(m => m.lastRev > 0 ? Math.round(m.lastRev/500) : 0) },
+                          { label: "This Year",  color: "#F87171", isCurrent: true, data: months12.map(m => m.thisCount) },
+                        ]}
+                        height={110}
+                        yFmt={v => v}
+                      />
+                      <div style={{ display: "flex", gap: 16, marginTop: 4, fontSize: 10, color: "#4A5278" }}>
+                        <span><span style={{ display: "inline-block", width: 16, height: 2, background: "#3B6FE8", marginRight: 4, verticalAlign: "middle" }}></span>Total FM Opportunities Last Year</span>
+                        <span><span style={{ display: "inline-block", width: 16, height: 2, background: "#F87171", marginRight: 4, verticalAlign: "middle" }}></span>Total FM Opportunities This Year</span>
+                      </div>
+                    </div>
+
+                    {/* ── CHARTS ROW 2: Revenue per month ── */}
+                    <div className="stat-card" style={{ padding: 20 }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 8 }}>FM Revenue per Month</div>
+                      <LineChart
+                        labels={MONTHS}
+                        series={[
+                          { label: "2024", color: "#BCC6D8", data: months12.map(m => m.lastRev) },
+                          { label: "2026", color: "#F87171", isCurrent: true, data: months12.map(m => m.thisRev) },
+                        ]}
+                        height={120}
+                      />
+                      <div style={{ display: "flex", gap: 16, marginTop: 4, fontSize: 10, color: "#4A5278" }}>
+                        <span><span style={{ display: "inline-block", width: 16, height: 2, background: "#BCC6D8", marginRight: 4, verticalAlign: "middle" }}></span>FM Revenue 2025</span>
+                        <span><span style={{ display: "inline-block", width: 16, height: 2, background: "#F87171", marginRight: 4, verticalAlign: "middle" }}></span>FM Revenue 2026</span>
+                      </div>
+                    </div>
+
+                    {/* ── CHARTS ROW 3: GP per month ── */}
+                    <div className="stat-card" style={{ padding: 20 }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 8 }}>FM Gross Profit per Month</div>
+                      <LineChart
+                        labels={MONTHS}
+                        series={[
+                          { label: "2025", color: "#3B6FE8", data: months12.map(m => m.lastGP) },
+                          { label: "2026", color: "#F87171", isCurrent: true, data: months12.map(m => m.thisGP) },
+                        ]}
+                        height={120}
+                      />
+                      <div style={{ display: "flex", gap: 16, marginTop: 4, fontSize: 10, color: "#4A5278" }}>
+                        <span><span style={{ display: "inline-block", width: 16, height: 2, background: "#3B6FE8", marginRight: 4, verticalAlign: "middle" }}></span>FM GP 2025</span>
+                        <span><span style={{ display: "inline-block", width: 16, height: 2, background: "#F87171", marginRight: 4, verticalAlign: "middle" }}></span>FM GP 2026</span>
+                      </div>
+                    </div>
+
+                    {/* ── PROJECTION CARDS ── */}
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-                      <div className="stat-card" style={{ padding: 20 }}>
-                        <BarChart data={monthlyRevenue} valueKey="revenue" budgetKey={REVENUE_BUDGET} color="#3B6FE8" label="Revenue per Month vs Budget" />
-                        <div style={{ display: "flex", gap: 16, marginTop: 10, fontSize: 10, color: "#4A5278" }}>
-                          <span><span style={{ display: "inline-block", width: 10, height: 10, background: "#3B6FE8", borderRadius: 2, marginRight: 4 }}></span>Actual</span>
-                          <span><span style={{ display: "inline-block", width: 10, height: 4, borderTop: "2px dashed #FCD34D", marginRight: 4, verticalAlign: "middle" }}></span>Budget ${(REVENUE_BUDGET/1000).toFixed(0)}k/mo</span>
-                          <span><span style={{ display: "inline-block", width: 10, height: 10, background: "#4ADE80", borderRadius: 2, marginRight: 4 }}></span>At/over budget</span>
-                        </div>
-                      </div>
-                      <div className="stat-card" style={{ padding: 20 }}>
-                        <BarChart data={monthlyRevenue} valueKey="gp" budgetKey={GP_BUDGET} color="#60A5FA" label="Gross Profit per Month vs Budget" />
-                        <div style={{ display: "flex", gap: 16, marginTop: 10, fontSize: 10, color: "#4A5278" }}>
-                          <span><span style={{ display: "inline-block", width: 10, height: 10, background: "#60A5FA", borderRadius: 2, marginRight: 4 }}></span>Actual GP</span>
-                          <span><span style={{ display: "inline-block", width: 10, height: 4, borderTop: "2px dashed #FCD34D", marginRight: 4, verticalAlign: "middle" }}></span>Budget ${(GP_BUDGET/1000).toFixed(0)}k/mo</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* PM Personal View — shows when a PM is selected */}
-                    {selectedPM && myJobs && (
-                      <div style={{ background: "#F5F7FC", borderRadius: 12, padding: 20, border: "2px solid #3B6FE840" }}>
-                        <div style={{ fontSize: 14, fontWeight: 700, color: "#1A2240", marginBottom: 16 }}>👤 {selectedPM}'s Jobs</div>
-                        <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 10, marginBottom: 16 }}>
+                      <div className="stat-card" style={{ padding: 16 }}>
+                        <div style={{ fontSize: 10, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 10, fontWeight: 600 }}>This Month Projection ({MONTHS[curMonth]})</div>
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
                           {[
-                            { label: "Total Jobs",   value: myJobs.length,                                                                         color: "#3B6FE8" },
-                            { label: "Open",         value: myJobs.filter(j => !["bill"].includes(j.stage)).length,                                color: "#FCD34D" },
-                            { label: "Revenue",      value: fmt(myJobs.reduce((s,j) => s + (j.contractValue||0), 0)),                              color: "#818CF8" },
-                            { label: "Gross Profit", value: fmt(myJobs.reduce((s,j) => s + (j.grossProfit||0), 0)),                               color: "#4ADE80" },
+                            { label: "Actual Rev", value: "$" + Math.round(curMthRev).toLocaleString(), color: "#3B6FE8" },
+                            { label: "Projected Rev", value: "$" + projRev.toLocaleString(), color: "#60A5FA" },
+                            { label: "Actual GP", value: "$" + Math.round(curMthGP).toLocaleString(), color: "#4ADE80" },
+                            { label: "Projected GP", value: "$" + projGP.toLocaleString(), color: "#86EFAC" },
                           ].map(s => (
-                            <div key={s.label} style={{ background: "#fff", borderRadius: 8, padding: "12px 14px", border: "1px solid #D4D9EE" }}>
+                            <div key={s.label} style={{ background: "#F5F7FC", borderRadius: 6, padding: "10px 12px" }}>
                               <div style={{ fontSize: 9, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 4 }}>{s.label}</div>
-                              <div style={{ fontSize: 18, fontWeight: 700, color: s.color }}>{s.value}</div>
+                              <div style={{ fontSize: 18, fontWeight: 800, color: s.color }}>{s.value}</div>
                             </div>
                           ))}
                         </div>
-                        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                          {myJobs.slice(0,8).map(j => {
-                            const site = sites.find(s => s.id === j.siteId);
-                            const co = companies.find(c => c.id === j.companyId);
-                            const stg = FM_STAGES.find(s => s.id === j.stage);
-                            return (
-                              <div key={j.id} style={{ background: "#fff", borderRadius: 6, padding: "10px 14px", display: "flex", alignItems: "center", gap: 12, border: "1px solid #E8EBF4", cursor: "pointer" }}
-                                onClick={() => setSelectedFmJob(j)}>
-                                <span style={{ fontSize: 11, fontWeight: 700, color: stg?.color || "#4A5278", background: (stg?.color||"#4A5278") + "15", padding: "2px 8px", borderRadius: 4, minWidth: 80, textAlign: "center" }}>{stg?.label || j.stage}</span>
-                                <div style={{ flex: 1 }}>
-                                  <div style={{ fontSize: 12, fontWeight: 600, color: "#1A2240" }}>{j.name}</div>
-                                  <div style={{ fontSize: 10, color: "#4A5278" }}>{co?.name}{site ? " · #" + site.storeNumber : ""}</div>
-                                </div>
-                                <div style={{ fontSize: 12, fontWeight: 700, color: "#4ADE80" }}>{fmt(j.contractValue)}</div>
-                              </div>
-                            );
-                          })}
-                          {myJobs.length > 8 && <div style={{ fontSize: 11, color: "#3B6FE8", textAlign: "center", cursor: "pointer" }} onClick={() => setActiveNav("jobs")}>+ {myJobs.length - 8} more → View All Jobs</div>}
-                        </div>
                       </div>
-                    )}
-
-                    {/* PM breakdown table — org view */}
-                    {!selectedPM && pmStats.length > 0 && (
-                      <div className="stat-card" style={{ padding: 20 }}>
-                        <div style={{ fontSize: 11, fontWeight: 700, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 14 }}>Project Manager Breakdown</div>
-                        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                      <div className="stat-card" style={{ padding: 16 }}>
+                        <div style={{ fontSize: 10, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 10, fontWeight: 600 }}>PM Breakdown</div>
+                        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
                           <thead>
-                            <tr style={{ borderBottom: "2px solid #EEF0F8" }}>
-                              {["PM","Total Jobs","Open","Revenue","Gross Profit","GP %"].map(h => (
-                                <th key={h} style={{ textAlign: "left", padding: "6px 10px", fontSize: 10, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em" }}>{h}</th>
-                              ))}
+                            <tr style={{ borderBottom: "1px solid #EEF0F8" }}>
+                              {["PM","Jobs","Rev","GP","GP%"].map(h => <th key={h} style={{ textAlign:"left", padding:"4px 8px", fontSize:9, color:"#4A5278", textTransform:"uppercase", letterSpacing:"0.07em" }}>{h}</th>)}
                             </tr>
                           </thead>
                           <tbody>
-                            {pmStats.map((p, i) => (
-                              <tr key={p.pm} style={{ borderBottom: "1px solid #F0F2F8", cursor: "pointer", background: i % 2 === 0 ? "#fff" : "#FAFBFD" }}
-                                onClick={() => setSelectedPM(p.pm)}>
-                                <td style={{ padding: "8px 10px", fontWeight: 600, color: "#1A2240" }}>{p.pm}</td>
-                                <td style={{ padding: "8px 10px", color: "#4A5278" }}>{p.total}</td>
-                                <td style={{ padding: "8px 10px" }}><span style={{ background: "#FCD34D20", color: "#78600A", borderRadius: 4, padding: "2px 8px", fontSize: 11 }}>{p.open}</span></td>
-                                <td style={{ padding: "8px 10px", fontWeight: 600, color: "#1A2240" }}>{fmt(p.revenue)}</td>
-                                <td style={{ padding: "8px 10px", fontWeight: 600, color: "#4ADE80" }}>{fmt(p.gp)}</td>
-                                <td style={{ padding: "8px 10px", color: "#818CF8" }}>{p.revenue > 0 ? Math.round((p.gp/p.revenue)*100) + "%" : "—"}</td>
-                              </tr>
-                            ))}
+                            {pms.map(pm => {
+                              const j = fmJobs.filter(x => x.pm === pm);
+                              const r = j.reduce((s,x)=>s+(x.contractValue||0),0);
+                              const g = j.reduce((s,x)=>s+(x.grossProfit||0),0);
+                              return (
+                                <tr key={pm} style={{ borderBottom: "1px solid #F5F7FC", cursor:"pointer" }} onClick={() => setSelectedPM(pm === selectedPM ? null : pm)}>
+                                  <td style={{ padding:"6px 8px", fontWeight:600, color:"#1A2240" }}>{pm.split(" ")[0]}</td>
+                                  <td style={{ padding:"6px 8px", color:"#4A5278" }}>{j.length}</td>
+                                  <td style={{ padding:"6px 8px", color:"#1A2240" }}>${(r/1000).toFixed(0)}k</td>
+                                  <td style={{ padding:"6px 8px", color:"#4ADE80", fontWeight:600 }}>${(g/1000).toFixed(0)}k</td>
+                                  <td style={{ padding:"6px 8px", color:"#818CF8" }}>{r>0?Math.round((g/r)*100):0}%</td>
+                                </tr>
+                              );
+                            })}
                           </tbody>
                         </table>
                       </div>
-                    )}
+                    </div>
 
-                    {/* Punch list */}
+                    {/* ── PUNCH LIST ── */}
                     <div>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-                        <div style={{ fontSize: 11, fontWeight: 700, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em" }}>Today's Punch List</div>
-                        <div style={{ fontSize: 11, color: "#4A5278" }}>{new Date().toLocaleDateString("en-US", { month: "short", day: "numeric" })}</div>
+                      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
+                        <div style={{ fontSize:11, fontWeight:700, color:"#4A5278", textTransform:"uppercase", letterSpacing:"0.07em" }}>Today's Punch List</div>
+                        <div style={{ fontSize:11, color:"#4A5278" }}>{new Date().toLocaleDateString("en-US",{month:"short",day:"numeric"})}</div>
                       </div>
-                      <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
-                        {dynamicPunchList.filter(p => p.bu === "facility").map(item => (
+                      <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+                        {dynamicPunchList.filter(p => p.bu==="facility").map(item => (
                           <div key={item.id} className="punch-item">
-                            <div className="priority-dot" style={{ background: item.priority === "high" ? "#F87171" : "#FCD34D" }} />
-                            <span style={{ fontSize: 13, color: "#252E52", flex: 1 }}>{item.text}</span>
-                            {item.dueDate && <span style={{ fontSize: 10, color: "#4A5278" }}>{item.dueDate}</span>}
+                            <div className="priority-dot" style={{ background: item.priority==="high"?"#F87171":"#FCD34D" }} />
+                            <span style={{ fontSize:13, color:"#252E52", flex:1 }}>{item.text}</span>
+                            {item.dueDate && <span style={{ fontSize:10, color:"#4A5278" }}>{item.dueDate}</span>}
                           </div>
                         ))}
-                        {dynamicPunchList.filter(p => p.bu === "facility").length === 0 && (
-                          <div style={{ textAlign: "center", padding: "20px", color: "#3D4570", fontSize: 12, background: "#F5F7FC", borderRadius: 8 }}>No FM reminders in the next 7 days.</div>
+                        {dynamicPunchList.filter(p => p.bu==="facility").length === 0 && (
+                          <div style={{ textAlign:"center", padding:"16px", color:"#3D4570", fontSize:12, background:"#F5F7FC", borderRadius:8 }}>No FM reminders in the next 7 days.</div>
                         )}
                       </div>
                     </div>
                   </div>
                 );
               })()}
+
 
               {/* ══ ALL OTHER BU DASHBOARDS ══ */}
               {activeBU !== "facility" && (<>
@@ -4078,170 +4761,229 @@ Return ONLY valid JSON, no markdown, no extra text:
           )}
 
           {/* ── COORDINATOR DAILY REPORT ── */}
+          {/* ── PM PERSONAL DASHBOARD ── */}
           {activeNav === "team" && selectedCoord && (() => {
-            const today      = new Date();
-            const myJobs     = fmJobs.filter(j => j.pm === selectedCoord || j.coordinator === selectedCoord);
-            const totalGross  = myJobs.reduce((s,j) => s + (j.contractValue||0), 0);
-            const totalProfit = myJobs.reduce((s,j) => s + (j.grossProfit||0), 0);
+            const now = new Date();
+            const curYear = now.getFullYear();
+            const curMonth = now.getMonth();
+            const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+            const myJobs = fmJobs.filter(j => j.pm === selectedCoord || j.coordinator === selectedCoord);
 
-            // Priority score: lower = more urgent. Based on days in stage (age) and date proximity
-            const getPriority = (job) => {
-              const st = FM_STAGES.find(s => s.id === job.stage);
-              if (!st) return 999;
-              const actionDate = job[st.actionKey];
-              if (actionDate) {
-                const daysUntil = (new Date(actionDate) - today) / 86400000;
-                if (daysUntil < 0)  return 0;   // overdue
-                if (daysUntil < 3)  return 1;   // due very soon
-                if (daysUntil < 7)  return 2;   // due this week
-                return 3;
-              }
-              return 4; // no date set
+            // Monthly GP data
+            const gpByMonth = Array.from({length:12}, (_,i) => {
+              const k = curYear + "-" + String(i+1).padStart(2,"0");
+              const jobs = myJobs.filter(j => (j.startDate||"").startsWith(k));
+              return { label: MONTHS[i], gp: jobs.reduce((s,j)=>s+(j.grossProfit||0),0), rev: jobs.reduce((s,j)=>s+(j.contractValue||0),0), count: jobs.length };
+            });
+
+            // Projections
+            const curKey = curYear + "-" + String(curMonth+1).padStart(2,"0");
+            const curMth = myJobs.filter(j => (j.startDate||"").startsWith(curKey));
+            const curMthRev = curMth.reduce((s,j)=>s+(j.contractValue||0),0);
+            const curMthGP  = curMth.reduce((s,j)=>s+(j.grossProfit||0),0);
+            const daysInMonth = new Date(curYear, curMonth+1, 0).getDate();
+            const dayOfMonth  = now.getDate();
+            const projRev = dayOfMonth > 0 ? Math.round(curMthRev/dayOfMonth*daysInMonth) : 0;
+            const projGP  = dayOfMonth > 0 ? Math.round(curMthGP/dayOfMonth*daysInMonth)  : 0;
+
+            // Quarter projection
+            const curQ = Math.floor(curMonth/3);
+            const qMonths = [0,1,2].map(i => curQ*3+i);
+            const qJobs = myJobs.filter(j => {
+              const m = parseInt((j.startDate||"").slice(5,7)) - 1;
+              return qMonths.includes(m);
+            });
+            const qRev = qJobs.reduce((s,j)=>s+(j.contractValue||0),0);
+            const qGP  = qJobs.reduce((s,j)=>s+(j.grossProfit||0),0);
+
+            // Priority jobs — overdue or due within 3 days
+            const today = new Date(); today.setHours(0,0,0,0);
+            const urgent = myJobs.filter(j => {
+              const st = FM_STAGES.find(s => s.id === j.stage);
+              if (!st?.actionKey) return false;
+              const d = j[st.actionKey];
+              return d && new Date(d) <= new Date(today.getTime() + 3*86400000);
+            }).sort((a,b) => {
+              const stA = FM_STAGES.find(s=>s.id===a.stage);
+              const stB = FM_STAGES.find(s=>s.id===b.stage);
+              return new Date(a[stA?.actionKey]||"9999") - new Date(b[stB?.actionKey]||"9999");
+            });
+
+            // Stage groupings for collapsible sections
+            const stageGroups = [
+              { key: "estimating",    label: "Estimating",       color: "#818CF8", jobs: myJobs.filter(j=>j.stage==="estimating") },
+              { key: "waiting_quote", label: "Waiting on Quote", color: "#60A5FA", jobs: myJobs.filter(j=>j.stage==="waiting_quote") },
+              { key: "buyout",        label: "Buyout",           color: "#FCD34D", jobs: myJobs.filter(j=>j.stage==="buyout") },
+              { key: "do_work",       label: "Do Work",          color: "#4ADE80", jobs: myJobs.filter(j=>j.stage==="do_work") },
+              { key: "bill",          label: "Ready to Bill",    color: "#F97316", jobs: myJobs.filter(j=>j.stage==="bill") },
+            ].filter(g => g.jobs.length > 0);
+
+            // Collapsible state — store which sections are open
+            const toggleSection = (key) => {
+              setOpenSections(prev => {
+                const n = new Set(prev);
+                n.has(key) ? n.delete(key) : n.add(key);
+                return n;
+              });
             };
 
-            const getUrgencyLabel = (job) => {
-              const st = FM_STAGES.find(s => s.id === job.stage);
-              if (!st) return null;
-              const d = job[st.actionKey];
-              if (!d) return null;
-              const days = Math.round((new Date(d) - today) / 86400000);
-              if (days < 0)  return { text: `${Math.abs(days)}d overdue`, color: "#F87171", bg: "#F8717115" };
-              if (days === 0) return { text: "Due today",               color: "#F87171", bg: "#F8717115" };
-              if (days <= 3)  return { text: `Due in ${days}d`,          color: "#FCD34D", bg: "#FCD34D15" };
-              if (days <= 7)  return { text: `Due in ${days}d`,          color: "#60A5FA", bg: "#60A5FA15" };
-              return null;
-            };
+            // Mini GP bar chart
+            const maxGP = Math.max(...gpByMonth.map(m=>m.gp), 1);
+            const barW = 32, gap = 8;
 
-            const JobRow = ({ job }) => {
-              const st      = FM_STAGES.find(s => s.id === job.stage);
-              const urgency = getUrgencyLabel(job);
-              const site    = sites.find(s => s.id === job.siteId);
-              const sub     = subcontractors.find(s => s.id === job.subcontractorId);
-              const actionDate = st ? job[st.actionKey] : null;
-              return (
-                <div style={{ background: "#F8F9FD", border: "1px solid #CBD1E8", borderRadius: 8, padding: "14px 16px", display: "flex", flexDirection: "column", gap: 8, cursor: "pointer", transition: "border-color 0.15s" }}
-                  onClick={() => setSelectedFmJob(job)}
-                  onMouseEnter={e => e.currentTarget.style.borderColor = buColor.accent + "60"}
-                  onMouseLeave={e => e.currentTarget.style.borderColor = "#CBD1E8"}>
-                  <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10 }}>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 4 }}>
-                        <span style={{ fontSize: 13, color: "#1A2240", fontWeight: 600 }}>{job.name}</span>
-                        {job.storeCode  && <span style={{ fontSize: 10, color: "#4A5278", background: "#E8EBFA", padding: "2px 7px", borderRadius: 4 }}>#{job.storeCode}</span>}
-                        {job.projectNo  && <span style={{ fontSize: 10, color: "#4A5278", background: "#E8EBFA", padding: "2px 7px", borderRadius: 4 }}>{job.projectNo}</span>}
-                        {urgency && <span style={{ fontSize: 10, fontWeight: 700, color: urgency.color, background: urgency.bg, padding: "2px 8px", borderRadius: 4 }}>{urgency.text}</span>}
-                      </div>
-                      <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
-                        {site && <span style={{ fontSize: 11, color: "#4A5278" }}>📍 {site.address}</span>}
-                        {sub  && <span style={{ fontSize: 11, color: "#353C62" }}>🔧 {sub.name}</span>}
-                      </div>
-                    </div>
-                    <div style={{ textAlign: "right", flexShrink: 0 }}>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: "#1A2240" }}>{fmt(job.contractValue)}</div>
-                      <div style={{ fontSize: 11, color: "#4ADE80" }}>{fmt(job.grossProfit)} GP</div>
-                    </div>
-                  </div>
-                  {/* Key dates row */}
-                  <div style={{ display: "flex", gap: 10, flexWrap: "wrap", paddingTop: 8, borderTop: "1px solid #1A2035" }}>
-                    {st && actionDate && (
-                      <span style={{ fontSize: 11, color: urgency ? urgency.color : "#353C62" }}>
-                        📅 {st.actionLabel}: <strong>{actionDate}</strong>
-                      </span>
-                    )}
-                    {job.startDate && <span style={{ fontSize: 11, color: "#353C62" }}>▶ Start: {job.startDate}</span>}
-                    {job.vendorNextStep && <span style={{ fontSize: 11, color: "#252E52" }}>↪ Vendor: {VENDOR_NEXT_STEPS.find(v => v.id === job.vendorNextStep)?.label || job.vendorNextStep}</span>}
-                    {job.ownersProjectNo && <span style={{ fontSize: 11, color: "#4A5278" }}>WO: {job.ownersProjectNo}</span>}
-                  </div>
-                  {job.notes && (
-                    <div style={{ fontSize: 11, color: "#353C62", fontStyle: "italic", paddingTop: 4, borderTop: "1px solid #1A2035" }}>
-                      {job.notes}
-                    </div>
-                  )}
-                </div>
-              );
-            };
+            const initials = (fmTeam.find(m=>m.name===selectedCoord)?.initials) || selectedCoord.split(" ").map(w=>w[0]).join("").toUpperCase();
 
             return (
-              <div className="fade-in" style={{ display: "flex", flexDirection: "column", gap: 22 }}>
+              <div className="fade-in" style={{ display:"flex", flexDirection:"column", gap:20 }}>
                 {/* Header */}
-                <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-                  <button className="btn-ghost" style={{ fontSize: 12 }} onClick={() => setSelectedCoord(null)}>← Back</button>
-                  <div style={{ width: 48, height: 48, borderRadius: "50%", background: buColor.light, border: "2px solid " + buColor.accent + "60", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, fontWeight: 700, color: buColor.accent, flexShrink: 0 }}>
-                    {selectedCoord.charAt(0).toUpperCase()}
-                  </div>
-                  <div>
-                    <div style={{ fontSize: 22, fontWeight: 700, color: "#1A2240", letterSpacing: "-0.01em" }}>{selectedCoord}</div>
-                    <div style={{ fontSize: 11, color: "#4A5278", marginTop: 2, letterSpacing: "0.06em" }}>
-                      {new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" }).toUpperCase()} · DAILY REPORT
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                  <div style={{ display:"flex", alignItems:"center", gap:14 }}>
+                    <div style={{ width:52, height:52, borderRadius:"50%", background:"#3B6FE820", border:"2px solid #3B6FE840", display:"flex", alignItems:"center", justifyContent:"center", fontSize:20, fontWeight:800, color:"#3B6FE8" }}>{initials}</div>
+                    <div>
+                      <div style={{ fontSize:22, fontWeight:800, color:"#1A2240" }}>{selectedCoord}</div>
+                      <div style={{ fontSize:11, color:"#4A5278", marginTop:2 }}>{fmTeam.find(m=>m.name===selectedCoord)?.role || "Project Coordinator"} · {myJobs.length} Total Jobs</div>
                     </div>
                   </div>
+                  <button className="btn-ghost" onClick={() => setSelectedCoord(null)} style={{ padding:"8px 16px" }}>← Back to Team</button>
                 </div>
 
-                {/* Summary KPIs */}
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 10 }}>
+                {/* KPI row */}
+                <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:12 }}>
                   {[
-                    { label: "Total Jobs",    value: myJobs.length,                                                                             color: buColor.accent },
-                    { label: "Active Jobs",   value: myJobs.filter(j => FM_ACTIVE_STAGES.some(s => s.id === j.stage)).length,                   color: "#4ADE80" },
-                    { label: "In Pipeline",   value: myJobs.filter(j => FM_PIPELINE_STAGES.some(s => s.id === j.stage)).length,                 color: "#818CF8" },
-                    { label: "Urgent",        value: myJobs.filter(j => getPriority(j) <= 1).length,                                            color: "#F87171" },
-                  ].map(k => (
-                    <div key={k.label} style={{ background: "#ECEEF8", border: "1px solid " + k.color + "25", borderRadius: 8, padding: "12px 16px", position: "relative", overflow: "hidden" }}>
-                      <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: k.color }} />
-                      <div style={{ fontSize: 10, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 4 }}>{k.label}</div>
-                      <div style={{ fontSize: 22, fontWeight: 700, color: k.color }}>{k.value}</div>
+                    { label:"Total Revenue", value:"$"+Math.round(myJobs.reduce((s,j)=>s+(j.contractValue||0),0)).toLocaleString(), color:"#3B6FE8" },
+                    { label:"Total GP",      value:"$"+Math.round(myJobs.reduce((s,j)=>s+(j.grossProfit||0),0)).toLocaleString(), color:"#4ADE80" },
+                    { label:"Active Jobs",   value:myJobs.filter(j=>["buyout","do_work","bill"].includes(j.stage)).length, color:"#FCD34D" },
+                    { label:"Ready to Bill", value:myJobs.filter(j=>j.stage==="bill").length, color:"#F97316" },
+                  ].map(s => (
+                    <div key={s.label} className="stat-card" style={{ padding:"14px 16px", position:"relative", overflow:"hidden" }}>
+                      <div style={{ position:"absolute", top:0, left:0, right:0, height:3, background:s.color }} />
+                      <div style={{ fontSize:9, color:"#4A5278", textTransform:"uppercase", letterSpacing:"0.08em", marginBottom:6 }}>{s.label}</div>
+                      <div style={{ fontSize:22, fontWeight:800, color:s.color }}>{s.value}</div>
                     </div>
                   ))}
                 </div>
 
-                {/* Financial summary */}
-                <div style={{ background: "#ECEEF8", border: "1px solid #CBD1E8", borderRadius: 8, padding: "14px 20px", display: "flex", gap: 32 }}>
-                  <div>
-                    <div style={{ fontSize: 10, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 4 }}>Total Gross Value</div>
-                    <div style={{ fontSize: 20, fontWeight: 700, color: "#1A2240" }}>{fmt(totalGross)}</div>
+                {/* Charts + Projections */}
+                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:16 }}>
+                  {/* GP per month bar chart */}
+                  <div className="stat-card" style={{ padding:20 }}>
+                    <div style={{ fontSize:11, fontWeight:700, color:"#4A5278", textTransform:"uppercase", letterSpacing:"0.07em", marginBottom:12 }}>GP per Month</div>
+                    <svg viewBox={`0 0 ${gpByMonth.length*(barW+gap)} 100`} style={{ width:"100%", height:120, overflow:"visible" }}>
+                      {gpByMonth.map((m, i) => {
+                        const h = Math.round((m.gp/maxGP)*80);
+                        const x = i*(barW+gap);
+                        return (
+                          <g key={i}>
+                            <rect x={x} y={80-h} width={barW} height={h} fill={i===curMonth?"#4ADE80":"#3B6FE8"} rx={3} opacity={0.85} />
+                            {m.gp>0 && <text x={x+barW/2} y={80-h-4} textAnchor="middle" fontSize={8} fill="#4A5278">${(m.gp/1000).toFixed(0)}k</text>}
+                            <text x={x+barW/2} y={96} textAnchor="middle" fontSize={8} fill="#9BA3BF">{m.label.slice(0,1)}</text>
+                          </g>
+                        );
+                      })}
+                    </svg>
+                    <div style={{ fontSize:9, color:"#4A5278", marginTop:6 }}>
+                      <span style={{ background:"#4ADE8030", color:"#4ADE80", padding:"1px 6px", borderRadius:3, marginRight:8 }}>■ Current month</span>
+                      <span style={{ background:"#3B6FE820", color:"#3B6FE8", padding:"1px 6px", borderRadius:3 }}>■ Other months</span>
+                    </div>
                   </div>
-                  <div>
-                    <div style={{ fontSize: 10, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 4 }}>Total Gross Profit</div>
-                    <div style={{ fontSize: 20, fontWeight: 700, color: "#4ADE80" }}>{fmt(totalProfit)}</div>
-                  </div>
-                  <div>
-                    <div style={{ fontSize: 10, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 4 }}>GP Margin</div>
-                    <div style={{ fontSize: 20, fontWeight: 700, color: totalGross ? (totalProfit/totalGross > 0.2 ? "#4ADE80" : "#FCD34D") : "#4A5278" }}>
-                      {totalGross ? Math.round((totalProfit/totalGross)*100) + "%" : "—"}
+
+                  {/* Projections */}
+                  <div className="stat-card" style={{ padding:20 }}>
+                    <div style={{ fontSize:11, fontWeight:700, color:"#4A5278", textTransform:"uppercase", letterSpacing:"0.07em", marginBottom:12 }}>Projections</div>
+                    <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+                      <div style={{ fontSize:10, color:"#4A5278", fontWeight:600, textTransform:"uppercase", letterSpacing:"0.06em", paddingBottom:6, borderBottom:"1px solid #EEF0F8" }}>This Month ({MONTHS[curMonth]})</div>
+                      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
+                        {[
+                          { label:"Actual Rev", value:"$"+Math.round(curMthRev).toLocaleString(), color:"#3B6FE8" },
+                          { label:"Projected Rev", value:"$"+projRev.toLocaleString(), color:"#60A5FA" },
+                          { label:"Actual GP", value:"$"+Math.round(curMthGP).toLocaleString(), color:"#4ADE80" },
+                          { label:"Projected GP", value:"$"+projGP.toLocaleString(), color:"#86EFAC" },
+                        ].map(s => (
+                          <div key={s.label} style={{ background:"#F5F7FC", borderRadius:6, padding:"8px 10px" }}>
+                            <div style={{ fontSize:9, color:"#4A5278", textTransform:"uppercase", letterSpacing:"0.07em" }}>{s.label}</div>
+                            <div style={{ fontSize:16, fontWeight:800, color:s.color, marginTop:2 }}>{s.value}</div>
+                          </div>
+                        ))}
+                      </div>
+                      <div style={{ fontSize:10, color:"#4A5278", fontWeight:600, textTransform:"uppercase", letterSpacing:"0.06em", paddingTop:6, borderTop:"1px solid #EEF0F8" }}>This Quarter (Q{Math.floor(curMonth/3)+1})</div>
+                      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
+                        {[
+                          { label:"QTR Revenue", value:"$"+(qRev/1000).toFixed(1)+"k", color:"#3B6FE8" },
+                          { label:"QTR GP",      value:"$"+(qGP/1000).toFixed(1)+"k",  color:"#4ADE80" },
+                        ].map(s => (
+                          <div key={s.label} style={{ background:"#F5F7FC", borderRadius:6, padding:"8px 10px" }}>
+                            <div style={{ fontSize:9, color:"#4A5278", textTransform:"uppercase", letterSpacing:"0.07em" }}>{s.label}</div>
+                            <div style={{ fontSize:16, fontWeight:800, color:s.color, marginTop:2 }}>{s.value}</div>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   </div>
                 </div>
 
-                {myJobs.length === 0 && (
-                  <div style={{ textAlign: "center", padding: "48px", color: "#3D4570", fontSize: 12, background: "#ECEEF8", borderRadius: 10, border: "1px solid #CBD1E8" }}>
-                    No jobs assigned to {selectedCoord} yet
+                {/* Priority list */}
+                {urgent.length > 0 && (
+                  <div className="stat-card" style={{ padding:16, border:"2px solid #F8717130" }}>
+                    <div style={{ fontSize:11, fontWeight:700, color:"#F87171", textTransform:"uppercase", letterSpacing:"0.07em", marginBottom:10 }}>⚠ Priority List — Due within 3 days</div>
+                    <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+                      {urgent.map(j => {
+                        const st = FM_STAGES.find(s=>s.id===j.stage);
+                        const d = j[st?.actionKey||""];
+                        const daysLeft = d ? Math.ceil((new Date(d)-today)/86400000) : null;
+                        const co = companies.find(c=>c.id===j.companyId);
+                        return (
+                          <div key={j.id} style={{ display:"flex", alignItems:"center", gap:10, padding:"8px 10px", background: daysLeft < 0 ? "#F8717108" : "#FCD34D08", borderRadius:6, border:"1px solid "+(daysLeft<0?"#F8717130":"#FCD34D30"), cursor:"pointer" }} onClick={() => setSelectedFmJob(j)}>
+                            <span style={{ fontSize:10, fontWeight:700, color:daysLeft<0?"#F87171":"#FCD34D", minWidth:60 }}>{daysLeft<0?"OVERDUE":daysLeft===0?"TODAY":"in "+daysLeft+"d"}</span>
+                            <span style={{ fontSize:11, fontWeight:600, color:"#1A2240", flex:1, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{j.name}</span>
+                            <span style={{ fontSize:10, color:"#4A5278" }}>{j.storeCode}</span>
+                            <span style={{ fontSize:9, background:(st?.color||"#4A5278")+"20", color:st?.color||"#4A5278", padding:"2px 6px", borderRadius:3 }}>{st?.label||j.stage}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 )}
 
-                {/* Jobs grouped by stage in FM_STAGES order, sorted by priority within each group */}
-                {FM_STAGES.map(st => {
-                  const stageJobs = myJobs
-                    .filter(j => j.stage === st.id)
-                    .sort((a, b) => getPriority(a) - getPriority(b));
-                  if (!stageJobs.length) return null;
-                  const phaseLabel = st.phase === "pipeline" ? "PIPELINE" : "ACTIVE";
-                  return (
-                    <div key={st.id}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
-                        <div style={{ width: 10, height: 10, borderRadius: "50%", background: st.color, flexShrink: 0 }} />
-                        <span style={{ fontSize: 12, letterSpacing: "0.07em", textTransform: "uppercase", color: st.color, fontWeight: 700 }}>{st.label}</span>
-                        <span style={{ fontSize: 10, color: "#3D4570", background: "#E8EBFA", padding: "1px 7px", borderRadius: 4 }}>{phaseLabel}</span>
-                        <span style={{ fontSize: 10, color: "#4A5278" }}>{stageJobs.length} job{stageJobs.length !== 1 ? "s" : ""}</span>
-                        <span style={{ fontSize: 10, color: "#4A5278" }}>· {fmt(stageJobs.reduce((s,j) => s+(j.contractValue||0),0))}</span>
+                {/* Collapsible job sections */}
+                <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+                  {stageGroups.map(g => (
+                    <div key={g.key} style={{ border:"1px solid #E8EBF4", borderRadius:10, overflow:"hidden" }}>
+                      {/* Section header — click to collapse */}
+                      <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"12px 16px", background:"#F8F9FD", cursor:"pointer", userSelect:"none" }}
+                        onClick={() => toggleSection(g.key)}>
+                        <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+                          <span style={{ width:10, height:10, borderRadius:2, background:g.color, display:"inline-block" }}></span>
+                          <span style={{ fontSize:12, fontWeight:700, color:"#1A2240" }}>{g.label}</span>
+                          <span style={{ fontSize:11, color:"#4A5278" }}>({g.jobs.length} jobs · ${g.jobs.reduce((s,j)=>s+(j.contractValue||0),0).toLocaleString()})</span>
+                        </div>
+                        <span style={{ fontSize:12, color:"#4A5278", transform: openSections.has(g.key)?"rotate(0deg)":"rotate(-90deg)", transition:"transform 0.2s" }}>▼</span>
                       </div>
-                      <div style={{ display: "flex", flexDirection: "column", gap: 8, paddingLeft: 4 }}>
-                        {stageJobs.map(j => <JobRow key={j.id} job={j} />)}
-                      </div>
+                      {/* Job rows */}
+                      {openSections.has(g.key) && (
+                        <div style={{ display:"flex", flexDirection:"column" }}>
+                          {g.jobs.map((j, ji) => {
+                            const co = companies.find(c=>c.id===j.companyId);
+                            return (
+                              <div key={j.id} style={{ display:"flex", alignItems:"center", gap:12, padding:"10px 16px", borderTop:"1px solid #F0F2F8", background: ji%2===0?"#fff":"#FAFBFD", cursor:"pointer" }}
+                                onClick={() => setSelectedFmJob(j)}>
+                                <span style={{ fontSize:11, fontWeight:600, color:"#4A5278", minWidth:70 }}>{j.storeCode || j.projectNo}</span>
+                                <span style={{ fontSize:12, color:"#1A2240", flex:1, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{j.name}</span>
+                                <span style={{ fontSize:11, color:"#4A5278" }}>{co?.name?.split(" ")[0]}</span>
+                                <span style={{ fontSize:11, fontWeight:700, color:"#3B6FE8" }}>${(j.contractValue||0).toLocaleString()}</span>
+                                <span style={{ fontSize:11, fontWeight:700, color:"#4ADE80" }}>${(j.grossProfit||0).toLocaleString()}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
-                  );
-                })}
+                  ))}
+                </div>
+
               </div>
             );
           })()}
+
 
           {/* ── SUBCONTRACTORS (master list — FM, Lawn, Snow) ── */}
           {activeNav === "subcontractors" && ["facility","lawn","snow"].includes(activeBU) && (() => {
