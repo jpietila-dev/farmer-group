@@ -50,8 +50,13 @@ const lsSiteToDB = s => siteToDB(s);
 
 const dbToSub = r => ({ id: r.id, name: r.name||"", trade: r.trade||"", phone: r.phone||"", email: r.email||"", msaStatus: r.msa_status||"missing", coiExpiry: r.coi_expiry||"", w9: r.w9||false, notes: r.notes||"", services: r.services||[] });
 const subToDB = s => ({ id: s.id, name: s.name||"", trade: s.trade||"", phone: s.phone||"", email: s.email||"", msa_status: s.msaStatus||"missing", coi_expiry: s.coiExpiry||null, w9: s.w9||false, notes: s.notes||"", services: s.services||[] });
-const dbToTeamMember = r => ({ id: r.id, name: r.name||"", role: r.role||"", phone: r.phone||"", email: r.email||"", division: r.division||"facility", initials: r.initials||"" });
-const teamMemberToDB = m => ({ id: m.id, name: m.name||"", role: m.role||"", phone: m.phone||"", email: m.email||"", division: m.division||"facility", initials: m.initials||"" });
+const dbToTeamMember = r => ({ id: r.id, name: r.name||"", role: r.role||"", phone: r.phone||"", email: r.email||"",
+  // Support both old string "facility" and new array ["facility","major"] formats
+  divisions: Array.isArray(r.divisions) ? r.divisions : (r.division ? [r.division] : ["facility"]),
+  division: r.division||"facility", initials: r.initials||"" });
+const teamMemberToDB = m => ({ id: m.id, name: m.name||"", role: m.role||"", phone: m.phone||"", email: m.email||"",
+  divisions: m.divisions||[m.division||"facility"],
+  division: (m.divisions||[m.division||"facility"])[0]||"facility", initials: m.initials||"" });
 
 // CRM Contact helpers
 const dbToCrmContact = r => ({
@@ -4896,22 +4901,34 @@ Return ONLY valid JSON, no markdown, no extra text:
           )}
 
           {/* ── TEAM ── */}
-          {activeNav === "team" && !selectedCoord && (
+          {activeNav === "team" && !selectedCoord && (() => {
+            // Filter team by division — ALL shows everyone, other BUs filter to matching division
+            const BU_TO_DIV = { facility:"facility", major:"major", capital:"capital", lawn:"lawn", snow:"snow" };
+            const curDiv = BU_TO_DIV[activeBU];
+            const visibleTeam = curDiv
+              ? fmTeam.filter(m => (m.divisions||[m.division||"facility"]).includes(curDiv))
+              : fmTeam; // ALL page = everyone
+
+            return (
             <div className="fade-in" style={{ display: "flex", flexDirection: "column", gap: 22 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div>
                   <div style={{ fontSize: 22, fontWeight: 700, color: "#1A2240", letterSpacing: "-0.01em", textTransform: "uppercase" }}>Team</div>
-                  <div style={{ fontSize: 11, color: "#4A5278", marginTop: 3, letterSpacing: "0.06em" }}>FM TEAM · {fmTeam.length} MEMBERS · CLICK TO VIEW PERSONAL DASHBOARD</div>
+                  <div style={{ fontSize: 11, color: "#4A5278", marginTop: 3, letterSpacing: "0.06em" }}>
+                    {activeBU === "all" ? "ALL DIVISIONS" : activeBU.toUpperCase()} TEAM · {visibleTeam.length} MEMBERS · CLICK TO VIEW PERSONAL DASHBOARD
+                  </div>
                 </div>
                 <button className="btn-primary" onClick={() => { setEditTeamId(null); setTeamForm({ name: "", role: "", phone: "", email: "" }); setShowTeamForm(true); }}>+ Add Member</button>
               </div>
 
-              {fmTeam.length === 0 && (
-                <div style={{ textAlign: "center", padding: "48px", color: "#3D4570", fontSize: 12, background: "#ECEEF8", borderRadius: 10, border: "1px solid #CBD1E8" }}>No team members yet — add your first one</div>
+              {visibleTeam.length === 0 && (
+                <div style={{ textAlign: "center", padding: "48px", color: "#3D4570", fontSize: 12, background: "#ECEEF8", borderRadius: 10, border: "1px solid #CBD1E8" }}>
+                  {activeBU === "all" ? "No team members yet — add your first one" : `No team members assigned to ${activeBU === "facility" ? "FM" : activeBU} yet`}
+                </div>
               )}
 
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: 14 }}>
-                {fmTeam.map(m => {
+                {visibleTeam.map(m => {
                   // Match jobs by pm field (primary) or coordinator field
                   const myJobs   = fmJobs.filter(j => j.pm === m.name || j.coordinator === m.name);
                   const active   = myJobs.filter(j => ["buyout","do_work","bill"].includes(j.stage));
@@ -4984,9 +5001,9 @@ Return ONLY valid JSON, no markdown, no extra text:
                 })}
               </div>
             </div>
-          )}
+            );
+          })()}
 
-          {/* ── COORDINATOR DAILY REPORT ── */}
           {/* ── PM PERSONAL DASHBOARD ── */}
           {activeNav === "team" && selectedCoord && (() => {
             const now = new Date();
@@ -8623,6 +8640,33 @@ Return ONLY valid JSON, no markdown, no extra text:
                   <input className="fi" style={{ width: "100%", boxSizing: "border-box" }} value={teamForm[key]||""} onChange={e => setTeamForm({ ...teamForm, [key]: e.target.value })} placeholder={key === "role" ? "e.g. Project Manager, Coordinator" : ""} />
                 </div>
               ))}
+              {/* Divisions multi-select */}
+              <div>
+                <div style={{ fontSize: 10, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 8 }}>Divisions <span style={{ color: "#9BA3BF", fontWeight: 400, textTransform: "none" }}>— select all that apply</span></div>
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                  {[
+                    { id: "facility", label: "FM" },
+                    { id: "major",    label: "Major Projects" },
+                    { id: "capital",  label: "CapEx" },
+                    { id: "lawn",     label: "Lawn" },
+                    { id: "snow",     label: "Snow" },
+                  ].map(d => {
+                    const divs = teamForm.divisions || [teamForm.division || "facility"];
+                    const on = divs.includes(d.id);
+                    return (
+                      <button key={d.id} type="button"
+                        style={{ padding: "5px 12px", borderRadius: 20, border: "1px solid " + (on ? buColor.accent : "#CBD1E8"), background: on ? buColor.accent : "transparent", color: on ? "#fff" : "#4A5278", fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}
+                        onClick={() => {
+                          const cur = teamForm.divisions || [teamForm.division || "facility"];
+                          const next = on ? cur.filter(x => x !== d.id) : [...cur, d.id];
+                          setTeamForm({ ...teamForm, divisions: next.length ? next : [d.id] });
+                        }}>
+                        {d.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
             <div style={{ display: "flex", gap: 8, marginTop: 20 }}>
               <button className="btn-ghost" style={{ flex: 1 }} onClick={() => setShowTeamForm(false)}>Cancel</button>
@@ -8633,7 +8677,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                   setFmTeam(fmTeam.map(m => m.id === editTeamId ? updated : m));
                   try { supa.from("fm_team").update(teamMemberToDB(updated)).eq("id", editTeamId); } catch(e) {}
                 } else {
-                  const newM = { id: "tm" + Date.now(), division: "facility", initials: teamForm.name.split(" ").map(w=>w[0]).join("").toUpperCase().slice(0,2), ...teamForm };
+                  const newM = { id: "tm" + Date.now(), division: (teamForm.divisions||["facility"])[0]||"facility", divisions: teamForm.divisions||["facility"], initials: teamForm.name.split(" ").map(w=>w[0]).join("").toUpperCase().slice(0,2), ...teamForm };
                   setFmTeam([...fmTeam, newM]);
                   try { supa.from("fm_team").insert(teamMemberToDB(newM)); } catch(e) {}
                 }
@@ -9168,3 +9212,5 @@ Return ONLY valid JSON, no markdown, no extra text:
     </div>
   );
 }
+
+          
