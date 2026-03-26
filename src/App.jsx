@@ -168,8 +168,9 @@ const BUSINESS_UNITS = [
 const NAV_ITEMS = {
   all: [
     { id: "dashboard", label: "Dashboard", icon: "⊞" },
+    { id: "team",      label: "Team",      icon: "👥" },
     { id: "customers", label: "Customers", icon: "🏢" },
-    { id: "finance", label: "Finance", icon: "💰" },
+    { id: "finance",   label: "Finance",   icon: "💰" },
   ],
   major: [
     { id: "dashboard", label: "Dashboard", icon: "⊞" },
@@ -4918,7 +4919,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                     {activeBU === "all" ? "ALL DIVISIONS" : activeBU.toUpperCase()} TEAM · {visibleTeam.length} MEMBERS · CLICK TO VIEW PERSONAL DASHBOARD
                   </div>
                 </div>
-                <button className="btn-primary" onClick={() => { setEditTeamId(null); setTeamForm({ name: "", role: "", phone: "", email: "" }); setShowTeamForm(true); }}>+ Add Member</button>
+                <button className="btn-primary" onClick={() => { setEditTeamId(null); setTeamForm({ name: "", role: "", phone: "", email: "", divisions: curDiv ? [curDiv] : [] }); setShowTeamForm(true); }}>+ Add Member</button>
               </div>
 
               {visibleTeam.length === 0 && (
@@ -4992,7 +4993,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                           {m.phone && <span style={{ fontSize: 10, color: "#4A5278" }}>📞 {m.phone}</span>}
                           {m.email && <span style={{ fontSize: 10, color: "#4A5278", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>✉ {m.email}</span>}
                           <div style={{ flex: 1 }} onClick={e => e.stopPropagation()}>
-                            <button className="btn-ghost" style={{ fontSize: 10, padding: "2px 8px", float: "right" }} onClick={() => { setEditTeamId(m.id); setTeamForm({ name: m.name, role: m.role||"", phone: m.phone, email: m.email }); setShowTeamForm(true); }}>✎ Edit</button>
+                            <button className="btn-ghost" style={{ fontSize: 10, padding: "2px 8px", float: "right" }} onClick={() => { setEditTeamId(m.id); setTeamForm({ name: m.name, role: m.role||"", phone: m.phone, email: m.email, divisions: m.divisions||[m.division||"facility"] }); setShowTeamForm(true); }}>✎ Edit</button>
                           </div>
                         </div>
                       </div>
@@ -9212,5 +9213,3 @@ Return ONLY valid JSON, no markdown, no extra text:
     </div>
   );
 }
-
-          
