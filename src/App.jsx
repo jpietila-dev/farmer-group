@@ -2210,188 +2210,168 @@ Return ONLY valid JSON, no markdown, no extra text:
                CRM MODULE — renders when crmMode === true
           ══════════════════════════════════════════ */}
           {crmMode && (() => {
-
-            // ── CRM constants ──
             const CRM_STATUSES = [
-              { id: "prospect",   label: "Prospect",   color: "#818CF8" },
-              { id: "contacted",  label: "Contacted",  color: "#60A5FA" },
-              { id: "meeting",    label: "Meeting",    color: "#FCD34D" },
-              { id: "active",     label: "Active",     color: "#4ADE80" },
-              { id: "at_risk",    label: "At Risk",    color: "#F97316" },
-              { id: "dormant",    label: "Dormant",    color: "#9BA3BF" },
+              { id: "active",    label: "Active Customer", color: "#4ADE80" },
+              { id: "prospect",  label: "Prospect",        color: "#818CF8" },
+              { id: "contacted", label: "Contacted",       color: "#60A5FA" },
+              { id: "meeting",   label: "Meeting",         color: "#FCD34D" },
+              { id: "at_risk",   label: "At Risk",         color: "#F97316" },
+              { id: "dormant",   label: "Dormant",         color: "#9BA3BF" },
             ];
             const CRM_DIVS = ["FM","CapEx","MP","Lawn","Snow"];
-            const CRM_SOURCES = ["Referral","Cold Outreach","Existing Relationship","Bid Portal","Trade Show","Other"];
-            const CRM_CONTRACT = ["MSA","Time & Material","One-off","Retainer"];
-            const US_STATES = ["AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA","HI","ID","IL","IN","IA","KS","KY","LA","ME","MD","MA","MI","MN","MS","MO","MT","NE","NV","NH","NJ","NM","NY","NC","ND","OH","OK","OR","PA","RI","SC","SD","TN","TX","UT","VT","VA","WA","WV","WI","WY"];
 
-            // ── Save / update contact ──
+            // ── Derive status live from job data ──
+            const activeCoIds = new Set([
+              ...fmJobs.map(j=>j.companyId),
+            ].filter(Boolean));
+            const getStatus = (c) => {
+              if (c.companyId && activeCoIds.has(c.companyId)) return "active";
+              return c.status && c.status !== "active" ? c.status : "prospect";
+            };
+
+            // ── Enrich contacts with live status ──
+            const enriched = crmContacts.map(c => ({ ...c, liveStatus: getStatus(c) }));
+
+            // ── Filtered list ──
+            const filtered = enriched.filter(c => {
+              const divMatch = crmDivFilter === "all" || (c.divisions||[]).includes(crmDivFilter);
+              const q = crmSearchQ.toLowerCase();
+              const textMatch = !q ||
+                (c.firstName||"").toLowerCase().includes(q) ||
+                (c.lastName||"").toLowerCase().includes(q) ||
+                (c.company||"").toLowerCase().includes(q) ||
+                (c.phone||"").includes(q) ||
+                (c.email||"").toLowerCase().includes(q);
+              return divMatch && textMatch;
+            });
+
+            // Split: active customers vs prospects/others
+            const activeContacts  = filtered.filter(c => c.liveStatus === "active");
+            const otherContacts   = filtered.filter(c => c.liveStatus !== "active");
+
+            // ── Save contact ──
             const saveCrmContact = () => {
               if (!crmFormData.firstName && !crmFormData.lastName) return;
               if (editCrmId) {
-                const updated = { ...crmContacts.find(c => c.id === editCrmId), ...crmFormData };
-                setCrmContacts(prev => prev.map(c => c.id === editCrmId ? updated : c));
+                const updated = { ...crmContacts.find(c=>c.id===editCrmId), ...crmFormData };
+                setCrmContacts(prev => prev.map(c => c.id===editCrmId ? updated : c));
                 try { supa.from("crm_contacts").update(crmContactToDB(updated)).eq("id", editCrmId); } catch(e) {}
               } else {
-                const newC = { id: "crm_" + Date.now(), createdAt: new Date().toISOString(), activityLog: [], ...crmFormData };
+                const newC = { id:"crm_"+Date.now(), createdAt:new Date().toISOString(), activityLog:[], ...crmFormData };
                 setCrmContacts(prev => [...prev, newC]);
                 try { supa.from("crm_contacts").insert(crmContactToDB(newC)); } catch(e) {}
               }
               setShowCrmForm(false); setEditCrmId(null); setCrmFormData({});
             };
 
-            // ── Add activity log entry ──
-            const addActivity = (contactId, type, note) => {
+            // ── Add activity ──
+            const addActivity = (contactId, note) => {
               if (!note.trim()) return;
-              const entry = { id: "act_" + Date.now(), date: new Date().toISOString(), type, note, by: "Owner" };
+              const entry = { id:"act_"+Date.now(), date:new Date().toISOString(), note, by:"Owner" };
               setCrmContacts(prev => prev.map(c => {
                 if (c.id !== contactId) return c;
-                const updated = { ...c, activityLog: [entry, ...(c.activityLog||[])], lastContactDate: new Date().toISOString().slice(0,10) };
-                try { supa.from("crm_contacts").update(crmContactToDB(updated)).eq("id", contactId); } catch(e) {}
+                const updated = { ...c, activityLog:[entry,...(c.activityLog||[])], lastContactDate:new Date().toISOString().slice(0,10) };
+                try { supa.from("crm_contacts").update(crmContactToDB(updated)).eq("id",contactId); } catch(e) {}
                 return updated;
               }));
               if (selectedCrmContact?.id === contactId) {
-                setSelectedCrmContact(prev => ({ ...prev, activityLog: [entry, ...(prev.activityLog||[])], lastContactDate: new Date().toISOString().slice(0,10) }));
+                setSelectedCrmContact(prev => ({...prev, activityLog:[entry,...(prev.activityLog||[])], lastContactDate:new Date().toISOString().slice(0,10)}));
               }
               setNewActivity("");
             };
 
-            // ── Filtered contacts ──
-            const filtered = crmContacts.filter(c => {
-              const divMatch = crmDivFilter === "all" || (c.divisions||[]).includes(crmDivFilter);
-              const q = crmSearchQ.toLowerCase();
-              const textMatch = !q || (c.firstName||"").toLowerCase().includes(q) || (c.lastName||"").toLowerCase().includes(q) || (c.company||"").toLowerCase().includes(q) || (c.title||"").toLowerCase().includes(q) || (c.territory||"").toLowerCase().includes(q);
-              return divMatch && textMatch;
-            });
+            const stColor = id => CRM_STATUSES.find(s=>s.id===id)?.color || "#9BA3BF";
+            const stLabel = id => CRM_STATUSES.find(s=>s.id===id)?.label || id;
 
-            // ── Dashboard stats ──
-            const totalActive    = crmContacts.filter(c => c.status === "active").length;
-            const totalProspects = crmContacts.filter(c => c.status === "prospect").length;
-            const followUpsToday = crmContacts.filter(c => c.nextFollowUp && c.nextFollowUp <= new Date().toISOString().slice(0,10)).length;
-            const totalAnnualEst = crmContacts.reduce((s,c) => s + (c.annualSpendEst||0), 0);
-
-            // ── Status color helper ──
-            const stColor = (id) => CRM_STATUSES.find(s => s.id === id)?.color || "#9BA3BF";
-
-            // ── DETAIL VIEW ──
+            // ── CONTACT DETAIL ──
             if (selectedCrmContact) {
-              const c = selectedCrmContact;
-              const st = CRM_STATUSES.find(s => s.id === c.status);
+              const c = { ...selectedCrmContact, liveStatus: getStatus(selectedCrmContact) };
+              const stc = stColor(c.liveStatus);
               return (
-                <div className="fade-in" style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-                  {/* Header */}
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <button className="btn-ghost" onClick={() => setSelectedCrmContact(null)} style={{ padding: "8px 14px" }}>← Back to CRM</button>
-                    <div style={{ display: "flex", gap: 8 }}>
-                      <button className="btn-ghost" onClick={() => { setEditCrmId(c.id); setCrmFormData({...c}); setShowCrmForm(true); }}>✎ Edit</button>
-                      <button className="btn-ghost" style={{ color: "#F87171", borderColor: "#F8717120" }} onClick={() => {
-                        if (!window.confirm("Delete this contact?")) return;
-                        setCrmContacts(prev => prev.filter(x => x.id !== c.id));
-                        try { supa.from("crm_contacts").delete().eq("id", c.id); } catch(e) {}
+                <div className="fade-in" style={{display:"flex",flexDirection:"column",gap:20}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                    <button className="btn-ghost" onClick={()=>setSelectedCrmContact(null)} style={{padding:"8px 14px"}}>← Back to CRM</button>
+                    <div style={{display:"flex",gap:8}}>
+                      <button className="btn-ghost" onClick={()=>{setEditCrmId(c.id);setCrmFormData({...c});setShowCrmForm(true);}}>✎ Edit</button>
+                      <button className="btn-ghost" style={{color:"#F87171",borderColor:"#F8717120"}} onClick={()=>{
+                        if(!window.confirm("Delete?"))return;
+                        setCrmContacts(prev=>prev.filter(x=>x.id!==c.id));
+                        try{supa.from("crm_contacts").delete().eq("id",c.id);}catch(e){}
                         setSelectedCrmContact(null);
                       }}>✕ Delete</button>
                     </div>
                   </div>
-
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 340px", gap: 20, alignItems: "start" }}>
-                    {/* LEFT: Contact info */}
-                    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-                      {/* Identity card */}
-                      <div className="stat-card" style={{ padding: 24 }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 18 }}>
-                          <div style={{ width: 60, height: 60, borderRadius: "50%", background: (st?.color||"#3B6FE8") + "20", border: "2px solid " + (st?.color||"#3B6FE8") + "50", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22, fontWeight: 800, color: st?.color||"#3B6FE8", flexShrink: 0 }}>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 340px",gap:20,alignItems:"start"}}>
+                    <div style={{display:"flex",flexDirection:"column",gap:16}}>
+                      <div className="stat-card" style={{padding:24}}>
+                        <div style={{display:"flex",alignItems:"center",gap:16,marginBottom:18}}>
+                          <div style={{width:56,height:56,borderRadius:"50%",background:stc+"20",border:"2px solid "+stc+"50",display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,fontWeight:800,color:stc,flexShrink:0}}>
                             {(c.firstName?.[0]||"")}{(c.lastName?.[0]||"")}
                           </div>
                           <div>
-                            <div style={{ fontSize: 22, fontWeight: 800, color: "#1A2240" }}>{c.firstName} {c.lastName}</div>
-                            <div style={{ fontSize: 13, color: "#4A5278", marginTop: 2 }}>{c.title}{c.company ? " · " + c.company : ""}</div>
-                            <div style={{ display: "flex", gap: 6, marginTop: 6, flexWrap: "wrap" }}>
-                              <span style={{ fontSize: 10, fontWeight: 700, background: (st?.color||"#9BA3BF")+"20", color: st?.color||"#9BA3BF", padding: "2px 8px", borderRadius: 4 }}>{st?.label||c.status}</span>
-                              {c.isDecisionMaker && <span style={{ fontSize: 10, fontWeight: 700, background: "#FCD34D20", color: "#78600A", padding: "2px 8px", borderRadius: 4 }}>⭐ Decision Maker</span>}
-                              {(c.divisions||[]).map(d => <span key={d} style={{ fontSize: 10, fontWeight: 700, background: "#3B6FE820", color: "#3B6FE8", padding: "2px 8px", borderRadius: 4 }}>{d}</span>)}
+                            <div style={{fontSize:22,fontWeight:800,color:"#1A2240"}}>{c.firstName} {c.lastName}</div>
+                            <div style={{fontSize:13,color:"#4A5278",marginTop:2}}>{c.title}{c.company?" · "+c.company:""}</div>
+                            <div style={{display:"flex",gap:6,marginTop:6,flexWrap:"wrap"}}>
+                              <span style={{fontSize:10,fontWeight:700,background:stc+"20",color:stc,padding:"2px 8px",borderRadius:4}}>{stLabel(c.liveStatus)}</span>
+                              {c.isDecisionMaker&&<span style={{fontSize:10,fontWeight:700,background:"#FCD34D20",color:"#78600A",padding:"2px 8px",borderRadius:4}}>⭐ Decision Maker</span>}
+                              {(c.divisions||[]).map(d=><span key={d} style={{fontSize:10,fontWeight:700,background:"#3B6FE820",color:"#3B6FE8",padding:"2px 8px",borderRadius:4}}>{d}</span>)}
                             </div>
                           </div>
                         </div>
-                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
                           {[
-                            { label: "Email",        value: c.email,    icon: "✉" },
-                            { label: "Phone",        value: c.phone,    icon: "📞" },
-                            { label: "Territory",    value: c.territory, icon: "📍" },
-                            { label: "States",       value: (c.states||[]).join(", "), icon: "🗺" },
-                            { label: "Contract Type",value: c.contractType, icon: "📋" },
-                            { label: "Source",       value: c.source,   icon: "🔗" },
-                            { label: "Rel. Owner",   value: c.relationshipOwner, icon: "👤" },
-                            { label: "Annual Spend", value: c.annualSpendEst > 0 ? "$" + c.annualSpendEst.toLocaleString() : "", icon: "💰" },
-                          ].filter(f => f.value).map(f => (
+                            {label:"Email",    value:c.email,    icon:"✉"},
+                            {label:"Phone",    value:c.phone,    icon:"📞"},
+                            {label:"Territory",value:c.territory,icon:"📍"},
+                            {label:"States",   value:(c.states||[]).join(", "),icon:"🗺"},
+                            {label:"Contract", value:c.contractType,icon:"📋"},
+                            {label:"Source",   value:c.source,   icon:"🔗"},
+                            {label:"Owner",    value:c.relationshipOwner,icon:"👤"},
+                            {label:"Est. Spend",value:c.annualSpendEst>0?"$"+c.annualSpendEst.toLocaleString():"",icon:"💰"},
+                          ].filter(f=>f.value).map(f=>(
                             <div key={f.label}>
-                              <div style={{ fontSize: 9, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 2 }}>{f.icon} {f.label}</div>
-                              <div style={{ fontSize: 12, color: "#1A2240", fontWeight: 500 }}>{f.value}</div>
+                              <div style={{fontSize:9,color:"#4A5278",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:2}}>{f.icon} {f.label}</div>
+                              <div style={{fontSize:12,color:"#1A2240",fontWeight:500}}>{f.value}</div>
                             </div>
                           ))}
                         </div>
-                        {c.notes && (
-                          <div style={{ marginTop: 14, paddingTop: 14, borderTop: "1px solid #EEF0F8" }}>
-                            <div style={{ fontSize: 9, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 4 }}>📝 Notes</div>
-                            <div style={{ fontSize: 12, color: "#252E52", lineHeight: 1.6 }}>{c.notes}</div>
-                          </div>
-                        )}
+                        {c.notes&&<div style={{marginTop:14,paddingTop:14,borderTop:"1px solid #EEF0F8"}}>
+                          <div style={{fontSize:9,color:"#4A5278",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:4}}>📝 Notes</div>
+                          <div style={{fontSize:12,color:"#252E52",lineHeight:1.6}}>{c.notes}</div>
+                        </div>}
                       </div>
-
-                      {/* Follow-up */}
-                      <div className="stat-card" style={{ padding: 16, display: "flex", gap: 16, alignItems: "center" }}>
-                        <div style={{ flex: 1 }}>
-                          <div style={{ fontSize: 9, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 3 }}>Last Contact</div>
-                          <div style={{ fontSize: 13, fontWeight: 600, color: "#1A2240" }}>{c.lastContactDate || "—"}</div>
+                      <div className="stat-card" style={{padding:14,display:"flex",gap:16,alignItems:"center"}}>
+                        <div style={{flex:1}}>
+                          <div style={{fontSize:9,color:"#4A5278",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:2}}>Last Contact</div>
+                          <div style={{fontSize:13,fontWeight:600,color:"#1A2240"}}>{c.lastContactDate||"—"}</div>
                         </div>
-                        <div style={{ flex: 1 }}>
-                          <div style={{ fontSize: 9, color: c.nextFollowUp && c.nextFollowUp <= new Date().toISOString().slice(0,10) ? "#F87171" : "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 3 }}>
-                            {c.nextFollowUp && c.nextFollowUp <= new Date().toISOString().slice(0,10) ? "⚠ FOLLOW-UP OVERDUE" : "Next Follow-up"}
+                        <div style={{flex:1}}>
+                          <div style={{fontSize:9,color:c.nextFollowUp&&c.nextFollowUp<=new Date().toISOString().slice(0,10)?"#F87171":"#4A5278",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:2}}>
+                            {c.nextFollowUp&&c.nextFollowUp<=new Date().toISOString().slice(0,10)?"⚠ OVERDUE":"Next Follow-up"}
                           </div>
-                          <div style={{ fontSize: 13, fontWeight: 600, color: c.nextFollowUp && c.nextFollowUp <= new Date().toISOString().slice(0,10) ? "#F87171" : "#1A2240" }}>{c.nextFollowUp || "—"}</div>
+                          <div style={{fontSize:13,fontWeight:600,color:c.nextFollowUp&&c.nextFollowUp<=new Date().toISOString().slice(0,10)?"#F87171":"#1A2240"}}>{c.nextFollowUp||"—"}</div>
                         </div>
-                        {c.linkedIn && (
-                          <a href={c.linkedIn} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: "#3B6FE8", textDecoration: "none", background: "#3B6FE810", border: "1px solid #3B6FE830", borderRadius: 6, padding: "6px 12px" }}>
-                            LinkedIn →
-                          </a>
-                        )}
+                        {c.linkedIn&&<a href={c.linkedIn} target="_blank" rel="noreferrer" style={{fontSize:11,color:"#3B6FE8",textDecoration:"none",background:"#3B6FE810",border:"1px solid #3B6FE830",borderRadius:6,padding:"6px 12px"}}>LinkedIn →</a>}
                       </div>
                     </div>
-
-                    {/* RIGHT: Activity log */}
-                    <div className="stat-card" style={{ padding: 16 }}>
-                      <div style={{ fontSize: 11, fontWeight: 700, color: "#1A2240", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 14 }}>Activity Log</div>
-
-                      {/* New activity input */}
-                      <div style={{ marginBottom: 14 }}>
-                        <div style={{ display: "flex", gap: 6, marginBottom: 6 }}>
-                          {["📞 Call","📧 Email","🤝 Meeting","📝 Note"].map(t => (
-                            <button key={t} className="btn-ghost" style={{ fontSize: 10, padding: "3px 8px" }}
-                              onClick={() => setNewActivity(t + " — ")}>
-                              {t.split(" ")[0]}
-                            </button>
-                          ))}
-                        </div>
-                        <textarea className="fi" rows={2} value={newActivity} onChange={e => setNewActivity(e.target.value)}
-                          placeholder="Log a call, email, meeting…"
-                          style={{ resize: "none", fontSize: 12 }} />
-                        <button className="btn-primary" style={{ width: "100%", marginTop: 6, fontSize: 11, padding: "7px" }}
-                          onClick={() => addActivity(c.id, "note", newActivity)}>
-                          + Add Entry
-                        </button>
+                    <div className="stat-card" style={{padding:16}}>
+                      <div style={{fontSize:11,fontWeight:700,color:"#1A2240",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:14}}>Activity Log</div>
+                      <div style={{display:"flex",gap:6,marginBottom:8,flexWrap:"wrap"}}>
+                        {["📞 Call","📧 Email","🤝 Meeting","📝 Note"].map(t=>(
+                          <button key={t} className="btn-ghost" style={{fontSize:10,padding:"3px 8px"}} onClick={()=>setNewActivity(t+" — ")}>{t}</button>
+                        ))}
                       </div>
-
-                      {/* Log entries */}
-                      <div style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 400, overflowY: "auto" }}>
-                        {(c.activityLog||[]).length === 0 && (
-                          <div style={{ fontSize: 11, color: "#4A5278", textAlign: "center", padding: "20px 0" }}>No activity yet</div>
-                        )}
-                        {(c.activityLog||[]).map((a, i) => (
-                          <div key={a.id||i} style={{ background: "#F8F9FD", borderRadius: 8, padding: "10px 12px" }}>
-                            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                              <span style={{ fontSize: 10, color: "#3B6FE8", fontWeight: 600 }}>{a.by || "Team"}</span>
-                              <span style={{ fontSize: 10, color: "#9BA3BF" }}>{a.date ? new Date(a.date).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"}) : ""}</span>
+                      <textarea className="fi" rows={2} value={newActivity} onChange={e=>setNewActivity(e.target.value)} placeholder="Log a call, email, meeting…" style={{resize:"none",fontSize:12}} />
+                      <button className="btn-primary" style={{width:"100%",marginTop:6,fontSize:11,padding:"7px"}} onClick={()=>addActivity(c.id, newActivity)}>+ Add Entry</button>
+                      <div style={{display:"flex",flexDirection:"column",gap:8,maxHeight:360,overflowY:"auto",marginTop:12}}>
+                        {(c.activityLog||[]).length===0&&<div style={{fontSize:11,color:"#4A5278",textAlign:"center",padding:"20px 0"}}>No activity yet</div>}
+                        {(c.activityLog||[]).map((a,i)=>(
+                          <div key={a.id||i} style={{background:"#F8F9FD",borderRadius:8,padding:"10px 12px"}}>
+                            <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
+                              <span style={{fontSize:10,color:"#3B6FE8",fontWeight:600}}>{a.by||"Team"}</span>
+                              <span style={{fontSize:10,color:"#9BA3BF"}}>{a.date?new Date(a.date).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"}):""}</span>
                             </div>
-                            <div style={{ fontSize: 12, color: "#252E52", lineHeight: 1.5 }}>{a.note}</div>
+                            <div style={{fontSize:12,color:"#252E52",lineHeight:1.5}}>{a.note}</div>
                           </div>
                         ))}
                       </div>
@@ -2401,211 +2381,95 @@ Return ONLY valid JSON, no markdown, no extra text:
               );
             }
 
-            // ── PIPELINE VIEW ──
-            if (crmView === "pipeline") {
-              return (
-                <div className="fade-in" style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <div>
-                      <div style={{ fontSize: 22, fontWeight: 800, color: "#1A2240" }}>CRM PIPELINE</div>
-                      <div style={{ fontSize: 11, color: "#4A5278", marginTop: 3 }}>{crmContacts.length} contacts · drag to change stage</div>
-                    </div>
-                    <div style={{ display: "flex", gap: 8 }}>
-                      <button className={crmView==="contacts"?"btn-ghost":"btn-primary"} style={{ fontSize: 11 }} onClick={() => setCrmView("contacts")}>👥 Contacts</button>
-                      <button className={crmView==="dashboard"?"btn-primary":"btn-ghost"} style={{ fontSize: 11 }} onClick={() => setCrmView("dashboard")}>📊 Dashboard</button>
-                    </div>
-                  </div>
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(6,1fr)", gap: 10, alignItems: "start" }}>
-                    {CRM_STATUSES.map(st => {
-                      const stContacts = crmContacts.filter(c => c.status === st.id);
-                      return (
-                        <div key={st.id} style={{ background: "#F8F9FD", borderRadius: 10, padding: 10, border: "1px solid #E8EBF4" }}>
-                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-                            <span style={{ fontSize: 10, fontWeight: 700, color: st.color, textTransform: "uppercase", letterSpacing: "0.07em" }}>{st.label}</span>
-                            <span style={{ fontSize: 11, color: "#9BA3BF", fontWeight: 600 }}>{stContacts.length}</span>
-                          </div>
-                          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                            {stContacts.map(c => (
-                              <div key={c.id} style={{ background: "#fff", borderRadius: 8, padding: "10px 12px", cursor: "pointer", border: "1px solid #E8EBF4", borderLeft: "3px solid " + st.color }}
-                                onClick={() => setSelectedCrmContact(c)}>
-                                <div style={{ fontSize: 12, fontWeight: 700, color: "#1A2240" }}>{c.firstName} {c.lastName}</div>
-                                <div style={{ fontSize: 10, color: "#4A5278", marginTop: 2 }}>{c.title}</div>
-                                <div style={{ fontSize: 10, color: "#3B6FE8", marginTop: 1 }}>{c.company}</div>
-                                {(c.divisions||[]).length > 0 && (
-                                  <div style={{ display: "flex", gap: 3, marginTop: 5, flexWrap: "wrap" }}>
-                                    {(c.divisions||[]).map(d => <span key={d} style={{ fontSize: 9, background: "#3B6FE815", color: "#3B6FE8", padding: "1px 5px", borderRadius: 3 }}>{d}</span>)}
-                                  </div>
-                                )}
-                                {c.nextFollowUp && (
-                                  <div style={{ fontSize: 9, marginTop: 5, color: c.nextFollowUp <= new Date().toISOString().slice(0,10) ? "#F87171" : "#4A5278" }}>
-                                    📅 {c.nextFollowUp}
-                                  </div>
-                                )}
-                              </div>
+            // ── MAIN LIST VIEW ──
+            const ContactTable = ({ contacts, title, accent }) => (
+              <div style={{marginBottom:24}}>
+                <div style={{fontSize:11,fontWeight:700,color:accent,textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:10,display:"flex",alignItems:"center",gap:8}}>
+                  <span style={{width:8,height:8,borderRadius:"50%",background:accent,display:"inline-block"}}></span>
+                  {title} <span style={{color:"#9BA3BF",fontWeight:400}}>({contacts.length})</span>
+                </div>
+                {contacts.length === 0
+                  ? <div style={{fontSize:12,color:"#4A5278",padding:"14px 0",textAlign:"center",background:"#F8F9FD",borderRadius:8,border:"1px dashed #CBD1E8"}}>None in this category</div>
+                  : <div style={{background:"#fff",border:"1px solid #E8EBF4",borderRadius:10,overflow:"hidden"}}>
+                      <table style={{width:"100%",borderCollapse:"collapse"}}>
+                        <thead>
+                          <tr style={{background:"#F8F9FD",borderBottom:"2px solid #E8EBF4"}}>
+                            {["Name","Company","Phone","Email","Divisions","Follow-up",""].map(h=>(
+                              <th key={h} style={{textAlign:"left",padding:"9px 14px",fontSize:9,color:"#4A5278",textTransform:"uppercase",letterSpacing:"0.07em",fontWeight:700,whiteSpace:"nowrap"}}>{h}</th>
                             ))}
-                            {stContacts.length === 0 && <div style={{ fontSize: 10, color: "#CBD1E8", textAlign: "center", padding: "12px 0" }}>Empty</div>}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              );
-            }
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {contacts.map((c,i)=>{
+                            const overdue = c.nextFollowUp && c.nextFollowUp <= new Date().toISOString().slice(0,10);
+                            return (
+                              <tr key={c.id} style={{borderBottom:"1px solid #F0F2F8",cursor:"pointer",background:i%2===0?"#fff":"#FAFBFD"}}
+                                onClick={()=>setSelectedCrmContact(c)}
+                                onMouseEnter={e=>e.currentTarget.style.background="#EEF3FF"}
+                                onMouseLeave={e=>e.currentTarget.style.background=i%2===0?"#fff":"#FAFBFD"}>
+                                <td style={{padding:"10px 14px",whiteSpace:"nowrap"}}>
+                                  <div style={{fontSize:13,fontWeight:600,color:"#1A2240"}}>{c.firstName} {c.lastName}</div>
+                                  {c.title&&<div style={{fontSize:10,color:"#4A5278",marginTop:1}}>{c.title}</div>}
+                                </td>
+                                <td style={{padding:"10px 14px",fontSize:12,color:"#4A5278",whiteSpace:"nowrap"}}>{c.company}</td>
+                                <td style={{padding:"10px 14px",fontSize:12,color:"#1A2240",whiteSpace:"nowrap"}}>{c.phone||<span style={{color:"#CBD1E8"}}>—</span>}</td>
+                                <td style={{padding:"10px 14px",fontSize:12,color:"#3B6FE8",whiteSpace:"nowrap"}}>{c.email||<span style={{color:"#CBD1E8"}}>—</span>}</td>
+                                <td style={{padding:"10px 14px"}}>
+                                  <div style={{display:"flex",gap:3,flexWrap:"wrap"}}>
+                                    {(c.divisions||[]).map(d=><span key={d} style={{fontSize:9,background:"#3B6FE815",color:"#3B6FE8",padding:"2px 6px",borderRadius:3,fontWeight:600}}>{d}</span>)}
+                                  </div>
+                                </td>
+                                <td style={{padding:"10px 14px",fontSize:11,whiteSpace:"nowrap",color:overdue?"#F87171":"#4A5278",fontWeight:overdue?700:400}}>
+                                  {c.nextFollowUp?(overdue?"⚠ ":"")+c.nextFollowUp:"—"}
+                                </td>
+                                <td style={{padding:"10px 14px"}} onClick={e=>e.stopPropagation()}>
+                                  <button className="btn-ghost" style={{fontSize:10,padding:"3px 8px"}} onClick={()=>{setEditCrmId(c.id);setCrmFormData({...c});setShowCrmForm(true);}}>✎</button>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                }
+              </div>
+            );
 
-            // ── DASHBOARD VIEW ──
-            if (crmView === "dashboard") {
-              const byDiv = {};
-              CRM_DIVS.forEach(d => { byDiv[d] = crmContacts.filter(c => (c.divisions||[]).includes(d)).length; });
-              const overdue = crmContacts.filter(c => c.nextFollowUp && c.nextFollowUp <= new Date().toISOString().slice(0,10));
-              return (
-                <div className="fade-in" style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <div style={{ fontSize: 22, fontWeight: 800, color: "#1A2240" }}>CRM DASHBOARD</div>
-                    <div style={{ display: "flex", gap: 8 }}>
-                      <button className="btn-ghost" style={{ fontSize: 11 }} onClick={() => setCrmView("contacts")}>👥 Contacts</button>
-                      <button className="btn-ghost" style={{ fontSize: 11 }} onClick={() => setCrmView("pipeline")}>⬦ Pipeline</button>
-                    </div>
-                  </div>
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 12 }}>
-                    {[
-                      { label: "Total Contacts",      value: crmContacts.length,    color: "#3B6FE8" },
-                      { label: "Active Customers",     value: totalActive,            color: "#4ADE80" },
-                      { label: "Follow-ups Due",       value: followUpsToday,         color: followUpsToday > 0 ? "#F87171" : "#FCD34D" },
-                      { label: "Est. Annual Spend",    value: "$" + (totalAnnualEst/1000).toFixed(0) + "k", color: "#818CF8" },
-                    ].map(s => (
-                      <div key={s.label} className="stat-card" style={{ padding: "16px 20px", position: "relative", overflow: "hidden" }}>
-                        <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, background: s.color }} />
-                        <div style={{ fontSize: 9, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>{s.label}</div>
-                        <div style={{ fontSize: 26, fontWeight: 800, color: s.color }}>{s.value}</div>
-                      </div>
-                    ))}
-                  </div>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-                    {/* By Division */}
-                    <div className="stat-card" style={{ padding: 20 }}>
-                      <div style={{ fontSize: 11, fontWeight: 700, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 14 }}>Contacts by Division</div>
-                      {CRM_DIVS.map(d => {
-                        const count = byDiv[d] || 0;
-                        const pct = crmContacts.length > 0 ? (count/crmContacts.length)*100 : 0;
-                        return (
-                          <div key={d} style={{ marginBottom: 10 }}>
-                            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-                              <span style={{ fontSize: 12, color: "#1A2240", fontWeight: 600 }}>{d}</span>
-                              <span style={{ fontSize: 12, color: "#4A5278" }}>{count}</span>
-                            </div>
-                            <div style={{ background: "#EEF0F8", borderRadius: 4, height: 6 }}>
-                              <div style={{ background: "#3B6FE8", borderRadius: 4, height: 6, width: pct + "%" }} />
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                    {/* Follow-ups due */}
-                    <div className="stat-card" style={{ padding: 20 }}>
-                      <div style={{ fontSize: 11, fontWeight: 700, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 14 }}>
-                        {overdue.length > 0 ? "⚠ Follow-ups Due" : "Upcoming Follow-ups"}
-                      </div>
-                      {overdue.length === 0 && <div style={{ fontSize: 12, color: "#4A5278", textAlign: "center", padding: "24px 0" }}>All caught up! 🎉</div>}
-                      {overdue.slice(0,6).map(c => (
-                        <div key={c.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: "1px solid #F0F2F8", cursor: "pointer" }}
-                          onClick={() => setSelectedCrmContact(c)}>
-                          <div>
-                            <div style={{ fontSize: 12, fontWeight: 600, color: "#1A2240" }}>{c.firstName} {c.lastName}</div>
-                            <div style={{ fontSize: 10, color: "#4A5278" }}>{c.company}</div>
-                          </div>
-                          <span style={{ fontSize: 10, color: "#F87171", fontWeight: 700 }}>{c.nextFollowUp}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                  {/* Status breakdown */}
-                  <div className="stat-card" style={{ padding: 20 }}>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 14 }}>Pipeline by Stage</div>
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(6,1fr)", gap: 10 }}>
-                      {CRM_STATUSES.map(st => {
-                        const count = crmContacts.filter(c => c.status === st.id).length;
-                        return (
-                          <div key={st.id} style={{ textAlign: "center", cursor: "pointer" }} onClick={() => setCrmView("pipeline")}>
-                            <div style={{ fontSize: 28, fontWeight: 800, color: st.color }}>{count}</div>
-                            <div style={{ fontSize: 10, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.06em", marginTop: 3 }}>{st.label}</div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </div>
-              );
-            }
-
-            // ── CONTACTS LIST VIEW (default) ──
             return (
-              <div className="fade-in" style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+              <div className="fade-in" style={{display:"flex",flexDirection:"column",gap:0}}>
                 {/* Header */}
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:18}}>
                   <div>
-                    <div style={{ fontSize: 22, fontWeight: 800, color: "#1A2240" }}>CRM</div>
-                    <div style={{ fontSize: 11, color: "#4A5278", marginTop: 3 }}>{filtered.length} contacts{crmDivFilter !== "all" ? " · " + crmDivFilter : ""}</div>
+                    <div style={{fontSize:22,fontWeight:800,color:"#1A2240"}}>CRM</div>
+                    <div style={{fontSize:11,color:"#4A5278",marginTop:3}}>{enriched.length} contacts · {activeContacts.length} active customers · {otherContacts.length} prospects</div>
                   </div>
-                  <div style={{ display: "flex", gap: 8 }}>
-                    <button className="btn-ghost" style={{ fontSize: 11 }} onClick={() => setCrmView("pipeline")}>⬦ Pipeline</button>
-                    <button className="btn-ghost" style={{ fontSize: 11 }} onClick={() => setCrmView("dashboard")}>📊 Dashboard</button>
-                    <button className="btn-primary" onClick={() => { setEditCrmId(null); setCrmFormData({ status: "prospect", divisions: [], states: [], isDecisionMaker: false }); setShowCrmForm(true); }}>+ Add Contact</button>
+                  <div style={{display:"flex",gap:8}}>
+                    <button className="btn-primary" onClick={()=>{setEditCrmId(null);setCrmFormData({status:"prospect",divisions:[],states:[],isDecisionMaker:false});setShowCrmForm(true);}}>+ Add Contact</button>
                   </div>
                 </div>
 
-                {/* Search + filters */}
-                <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-                  <input className="fi" style={{ width: 220 }} placeholder="Search name, company, territory…" value={crmSearchQ} onChange={e => setCrmSearchQ(e.target.value)} />
-                  <div style={{ display: "flex", gap: 5 }}>
-                    {["all",...CRM_DIVS].map(d => (
-                      <button key={d} onClick={() => setCrmDivFilter(d)}
-                        style={{ padding: "4px 11px", borderRadius: 20, border: "1px solid " + (crmDivFilter===d ? "#3B6FE8" : "#CBD1E8"), background: crmDivFilter===d ? "#3B6FE8" : "transparent", color: crmDivFilter===d ? "#fff" : "#4A5278", fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
-                        {d === "all" ? "All" : d}
+                {/* Search + Division filter */}
+                <div style={{display:"flex",gap:10,alignItems:"center",flexWrap:"wrap",marginBottom:18}}>
+                  <input className="fi" style={{width:220}} placeholder="Search name, company, phone…" value={crmSearchQ} onChange={e=>setCrmSearchQ(e.target.value)} />
+                  <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
+                    {["all",...CRM_DIVS].map(d=>(
+                      <button key={d} onClick={()=>setCrmDivFilter(d)}
+                        style={{padding:"4px 11px",borderRadius:20,border:"1px solid "+(crmDivFilter===d?"#3B6FE8":"#CBD1E8"),background:crmDivFilter===d?"#3B6FE8":"transparent",color:crmDivFilter===d?"#fff":"#4A5278",fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>
+                        {d==="all"?"All Divisions":d}
                       </button>
                     ))}
                   </div>
                 </div>
 
-                {/* Contacts grid */}
-                {filtered.length === 0 && (
-                  <div style={{ textAlign: "center", padding: "60px", color: "#4A5278", fontSize: 13, background: "#F8F9FD", borderRadius: 12, border: "1px dashed #CBD1E8" }}>
-                    No contacts yet — click <strong>+ Add Contact</strong> to start building your CRM
-                  </div>
-                )}
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 12 }}>
-                  {filtered.map(c => {
-                    const st = CRM_STATUSES.find(s => s.id === c.status);
-                    const overdue = c.nextFollowUp && c.nextFollowUp <= new Date().toISOString().slice(0,10);
-                    return (
-                      <div key={c.id} className="company-card" style={{ cursor: "pointer", padding: 16, position: "relative", overflow: "hidden" }}
-                        onClick={() => setSelectedCrmContact(c)}>
-                        <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, background: st?.color||"#9BA3BF" }} />
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
-                          <div>
-                            <div style={{ fontSize: 14, fontWeight: 700, color: "#1A2240" }}>{c.firstName} {c.lastName}</div>
-                            <div style={{ fontSize: 11, color: "#4A5278", marginTop: 1 }}>{c.title}</div>
-                            <div style={{ fontSize: 11, color: "#3B6FE8", marginTop: 1, fontWeight: 500 }}>{c.company}</div>
-                          </div>
-                          <span style={{ fontSize: 9, fontWeight: 700, background: (st?.color||"#9BA3BF")+"20", color: st?.color||"#9BA3BF", padding: "2px 7px", borderRadius: 10, flexShrink: 0 }}>{st?.label}</span>
-                        </div>
-                        {c.territory && <div style={{ fontSize: 10, color: "#4A5278", marginBottom: 6 }}>📍 {c.territory}</div>}
-                        {(c.states||[]).length > 0 && <div style={{ fontSize: 10, color: "#4A5278", marginBottom: 6 }}>🗺 {c.states.slice(0,5).join(", ")}{c.states.length > 5 ? " +" + (c.states.length-5) : ""}</div>}
-                        <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginBottom: 8 }}>
-                          {(c.divisions||[]).map(d => <span key={d} style={{ fontSize: 9, background: "#3B6FE815", color: "#3B6FE8", padding: "1px 6px", borderRadius: 3 }}>{d}</span>)}
-                          {c.isDecisionMaker && <span style={{ fontSize: 9, background: "#FCD34D20", color: "#78600A", padding: "1px 6px", borderRadius: 3 }}>⭐ DM</span>}
-                        </div>
-                        <div style={{ display: "flex", justifyContent: "space-between", paddingTop: 8, borderTop: "1px solid #EEF0F8", fontSize: 10 }}>
-                          <span style={{ color: "#4A5278" }}>{c.phone || c.email || ""}</span>
-                          {c.nextFollowUp && <span style={{ color: overdue ? "#F87171" : "#4A5278", fontWeight: overdue ? 700 : 400 }}>{overdue ? "⚠ " : "📅 "}{c.nextFollowUp}</span>}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
+                {/* Active Customers table */}
+                <ContactTable contacts={activeContacts} title="Active Customers" accent="#4ADE80" />
+
+                {/* Prospects table */}
+                <ContactTable contacts={otherContacts} title="Prospects & Targets" accent="#818CF8" />
               </div>
             );
           })()}
+
 
           {/* CRM CONTACT FORM MODAL */}
           {crmMode && showCrmForm && (() => {
