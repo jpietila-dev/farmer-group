@@ -2221,9 +2221,11 @@ Return ONLY valid JSON, no markdown, no extra text:
             ];
             const CRM_DIVS = ["FM","CapEx","MP","Lawn","Snow"];
 
-            // ── Derive status live from job data ──
+            // ── Derive status live from FM + CapEx + MP job data ──
             const activeCoIds = new Set([
               ...fmJobs.map(j=>j.companyId),
+              ...capexJobs.map(j=>j.companyId),
+              ...majorJobs.map(j=>j.companyId),
             ].filter(Boolean));
             const getStatus = (c) => {
               if (c.companyId && activeCoIds.has(c.companyId)) return "active";
