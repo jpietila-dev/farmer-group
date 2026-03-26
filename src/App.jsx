@@ -329,17 +329,58 @@ const INIT_CONTACTS = [
 ];
 
 const INIT_PIPELINE = [
-  { id: 1, name: "Riverside Community Center",  companyId: "c1", contactId: "p1", value: 450000, stage: "Negotiation",   closeDate: "2026-04-15", notes: "Final contract review", bu: "major",    budgetDueDate: "",           bidDueDate: "",           nextSteps: [] },
-  { id: 2, name: "Elmwood School Renovation",   companyId: "c2", contactId: "p3", value: 280000, stage: "Proposal / Bid",closeDate: "2026-03-28", notes: "Submitted last Tuesday",bu: "major",    budgetDueDate: "",           bidDueDate: "2026-03-28", nextSteps: [] },
+  { id: 1, name: "Riverside Community Center",  companyId: "c1", contactId: "p1", value: 450000, stage: "Negotiation",   pipelineType: "hard_bid",    closeDate: "2026-04-15", notes: "Final contract review", bu: "major",    budgetDueDate: "",           bidDueDate: "2026-04-01",     nextSteps: [] },
+  { id: 2, name: "Elmwood School Renovation",   companyId: "c2", contactId: "p3", value: 280000, stage: "Proposal / Bid",pipelineType: "hard_bid",    closeDate: "2026-03-28", notes: "Submitted last Tuesday",bu: "major",    budgetDueDate: "",           bidDueDate: "2026-03-28", nextSteps: [] },
   { id: 3, name: "Oak Street Parking Lot",      companyId: "c3", contactId: "p4", value:  95000, stage: "Lead",          closeDate: "2026-05-01", notes: "Initial inquiry",       bu: "capital",  budgetDueDate: "",           bidDueDate: "",           nextSteps: [] },
-  { id: 4, name: "Eastside Budget Scope",       companyId: "c4", contactId: "p5", value: 320000, stage: "Budgeting",     closeDate: "",           notes: "Early scoping",         bu: "major",    budgetDueDate: "2026-03-17", bidDueDate: "",           nextSteps: [] },
+  { id: 4, name: "Eastside Budget Scope",       companyId: "c4", contactId: "p5", value: 320000, stage: "Budgeting",     pipelineType: "budgeting",   closeDate: "",           notes: "Early scoping",         bu: "major",    budgetDueDate: "2026-03-17", bidDueDate: "",           nextSteps: [] },
   { id: 5, name: "Central Park Redevelopment",  companyId: "c1", contactId: "p2", value: 580000, stage: "Lead",          closeDate: "2026-06-01", notes: "Referral",              bu: "major",    budgetDueDate: "",           bidDueDate: "",           nextSteps: [{ step: "Geotechnical", dueDate: "2026-03-14" }, { step: "Engage Engineer", dueDate: "2026-03-21" }] },
 ];
 
 const INIT_JOBS = [
-  { id: 1, name: "Riverside Community Center", companyId: "c1", client: "Riverside City",         contractValue: 450000, startDate: "2026-02-01", endDate: "2026-06-30", pm: "John Smith",  pct: 35, status: "On Schedule",     notes: "Foundation complete", bu: "major" },
-  { id: 2, name: "Elmwood School Renovation",  companyId: "c2", client: "Elmwood School District", contractValue: 280000, startDate: "2026-03-15", endDate: "2026-08-15", pm: "Sarah Lee",   pct: 10, status: "On Schedule",     notes: "Permits approved",    bu: "major" },
-  { id: 3, name: "Harbor View Expansion",      companyId: "c3", client: "Harbor View LLC",         contractValue: 620000, startDate: "2026-01-10", endDate: "2026-09-30", pm: "Mike Torres", pct: 52, status: "Behind Schedule", notes: "Weather delays",      bu: "major" },
+  { id: 1, name: "AAA - 66th Conversion",     companyId: "c1", client: "AAA",  contractValue: 0, startDate: "2026-01-21", endDate: "2026-04-22", pm: "Zak Kranich",    pct: 85, status: "Behind Schedule", daysAhead: -48, gpm: 0.15, completionSchedule: "Hold",
+    km1: "Fire Suppression Wet Tap",         km1Date: "2026-04-15",
+    km2: "Fire Suppression Final Inspection", km2Date: "2026-04-22",
+    km3: "Building & Life Safety Finals",     km3Date: "2026-04-22",
+    currentWeekActivities: "HVAC
+Electrical", nextWeekActivities: "Site Preparation and Clearing",
+    criticalPath: "Yes", changeOrderStatus: "Yes", budgetStatus: "Yes", billingStatus: "Yes",
+    dailyReports: "Yes", lookahead: "Yes", cleanliness: "Four", nextOwnerComms: "2026-03-27", notes: "", bu: "major" },
+  { id: 2, name: "AAA - Busch Blvd Conversion", companyId: "c1", client: "AAA", contractValue: 0, startDate: "2026-01-15", endDate: "2026-04-16", pm: "Zak Kranich", pct: 80, status: "On Schedule", daysAhead: 0, gpm: 0.13, completionSchedule: "Hold",
+    km1: "HVAC & Electrical Final Inspections", km1Date: "2026-04-03",
+    km2: "Final Cleaning & Floor Seal",         km2Date: "2026-04-10",
+    km3: "Fire Suppression & Final Building Inspections", km3Date: "2026-04-16",
+    currentWeekActivities: "Electrical", nextWeekActivities: "HVAC
+Electrical",
+    criticalPath: "Yes", changeOrderStatus: "Yes", budgetStatus: "No", billingStatus: "Yes",
+    dailyReports: "Yes", lookahead: "Yes", cleanliness: "Three", nextOwnerComms: "2026-03-27", notes: "", bu: "major" },
+  { id: 3, name: "AAA - Ulmerton Conversion",  companyId: "c1", client: "AAA",  contractValue: 0, startDate: "2026-01-10", endDate: "2026-04-15", pm: "Zak Kranich",    pct: 60, status: "Behind Schedule", daysAhead: -58, gpm: 0.20, completionSchedule: "Hold",
+    km1: "Fire Suppression Wet Tap",            km1Date: "2026-04-08",
+    km2: "Fire Suppression Final Inspections",  km2Date: "2026-04-15",
+    km3: "Building & Life Safety Inspections",  km3Date: "2026-04-15",
+    currentWeekActivities: "Site Preparation and Clearing", nextWeekActivities: "Fire Suppression",
+    criticalPath: "Yes", changeOrderStatus: "Yes", budgetStatus: "No", billingStatus: "Yes",
+    dailyReports: "Yes", lookahead: "Yes", cleanliness: "Five", nextOwnerComms: "2026-03-27", notes: "", bu: "major" },
+  { id: 4, name: "MP - Westland Conversion",   companyId: "c1", client: "MP",   contractValue: 0, startDate: "2025-10-01", endDate: "2026-04-10", pm: "Zak Kranich",    pct: 95, status: "On Schedule", daysAhead: 0, gpm: 0.185, completionSchedule: "Hold",
+    km1: "Keypad Install",                      km1Date: "2026-04-03",
+    km2: "Back Wall Replacement",               km2Date: "2026-03-27",
+    km3: "Complete OM Manual",                  km3Date: "2026-04-03",
+    currentWeekActivities: "Concrete Wall
+Unit Plaques", nextWeekActivities: "Punchlist / Change Order Items",
+    criticalPath: "No", changeOrderStatus: "Yes", longLeadItems: "Other", budgetStatus: "Yes", billingStatus: "Yes",
+    dailyReports: "Yes", lookahead: "Yes", cleanliness: "Five", nextOwnerComms: "2026-03-26", notes: "", bu: "major" },
+  { id: 5, name: "NCD - Pontiac Conversion",   companyId: "c1", client: "NCD",  contractValue: 0, startDate: "2025-11-01", endDate: "2026-05-15", pm: "Connor Thomas",   pct: 55, status: "At Risk", daysAhead: 0, gpm: 0.15, completionSchedule: "Hold",
+    km1: "", km1Date: "", km2: "", km2Date: "", km3: "", km3Date: "",
+    currentWeekActivities: "Masonry
+Janus Hallway Systems
+Fire Suppression
+HVAC
+Electrical",
+    nextWeekActivities: "Roll Up Doors
+Janus Hallway Systems
+Fire Suppression
+Electrical",
+    criticalPath: "Yes", changeOrderStatus: "Hold", longLeadItems: "Janus", budgetStatus: "Yes", billingStatus: "No",
+    dailyReports: "No", lookahead: "Yes", cleanliness: "Four", nextOwnerComms: "", notes: "", bu: "major" },
 ];
 
 const INIT_SITES = [
@@ -1369,6 +1410,14 @@ export default function App() {
   const [fmCoordFilter, setFmCoordFilter] = useState("all");
   const [selectedPM,    setSelectedPM]    = useState(null);
   const [openSections,   setOpenSections]   = useState(new Set(["do_work","bill"]));
+  // Major Projects state
+  const [selectedMpJob,    setSelectedMpJob]    = useState(null);
+  const [mpPanelTab,       setMpPanelTab]       = useState("overview"); // overview | weekly | milestones
+  const [showMpForm,       setShowMpForm]       = useState(false);
+  const [editMpId,         setEditMpId]         = useState(null);
+  const [mpFormData,       setMpFormData]       = useState({});
+  const [mpPipelineType,   setMpPipelineType]   = useState("all"); // all | opportunity | budgeting | hard_bid
+  const [mpJobs,           setMpJobs]           = useState([]);
   const [selectedCoord, setSelectedCoord] = useState(null); // coordinator report
   const [fmInbox,       setFmInbox]       = useState([]);   // unassigned leads
   const [showInboxForm, setShowInboxForm] = useState(false);
@@ -1912,7 +1961,7 @@ Return ONLY valid JSON, no markdown, no extra text:
   // Pipeline helpers
   const openAdd = (defaultStage) => {
     setEditId(null);
-    setForm({ name: "", companyId: "", contactId: "", value: "", stage: defaultStage || "Budgeting", closeDate: "", notes: "", bu: activeBU === "all" ? "major" : activeBU, budgetDueDate: "", bidDueDate: "", nextSteps: [] });
+    setForm({ name: "", companyId: "", contactId: "", value: "", stage: defaultStage || "Budgeting", pipelineType: "budgeting", closeDate: "", notes: "", bu: activeBU === "all" ? "major" : activeBU, budgetDueDate: "", bidDueDate: "", nextSteps: [] });
     setShowForm(true);
   };
   const openEdit = (o) => {
@@ -3431,95 +3480,379 @@ Return ONLY valid JSON, no markdown, no extra text:
             );
           })()}
           {/* ── BUDGETING ── */}
-          {activeNav === "budgeting" && activeBU === "major" && (
-            <div className="fade-in" style={{ display: "flex", flexDirection: "column", gap: 22 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <div>
-                  <div style={{ fontSize: 22, fontWeight: 700, color: "#1A2240", letterSpacing: "-0.01em", textTransform: "uppercase" }}>Budgeting</div>
-                  <div style={{ fontSize: 11, color: "#4A5278", marginTop: 3, letterSpacing: "0.06em" }}>MAJOR PROJECTS · PRE-LEAD SCOPING · {pipeline.filter(o => o.bu === "major" && o.stage === "Budgeting").length} PROJECTS</div>
-                </div>
-                <button className="btn-primary" onClick={() => openAdd("Budgeting")}>+ Add Project</button>
-              </div>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 12 }}>
-                {[
-                  { label: "Projects in Budgeting", value: pipeline.filter(o => o.bu === "major" && o.stage === "Budgeting").length,                                                                           color: "#3B6FE8" },
-                  { label: "Total Estimated Value",  value: fmt(pipeline.filter(o => o.bu === "major" && o.stage === "Budgeting").reduce((s, o) => s + o.value, 0)),                                           color: "#FCD34D" },
-                  { label: "Due This Week",          value: pipeline.filter(o => o.bu === "major" && o.stage === "Budgeting" && o.budgetDueDate && new Date(o.budgetDueDate) <= new Date(Date.now() + 7 * 86400000)).length, color: "#F87171" },
-                ].map(s => (
-                  <div key={s.label} className="stat-card" style={{ position: "relative", overflow: "hidden", padding: "14px 18px" }}>
-                    <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: s.color }} />
-                    <div style={{ fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "#4A5278", marginBottom: 6 }}>{s.label}</div>
-                    <div style={{ fontSize: 22, fontWeight: 700, color: s.color }}>{s.value}</div>
+          {activeNav === "pipeline" && activeBU === "major" && (() => {
+            const PIPE_TYPES = [
+              { id:"opportunity", label:"Opportunity",  color:"#818CF8", icon:"🔍", desc:"Heard about it — need to find out more" },
+              { id:"budgeting",   label:"Budgeting",    color:"#60A5FA", icon:"📧", desc:"Got email/sketch — doing rough numbers" },
+              { id:"hard_bid",    label:"Hard Bid",     color:"#FCD34D", icon:"📋", desc:"Estimating team doing formal estimate" },
+            ];
+            const mpPipeline = pipeline.filter(o => o.bu === "major" && !["Won","Lost"].includes(o.stage));
+            // Group by type
+            const grouped = {};
+            PIPE_TYPES.forEach(t => { grouped[t.id] = mpPipeline.filter(o => (o.pipelineType || "budgeting") === t.id); });
+            const allShown = mpPipelineType === "all" ? mpPipeline : mpPipeline.filter(o => (o.pipelineType || "budgeting") === mpPipelineType);
+
+            return (
+              <div className="fade-in" style={{display:"flex",flexDirection:"column",gap:20}}>
+                {/* Header */}
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                  <div>
+                    <div style={{fontSize:22,fontWeight:800,color:"#1A2240",letterSpacing:"-0.01em",textTransform:"uppercase"}}>MP Pipeline</div>
+                    <div style={{fontSize:11,color:"#4A5278",marginTop:3}}>{mpPipeline.length} opportunities · {fmt(mpPipeline.reduce((s,o)=>s+o.value,0))} total value</div>
                   </div>
-                ))}
-              </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                {pipeline.filter(o => o.bu === "major" && o.stage === "Budgeting").map(o => {
-                  const now     = new Date();
-                  const overdue = o.budgetDueDate && new Date(o.budgetDueDate) < now;
-                  const soon    = o.budgetDueDate && new Date(o.budgetDueDate) <= new Date(now.getTime() + 7 * 86400000);
-                  const co      = companies.find(c => c.id === o.companyId);
-                  return (
-                    <div key={o.id} className="opp-row" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }} onClick={() => setSelectedOpp(o)}>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: 14, color: "#1A2240", fontWeight: 600, marginBottom: 4 }}>{o.name}</div>
-                        <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
-                          {co && <span style={{ fontSize: 11, color: "#3B6FE8" }}>🏢 {co.name}</span>}
-                          {o.budgetDueDate && <span style={{ fontSize: 11, color: overdue ? "#F87171" : soon ? "#FCD34D" : "#4A5278" }}>📅 Budget due: {o.budgetDueDate}{overdue ? " ⚠ OVERDUE" : ""}</span>}
-                          {o.notes && <span style={{ fontSize: 11, color: "#4A5278" }}>📝 {o.notes}</span>}
+                  <button className="btn-primary" onClick={() => { setForm({ name:"",companyId:"",contactId:"",value:"",stage:"Lead",pipelineType:"opportunity",closeDate:"",notes:"",bu:"major",budgetDueDate:"",bidDueDate:"",nextSteps:[] }); setShowPipelineForm(true); }}>+ Add Opportunity</button>
+                </div>
+
+                {/* Type KPI cards */}
+                <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12}}>
+                  {PIPE_TYPES.map(t=>(
+                    <div key={t.id} className="stat-card" style={{padding:16,cursor:"pointer",border:mpPipelineType===t.id?"2px solid "+t.color:"1px solid #E8EBF4",transition:"all 0.15s"}}
+                      onClick={()=>setMpPipelineType(mpPipelineType===t.id?"all":t.id)}>
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}>
+                        <div>
+                          <div style={{fontSize:11,fontWeight:700,color:t.color,textTransform:"uppercase",letterSpacing:"0.06em"}}>{t.icon} {t.label}</div>
+                          <div style={{fontSize:10,color:"#4A5278",marginTop:2}}>{t.desc}</div>
                         </div>
+                        <span style={{fontSize:22,fontWeight:800,color:t.color}}>{grouped[t.id]?.length||0}</span>
                       </div>
-                      <div style={{ display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>
-                        <div style={{ textAlign: "right" }}>
-                          <div style={{ fontSize: 16, fontWeight: 700, color: "#FCD34D" }}>{fmt(o.value)}</div>
-                          <div style={{ fontSize: 10, color: "#4A5278" }}>estimated</div>
-                        </div>
-                        <button className="btn-primary" style={{ fontSize: 11, padding: "6px 12px", background: "#4ADE8020", color: "#4ADE80", border: "1px solid #4ADE8040" }}
-                          onClick={e => { e.stopPropagation(); setPipeline(pipeline.map(p => p.id === o.id ? { ...p, stage: "Lead" } : p)); }}>
-                          → Promote to Lead
-                        </button>
-                        <div style={{ display: "flex", gap: 5 }} onClick={e => e.stopPropagation()}>
-                          <button className="btn-ghost" onClick={() => openEdit(o)}>✎</button>
-                          <button className="btn-ghost" style={{ color: "#F87171", borderColor: "#F8717120" }} onClick={() => deleteOpp(o.id)}>✕</button>
-                        </div>
-                      </div>
+                      <div style={{fontSize:12,color:"#1A2240",fontWeight:600}}>{fmt(grouped[t.id]?.reduce((s,o)=>s+o.value,0)||0)}</div>
                     </div>
-                  );
-                })}
-                {pipeline.filter(o => o.bu === "major" && o.stage === "Budgeting").length === 0 && (
-                  <div style={{ textAlign: "center", padding: "48px", color: "#3D4570", fontSize: 12, background: "#ECEEF8", borderRadius: 10, border: "1px solid #CBD1E8" }}>No projects in budgeting yet</div>
-                )}
+                  ))}
+                </div>
+
+                {/* Filter pills */}
+                <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                  <span style={{fontSize:11,color:"#4A5278"}}>Show:</span>
+                  {[{id:"all",label:"All"},...PIPE_TYPES].map(t=>(
+                    <button key={t.id} onClick={()=>setMpPipelineType(t.id)}
+                      style={{padding:"4px 12px",borderRadius:20,border:"1px solid "+(mpPipelineType===t.id?(t.color||"#3B6FE8"):"#CBD1E8"),background:mpPipelineType===t.id?(t.color||"#3B6FE8"):"transparent",color:mpPipelineType===t.id?"#fff":"#4A5278",fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Opportunity rows */}
+                {allShown.length===0&&<div style={{textAlign:"center",padding:"48px",color:"#4A5278",fontSize:12,background:"#F5F7FC",borderRadius:10,border:"1px dashed #CBD1E8"}}>No opportunities in this category</div>}
+                <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                  {allShown.map(o=>{
+                    const t = PIPE_TYPES.find(t=>t.id===(o.pipelineType||"budgeting"))||PIPE_TYPES[1];
+                    const co = companies.find(c=>c.id===o.companyId);
+                    const dueDateKey = o.pipelineType==="hard_bid" ? o.bidDueDate : o.budgetDueDate;
+                    const isUrgent = dueDateKey && new Date(dueDateKey) <= new Date(Date.now()+7*86400000);
+                    return (
+                      <div key={o.id} className="opp-row" style={{cursor:"pointer",borderLeft:"3px solid "+t.color,padding:"14px 16px",display:"flex",alignItems:"center",gap:14}}
+                        onClick={()=>{ /* open pipeline detail */ }}>
+                        <div style={{width:28,height:28,background:t.color+"20",border:"1px solid "+t.color+"50",borderRadius:6,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,flexShrink:0}}>{t.icon}</div>
+                        <div style={{flex:1,minWidth:0}}>
+                          <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+                            <span style={{fontSize:13,fontWeight:700,color:"#1A2240"}}>{o.name}</span>
+                            <span style={{fontSize:9,fontWeight:700,background:t.color+"20",color:t.color,padding:"2px 6px",borderRadius:3}}>{t.label}</span>
+                            {isUrgent&&<span style={{fontSize:9,fontWeight:700,background:"#F8717120",color:"#F87171",padding:"2px 6px",borderRadius:3}}>⚠ Due Soon</span>}
+                          </div>
+                          <div style={{display:"flex",gap:14,marginTop:4,flexWrap:"wrap"}}>
+                            {co&&<span style={{fontSize:11,color:"#3B6FE8"}}>{co.name}</span>}
+                            {dueDateKey&&<span style={{fontSize:11,color:isUrgent?"#F87171":"#4A5278"}}>📋 {o.pipelineType==="hard_bid"?"Bid":"Budget"}: {dueDateKey}</span>}
+                            {o.notes&&<span style={{fontSize:11,color:"#4A5278",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:300}}>{o.notes}</span>}
+                          </div>
+                        </div>
+                        <div style={{textAlign:"right",flexShrink:0}}>
+                          <div style={{fontSize:14,fontWeight:700,color:"#1A2240"}}>{fmt(o.value)}</div>
+                          {o.closeDate&&<div style={{fontSize:10,color:"#4A5278",marginTop:2}}>Close: {o.closeDate}</div>}
+                        </div>
+                        <div style={{display:"flex",gap:5,flexShrink:0}} onClick={e=>e.stopPropagation()}>
+                          <button className="btn-ghost" style={{fontSize:10,padding:"3px 7px",color:"#4ADE80",borderColor:"#4ADE8030"}} onClick={()=>setPipeline(pipeline.map(p=>p.id===o.id?{...p,stage:"Won"}:p))}>Won</button>
+                          <button className="btn-ghost" style={{fontSize:10,padding:"3px 7px",color:"#F87171",borderColor:"#F8717130"}} onClick={()=>setPipeline(pipeline.map(p=>p.id===o.id?{...p,stage:"Lost"}:p))}>Lost</button>
+                          <button className="btn-ghost" style={{fontSize:10,padding:"3px 7px"}} onClick={()=>{ setEditId(o.id); setForm({...o}); setShowPipelineForm(true); }}>✎</button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* ── ACTIVE JOBS (MP only) ── */}
-          {activeNav === "jobs" && activeBU !== "capital" && activeBU !== "facility" && (
-            <div className="fade-in" style={{ display: "flex", flexDirection: "column", gap: 22 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <div>
-                  <div style={{ fontSize: 22, fontWeight: 700, color: "#1A2240", letterSpacing: "-0.01em", textTransform: "uppercase" }}>Active Jobs</div>
-                  <div style={{ fontSize: 11, color: "#4A5278", marginTop: 3, letterSpacing: "0.06em" }}>{majorJobs.length} JOBS · {fmt(majorJobs.reduce((s, j) => s + j.contractValue, 0))} TOTAL</div>
-                </div>
-                <button className="btn-primary" onClick={openAddJob}>+ Add Job</button>
-              </div>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 12 }}>
-                {[
-                  { label: "Total Contract Value", value: fmt(majorJobs.reduce((s, j) => s + j.contractValue, 0)), color: buColor.accent },
-                  { label: "On Schedule",          value: majorJobs.filter(j => j.status === "On Schedule").length, color: "#4ADE80" },
-                  { label: "Behind / At Risk",     value: majorJobs.filter(j => ["Behind Schedule", "At Risk"].includes(j.status)).length, color: "#F87171" },
-                  { label: "Avg Completion",       value: (majorJobs.length ? Math.round(majorJobs.reduce((s, j) => s + j.pct, 0) / majorJobs.length) : 0) + "%", color: "#FCD34D" },
-                ].map(s => (
-                  <div key={s.label} className="stat-card" style={{ position: "relative", overflow: "hidden", padding: "14px 18px" }}>
-                    <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: s.color }} />
-                    <div style={{ fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "#4A5278", marginBottom: 6 }}>{s.label}</div>
-                    <div style={{ fontSize: 22, fontWeight: 700, color: s.color }}>{s.value}</div>
+          {activeNav === "jobs" && activeBU !== "capital" && activeBU !== "facility" && (() => {
+            const activeJobs   = majorJobs.filter(j => j.status !== "Closeout");
+            const closeoutJobs = majorJobs.filter(j => j.status === "Closeout");
+
+            // ── Enhanced Gantt with milestone diamonds ──
+            const MpGantt = ({ jobs }) => {
+              if (!jobs.length) return <div style={{textAlign:"center",padding:"32px",color:"#3D4570",fontSize:12,background:"#F5F7FC",borderRadius:10,border:"1px dashed #CBD1E8"}}>No jobs</div>;
+              const months = getGanttMonths(jobs);
+              if (!months.length) return null;
+              const tStart = new Date(months[0].year, months[0].month, 1);
+              const tEnd   = new Date(months[months.length-1].year, months[months.length-1].month+1, 1);
+              const tMs    = tEnd - tStart || 1;
+              const tPct   = Math.max(0,Math.min(100,((new Date()-tStart)/tMs)*100));
+              const nowM = new Date().getMonth(), nowY = new Date().getFullYear();
+              const datePct = (d) => { if(!d) return null; const dt = new Date(d); return Math.max(0,Math.min(100,((dt-tStart)/tMs)*100)); };
+              const MILESTONE_STYLES = [
+                { color:"#F87171", label:"KM1" },
+                { color:"#FCD34D", label:"KM2" },
+                { color:"#4ADE80", label:"KM3" },
+              ];
+              const SC = { "On Schedule":{ color:"#4ADE80",bg:"#4ADE8015" }, "Behind Schedule":{ color:"#F87171",bg:"#F8717115" }, "At Risk":{ color:"#F97316",bg:"#F9731615" }, "Closeout":{ color:"#818CF8",bg:"#818CF815" } };
+              return (
+                <div style={{background:"#F5F7FC",border:"1px solid #CBD1E8",borderRadius:10,overflow:"hidden"}}>
+                  {/* Header row */}
+                  <div style={{display:"flex",borderBottom:"1px solid #CBD1E8"}}>
+                    <div style={{width:260,flexShrink:0,padding:"8px 14px",fontSize:10,color:"#4A5278",textTransform:"uppercase",letterSpacing:"0.08em",borderRight:"1px solid #CBD1E8"}}>Project</div>
+                    <div style={{width:60,flexShrink:0,padding:"8px 6px",fontSize:10,color:"#4A5278",textTransform:"uppercase",textAlign:"center",borderRight:"1px solid #CBD1E8"}}>%</div>
+                    <div style={{flex:1,display:"grid",gridTemplateColumns:"repeat("+months.length+",1fr)"}}>
+                      {months.map((m,i)=>(
+                        <div key={i} style={{padding:"8px 4px",fontSize:9,textTransform:"uppercase",textAlign:"center",borderRight:i<months.length-1?"1px solid #D4D8EC":"none",fontWeight:m.month===nowM&&m.year===nowY?700:400,color:m.month===nowM&&m.year===nowY?"#3B6FE8":"#4A5278"}}>
+                          {["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][m.month]}{m.year!==nowY?" '"+String(m.year).slice(2):""}
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                ))}
+                  {/* Job rows */}
+                  {jobs.map((job,idx)=>{
+                    const bar = getBarStyle(job,months);
+                    const sc  = SC[job.status] || SC["On Schedule"];
+                    const milestones = [
+                      job.km1 && job.km1Date ? { label: job.km1, date: job.km1Date, ...MILESTONE_STYLES[0] } : null,
+                      job.km2 && job.km2Date ? { label: job.km2, date: job.km2Date, ...MILESTONE_STYLES[1] } : null,
+                      job.km3 && job.km3Date ? { label: job.km3, date: job.km3Date, ...MILESTONE_STYLES[2] } : null,
+                    ].filter(Boolean);
+                    const daysAhead = job.daysAhead || 0;
+                    return (
+                      <div key={job.id} style={{display:"flex",borderBottom:idx<jobs.length-1?"1px solid #E0E3F0":"none",cursor:"pointer",minHeight:56}}
+                        onMouseEnter={e=>e.currentTarget.style.background="#EEF3FF"}
+                        onMouseLeave={e=>e.currentTarget.style.background="transparent"}
+                        onClick={()=>{ setSelectedMpJob(job); setMpPanelTab("overview"); }}>
+                        {/* Name col */}
+                        <div style={{width:260,flexShrink:0,padding:"10px 14px",borderRight:"1px solid #CBD1E8",display:"flex",flexDirection:"column",justifyContent:"center",gap:3}}>
+                          <div style={{display:"flex",alignItems:"center",gap:6}}>
+                            <span style={{width:7,height:7,borderRadius:"50%",background:sc.color,flexShrink:0}}></span>
+                            <span style={{fontSize:12,fontWeight:600,color:"#1A2240",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{job.name}</span>
+                          </div>
+                          <div style={{fontSize:10,color:"#4A5278",paddingLeft:13}}>{job.client||companies.find(c=>c.id===job.companyId)?.name||""}</div>
+                          <div style={{display:"flex",gap:8,paddingLeft:13,alignItems:"center"}}>
+                            <span style={{fontSize:10,color:"#3B6FE8",fontWeight:600}}>{fmt(job.contractValue)}</span>
+                            {daysAhead!==0&&<span style={{fontSize:9,color:daysAhead<0?"#F87171":"#4ADE80",fontWeight:700}}>{daysAhead<0?daysAhead+"d":"+"+ daysAhead+"d"}</span>}
+                          </div>
+                        </div>
+                        {/* Pct col */}
+                        <div style={{width:60,flexShrink:0,borderRight:"1px solid #CBD1E8",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                          <span style={{fontSize:12,fontWeight:700,color:sc.color}}>{job.pct||0}%</span>
+                        </div>
+                        {/* Gantt col */}
+                        <div style={{flex:1,position:"relative",padding:"10px 0"}}>
+                          {/* Today line */}
+                          <div style={{position:"absolute",left:tPct+"%",top:0,bottom:0,width:1,background:"#3B6FE840",zIndex:3}}/>
+                          {/* Month grid lines */}
+                          {months.map((_,i)=>i>0&&<div key={i} style={{position:"absolute",left:((i/months.length)*100)+"%",top:0,bottom:0,width:1,background:"#E0E3F0"}}/>)}
+                          {/* Main bar */}
+                          {bar.left&&<div style={{position:"absolute",top:"50%",transform:"translateY(-50%)",left:bar.left,width:bar.width,height:22,borderRadius:4,background:sc.bg,border:"1px solid "+sc.color+"40",overflow:"hidden",zIndex:1}}>
+                            <div style={{height:"100%",width:(job.pct||0)+"%",background:sc.color+"35",borderRadius:"3px 0 0 3px"}}/>
+                          </div>}
+                          {/* Milestone diamonds */}
+                          {milestones.map((km,mi)=>{
+                            const pct = datePct(km.date);
+                            if(pct===null) return null;
+                            return (
+                              <div key={mi} title={km.label+" — "+km.date} style={{position:"absolute",left:"calc("+pct+"% - 7px)",top:"50%",transform:"translateY(-50%)",width:14,height:14,background:km.color,transform:"translateY(-50%) rotate(45deg)",zIndex:4,borderRadius:2,cursor:"pointer"}}/>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {/* Legend */}
+                  <div style={{display:"flex",gap:16,padding:"8px 14px",borderTop:"1px solid #E0E3F0",background:"#F8F9FD"}}>
+                    <span style={{fontSize:9,color:"#4A5278",textTransform:"uppercase",letterSpacing:"0.07em"}}>Milestones:</span>
+                    {[{color:"#F87171",label:"KM1"},{color:"#FCD34D",label:"KM2"},{color:"#4ADE80",label:"KM3"}].map(m=>(
+                      <span key={m.label} style={{display:"flex",alignItems:"center",gap:4,fontSize:9,color:"#4A5278"}}>
+                        <span style={{width:10,height:10,background:m.color,display:"inline-block",transform:"rotate(45deg)",borderRadius:1}}></span>{m.label}
+                      </span>
+                    ))}
+                    <span style={{display:"flex",alignItems:"center",gap:4,fontSize:9,color:"#4A5278",marginLeft:"auto"}}>
+                      <span style={{width:16,height:1,background:"#3B6FE8",display:"inline-block"}}></span>Today
+                    </span>
+                  </div>
+                </div>
+              );
+            };
+
+            // ── Job detail side panel ──
+            if (selectedMpJob) {
+              const j = selectedMpJob;
+              const sc = { "On Schedule":"#4ADE80","Behind Schedule":"#F87171","At Risk":"#F97316","Closeout":"#818CF8" };
+              const stColor = sc[j.status]||"#3B6FE8";
+              const StatusDot = ({val, good="Yes"}) => val
+                ? <span style={{fontSize:11,color:val===good?"#4ADE80":"#F87171",fontWeight:600}}>{val===good?"✓":"✗"} {val}</span>
+                : <span style={{fontSize:11,color:"#CBD1E8"}}>—</span>;
+              return (
+                <div className="fade-in" style={{display:"flex",flexDirection:"column",gap:16}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                    <button className="btn-ghost" onClick={()=>setSelectedMpJob(null)} style={{padding:"8px 14px"}}>← Back to Jobs</button>
+                    <div style={{display:"flex",gap:8}}>
+                      <button className="btn-ghost" style={{fontSize:11}} onClick={()=>{ setEditMpId(j.id); setMpFormData({...j}); setShowMpForm(true); }}>✎ Edit</button>
+                    </div>
+                  </div>
+                  {/* Header card */}
+                  <div className="stat-card" style={{padding:20}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14}}>
+                      <div>
+                        <div style={{fontSize:20,fontWeight:800,color:"#1A2240"}}>{j.name}</div>
+                        <div style={{fontSize:12,color:"#4A5278",marginTop:3}}>{j.client||companies.find(c=>c.id===j.companyId)?.name||""} · {j.pm}</div>
+                      </div>
+                      <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:6}}>
+                        <span style={{fontSize:10,fontWeight:700,background:stColor+"20",color:stColor,padding:"3px 10px",borderRadius:4}}>{j.status}</span>
+                        {(j.daysAhead||0)!==0&&<span style={{fontSize:10,fontWeight:700,color:(j.daysAhead||0)<0?"#F87171":"#4ADE80"}}>{(j.daysAhead||0)<0?Math.abs(j.daysAhead)+" days behind":j.daysAhead+" days ahead"}</span>}
+                      </div>
+                    </div>
+                    <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10}}>
+                      {[
+                        {label:"Contract Value",value:fmt(j.contractValue),color:"#3B6FE8"},
+                        {label:"GPM",value:j.gpm?(Math.round(j.gpm*100))+"%":"—",color:"#4ADE80"},
+                        {label:"Complete",value:(j.pct||0)+"%",color:"#FCD34D"},
+                        {label:"Completion",value:j.completionSchedule||"—",color:"#818CF8"},
+                      ].map(s=>(
+                        <div key={s.label} style={{background:"#F5F7FC",borderRadius:6,padding:"10px 12px"}}>
+                          <div style={{fontSize:9,color:"#4A5278",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:3}}>{s.label}</div>
+                          <div style={{fontSize:16,fontWeight:800,color:s.color}}>{s.value}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                  {/* Tabs */}
+                  <div style={{display:"flex",gap:0,background:"#F0F2F8",borderRadius:8,padding:3}}>
+                    {[["overview","📋 Overview"],["weekly","📅 Weekly Report"],["milestones","◆ Milestones"]].map(([id,label])=>(
+                      <button key={id} onClick={()=>setMpPanelTab(id)}
+                        style={{flex:1,padding:"8px 12px",borderRadius:6,border:"none",background:mpPanelTab===id?"#fff":"transparent",color:mpPanelTab===id?"#1A2240":"#4A5278",fontSize:11,fontWeight:mpPanelTab===id?700:500,cursor:"pointer",fontFamily:"inherit",boxShadow:mpPanelTab===id?"0 1px 3px #00000015":"none",transition:"all 0.15s"}}>
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                  {/* Overview tab */}
+                  {mpPanelTab==="overview"&&(
+                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
+                      <div className="stat-card" style={{padding:16}}>
+                        <div style={{fontSize:10,fontWeight:700,color:"#4A5278",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:12}}>Project Info</div>
+                        {[
+                          ["Start Date",j.startDate],["End Date",j.endDate],["Contract Type",j.contractType],
+                          ["Change Orders",j.changeOrderStatus],["Long Lead Items",j.longLeadItems],
+                        ].filter(([,v])=>v).map(([label,val])=>(
+                          <div key={label} style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:"1px solid #F0F2F8"}}>
+                            <span style={{fontSize:11,color:"#4A5278"}}>{label}</span>
+                            <span style={{fontSize:11,color:"#1A2240",fontWeight:500,textAlign:"right",maxWidth:"60%"}}>{val}</span>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="stat-card" style={{padding:16}}>
+                        <div style={{fontSize:10,fontWeight:700,color:"#4A5278",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:12}}>Status Check</div>
+                        {[
+                          ["Budget Status",j.budgetStatus],["Billing Status",j.billingStatus],
+                          ["Daily Reports",j.dailyReports],["3-Week Lookahead",j.lookahead],
+                          ["Site Safety",j.cleanliness],["Critical Path",j.criticalPath],
+                        ].map(([label,val])=>(
+                          <div key={label} style={{display:"flex",justifyContent:"space-between",padding:"5px 0",borderBottom:"1px solid #F0F2F8"}}>
+                            <span style={{fontSize:11,color:"#4A5278"}}>{label}</span>
+                            <StatusDot val={val} good={label==="Site Safety"?"Five":label==="Budget Status"?"Yes":label==="Billing Status"?"Yes":"Yes"}/>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {/* Weekly report tab */}
+                  {mpPanelTab==="weekly"&&(
+                    <div style={{display:"flex",flexDirection:"column",gap:12}}>
+                      <div className="stat-card" style={{padding:16}}>
+                        <div style={{fontSize:10,fontWeight:700,color:"#4ADE80",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:8}}>This Week's Activities</div>
+                        <div style={{fontSize:13,color:"#1A2240",lineHeight:1.7,whiteSpace:"pre-line"}}>{j.currentWeekActivities||"—"}</div>
+                      </div>
+                      <div className="stat-card" style={{padding:16}}>
+                        <div style={{fontSize:10,fontWeight:700,color:"#60A5FA",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:8}}>Next Week's Activities</div>
+                        <div style={{fontSize:13,color:"#1A2240",lineHeight:1.7,whiteSpace:"pre-line"}}>{j.nextWeekActivities||"—"}</div>
+                      </div>
+                      {j.criticalPath==="Yes"&&<div style={{background:"#F8717110",border:"1px solid #F8717130",borderRadius:8,padding:"10px 14px",display:"flex",gap:8,alignItems:"center"}}>
+                        <span style={{fontSize:14}}>⚠</span>
+                        <span style={{fontSize:12,color:"#F87171",fontWeight:600}}>Critical path items active this week</span>
+                      </div>}
+                      {j.nextOwnerComms&&<div className="stat-card" style={{padding:14}}>
+                        <div style={{fontSize:10,fontWeight:700,color:"#4A5278",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:4}}>Next Owner Communication</div>
+                        <div style={{fontSize:13,color:"#1A2240"}}>{typeof j.nextOwnerComms==="string"?j.nextOwnerComms:new Date(j.nextOwnerComms).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"})}</div>
+                      </div>}
+                      {j.notes&&<div className="stat-card" style={{padding:14}}>
+                        <div style={{fontSize:10,fontWeight:700,color:"#4A5278",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:4}}>Notes</div>
+                        <div style={{fontSize:12,color:"#252E52",lineHeight:1.6}}>{j.notes}</div>
+                      </div>}
+                    </div>
+                  )}
+                  {/* Milestones tab */}
+                  {mpPanelTab==="milestones"&&(
+                    <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                      {[[j.km1,j.km1Date,"#F87171"],[j.km2,j.km2Date,"#FCD34D"],[j.km3,j.km3Date,"#4ADE80"]].map(([km,kmDate,color],i)=>
+                        km?(
+                          <div key={i} className="stat-card" style={{padding:16,display:"flex",alignItems:"center",gap:14,borderLeft:"4px solid "+color}}>
+                            <div style={{width:28,height:28,background:color+"20",border:"2px solid "+color,borderRadius:4,transform:"rotate(45deg)",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center"}}>
+                              <span style={{transform:"rotate(-45deg)",fontSize:11,fontWeight:800,color}}>{i+1}</span>
+                            </div>
+                            <div style={{flex:1}}>
+                              <div style={{fontSize:13,fontWeight:700,color:"#1A2240"}}>{km}</div>
+                              {kmDate&&<div style={{fontSize:11,color:"#4A5278",marginTop:2}}>📅 {typeof kmDate==="string"?kmDate:new Date(kmDate).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"})}</div>}
+                            </div>
+                            <span style={{fontSize:9,fontWeight:700,color,background:color+"15",padding:"2px 8px",borderRadius:4}}>KM{i+1}</span>
+                          </div>
+                        ):null
+                      )}
+                      {!j.km1&&!j.km2&&!j.km3&&<div style={{textAlign:"center",padding:"24px",color:"#4A5278",fontSize:12,background:"#F5F7FC",borderRadius:8}}>No milestones set for this project</div>}
+                    </div>
+                  )}
+                </div>
+              );
+            }
+
+            return (
+              <div className="fade-in" style={{display:"flex",flexDirection:"column",gap:22}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                  <div>
+                    <div style={{fontSize:22,fontWeight:800,color:"#1A2240",letterSpacing:"-0.01em",textTransform:"uppercase"}}>Active Jobs</div>
+                    <div style={{fontSize:11,color:"#4A5278",marginTop:3,letterSpacing:"0.06em"}}>{activeJobs.length} active · {closeoutJobs.length} in closeout · {fmt(majorJobs.reduce((s,j)=>s+j.contractValue,0))} total</div>
+                  </div>
+                  <button className="btn-primary" onClick={openAddJob}>+ Add Job</button>
+                </div>
+                {/* KPI cards */}
+                <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12}}>
+                  {[
+                    {label:"Contract Value",value:fmt(majorJobs.reduce((s,j)=>s+j.contractValue,0)),color:buColor.accent},
+                    {label:"On Schedule",   value:majorJobs.filter(j=>j.status==="On Schedule").length,color:"#4ADE80"},
+                    {label:"Behind / At Risk",value:majorJobs.filter(j=>["Behind Schedule","At Risk"].includes(j.status)).length,color:"#F87171"},
+                    {label:"Avg Complete",  value:(majorJobs.length?Math.round(majorJobs.reduce((s,j)=>s+(j.pct||0),0)/majorJobs.length):0)+"%",color:"#FCD34D"},
+                  ].map(s=>(
+                    <div key={s.label} className="stat-card" style={{position:"relative",overflow:"hidden",padding:"14px 18px"}}>
+                      <div style={{position:"absolute",top:0,left:0,right:0,height:3,background:s.color}}/>
+                      <div style={{fontSize:9,letterSpacing:"0.1em",textTransform:"uppercase",color:"#4A5278",marginBottom:6}}>{s.label}</div>
+                      <div style={{fontSize:22,fontWeight:800,color:s.color}}>{s.value}</div>
+                    </div>
+                  ))}
+                </div>
+                {/* Active Jobs Gantt */}
+                <div>
+                  <div style={{fontSize:12,fontWeight:700,color:"#1A2240",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:10,display:"flex",alignItems:"center",gap:8}}>
+                    <span style={{width:8,height:8,borderRadius:"50%",background:"#4ADE80",display:"inline-block"}}></span>
+                    Active Jobs <span style={{color:"#9BA3BF",fontWeight:400}}>({activeJobs.length})</span>
+                    <span style={{fontSize:10,color:"#4A5278",fontWeight:400,marginLeft:4}}>— click any row to open</span>
+                  </div>
+                  <MpGantt jobs={activeJobs}/>
+                </div>
+                {/* Closeout section */}
+                {closeoutJobs.length>0&&(
+                  <div>
+                    <div style={{fontSize:12,fontWeight:700,color:"#818CF8",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:10,display:"flex",alignItems:"center",gap:8}}>
+                      <span style={{width:8,height:8,borderRadius:"50%",background:"#818CF8",display:"inline-block"}}></span>
+                      Closeout <span style={{color:"#9BA3BF",fontWeight:400}}>({closeoutJobs.length})</span>
+                    </div>
+                    <MpGantt jobs={closeoutJobs}/>
+                  </div>
+                )}
               </div>
-              <GanttSection jobList={majorJobs} showAddBtn={false} />
-            </div>
-          )}
+            );
+          })()}
 
           {/* ── PIPELINE ── */}
           {activeNav === "pipeline" && (
