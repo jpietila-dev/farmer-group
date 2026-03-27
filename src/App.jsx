@@ -1625,6 +1625,8 @@ export default function App() {
   const [siteForm,     setSiteForm]     = useState({ companyId: "", contactIds: [], storeNumber: "", address: "", phone: "", accessCode: "", notes: "", lat: "", lng: "", businessUnits: [] });
   const [selectedSite, setSelectedSite] = useState(null);
   const [siteSearch,   setSiteSearch]   = useState("");
+  const [siteView,     setSiteView]     = useState("list"); // "list" | "map"
+  const [mapCompanyFilter, setMapCompanyFilter] = useState(null); // null = all
   const [siteGeocoding, setSiteGeocoding] = useState(false);
 
   // Lawn / Snow — derived from unified sites
@@ -4624,6 +4626,15 @@ Return ONLY valid JSON, no markdown, no extra text:
                   </div>
                 </div>
                 <div style={{ display: "flex", gap: 8 }}>
+                  {/* Map / List toggle */}
+                  <div style={{ display: "flex", border: "1px solid #CBD1E8", borderRadius: 7, overflow: "hidden" }}>
+                    {[{id:"list",icon:"☰"},{id:"map",icon:"🗺"}].map(v=>(
+                      <button key={v.id} onClick={()=>setSiteView(v.id)}
+                        style={{padding:"6px 14px",border:"none",background:siteView===v.id?"#3B6FE8":"transparent",color:siteView===v.id?"#fff":"#4A5278",cursor:"pointer",fontFamily:"inherit",fontSize:12,fontWeight:600}}>
+                        {v.icon} {v.id==="list"?"List":"Map"}
+                      </button>
+                    ))}
+                  </div>
                   <input className="fi" style={{ width: 200 }} placeholder="Search sites…" value={siteSearch} onChange={e => setSiteSearch(e.target.value)} />
                   <label className="btn-ghost" style={{ cursor: "pointer", display: "inline-flex", alignItems: "center", padding: "5px 10px", borderRadius: 5, border: "1px solid #CBD1E8", color: "#353C62", fontSize: 11, fontFamily: "inherit" }}>
                     ↑ Import CSV
@@ -4709,7 +4720,102 @@ Return ONLY valid JSON, no markdown, no extra text:
               </div>
                 );
               })()}
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 12 }}>
+              {/* ── MAP VIEW ── */}
+              {siteView === "map" && (() => {
+                const CO_COLORS = {};
+                const PALETTE = ["#3B6FE8","#F59E0B","#10B981","#EF4444","#8B5CF6","#EC4899","#06B6D4","#84CC16","#F97316","#6366F1","#14B8A6"];
+                companies.forEach((c,i) => { CO_COLORS[c.id] = PALETTE[i % PALETTE.length]; });
+                const mapSites = sites.filter(s => s.lat && s.lng
+                  && (activeBU === "all" || (s.businessUnits||[]).includes(activeBU === "facility" ? "facility" : activeBU))
+                  && (!mapCompanyFilter || s.companyId === mapCompanyFilter)
+                );
+                return (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                    {/* Company filter pills */}
+                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+                      <span style={{ fontSize: 11, color: "#4A5278", fontWeight: 600, marginRight: 2 }}>Show:</span>
+                      <button onClick={() => setMapCompanyFilter(null)}
+                        style={{ padding: "4px 12px", borderRadius: 20, border: "1px solid " + (!mapCompanyFilter ? "#3B6FE8" : "#CBD1E8"), background: !mapCompanyFilter ? "#3B6FE8" : "transparent", color: !mapCompanyFilter ? "#fff" : "#4A5278", fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
+                        All Companies ({sites.filter(s=>s.lat&&s.lng).length} mapped)
+                      </button>
+                      {companies.map(c => {
+                        const n = sites.filter(s => s.companyId === c.id && s.lat && s.lng).length;
+                        if (!n) return null;
+                        const color = CO_COLORS[c.id];
+                        const active = mapCompanyFilter === c.id;
+                        return (
+                          <button key={c.id} onClick={() => setMapCompanyFilter(active ? null : c.id)}
+                            style={{ padding: "4px 12px", borderRadius: 20, border: "1px solid " + (active ? color : color + "50"), background: active ? color : color + "18", color: active ? "#fff" : color, fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "inherit", display: "flex", alignItems: "center", gap: 5 }}>
+                            <span style={{ width: 7, height: 7, borderRadius: "50%", background: active ? "#ffffffcc" : color, display: "inline-block" }}/>
+                            {c.name.replace(" Self Storage","").replace(" Storage","").trim()} ({n})
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {sites.filter(s=>s.lat&&s.lng).length === 0 ? (
+                      <div style={{ background: "#fff", borderRadius: 12, border: "2px dashed #D4D9EE", padding: "40px 24px", textAlign: "center" }}>
+                        <div style={{ fontSize: 36, marginBottom: 10 }}>📍</div>
+                        <div style={{ fontSize: 15, fontWeight: 700, color: "#1A2240", marginBottom: 6 }}>No GPS coordinates yet</div>
+                        <div style={{ fontSize: 13, color: "#4A5278" }}>Run the <strong>geocode_sites.html</strong> tool to add coordinates — takes ~10 min, does all 599 sites automatically.</div>
+                      </div>
+                    ) : (
+                      <div style={{ borderRadius: 12, overflow: "hidden", border: "1px solid #D4D9EE", boxShadow: "0 2px 16px rgba(0,0,0,0.07)" }}>
+                        {/* Legend bar */}
+                        <div style={{ background: "#fff", padding: "10px 16px", borderBottom: "1px solid #F0F2F8", display: "flex", gap: 14, flexWrap: "wrap", alignItems: "center" }}>
+                          <span style={{ fontSize: 11, fontWeight: 700, color: "#1A2240" }}>{mapSites.length} site{mapSites.length!==1?"s":""} displayed</span>
+                          {(mapCompanyFilter ? [companies.find(c=>c.id===mapCompanyFilter)].filter(Boolean) : companies).map(c => {
+                            const n = mapSites.filter(s=>s.companyId===c.id).length;
+                            if (!n) return null;
+                            return (
+                              <div key={c.id} style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                                <span style={{ width: 9, height: 9, borderRadius: "50%", background: CO_COLORS[c.id], display: "inline-block", border: "1.5px solid white", boxShadow: "0 1px 3px rgba(0,0,0,0.3)" }}/>
+                                <span style={{ fontSize: 11, color: "#4A5278" }}>{c.name} ({n})</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                        <iframe
+                          key={mapCompanyFilter + "|" + mapSites.length}
+                          srcDoc={`<!DOCTYPE html><html><head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"><\/script>
+<style>html,body,#map{margin:0;padding:0;height:100%;width:100%}.leaflet-popup-content{margin:10px 14px}.leaflet-popup-content-wrapper{border-radius:10px;box-shadow:0 4px 20px rgba(0,0,0,0.15)}</style>
+</head><body><div id="map"></div>
+<script>
+const map=L.map("map",{zoomControl:true,attributionControl:false});
+L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19}).addTo(map);
+L.control.attribution({prefix:'© <a href="https://openstreetmap.org">OSM</a>'}).addTo(map);
+const pts=${JSON.stringify(mapSites.map(s=>({
+  lat:s.lat, lng:s.lng,
+  store:s.storeNumber,
+  addr:s.address,
+  co: companies.find(c=>c.id===s.companyId)?.name||"",
+  color: CO_COLORS[s.companyId]||"#3B6FE8"
+})))};
+const bounds=[];
+pts.forEach(p=>{
+  const icon=L.divIcon({className:"",
+    html:'<div style="width:11px;height:11px;border-radius:50%;background:'+p.color+';border:2px solid white;box-shadow:0 1px 5px rgba(0,0,0,0.5)"></div>',
+    iconSize:[11,11],iconAnchor:[5,5],popupAnchor:[0,-6]});
+  L.marker([p.lat,p.lng],{icon}).addTo(map)
+   .bindPopup('<div style="font-family:Inter,sans-serif;line-height:1.5"><b style="font-size:13px">#'+p.store+'</b><br><span style="font-size:11px;color:#555">'+p.addr+'</span><br><span style="font-size:11px;font-weight:600;color:'+p.color+'">'+p.co+'</span></div>');
+  bounds.push([p.lat,p.lng]);
+});
+if(bounds.length)map.fitBounds(bounds,{padding:[30,30]});
+<\/script></body></html>`}
+                          style={{ width: "100%", height: 540, border: "none", display: "block" }}
+                          title="Sites Map"
+                        />
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+
+              {/* ── LIST VIEW ── */}
+              {siteView === "list" && <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 12 }}>
                 {sites.filter(site => { const buMatch = activeBU === "all" || (site.businessUnits || []).includes(activeBU === "facility" ? "facility" : activeBU); const co = companies.find(c => c.id === site.companyId); const q = siteSearch.toLowerCase(); const textMatch = !q || (site.storeNumber||"").toLowerCase().includes(q) || (site.address||"").toLowerCase().includes(q) || (co?.name||"").toLowerCase().includes(q); return buMatch && textMatch; }).map(site => {
                   const co = companies.find(c => c.id === site.companyId);
                   const siteContacts = contacts.filter(p => (site.contactIds||[]).includes(p.id));
@@ -4735,7 +4841,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                   );
                 })}
                 {sites.length === 0 && <div style={{ gridColumn: "1/-1", textAlign: "center", padding: "48px", color: "#3D4570", fontSize: 12, background: "#ECEEF8", borderRadius: 10, border: "1px solid #CBD1E8" }}>No sites yet</div>}
-              </div>
+              </div>}
             </div>
           )}
 
