@@ -1436,9 +1436,9 @@ const CrmInlineField = ({ label, field, value, icon, type="text", placeholder=""
 
 // ── Site inline editable field ──────────────────────────────────────────────
 function SiteField({ label, field, value, type="text", onSave }) {
-  const [editing, setEditing] = React.useState(false);
-  const [val, setVal] = React.useState(value||"");
-  React.useEffect(()=>setVal(value||""),[value]);
+  const [editing, setEditing] = useState(false);
+  const [val, setVal] = useState(value||"");
+  useEffect(()=>setVal(value||""),[value]);
   const commit = () => { onSave(field, type==="number" ? (parseInt(val)||null) : val); setEditing(false); };
   if (editing) return (
     <div style={{padding:"8px 10px"}}>
@@ -1464,9 +1464,9 @@ function SiteField({ label, field, value, type="text", onSave }) {
 
 // ── HVAC unit inline field ───────────────────────────────────────────────────
 function HvacField({ label, value, type="text", onSave }) {
-  const [editing, setEditing] = React.useState(false);
-  const [val, setVal] = React.useState(value||"");
-  React.useEffect(()=>setVal(value||""),[value]);
+  const [editing, setEditing] = useState(false);
+  const [val, setVal] = useState(value||"");
+  useEffect(()=>setVal(value||""),[value]);
   const commit = () => { onSave(val); setEditing(false); };
   if (editing) return (
     <div style={{padding:"6px 8px"}}>
@@ -1492,7 +1492,7 @@ function HvacField({ label, value, type="text", onSave }) {
 
 // ── Photo URL adder ──────────────────────────────────────────────────────────
 function PhotoAdder({ onAdd }) {
-  const [url, setUrl] = React.useState("");
+  const [url, setUrl] = useState("");
   return (
     <div style={{display:"flex",gap:8}}>
       <input value={url} onChange={e=>setUrl(e.target.value)} placeholder="Paste image URL…"
