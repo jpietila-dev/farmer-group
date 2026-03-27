@@ -44,8 +44,8 @@ const companyToDB = c => ({ id: c.id, name: c.name, address: c.address||"", webs
 
 const dbToContact = r => ({ id: r.id, companyId: r.company_id||"", firstName: r.first_name||"", lastName: r.last_name||"", title: r.title||"", email: r.email||"", phone: r.phone||"" });
 const contactToDB = c => ({ id: c.id, company_id: c.companyId||null, first_name: c.firstName||"", last_name: c.lastName||"", title: c.title||"", email: c.email||"", phone: c.phone||"" });
-const dbToSite = r => ({ id: r.id, companyId: r.company_id||"", contactIds: r.contact_ids||[], storeNumber: r.store_number||"", address: r.address||"", phone: r.phone||"", accessCode: r.access_code||"", notes: r.notes||"", lat: r.lat ? parseFloat(r.lat) : null, lng: r.lng ? parseFloat(r.lng) : null, businessUnits: r.business_units||[] });
-const siteToDB = s => ({ id: s.id, company_id: s.companyId||null, contact_ids: s.contactIds||[], store_number: s.storeNumber||"", address: s.address||"", phone: s.phone||"", access_code: s.accessCode||"", notes: s.notes||"", lat: s.lat||null, lng: s.lng||null, business_units: s.businessUnits||[] });
+const dbToSite = r => ({ id: r.id, companyId: r.company_id||"", contactIds: r.contact_ids||[], storeNumber: r.store_number||"", address: r.address||"", phone: r.phone||"", accessCode: r.access_code||"", notes: r.notes||"", lat: r.lat ? parseFloat(r.lat) : null, lng: r.lng ? parseFloat(r.lng) : null, businessUnits: r.business_units||[], unitCount: r.unit_count||null, propertyType: r.property_type||"", gateCode: r.gate_code||"", managerName: r.manager_name||"", managerPhone: r.manager_phone||"", managerEmail: r.manager_email||"", photos: r.photos||[], backflow: r.backflow||{}, hvac: r.hvac||[], siteDetails: r.site_details||{} });
+const siteToDB = s => ({ id: s.id, company_id: s.companyId||null, contact_ids: s.contactIds||[], store_number: s.storeNumber||"", address: s.address||"", phone: s.phone||"", access_code: s.accessCode||"", notes: s.notes||"", lat: s.lat||null, lng: s.lng||null, business_units: s.businessUnits||[], unit_count: s.unitCount||null, property_type: s.propertyType||null, gate_code: s.gateCode||null, manager_name: s.managerName||null, manager_phone: s.managerPhone||null, manager_email: s.managerEmail||null, photos: s.photos||[], backflow: s.backflow||{}, hvac: s.hvac||[], site_details: s.siteDetails||{} });
 
 const dbToLsSite = r => dbToSite(r); // same structure now
 const lsSiteToDB = s => siteToDB(s);
@@ -1434,6 +1434,76 @@ const CrmInlineField = ({ label, field, value, icon, type="text", placeholder=""
   );
 };
 
+// ── Site inline editable field ──────────────────────────────────────────────
+function SiteField({ label, field, value, type="text", onSave }) {
+  const [editing, setEditing] = React.useState(false);
+  const [val, setVal] = React.useState(value||"");
+  React.useEffect(()=>setVal(value||""),[value]);
+  const commit = () => { onSave(field, type==="number" ? (parseInt(val)||null) : val); setEditing(false); };
+  if (editing) return (
+    <div style={{padding:"8px 10px"}}>
+      <div style={{fontSize:10,color:"#9BA3BF",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:3}}>{label}</div>
+      <div style={{display:"flex",gap:6}}>
+        <input type={type} value={val} autoFocus
+          onChange={e=>setVal(e.target.value)}
+          onKeyDown={e=>{if(e.key==="Enter")commit();if(e.key==="Escape")setEditing(false);}}
+          style={{flex:1,padding:"6px 10px",border:"1.5px solid #3B6FE8",borderRadius:6,fontSize:13,fontFamily:"inherit",outline:"none"}} />
+        <button onClick={commit} style={{padding:"6px 10px",background:"#3B6FE8",color:"#fff",border:"none",borderRadius:6,cursor:"pointer",fontSize:12,fontFamily:"inherit"}}>✓</button>
+      </div>
+    </div>
+  );
+  return (
+    <div onClick={()=>setEditing(true)} style={{padding:"8px 10px",cursor:"pointer",borderRadius:4}}
+      onMouseEnter={e=>e.currentTarget.style.background="#F9FAFC"}
+      onMouseLeave={e=>e.currentTarget.style.background=""}>
+      <div style={{fontSize:10,color:"#9BA3BF",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:2}}>{label}</div>
+      <div style={{fontSize:13,color:val?"#1A2240":"#CBD1E8"}}>{val||<span style={{fontStyle:"italic",fontSize:12}}>Click to add…</span>}</div>
+    </div>
+  );
+}
+
+// ── HVAC unit inline field ───────────────────────────────────────────────────
+function HvacField({ label, value, type="text", onSave }) {
+  const [editing, setEditing] = React.useState(false);
+  const [val, setVal] = React.useState(value||"");
+  React.useEffect(()=>setVal(value||""),[value]);
+  const commit = () => { onSave(val); setEditing(false); };
+  if (editing) return (
+    <div style={{padding:"6px 8px"}}>
+      <div style={{fontSize:9,color:"#9BA3BF",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:2}}>{label}</div>
+      <div style={{display:"flex",gap:4}}>
+        <input type={type} value={val} autoFocus
+          onChange={e=>setVal(e.target.value)}
+          onKeyDown={e=>{if(e.key==="Enter")commit();if(e.key==="Escape")setEditing(false);}}
+          style={{flex:1,padding:"4px 6px",border:"1.5px solid #3B6FE8",borderRadius:4,fontSize:12,fontFamily:"inherit",outline:"none"}} />
+        <button onClick={commit} style={{padding:"4px 6px",background:"#3B6FE8",color:"#fff",border:"none",borderRadius:4,cursor:"pointer",fontSize:11}}>✓</button>
+      </div>
+    </div>
+  );
+  return (
+    <div onClick={()=>setEditing(true)} style={{padding:"6px 8px",cursor:"pointer"}}
+      onMouseEnter={e=>e.currentTarget.style.background="#F9FAFC"}
+      onMouseLeave={e=>e.currentTarget.style.background=""}>
+      <div style={{fontSize:9,color:"#9BA3BF",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:1}}>{label}</div>
+      <div style={{fontSize:12,color:val?"#1A2240":"#CBD1E8"}}>{val||"—"}</div>
+    </div>
+  );
+}
+
+// ── Photo URL adder ──────────────────────────────────────────────────────────
+function PhotoAdder({ onAdd }) {
+  const [url, setUrl] = React.useState("");
+  return (
+    <div style={{display:"flex",gap:8}}>
+      <input value={url} onChange={e=>setUrl(e.target.value)} placeholder="Paste image URL…"
+        style={{flex:1,padding:"8px 12px",border:"1px solid #CBD1E8",borderRadius:8,fontSize:13,fontFamily:"inherit",outline:"none"}}
+        onKeyDown={e=>{if(e.key==="Enter"&&url.trim()){onAdd(url.trim());setUrl("");}}} />
+      <button onClick={()=>{if(url.trim()){onAdd(url.trim());setUrl("");}}}
+        style={{padding:"8px 14px",background:"#3B6FE8",color:"#fff",border:"none",borderRadius:8,cursor:"pointer",fontFamily:"inherit",fontSize:13}}>+ Add</button>
+    </div>
+  );
+}
+
 export default function App() {
   // URL routing — sub-facing page
   const urlToken  = useMemo(() => new URLSearchParams(window.location.search).get("subtoken"), []);
@@ -1447,6 +1517,10 @@ export default function App() {
   const [salesTab, setSalesTab] = useState("major"); // major | capex | acquisition
   const [crmTagFilter, setCrmTagFilter] = useState(null); // null | "FM" | "CapEx" | "Major" | "Lawn" | "Snow"
   const [selectedContact, setSelectedContact] = useState(null); // { contact, company }
+  const [selectedSiteDetail, setSelectedSiteDetail] = useState(null); // full site object for customer contact drill-down
+  const [siteDetailTab, setSiteDetailTab] = useState("info"); // info | photos | backflow | hvac | projects
+  const [editingSite, setEditingSite] = useState(false);
+  const [siteEditForm, setSiteEditForm] = useState({});
   // CRM module state
   const [crmContacts,    setCrmContacts]    = useState([]);
   const [crmView,        setCrmView]        = useState("contacts"); // contacts | pipeline | dashboard
@@ -3549,7 +3623,11 @@ Return ONLY valid JSON, no markdown, no extra text:
                               const siteJobs = contactFmJobs.filter(j => j.siteId === s.id);
                               const activeJob = siteJobs.find(j => ["do_work","buyout"].includes(j.stage));
                               return (
-                                <div key={s.id} style={{ background: "#fff", border: "1px solid #D4D9EE", borderRadius: 8, padding: "12px 14px", display: "flex", alignItems: "center", gap: 12 }}>
+                                <div key={s.id}
+                                  onClick={() => { setSelectedSiteDetail(s); setSiteDetailTab("info"); setEditingSite(false); setSiteEditForm({...s}); }}
+                                  style={{ background: "#fff", border: "1px solid #D4D9EE", borderRadius: 8, padding: "12px 14px", display: "flex", alignItems: "center", gap: 12, cursor: "pointer" }}
+                                  onMouseEnter={e=>{e.currentTarget.style.borderColor="#3B6FE8";e.currentTarget.style.boxShadow="0 2px 12px rgba(59,111,232,0.1)";}}
+                                  onMouseLeave={e=>{e.currentTarget.style.borderColor="#D4D9EE";e.currentTarget.style.boxShadow="none";}}>
                                   <div style={{ width: 44, height: 44, borderRadius: 8, background: "#3B6FE812", border: "1px solid #3B6FE830", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
                                     <div style={{ fontSize: 9, color: "#3B6FE8", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em" }}>Store</div>
                                     <div style={{ fontSize: 13, fontWeight: 800, color: "#3B6FE8", lineHeight: 1.1 }}>{(s.storeNumber||"—").replace(/^[A-Za-z]+\s*/,"")}</div>
@@ -3559,12 +3637,10 @@ Return ONLY valid JSON, no markdown, no extra text:
                                     <div style={{ fontSize: 11, color: "#4A5278", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{s.address}</div>
                                     {s.phone && <div style={{ fontSize: 10, color: "#9BA3BF", marginTop: 2 }}>📞 {s.phone}</div>}
                                   </div>
-                                  <div style={{ textAlign: "right", flexShrink: 0 }}>
-                                    {activeJob ? (
-                                      <span style={{ fontSize: 10, fontWeight: 700, background: "#4ADE8015", color: "#4ADE80", border: "1px solid #4ADE8040", borderRadius: 4, padding: "2px 7px" }}>Active Job</span>
-                                    ) : siteJobs.length > 0 ? (
-                                      <span style={{ fontSize: 10, color: "#9BA3BF" }}>{siteJobs.length} job{siteJobs.length>1?"s":""}</span>
-                                    ) : null}
+                                  <div style={{ textAlign: "right", flexShrink: 0, display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
+                                    {activeJob && <span style={{ fontSize: 10, fontWeight: 700, background: "#4ADE8015", color: "#4ADE80", border: "1px solid #4ADE8040", borderRadius: 4, padding: "2px 7px" }}>Active Job</span>}
+                                    {!activeJob && siteJobs.length > 0 && <span style={{ fontSize: 10, color: "#9BA3BF" }}>{siteJobs.length} job{siteJobs.length>1?"s":""}</span>}
+                                    <span style={{ fontSize: 11, color: "#3B6FE8" }}>→</span>
                                   </div>
                                 </div>
                               );
@@ -6970,6 +7046,289 @@ Return ONLY valid JSON, no markdown, no extra text:
           </div>
         </div>
       )}
+
+
+      {/* ── SITE DETAIL MODAL ── */}
+      {selectedSiteDetail && (() => {
+        const s = selectedSiteDetail;
+        const co = companies.find(c => c.id === s.companyId);
+        const siteContacts = contacts.filter(c => (s.contactIds||[]).includes(c.id));
+        const siteAllJobs = [
+          ...fmJobs.filter(j => j.siteId === s.id),
+          ...capexJobs.filter(j => j.siteId === s.id),
+        ];
+        const fmSiteJobs    = fmJobs.filter(j => j.siteId === s.id);
+        const capexSiteJobs = capexJobs.filter(j => j.siteId === s.id);
+
+        const TRADE_GROUPS = [
+          { label:"🔧 FM — Facility Maintenance", jobs: fmSiteJobs },
+          { label:"🏗️ CapEx",                    jobs: capexSiteJobs },
+        ].filter(g => g.jobs.length > 0);
+
+        const TABS = [
+          { id:"info",     icon:"📋", label:"Info" },
+          { id:"photos",   icon:"📷", label:"Photos" },
+          { id:"backflow", icon:"💧", label:"Backflow" },
+          { id:"hvac",     icon:"❄️",  label:"HVAC" },
+          { id:"projects", icon:"🔨", label:"Projects" },
+        ];
+
+        const saveSiteField = (field, value) => {
+          const updated = { ...s, [field]: value };
+          setSelectedSiteDetail(updated);
+          setSites(prev => prev.map(x => x.id === s.id ? updated : x));
+          try { supa.from("sites").update(siteToDB(updated)).eq("id", s.id); } catch(e){}
+        };
+        const saveBackflowField = (subField, val) => {
+          saveSiteField("backflow", { ...(s.backflow||{}), [subField]: val });
+        };
+        const addHvacUnit = () => {
+          saveSiteField("hvac", [...(s.hvac||[]), { id: Date.now(), location:"", brand:"", model:"", serial:"", size:"", type:"", installDate:"", lastService:"", nextService:"", notes:"" }]);
+        };
+        const updateHvacUnit = (uid, field, val) => {
+          saveSiteField("hvac", (s.hvac||[]).map(u => u.id===uid ? {...u,[field]:val} : u));
+        };
+        const removeHvacUnit = (uid) => saveSiteField("hvac", (s.hvac||[]).filter(u=>u.id!==uid));
+
+        return (
+          <div style={{position:"fixed",top:0,left:0,right:0,bottom:0,background:"rgba(10,16,36,0.7)",zIndex:1000,display:"flex",alignItems:"flex-start",justifyContent:"flex-end",backdropFilter:"blur(3px)"}}
+            onClick={e=>{ if(e.target===e.currentTarget)setSelectedSiteDetail(null); }}>
+            <div style={{width:"min(700px,100vw)",height:"100vh",background:"#F4F6FB",display:"flex",flexDirection:"column",boxShadow:"-8px 0 48px rgba(0,0,0,0.2)",overflowY:"auto"}}>
+
+              {/* ── Header ── */}
+              <div style={{background:"linear-gradient(135deg,#1A2240,#253260)",padding:"22px 24px 18px",color:"#fff",flexShrink:0}}>
+                <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
+                  <button onClick={()=>setSelectedSiteDetail(null)} style={{background:"rgba(255,255,255,0.12)",border:"none",color:"#fff",borderRadius:6,padding:"5px 12px",cursor:"pointer",fontSize:12,fontFamily:"inherit"}}>✕ Close</button>
+                  <div style={{flex:1}}/>
+                  {co && <span style={{fontSize:11,color:"rgba(255,255,255,0.45)",fontWeight:500}}>{co.name}</span>}
+                </div>
+                <div style={{display:"flex",alignItems:"center",gap:16}}>
+                  <div style={{width:60,height:60,borderRadius:12,background:"rgba(59,111,232,0.35)",border:"2px solid rgba(59,111,232,0.5)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                    <div style={{fontSize:9,color:"rgba(255,255,255,0.55)",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.07em"}}>Store</div>
+                    <div style={{fontSize:16,fontWeight:900,color:"#fff",lineHeight:1.1}}>{(s.storeNumber||"—").replace(/^[A-Za-z]+\s*/,"")}</div>
+                  </div>
+                  <div style={{flex:1}}>
+                    <div style={{fontSize:22,fontWeight:800,color:"#fff",letterSpacing:"-0.01em"}}>#{s.storeNumber}</div>
+                    <div style={{fontSize:13,color:"rgba(255,255,255,0.55)",marginTop:3}}>{s.address}</div>
+                  </div>
+                </div>
+                {/* Quick stats */}
+                <div style={{display:"flex",gap:20,marginTop:16,paddingTop:14,borderTop:"1px solid rgba(255,255,255,0.1)"}}>
+                  {[
+                    {label:"Units",    value:s.unitCount||"—"},
+                    {label:"Type",     value:s.propertyType||"—"},
+                    {label:"Jobs",     value:siteAllJobs.length||"0"},
+                    {label:"Contacts", value:siteContacts.length},
+                  ].map(st=>(
+                    <div key={st.label}>
+                      <div style={{fontSize:17,fontWeight:800,color:"#fff"}}>{st.value}</div>
+                      <div style={{fontSize:10,color:"rgba(255,255,255,0.4)",textTransform:"uppercase",letterSpacing:"0.07em"}}>{st.label}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* ── Tab bar ── */}
+              <div style={{display:"flex",background:"#fff",borderBottom:"1px solid #D4D9EE",flexShrink:0,overflowX:"auto"}}>
+                {TABS.map(t=>(
+                  <button key={t.id} onClick={()=>setSiteDetailTab(t.id)}
+                    style={{padding:"11px 16px",border:"none",background:"transparent",cursor:"pointer",fontFamily:"inherit",fontSize:12,fontWeight:siteDetailTab===t.id?700:400,color:siteDetailTab===t.id?"#3B6FE8":"#4A5278",borderBottom:siteDetailTab===t.id?"2px solid #3B6FE8":"2px solid transparent",whiteSpace:"nowrap",marginBottom:-1,display:"flex",alignItems:"center",gap:5}}>
+                    <span>{t.icon}</span>{t.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* ── Tab content ── */}
+              <div style={{flex:1,padding:"20px 22px",display:"flex",flexDirection:"column",gap:14}}>
+
+                {/* ══ INFO TAB ══ */}
+                {siteDetailTab==="info" && (
+                  <div style={{display:"flex",flexDirection:"column",gap:12}}>
+
+                    {/* District contacts */}
+                    {siteContacts.length > 0 && (
+                      <div style={{background:"#fff",borderRadius:10,border:"1px solid #D4D9EE",overflow:"hidden"}}>
+                        <div style={{padding:"10px 14px",borderBottom:"1px solid #D4D9EE",fontSize:11,fontWeight:700,color:"#4A5278",textTransform:"uppercase",letterSpacing:"0.07em"}}>
+                          District Contact{siteContacts.length>1?"s":""}
+                        </div>
+                        {siteContacts.map(c=>(
+                          <div key={c.id} style={{padding:"12px 14px",display:"flex",alignItems:"center",gap:12,borderBottom:"1px solid #F4F6FB"}}>
+                            <div style={{width:36,height:36,borderRadius:"50%",background:"#E8EEFA",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:800,color:"#3B6FE8",fontSize:14,flexShrink:0}}>{(c.firstName||"?").charAt(0)}</div>
+                            <div style={{flex:1}}>
+                              <div style={{fontSize:13,fontWeight:700,color:"#1A2240"}}>{c.firstName} {c.lastName}</div>
+                              {c.title&&<div style={{fontSize:11,color:"#4A5278"}}>{c.title}</div>}
+                            </div>
+                            <div style={{display:"flex",gap:12}}>
+                              {c.phone&&<a href={"tel:"+c.phone} style={{fontSize:12,color:"#3B6FE8",textDecoration:"none"}}>📞 {c.phone}</a>}
+                              {c.email&&<a href={"mailto:"+c.email} style={{fontSize:12,color:"#3B6FE8",textDecoration:"none"}}>✉ {c.email}</a>}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Site details grid */}
+                    <div style={{background:"#fff",borderRadius:10,border:"1px solid #D4D9EE",overflow:"hidden"}}>
+                      <div style={{padding:"10px 14px",borderBottom:"1px solid #D4D9EE",fontSize:11,fontWeight:700,color:"#4A5278",textTransform:"uppercase",letterSpacing:"0.07em"}}>Site Details — click any field to edit</div>
+                      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr"}}>
+                        {[
+                          {label:"Site Phone",    field:"phone",        value:s.phone},
+                          {label:"# of Units",    field:"unitCount",    value:s.unitCount, type:"number"},
+                          {label:"Property Type", field:"propertyType", value:s.propertyType},
+                          {label:"Access Code",   field:"accessCode",   value:s.accessCode},
+                          {label:"Gate Code",     field:"gateCode",     value:s.gateCode},
+                          {label:"Manager Name",  field:"managerName",  value:s.managerName},
+                          {label:"Manager Phone", field:"managerPhone", value:s.managerPhone},
+                          {label:"Manager Email", field:"managerEmail", value:s.managerEmail},
+                        ].map((f,i)=>(
+                          <div key={f.field} style={{borderRight:i%2===0?"1px solid #F0F2F8":"none",borderBottom:"1px solid #F0F2F8"}}>
+                            <SiteField label={f.label} field={f.field} value={f.value} type={f.type||"text"} onSave={saveSiteField} />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Notes */}
+                    <div style={{background:"#fff",borderRadius:10,border:"1px solid #D4D9EE",overflow:"hidden"}}>
+                      <div style={{padding:"10px 14px",borderBottom:"1px solid #D4D9EE",fontSize:11,fontWeight:700,color:"#4A5278",textTransform:"uppercase",letterSpacing:"0.07em"}}>Notes</div>
+                      <SiteField label="" field="notes" value={s.notes} onSave={saveSiteField} />
+                    </div>
+                  </div>
+                )}
+
+                {/* ══ PHOTOS TAB ══ */}
+                {siteDetailTab==="photos" && (
+                  <div style={{display:"flex",flexDirection:"column",gap:12}}>
+                    {(s.photos||[]).length===0 && (
+                      <div style={{background:"#fff",borderRadius:10,border:"2px dashed #CBD1E8",padding:"48px 24px",textAlign:"center",color:"#9BA3BF"}}>
+                        <div style={{fontSize:40,marginBottom:10}}>📷</div>
+                        <div style={{fontSize:14,fontWeight:600,marginBottom:4}}>No photos yet</div>
+                        <div style={{fontSize:12}}>Paste an image URL below to add photos</div>
+                      </div>
+                    )}
+                    {(s.photos||[]).length>0 && (
+                      <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:10}}>
+                        {(s.photos||[]).map((url,i)=>(
+                          <div key={i} style={{position:"relative",borderRadius:10,overflow:"hidden",background:"#E8EEFA",aspectRatio:"4/3",border:"1px solid #D4D9EE"}}>
+                            <img src={url} alt="" style={{width:"100%",height:"100%",objectFit:"cover"}} onError={e=>{e.target.parentNode.style.background="#F0F2F8";e.target.style.display="none";}} />
+                            <button onClick={()=>saveSiteField("photos",(s.photos||[]).filter((_,j)=>j!==i))}
+                              style={{position:"absolute",top:6,right:6,background:"rgba(248,113,113,0.9)",border:"none",color:"#fff",borderRadius:4,padding:"3px 8px",cursor:"pointer",fontSize:11,fontWeight:700}}>✕</button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    <PhotoAdder onAdd={url=>saveSiteField("photos",[...(s.photos||[]),url])} />
+                  </div>
+                )}
+
+                {/* ══ BACKFLOW TAB ══ */}
+                {siteDetailTab==="backflow" && (
+                  <div style={{display:"flex",flexDirection:"column",gap:12}}>
+                    <div style={{background:"#fff",borderRadius:10,border:"1px solid #D4D9EE",overflow:"hidden"}}>
+                      <div style={{padding:"10px 14px",borderBottom:"1px solid #D4D9EE",fontSize:11,fontWeight:700,color:"#4A5278",textTransform:"uppercase",letterSpacing:"0.07em"}}>💧 Backflow Prevention Device</div>
+                      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr"}}>
+                        {[
+                          {label:"Device Type",    field:"type",        value:(s.backflow||{}).type},
+                          {label:"Serial Number",  field:"serial",      value:(s.backflow||{}).serial},
+                          {label:"Location",       field:"location",    value:(s.backflow||{}).location},
+                          {label:"Last Test Date", field:"lastTest",    value:(s.backflow||{}).lastTest,    type:"date"},
+                          {label:"Next Test Due",  field:"nextTest",    value:(s.backflow||{}).nextTest,    type:"date"},
+                          {label:"Test Company",   field:"testCompany", value:(s.backflow||{}).testCompany},
+                          {label:"Pass / Fail",    field:"status",      value:(s.backflow||{}).status},
+                          {label:"Notes",          field:"notes",       value:(s.backflow||{}).notes},
+                        ].map((f,i)=>(
+                          <div key={f.field} style={{borderRight:i%2===0?"1px solid #F0F2F8":"none",borderBottom:"1px solid #F0F2F8"}}>
+                            <HvacField label={f.label} value={f.value} type={f.type||"text"} onSave={val=>saveBackflowField(f.field,val)} />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* ══ HVAC TAB ══ */}
+                {siteDetailTab==="hvac" && (
+                  <div style={{display:"flex",flexDirection:"column",gap:12}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                      <div style={{fontSize:14,fontWeight:700,color:"#1A2240"}}>❄️ HVAC Units ({(s.hvac||[]).length})</div>
+                      <button onClick={addHvacUnit} style={{padding:"7px 14px",background:"#3B6FE8",color:"#fff",border:"none",borderRadius:7,cursor:"pointer",fontFamily:"inherit",fontSize:12,fontWeight:600}}>+ Add Unit</button>
+                    </div>
+                    {(s.hvac||[]).length===0 && (
+                      <div style={{background:"#fff",borderRadius:10,border:"2px dashed #CBD1E8",padding:"40px 24px",textAlign:"center",color:"#9BA3BF"}}>
+                        <div style={{fontSize:36,marginBottom:8}}>❄️</div>
+                        <div style={{fontSize:14,fontWeight:600,marginBottom:4}}>No HVAC units yet</div>
+                        <div style={{fontSize:12}}>Click "+ Add Unit" to track a unit</div>
+                      </div>
+                    )}
+                    {(s.hvac||[]).map((u,i)=>(
+                      <div key={u.id} style={{background:"#fff",borderRadius:10,border:"1px solid #D4D9EE",overflow:"hidden"}}>
+                        <div style={{padding:"10px 14px",borderBottom:"1px solid #D4D9EE",display:"flex",alignItems:"center",background:"#F9FAFC"}}>
+                          <div style={{fontSize:12,fontWeight:700,color:"#1A2240",flex:1}}>Unit {i+1}{u.location?" · "+u.location:""}</div>
+                          <button onClick={()=>removeHvacUnit(u.id)} style={{background:"none",border:"none",color:"#F87171",cursor:"pointer",fontSize:14,padding:"0 4px",fontWeight:700}}>✕</button>
+                        </div>
+                        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr"}}>
+                          {[
+                            {label:"Location",     field:"location"},
+                            {label:"Type",         field:"type"},
+                            {label:"Brand",        field:"brand"},
+                            {label:"Model",        field:"model"},
+                            {label:"Serial #",     field:"serial"},
+                            {label:"Size / Tons",  field:"size"},
+                            {label:"Install Date", field:"installDate", type:"date"},
+                            {label:"Last Service", field:"lastService", type:"date"},
+                            {label:"Next Service", field:"nextService", type:"date"},
+                            {label:"Notes",        field:"notes"},
+                          ].map((f2,j)=>(
+                            <div key={f2.field} style={{borderRight:j%2===0?"1px solid #F0F2F8":"none",borderBottom:"1px solid #F0F2F8"}}>
+                              <HvacField label={f2.label} value={u[f2.field]||""} type={f2.type||"text"} onSave={val=>updateHvacUnit(u.id,f2.field,val)} />
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* ══ PAST PROJECTS TAB ══ */}
+                {siteDetailTab==="projects" && (
+                  <div style={{display:"flex",flexDirection:"column",gap:14}}>
+                    {siteAllJobs.length===0 && (
+                      <div style={{background:"#fff",borderRadius:10,border:"2px dashed #CBD1E8",padding:"40px 24px",textAlign:"center",color:"#9BA3BF"}}>
+                        <div style={{fontSize:36,marginBottom:8}}>🔨</div>
+                        <div style={{fontSize:14,fontWeight:600}}>No jobs for this site yet</div>
+                      </div>
+                    )}
+                    {TRADE_GROUPS.map(({label, jobs})=>(
+                      <div key={label} style={{background:"#fff",borderRadius:10,border:"1px solid #D4D9EE",overflow:"hidden"}}>
+                        <div style={{padding:"10px 14px",borderBottom:"1px solid #D4D9EE",display:"flex",alignItems:"center",gap:8,background:"#F9FAFC"}}>
+                          <div style={{fontSize:12,fontWeight:700,color:"#1A2240",flex:1}}>{label}</div>
+                          <span style={{fontSize:11,fontWeight:700,background:"#3B6FE815",color:"#3B6FE8",borderRadius:10,padding:"2px 9px"}}>{jobs.length}</span>
+                        </div>
+                        {jobs.sort((a,b)=>(b.startDate||"").localeCompare(a.startDate||"")).map(j=>(
+                          <div key={j.id} style={{padding:"12px 14px",borderBottom:"1px solid #F4F6FB",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                            <div style={{flex:1,minWidth:0}}>
+                              <div style={{fontSize:13,fontWeight:600,color:"#1A2240",marginBottom:3}}>{j.name}</div>
+                              <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
+                                {j.startDate&&<span style={{fontSize:11,color:"#9BA3BF"}}>{j.startDate}</span>}
+                                {j.pm&&<span style={{fontSize:11,color:"#4A5278"}}>· {j.pm}</span>}
+                              </div>
+                            </div>
+                            <div style={{textAlign:"right",flexShrink:0,marginLeft:12}}>
+                              {j.contractValue>0&&<div style={{fontSize:13,fontWeight:700,color:"#4ADE80",marginBottom:3}}>{fmt(j.contractValue)}</div>}
+                              <span style={{fontSize:10,fontWeight:700,background:j.stage==="bill"?"#4ADE8015":j.stage==="do_work"?"#FCD34D15":"#3B6FE815",color:j.stage==="bill"?"#4ADE80":j.stage==="do_work"?"#D97706":"#3B6FE8",borderRadius:4,padding:"2px 7px"}}>{j.stage}</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ── COMPANY FORM ── */}
       {showCompanyForm && (
