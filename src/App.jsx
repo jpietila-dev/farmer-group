@@ -42,6 +42,8 @@ const supa = {
 const dbToCompany = r => ({ id: r.id, name: r.name, address: r.address||"", website: r.website||"", logo: r.logo||"", notes: r.notes||"" });
 const companyToDB = c => ({ id: c.id, name: c.name, address: c.address||"", website: c.website||"", logo: c.logo||"", notes: c.notes||"" });
 
+const dbToContact = r => ({ id: r.id, companyId: r.company_id||"", firstName: r.first_name||"", lastName: r.last_name||"", title: r.title||"", email: r.email||"", phone: r.phone||"" });
+const contactToDB = c => ({ id: c.id, company_id: c.companyId||null, first_name: c.firstName||"", last_name: c.lastName||"", title: c.title||"", email: c.email||"", phone: c.phone||"" });
 const dbToSite = r => ({ id: r.id, companyId: r.company_id||"", contactIds: r.contact_ids||[], storeNumber: r.store_number||"", address: r.address||"", phone: r.phone||"", accessCode: r.access_code||"", notes: r.notes||"", lat: r.lat ? parseFloat(r.lat) : null, lng: r.lng ? parseFloat(r.lng) : null, businessUnits: r.business_units||[] });
 const siteToDB = s => ({ id: s.id, company_id: s.companyId||null, contact_ids: s.contactIds||[], store_number: s.storeNumber||"", address: s.address||"", phone: s.phone||"", access_code: s.accessCode||"", notes: s.notes||"", lat: s.lat||null, lng: s.lng||null, business_units: s.businessUnits||[] });
 
@@ -1734,13 +1736,14 @@ export default function App() {
     const load = async () => {
       setDbLoading(l => ({ ...l, companies: true, sites: true, lawnSites: true, subcontractors: true }));
       try {
-        const [coRes, siteRes, subRes, fmRes, teamRes, crmRes] = await Promise.all([
+        const [coRes, siteRes, subRes, fmRes, teamRes, crmRes, ctRes] = await Promise.all([
           supa.from("companies").select("*"),
           supa.from("sites").select("*"),
           supa.from("subcontractors").select("*"),
           supa.from("fm_jobs").select("*"),
           supa.from("fm_team").select("*"),
           supa.from("crm_contacts").select("*"),
+          supa.from("contacts").select("id,company_id,first_name,last_name,title,email,phone").limit(1000),
         ]);
         if (coRes.data?.length)   setCompanies(coRes.data.map(dbToCompany));
         if (siteRes.data?.length) setSites(siteRes.data.map(dbToSite));
@@ -1748,6 +1751,7 @@ export default function App() {
         if (fmRes.data?.length)   setFmJobs(fmRes.data.map(dbToFmJob));
         if (teamRes.data?.length) setFmTeam(teamRes.data.map(dbToTeamMember));
         if (crmRes.data?.length)  setCrmContacts(crmRes.data.map(dbToCrmContact));
+        if (ctRes.data?.length)   setContacts(ctRes.data.map(dbToContact));
         setSupaReady(true);
       } catch(e) {
         setDbError("Could not connect to database.");
@@ -2035,8 +2039,16 @@ Return ONLY valid JSON, no markdown, no extra text:
 
   const saveContact = () => {
     if (!contactForm.firstName.trim()) return;
-    if (editContactId) setContacts(contacts.map(p => p.id === editContactId ? { ...contactForm, id: editContactId } : p));
-    else setContacts([...contacts, { ...contactForm, id: "p" + Date.now() }]);
+    if (editContactId) {
+      const updated = { ...contactForm, id: editContactId };
+      setContacts(contacts.map(p => p.id === editContactId ? updated : p));
+      try { supa.from("contacts").update(contactToDB(updated)).eq("id", editContactId); } catch(e) {}
+    } else {
+      const newId = "p" + Date.now();
+      const entry = { ...contactForm, id: newId };
+      setContacts([...contacts, entry]);
+      try { supa.from("contacts").insert(contactToDB(entry)); } catch(e) {}
+    }
     setShowContactForm(false); setEditContactId(null);
     setContactForm({ companyId: "", firstName: "", lastName: "", title: "", email: "", phone: "" });
   };
@@ -2055,7 +2067,9 @@ Return ONLY valid JSON, no markdown, no extra text:
     if (!inlineContact.firstName.trim()) return;
     const newId  = "p" + Date.now();
     const compId = form.companyId || jobForm.companyId;
-    setContacts([...contacts, { ...inlineContact, id: newId, companyId: compId }]);
+    const entry = { ...inlineContact, id: newId, companyId: compId };
+    setContacts([...contacts, entry]);
+    try { supa.from("contacts").insert(contactToDB(entry)); } catch(e) {}
     setForm(f => ({ ...f, contactId: newId }));
     setJobForm(f => ({ ...f, contactId: newId }));
     setShowInlineContact(false);
@@ -3545,7 +3559,8 @@ Return ONLY valid JSON, no markdown, no extra text:
             const autoTag = activeBU !== "all" ? buToTag[activeBU] : null;
 
             const allCompanies = companies.filter(c => c.name.toLowerCase().includes(crmSearch.toLowerCase()));
-            const tagFilter = autoTag || crmTagFilter || "all";
+            // On division pages, don't auto-filter by tag — show all companies, tag is for discovery only
+            const tagFilter = crmTagFilter || "all";
 
             const filteredCompanies = tagFilter === "all"
               ? allCompanies
