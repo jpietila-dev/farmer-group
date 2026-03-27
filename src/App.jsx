@@ -6,7 +6,7 @@ const SUPA_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsI
 const supa = {
   from: (table) => ({
     select: function(cols = "*") {
-      return fetch(`${SUPA_URL}/rest/v1/${table}?select=${cols}&order=created_at.asc`, {
+      return fetch(`${SUPA_URL}/rest/v1/${table}?select=${cols}&limit=2000`, {
         headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}` }
       }).then(r => r.json()).then(data => ({ data, error: null })).catch(error => ({ data: null, error }));
     },
@@ -50,8 +50,8 @@ const siteToDB = s => ({ id: s.id, company_id: s.companyId||null, contact_ids: s
 const dbToLsSite = r => dbToSite(r); // same structure now
 const lsSiteToDB = s => siteToDB(s);
 
-const dbToSub = r => ({ id: r.id, name: r.name||"", trade: r.trade||"", phone: r.phone||"", email: r.email||"", msaStatus: r.msa_status||"missing", coiExpiry: r.coi_expiry||"", w9: r.w9||false, notes: r.notes||"", services: r.services||[] });
-const subToDB = s => ({ id: s.id, name: s.name||"", trade: s.trade||"", phone: s.phone||"", email: s.email||"", msa_status: s.msaStatus||"missing", coi_expiry: s.coiExpiry||null, w9: s.w9||false, notes: s.notes||"", services: s.services||[] });
+const dbToSub = r => ({ id: r.id, name: r.name||"", trade: r.trade||"", phone: r.phone||"", email: r.email||"", msaStatus: r.msa_status||"missing", coiExpiry: r.coi_expiry||"", w9: r.w9||false, notes: r.notes||"", services: r.services||[], address: r.address||"", city: r.city||"", state: r.state||"", lat: r.lat||null, lng: r.lng||null, coverage: r.coverage||"", contact_name: r.contact_name||"" });
+const subToDB = s => ({ id: s.id, name: s.name||"", trade: s.trade||"", phone: s.phone||"", email: s.email||"", msa_status: s.msaStatus||s.msa_status||"missing", coi_expiry: s.coiExpiry||s.coi_expiry||null, w9: s.w9||false, notes: s.notes||"", services: s.services||[], address: s.address||null, city: s.city||null, state: s.state||null, lat: s.lat||null, lng: s.lng||null, coverage: s.coverage||null, contact_name: s.contact_name||null });
 const dbToTeamMember = r => ({ id: r.id, name: r.name||"", role: r.role||"", phone: r.phone||"", email: r.email||"",
   // Support both old string "facility" and new array ["facility","major"] formats
   divisions: Array.isArray(r.divisions) ? r.divisions : (r.division ? [r.division] : ["facility"]),
@@ -202,6 +202,7 @@ const NAV_ITEMS = {
     { id: "sites",          label: "Sites",          icon: "📍" },
     { id: "customers",      label: "Customers",      icon: "🤝" },
     { id: "subcontractors", label: "Subcontractors", icon: "🔧" },
+  { id: "vendors",        label: "Vendors",        icon: "🏢" },
     { id: "team",           label: "Team",           icon: "👥" },
     { id: "calendar",       label: "Calendar",       icon: "📅" },
   ],
@@ -1731,7 +1732,7 @@ export default function App() {
   const [subcontractors,    setSubcontractors]    = useState([]);
   const [showSubForm,       setShowSubForm]       = useState(false);
   const [editSubId,         setEditSubId]         = useState(null);
-  const [subForm,           setSubForm]           = useState({ name: "", trade: "", phone: "", email: "", msaStatus: "missing", coiExpiry: "", w9: false, notes: "", services: [] });
+  const [subForm,           setSubForm]           = useState({ name: "", trade: "", phone: "", email: "", msaStatus: "missing", coiExpiry: "", w9: false, notes: "", services: [], address: "", city: "", state: "", contact_name: "", coverage: "" });
 
   const navItems = NAV_ITEMS[activeBU] || NAV_ITEMS.all;
   const buColor  = BU_COLORS[activeBU];
@@ -1815,8 +1816,12 @@ export default function App() {
       try {
         const [coRes, siteRes, subRes, fmRes, teamRes, crmRes, ctRes] = await Promise.all([
           supa.from("companies").select("*"),
-          supa.from("sites").select("*"),
-          supa.from("subcontractors").select("*"),
+          fetch(`${SUPA_URL}/rest/v1/sites?select=*&limit=1000`, {
+            headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}` }
+          }).then(r => r.json()).then(data => ({ data, error: null })).catch(error => ({ data: null, error })),
+          fetch(`${SUPA_URL}/rest/v1/subcontractors?select=*&limit=500`, {
+            headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}` }
+          }).then(r => r.json()).then(data => ({ data, error: null })).catch(error => ({ data: null, error })),
           supa.from("fm_jobs").select("*"),
           supa.from("fm_team").select("*"),
           supa.from("crm_contacts").select("*"),
@@ -5730,102 +5735,301 @@ if(bounds.length)map.fitBounds(bounds,{padding:[30,30]});
 
           {/* ── SUBCONTRACTORS (master list — FM, Lawn, Snow) ── */}
           {activeNav === "subcontractors" && ["facility","lawn","snow"].includes(activeBU) && (() => {
-            const SUB_SERVICE_OPTIONS = [
-              { id: "fm",   label: "Facility Maint.", color: "#7BA7F5" },
-              { id: "lawn", label: "Lawn",            color: "#4CAF82" },
-              { id: "snow", label: "Snow",            color: "#A8C4F8" },
-            ];
-            // filter list by current BU for relevance highlight, but show all
-            const visibleSubs = subcontractors.filter(s => {
-              if (!s.services || s.services.length === 0) return true;
-              return activeBU === "facility" ? s.services.includes("fm")
-                   : activeBU === "lawn"     ? s.services.includes("lawn")
-                   : s.services.includes("snow");
-            });
+            const TRADE_MAP = {"HVAC":["❄️","#60A5FA"],"Plumbing":["🔧","#3B82F6"],"Electrical":["⚡","#F59E0B"],"Roofing":["🏠","#8B5CF6"],"Painting":["🎨","#EC4899"],"Concrete":["🪨","#6B7280"],"Landscaping":["🌿","#10B981"],"Snow":["🌨","#A8C4F8"],"General":["🔨","#7BA7F5"],"Fire":["🔥","#EF4444"],"Pest":["🪲","#84CC16"],"Cleaning":["🧹","#14B8A6"],"Security":["🔒","#6366F1"],"Elevator":["🛗","#D97706"],"Carpentry":["🪵","#92400E"]};
+            const getTS = (trade) => { const match = Object.entries(TRADE_MAP).find(([k]) => trade && trade.toLowerCase().includes(k.toLowerCase())); return match ? {icon:match[1][0],color:match[1][1]} : {icon:"🔧",color:"#7BA7F5"}; };
+            const allTrades = [...new Set(subcontractors.map(s => s.trade).filter(Boolean))].sort();
+            const visibleSubs = subcontractors.filter(s => !subTradeFilter || s.trade === subTradeFilter);
+            const mappableSubs = subcontractors.filter(s => s.lat && s.lng);
+            const mapPts = (subTradeFilter ? visibleSubs : subcontractors).filter(s => s.lat && s.lng);
             const allCount = subcontractors.length;
             return (
-              <div className="fade-in" style={{ display: "flex", flexDirection: "column", gap: 22 }}>
+              <div className="fade-in" style={{ display: "flex", flexDirection: "column", gap: 20 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                   <div>
-                    <div style={{ fontSize: 22, fontWeight: 700, color: "#1A2240", letterSpacing: "-0.01em", textTransform: "uppercase" }}>Subcontractors</div>
-                    <div style={{ fontSize: 11, color: "#4A5278", marginTop: 3, letterSpacing: "0.06em" }}>MASTER LIST · {allCount} TOTAL · showing {visibleSubs.length} for {activeBU.toUpperCase()}</div>
+                    <div style={{ fontSize: 22, fontWeight: 700, color: "#1A2240", letterSpacing: "-0.01em", textTransform: "uppercase" }}>Vendors</div>
+                    <div style={{ fontSize: 11, color: "#4A5278", marginTop: 3, letterSpacing: "0.06em" }}>{allCount} TOTAL · {mappableSubs.length} GEOCODED</div>
                   </div>
-                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                    <button className="btn-ghost" style={{ fontSize: 11, color: "#4A5278" }} onClick={() => { /* show all toggle handled by rendering all */ }}>
-                      {visibleSubs.length < allCount ? "+ " + (allCount - visibleSubs.length) + " hidden (other BUs)" : ""}
-                    </button>
-                    <button className="btn-primary" onClick={() => { setEditSubId(null); setSubForm({ name: "", trade: "", phone: "", email: "", msaStatus: "missing", coiExpiry: "", w9: false, notes: "", services: [activeBU === "facility" ? "fm" : activeBU] }); setShowSubForm(true); }}>+ Add Subcontractor</button>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <div style={{ display: "flex", border: "1px solid #CBD1E8", borderRadius: 7, overflow: "hidden" }}>
+                      {[{id:"list",lbl:"☰ List"},{id:"map",lbl:"🗺 Map"}].map(v=>(
+                        <button key={v.id} onClick={()=>setSubView(v.id)} style={{padding:"6px 14px",border:"none",background:subView===v.id?"#3B6FE8":"transparent",color:subView===v.id?"#fff":"#4A5278",cursor:"pointer",fontFamily:"inherit",fontSize:12,fontWeight:600}}>{v.lbl}</button>
+                      ))}
+                    </div>
+                    <button className="btn-primary" onClick={()=>{ setEditSubId(null); setSubForm({name:"",trade:"",phone:"",email:"",address:"",city:"",state:"",msaStatus:"missing",coiExpiry:"",w9:false,notes:"",services:[activeBU==="facility"?"fm":activeBU]}); setShowSubForm(true); }}>+ Add Vendor</button>
                   </div>
                 </div>
 
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 12 }}>
                   {[
-                    { label: "Total Subs",    value: allCount,                                                                                                                                color: buColor.accent },
-                    { label: "MSA Signed",    value: subcontractors.filter(s => s.msaStatus === "signed").length,                                                                             color: "#4ADE80" },
-                    { label: "COI Expiring",  value: subcontractors.filter(s => { if (!s.coiExpiry) return false; const d = new Date(s.coiExpiry); return d > new Date() && d <= new Date(Date.now() + 30*86400000); }).length, color: "#FCD34D" },
-                    { label: "Missing Docs",  value: subcontractors.filter(s => s.msaStatus !== "signed" || !s.w9 || !s.coiExpiry).length,                                                   color: "#F87171" },
-                  ].map(s => (
-                    <div key={s.label} className="stat-card" style={{ position: "relative", overflow: "hidden", padding: "14px 18px" }}>
-                      <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: s.color }} />
-                      <div style={{ fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "#4A5278", marginBottom: 6 }}>{s.label}</div>
-                      <div style={{ fontSize: 22, fontWeight: 700, color: s.color }}>{s.value}</div>
+                    {label:"Total Vendors", value:allCount, color:buColor.accent},
+                    {label:"MSA Signed",    value:subcontractors.filter(s=>s.msaStatus==="signed").length, color:"#4ADE80"},
+                    {label:"COI Expiring",  value:subcontractors.filter(s=>{if(!s.coiExpiry)return false;const d=new Date(s.coiExpiry);return d>new Date()&&d<=new Date(Date.now()+30*86400000);}).length, color:"#FCD34D"},
+                    {label:"Missing Docs",  value:subcontractors.filter(s=>s.msaStatus!=="signed"||!s.w9||!s.coiExpiry).length, color:"#F87171"},
+                  ].map(s=>(
+                    <div key={s.label} className="stat-card" style={{position:"relative",overflow:"hidden",padding:"14px 18px"}}>
+                      <div style={{position:"absolute",top:0,left:0,right:0,height:2,background:s.color}}/>
+                      <div style={{fontSize:10,letterSpacing:"0.1em",textTransform:"uppercase",color:"#4A5278",marginBottom:6}}>{s.label}</div>
+                      <div style={{fontSize:22,fontWeight:700,color:s.color}}>{s.value}</div>
                     </div>
                   ))}
                 </div>
 
-                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  {subcontractors.length === 0 && (
-                    <div style={{ textAlign: "center", padding: "48px", color: "#3D4570", fontSize: 12, background: "#ECEEF8", borderRadius: 10, border: "1px solid #CBD1E8" }}>No subcontractors yet — add your first one</div>
-                  )}
-                  {subcontractors.map(s => {
-                    const msaColor   = s.msaStatus === "signed" ? "#4ADE80" : s.msaStatus === "expired" ? "#F87171" : "#FCD34D";
-                    const msaLabel   = s.msaStatus === "signed" ? "MSA ✓" : s.msaStatus === "expired" ? "MSA Expired" : "MSA Missing";
-                    const coiDate    = s.coiExpiry ? new Date(s.coiExpiry) : null;
-                    const coiExpired = coiDate && coiDate < new Date();
-                    const coiSoon    = coiDate && !coiExpired && coiDate <= new Date(Date.now() + 30*86400000);
-                    const coiColor   = !coiDate ? "#F87171" : coiExpired ? "#F87171" : coiSoon ? "#FCD34D" : "#4ADE80";
-                    const coiLabel   = !coiDate ? "COI Missing" : coiExpired ? "COI Expired" : coiSoon ? "COI Expiring " + s.coiExpiry : "COI ✓ " + s.coiExpiry;
-                    const w9Color    = s.w9 ? "#4ADE80" : "#F87171";
-                    const assignedFmJobs   = fmJobs.filter(j => j.subcontractorId === s.id);
-                    const assignedLawnBids = lawnBids.filter(b => b.subcontractorId === s.id);
-                    const svcTags = (s.services || []).map(sv => SUB_SERVICE_OPTIONS.find(o => o.id === sv)).filter(Boolean);
-                    const isCurrentBU = !s.services || s.services.length === 0 || (activeBU === "facility" ? s.services.includes("fm") : s.services.includes(activeBU));
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+                  <span style={{fontSize:11,color:"#4A5278",fontWeight:600,marginRight:2}}>Trade:</span>
+                  <button onClick={()=>setSubTradeFilter(null)} style={{padding:"4px 12px",borderRadius:20,border:"1px solid "+(!subTradeFilter?"#3B6FE8":"#CBD1E8"),background:!subTradeFilter?"#3B6FE8":"transparent",color:!subTradeFilter?"#fff":"#4A5278",fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>
+                    All ({allCount})
+                  </button>
+                  {allTrades.map(t=>{
+                    const ts=getTS(t); const n=subcontractors.filter(s=>s.trade===t).length; const active=subTradeFilter===t;
                     return (
-                      <div key={s.id} className="opp-row" style={{ opacity: isCurrentBU ? 1 : 0.5 }}>
-                        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12 }}>
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6, flexWrap: "wrap" }}>
-                              <div style={{ fontSize: 14, color: "#1A2240", fontWeight: 600 }}>{s.name}</div>
-                              {s.trade && <span style={{ fontSize: 10, color: buColor.accent, background: buColor.light, padding: "2px 8px", borderRadius: 10, textTransform: "uppercase", letterSpacing: "0.06em" }}>{s.trade}</span>}
-                              {svcTags.map(sv => (
-                                <span key={sv.id} style={{ fontSize: 10, color: sv.color, background: sv.color + "20", border: "1px solid " + sv.color + "40", padding: "2px 8px", borderRadius: 10, fontWeight: 600 }}>{sv.label}</span>
-                              ))}
-                              {(!s.services || s.services.length === 0) && <span style={{ fontSize: 10, color: "#4A5278", fontStyle: "italic" }}>All divisions</span>}
+                      <button key={t} onClick={()=>setSubTradeFilter(active?null:t)}
+                        style={{padding:"4px 12px",borderRadius:20,border:"1px solid "+(active?ts.color:ts.color+"50"),background:active?ts.color:ts.color+"18",color:active?"#fff":ts.color,fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",gap:5}}>
+                        <span>{ts.icon}</span> {t} ({n})
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {subView === "map" && (
+                  <div style={{borderRadius:12,overflow:"hidden",border:"1px solid #D4D9EE",boxShadow:"0 2px 16px rgba(0,0,0,0.07)"}}>
+                    <div style={{background:"#fff",padding:"10px 16px",borderBottom:"1px solid #F0F2F8",display:"flex",gap:12,flexWrap:"wrap",alignItems:"center"}}>
+                      <span style={{fontSize:11,fontWeight:700,color:"#1A2240"}}>{mapPts.length} vendor{mapPts.length!==1?"s":""} on map</span>
+                      {allTrades.slice(0,10).map(t=>{const ts=getTS(t);const n=mapPts.filter(s=>s.trade===t).length;if(!n)return null;return(<div key={t} style={{display:"flex",alignItems:"center",gap:4}}><span style={{fontSize:14}}>{ts.icon}</span><span style={{fontSize:11,color:"#4A5278"}}>{t} ({n})</span></div>);})}
+                    </div>
+                    {mapPts.length === 0 ? (
+                      <div style={{background:"#F9FAFC",padding:"48px 24px",textAlign:"center",color:"#4A5278"}}>
+                        <div style={{fontSize:36,marginBottom:10}}>🗺️</div>
+                        <div style={{fontSize:14,fontWeight:600,color:"#1A2240",marginBottom:6}}>No vendors geocoded yet</div>
+                        <div style={{fontSize:12}}>Add addresses when editing vendors, then run the geocode tool.</div>
+                      </div>
+                    ) : (
+                      <iframe key={"sm-"+subTradeFilter+"-"+mapPts.length} style={{width:"100%",height:500,border:"none",display:"block"}} title="Vendor Map"
+                        srcDoc={"<!DOCTYPE html><html><head><meta charset='utf-8'><link rel='stylesheet' href='https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css'/><script src='https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js'><\\/script><style>html,body,#map{margin:0;padding:0;height:100%;width:100%}.leaflet-popup-content-wrapper{border-radius:10px}</style></head><body><div id='map'></div><script>const map=L.map('map',{zoomControl:true,attributionControl:false});L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).addTo(map);L.control.attribution({prefix:'© OSM'}).addTo(map);const pts=" + JSON.stringify(mapPts.map(s=>({lat:s.lat,lng:s.lng,name:s.name,trade:s.trade||"General",phone:s.phone||"",city:s.city||"",state:s.state||""}))) + ";const TM={'HVAC':['❄️','#60A5FA'],'Plumbing':['🔧','#3B82F6'],'Electrical':['⚡','#F59E0B'],'Roofing':['🏠','#8B5CF6'],'Painting':['🎨','#EC4899'],'Concrete':['🪨','#6B7280'],'Landscaping':['🌿','#10B981'],'Snow':['🌨','#A8C4F8'],'General':['🔨','#7BA7F5'],'Fire':['🔥','#EF4444'],'Pest':['🪲','#84CC16'],'Cleaning':['🧹','#14B8A6'],'Security':['🔒','#6366F1'],'Elevator':['🛗','#D97706'],'Carpentry':['🪵','#92400E']};const getI=(t)=>{const m=Object.entries(TM).find(([k])=>t&&t.toLowerCase().includes(k.toLowerCase()));return m?m[1]:['🔧','#7BA7F5'];};const bnds=[];pts.forEach(p=>{const [ic,cl]=getI(p.trade);const icon=L.divIcon({className:'',html:'<div style=\"width:36px;height:36px;border-radius:50%;background:'+cl+';display:flex;align-items:center;justify-content:center;font-size:18px;box-shadow:0 2px 8px rgba(0,0,0,0.4);border:2.5px solid white\">'+ic+'</div>',iconSize:[36,36],iconAnchor:[18,18],popupAnchor:[0,-20]});L.marker([p.lat,p.lng],{icon}).addTo(map).bindPopup('<div style=\"font-family:Inter,sans-serif;line-height:1.6\"><b style=\"font-size:13px\">'+p.name+'</b><br><span style=\"font-size:11px;color:#4A5278\">'+p.trade+'</span>'+(p.city?'<br><span style=\"font-size:11px;color:#9BA3BF\">'+p.city+(p.state?', '+p.state:'')+'</span>':'')+(p.phone?'<br><span style=\"font-size:11px\">📞 '+p.phone+'</span>':'')+'</div>');bnds.push([p.lat,p.lng]);});if(bnds.length)map.fitBounds(bnds,{padding:[40,40]});<\\/script></body></html>"}
+                      />
+                    )}
+                  </div>
+                )}
+
+                {subView === "list" && (
+                  <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                    {visibleSubs.length===0&&<div style={{textAlign:"center",padding:"48px",color:"#3D4570",fontSize:12,background:"#ECEEF8",borderRadius:10,border:"1px solid #CBD1E8"}}>No vendors match this filter</div>}
+                    {visibleSubs.map(s=>{
+                      const ts=getTS(s.trade);
+                      const msaColor=s.msaStatus==="signed"?"#4ADE80":s.msaStatus==="expired"?"#F87171":"#FCD34D";
+                      const msaLabel=s.msaStatus==="signed"?"MSA ✓":s.msaStatus==="expired"?"MSA Expired":"MSA Missing";
+                      const coiDate=s.coiExpiry?new Date(s.coiExpiry):null;
+                      const coiExpired=coiDate&&coiDate<new Date();
+                      const coiSoon=coiDate&&!coiExpired&&coiDate<=new Date(Date.now()+30*86400000);
+                      const coiColor=!coiDate?"#F87171":coiExpired?"#F87171":coiSoon?"#FCD34D":"#4ADE80";
+                      const coiLabel=!coiDate?"COI Missing":coiExpired?"COI Expired":coiSoon?"Expires "+s.coiExpiry:"COI ✓";
+                      const assignedJobs=fmJobs.filter(j=>j.subcontractorId===s.id);
+                      return (
+                        <div key={s.id} style={{background:"#fff",border:"1px solid #D4D9EE",borderRadius:10,padding:"14px 16px",display:"flex",alignItems:"flex-start",gap:14}}>
+                          <div style={{width:46,height:46,borderRadius:10,background:ts.color+"18",border:"1px solid "+ts.color+"40",display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,flexShrink:0}}>{ts.icon}</div>
+                          <div style={{flex:1,minWidth:0}}>
+                            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:5,flexWrap:"wrap"}}>
+                              <div style={{fontSize:14,fontWeight:700,color:"#1A2240"}}>{s.name}</div>
+                              {s.trade&&<span style={{fontSize:10,color:ts.color,background:ts.color+"18",border:"1px solid "+ts.color+"40",padding:"2px 8px",borderRadius:10,fontWeight:600}}>{s.trade}</span>}
+                              {assignedJobs.length>0&&<span style={{fontSize:10,color:"#7BA7F5"}}>🔨 {assignedJobs.length} job{assignedJobs.length!==1?"s":""}</span>}
+                              {s.lat&&<span style={{fontSize:10,color:"#4ADE80",background:"#4ADE8012",border:"1px solid #4ADE8030",borderRadius:4,padding:"1px 6px"}}>📍 Mapped</span>}
                             </div>
-                            <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginBottom: 8 }}>
-                              {s.phone && <span style={{ fontSize: 11, color: "#4A5278" }}>📞 {s.phone}</span>}
-                              {s.email && <span style={{ fontSize: 11, color: "#4A5278" }}>✉ {s.email}</span>}
-                              {assignedFmJobs.length > 0 && <span style={{ fontSize: 11, color: "#7BA7F5" }}>🔨 {assignedFmJobs.length} FM job{assignedFmJobs.length !== 1 ? "s" : ""}</span>}
-                              {assignedLawnBids.length > 0 && <span style={{ fontSize: 11, color: "#4CAF82" }}>🌿 {assignedLawnBids.length} lawn site{assignedLawnBids.length !== 1 ? "s" : ""}</span>}
+                            <div style={{display:"flex",gap:14,flexWrap:"wrap",marginBottom:8}}>
+                              {s.phone&&<a href={"tel:"+s.phone} style={{fontSize:12,color:"#4A5278",textDecoration:"none"}}>📞 {s.phone}</a>}
+                              {s.email&&<a href={"mailto:"+s.email} style={{fontSize:12,color:"#3B6FE8",textDecoration:"none"}}>✉ {s.email}</a>}
+                              {(s.city||s.state)&&<span style={{fontSize:12,color:"#9BA3BF"}}>📍 {[s.city,s.state].filter(Boolean).join(", ")}</span>}
                             </div>
-                            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                              <span style={{ fontSize: 10, fontWeight: 600, color: msaColor, background: msaColor + "15", border: "1px solid " + msaColor + "30", padding: "3px 10px", borderRadius: 10 }}>{msaLabel}</span>
-                              <span style={{ fontSize: 10, fontWeight: 600, color: coiColor, background: coiColor + "15", border: "1px solid " + coiColor + "30", padding: "3px 10px", borderRadius: 10 }}>{coiLabel}</span>
-                              <span style={{ fontSize: 10, fontWeight: 600, color: w9Color, background: w9Color + "15", border: "1px solid " + w9Color + "30", padding: "3px 10px", borderRadius: 10 }}>{s.w9 ? "W9 ✓" : "W9 Missing"}</span>
+                            <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                              <span style={{fontSize:10,fontWeight:700,background:msaColor+"18",color:msaColor,border:"1px solid "+msaColor+"40",borderRadius:4,padding:"2px 8px"}}>{msaLabel}</span>
+                              <span style={{fontSize:10,fontWeight:700,background:coiColor+"18",color:coiColor,border:"1px solid "+coiColor+"40",borderRadius:4,padding:"2px 8px"}}>{coiLabel}</span>
+                              <span style={{fontSize:10,fontWeight:700,background:s.w9?"#4ADE8018":"#F8717118",color:s.w9?"#4ADE80":"#F87171",border:"1px solid "+(s.w9?"#4ADE8040":"#F8717140"),borderRadius:4,padding:"2px 8px"}}>{s.w9?"W9 ✓":"W9 Missing"}</span>
                             </div>
-                            {s.notes && <div style={{ fontSize: 11, color: "#4A5278", marginTop: 8, fontStyle: "italic" }}>{s.notes}</div>}
                           </div>
-                          <div style={{ display: "flex", gap: 5, flexShrink: 0 }}>
-                            <button className="btn-ghost" style={{ fontSize: 11 }} onClick={() => { setEditSubId(s.id); setSubForm({ name: s.name, trade: s.trade||"", phone: s.phone||"", email: s.email||"", msaStatus: s.msaStatus||"missing", coiExpiry: s.coiExpiry||"", w9: !!s.w9, notes: s.notes||"", services: s.services||[] }); setShowSubForm(true); }}>✎</button>
-                            <button className="btn-ghost" style={{ fontSize: 11, color: "#F87171", borderColor: "#F8717120" }} onClick={() => setSubcontractors(subcontractors.filter(x => x.id !== s.id))}>✕</button>
+                          <div style={{display:"flex",gap:6,flexShrink:0}}>
+                            <button className="btn-ghost" style={{fontSize:11}} onClick={()=>{setEditSubId(s.id);setSubForm({...s});setShowSubForm(true);}}>✎ Edit</button>
+                            <button className="btn-ghost" style={{fontSize:11,color:"#F87171",borderColor:"#F8717120"}} onClick={()=>{if(window.confirm("Delete "+s.name+"?")){setSubcontractors(subcontractors.filter(x=>x.id!==s.id));supa.from("subcontractors").delete().eq("id",s.id);}}}>✕</button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* showSubForm rendered at root level */}
+              </div>
+            );
+          })()}
+
+          {/* ── VENDORS PAGE ── */}
+          {activeNav === "vendors" && activeBU === "facility" && (() => {
+            const subs = subcontractors;
+            const TRADE_COLORS = {
+              plumbing:   "#3B6FE8", electrical: "#F59E0B", hvac: "#10B981",
+              roofing:    "#EF4444", concrete:   "#8B5CF6", painting: "#EC4899",
+              landscaping:"#84CC16", general:    "#6366F1", other:    "#9BA3BF",
+            };
+            const getColor = (s) => {
+              const t = (s.trade||s.services?.[0]||"other").toLowerCase();
+              return TRADE_COLORS[t] || "#9BA3BF";
+            };
+            const withCoords = subs.filter(s => s.lat && s.lng);
+
+            return (
+              <div className="fade-in" style={{ display: "flex", flexDirection: "column", gap: 22 }}>
+                {/* Header */}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div>
+                    <div style={{ fontSize: 22, fontWeight: 700, color: "#1A2240", letterSpacing: "-0.01em", textTransform: "uppercase" }}>Vendors</div>
+                    <div style={{ fontSize: 11, color: "#4A5278", marginTop: 3, letterSpacing: "0.06em" }}>{subs.length} VENDORS · {withCoords.length} MAPPED</div>
+                  </div>
+                  <button className="btn-primary" onClick={() => { setEditSubId(null); setSubForm({ name:"", trade:"", phone:"", email:"", address:"", city:"", state:"", contact_name:"", msa_status:"missing", coi_expiry:"", notes:"", services:[], coverage:"" }); setShowSubForm(true); }}>+ Add Vendor</button>
+                </div>
+
+                {/* Stats */}
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 12 }}>
+                  {[
+                    { label:"Total Vendors",   value: subs.length,                                           color:"#3B6FE8" },
+                    { label:"MSA Signed",      value: subs.filter(s=>s.msa_status==="signed").length,        color:"#4ADE80" },
+                    { label:"COI Active",      value: subs.filter(s=>s.coi_expiry && new Date(s.coi_expiry) > new Date()).length, color:"#60A5FA" },
+                    { label:"On Map",          value: withCoords.length,                                     color:"#A78BFA" },
+                  ].map(st => (
+                    <div key={st.label} className="stat-card" style={{ position:"relative", overflow:"hidden", padding:"14px 18px" }}>
+                      <div style={{ position:"absolute", top:0, left:0, right:0, height:2, background:st.color }}/>
+                      <div style={{ fontSize:10, letterSpacing:"0.1em", textTransform:"uppercase", color:"#4A5278", marginBottom:6 }}>{st.label}</div>
+                      <div style={{ fontSize:22, fontWeight:700, color:st.color }}>{st.value}</div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* MAP */}
+                <div style={{ borderRadius:12, overflow:"hidden", border:"1px solid #D4D9EE", boxShadow:"0 2px 16px rgba(0,0,0,0.07)" }}>
+                  <div style={{ background:"#fff", padding:"10px 16px", borderBottom:"1px solid #F0F2F8", display:"flex", gap:14, flexWrap:"wrap", alignItems:"center" }}>
+                    <span style={{ fontSize:12, fontWeight:700, color:"#1A2240" }}>🗺 Coverage Map</span>
+                    {withCoords.length === 0 && <span style={{ fontSize:11, color:"#F87171" }}>No vendors geocoded yet — add addresses to vendors to see them on the map</span>}
+                    {withCoords.length > 0 && subs.map(s => {
+                      if (!s.lat) return null;
+                      const c = getColor(s);
+                      return (
+                        <div key={s.id} style={{ display:"flex", alignItems:"center", gap:5, fontSize:11, color:"#4A5278" }}>
+                          <span style={{ width:9, height:9, borderRadius:"50%", background:c, display:"inline-block", border:"1.5px solid white", boxShadow:"0 1px 3px rgba(0,0,0,0.3)" }}/>
+                          {s.name}
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {withCoords.length === 0 ? (
+                    <div style={{ background:"#F9FAFC", padding:"60px 24px", textAlign:"center", color:"#9BA3BF" }}>
+                      <div style={{ fontSize:40, marginBottom:10 }}>📍</div>
+                      <div style={{ fontSize:15, fontWeight:700, color:"#1A2240", marginBottom:6 }}>No vendor locations yet</div>
+                      <div style={{ fontSize:13 }}>Add city/state or full address to vendor records and they'll appear here automatically.</div>
+                    </div>
+                  ) : (
+                    <iframe
+                      key={"vendor-map-" + withCoords.length}
+                      srcDoc={`<!DOCTYPE html><html><head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"><\/script>
+<style>html,body,#map{margin:0;padding:0;height:100%;width:100%}.leaflet-popup-content-wrapper{border-radius:10px;box-shadow:0 4px 20px rgba(0,0,0,0.15)}.leaflet-popup-content{margin:10px 14px}</style>
+</head><body><div id="map"></div>
+<script>
+const map=L.map("map",{zoomControl:true,attributionControl:false});
+L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19}).addTo(map);
+L.control.attribution({prefix:'© <a href="https://openstreetmap.org">OSM</a>'}).addTo(map);
+const vendors=${JSON.stringify(withCoords.map(s=>({
+  lat:s.lat, lng:s.lng, name:s.name,
+  trade:s.trade||"General",
+  phone:s.phone||"",
+  coverage:s.coverage||"",
+  color:getColor(s),
+  msa:s.msa_status,
+  coi:s.coi_expiry
+})))};
+const bounds=[];
+vendors.forEach(v=>{
+  const icon=L.divIcon({className:"",
+    html:'<div style="width:14px;height:14px;border-radius:50%;background:'+v.color+';border:2.5px solid white;box-shadow:0 2px 8px rgba(0,0,0,0.4)"></div>',
+    iconSize:[14,14],iconAnchor:[7,7],popupAnchor:[0,-8]});
+  let popup='<div style="font-family:Inter,sans-serif;min-width:180px;line-height:1.6">';
+  popup+='<b style="font-size:14px;color:#1A2240">'+v.name+'</b><br>';
+  if(v.trade) popup+='<span style="font-size:11px;color:'+v.color+';font-weight:600">'+v.trade+'</span><br>';
+  if(v.phone) popup+='<span style="font-size:11px;color:#555">📞 '+v.phone+'</span><br>';
+  if(v.coverage) popup+='<span style="font-size:11px;color:#555">📍 '+v.coverage+'</span><br>';
+  popup+='<span style="font-size:10px;color:'+( v.msa==="signed"?"#4ADE80":"#F87171" )+'">MSA: '+v.msa+'</span>';
+  popup+='</div>';
+  L.marker([v.lat,v.lng],{icon}).addTo(map).bindPopup(popup);
+  bounds.push([v.lat,v.lng]);
+});
+if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
+<\/script></body></html>`}
+                      style={{ width:"100%", height:440, border:"none", display:"block" }}
+                      title="Vendor Map"
+                    />
+                  )}
+                </div>
+
+                {/* Vendor cards */}
+                <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(300px,1fr))", gap:14 }}>
+                  {subs.length === 0 && (
+                    <div style={{ gridColumn:"1/-1", textAlign:"center", padding:"48px", color:"#9BA3BF", background:"#F4F6FB", borderRadius:12, border:"1px solid #D4D9EE" }}>
+                      <div style={{ fontSize:32, marginBottom:8 }}>🏢</div>
+                      <div style={{ fontSize:14, fontWeight:600 }}>No vendors yet</div>
+                    </div>
+                  )}
+                  {subs.map(s => {
+                    const color = getColor(s);
+                    const coiOk = s.coi_expiry && new Date(s.coi_expiry) > new Date();
+                    const coiSoon = s.coi_expiry && new Date(s.coi_expiry) > new Date() && new Date(s.coi_expiry) < new Date(Date.now() + 30*24*60*60*1000);
+                    return (
+                      <div key={s.id} style={{ background:"#fff", borderRadius:12, border:"1px solid #D4D9EE", overflow:"hidden", boxShadow:"0 1px 6px rgba(0,0,0,0.04)" }}>
+                        {/* Top color bar */}
+                        <div style={{ height:4, background:color }}/>
+                        <div style={{ padding:"14px 16px" }}>
+                          {/* Name + trade */}
+                          <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", marginBottom:10 }}>
+                            <div>
+                              <div style={{ fontSize:15, fontWeight:700, color:"#1A2240", marginBottom:2 }}>{s.name}</div>
+                              {s.contact_name && <div style={{ fontSize:11, color:"#4A5278" }}>Contact: {s.contact_name}</div>}
+                              {(s.trade||s.services?.[0]) && (
+                                <div style={{ display:"flex", gap:4, marginTop:4, flexWrap:"wrap" }}>
+                                  {(s.services||[s.trade]).filter(Boolean).map(t=>(
+                                    <span key={t} style={{ fontSize:10, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.06em", background:color+"15", color, border:"1px solid "+color+"40", borderRadius:4, padding:"1px 7px" }}>{t}</span>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                            <button className="btn-ghost" style={{ fontSize:11, flexShrink:0 }}
+                              onClick={() => { setEditSubId(s.id); setSubForm({ name:s.name, trade:s.trade||"", phone:s.phone||"", email:s.email||"", address:s.address||"", city:s.city||"", state:s.state||"", contact_name:s.contact_name||"", msa_status:s.msa_status||"missing", coi_expiry:s.coi_expiry||"", notes:s.notes||"", services:s.services||[], coverage:s.coverage||"" }); setShowSubForm(true); }}>
+                              ✎ Edit
+                            </button>
+                          </div>
+
+                          {/* Contact info */}
+                          <div style={{ display:"flex", flexDirection:"column", gap:3, marginBottom:10 }}>
+                            {s.phone && <a href={"tel:"+s.phone} style={{ fontSize:12, color:"#3B6FE8", textDecoration:"none" }}>📞 {s.phone}</a>}
+                            {s.email && <a href={"mailto:"+s.email} style={{ fontSize:12, color:"#3B6FE8", textDecoration:"none" }}>✉ {s.email}</a>}
+                            {(s.city||s.address) && <div style={{ fontSize:12, color:"#4A5278" }}>📍 {[s.address,s.city,s.state].filter(Boolean).join(", ")}</div>}
+                            {s.coverage && <div style={{ fontSize:11, color:"#9BA3BF" }}>Coverage: {s.coverage}</div>}
+                          </div>
+
+                          {/* Status badges */}
+                          <div style={{ display:"flex", gap:6, flexWrap:"wrap", paddingTop:10, borderTop:"1px solid #F0F2F8" }}>
+                            <span style={{ fontSize:10, fontWeight:700, padding:"2px 8px", borderRadius:4, background:s.msa_status==="signed"?"#4ADE8015":"#F8717115", color:s.msa_status==="signed"?"#4ADE80":"#F87171", border:"1px solid "+(s.msa_status==="signed"?"#4ADE8040":"#F8717140") }}>
+                              MSA {s.msa_status==="signed"?"✓ Signed":"✗ Missing"}
+                            </span>
+                            <span style={{ fontSize:10, fontWeight:700, padding:"2px 8px", borderRadius:4, background:s.w9?"#4ADE8015":"#F8717115", color:s.w9?"#4ADE80":"#F87171", border:"1px solid "+(s.w9?"#4ADE8040":"#F8717140") }}>
+                              W9 {s.w9?"✓":"✗"}
+                            </span>
+                            {s.coi_expiry && (
+                              <span style={{ fontSize:10, fontWeight:700, padding:"2px 8px", borderRadius:4, background:coiOk?(coiSoon?"#FCD34D15":"#4ADE8015"):"#F8717115", color:coiOk?(coiSoon?"#D97706":"#4ADE80"):"#F87171", border:"1px solid "+(coiOk?(coiSoon?"#FCD34D40":"#4ADE8040"):"#F8717140") }}>
+                                COI {coiOk?(coiSoon?"⚠ Expires soon":"✓ Active"):"✗ Expired"}: {s.coi_expiry}
+                              </span>
+                            )}
                           </div>
                         </div>
                       </div>
                     );
                   })}
                 </div>
-
-                {/* showSubForm rendered at root level */}
               </div>
             );
           })()}
@@ -9538,12 +9742,29 @@ if(bounds.length)map.fitBounds(bounds,{padding:[30,30]});
           <div style={{ background: "#ECEEF8", border: "1px solid #CBD1E8", borderRadius: 12, padding: 28, width: 480 }}>
             <div style={{ fontSize: 14, fontWeight: 600, color: "#1A2240", marginBottom: 20 }}>{editSubId ? "Edit" : "Add"} Subcontractor</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-              {[["Name", "name"], ["Trade / Specialty", "trade"], ["Phone", "phone"], ["Email", "email"]].map(([label, key]) => (
+              {[["Name", "name"], ["Contact Name", "contact_name"], ["Trade / Specialty", "trade"], ["Phone", "phone"], ["Email", "email"]].map(([label, key]) => (
                 <div key={key}>
                   <div style={{ fontSize: 10, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5 }}>{label}</div>
-                  <input className="fi" style={{ width: "100%", boxSizing: "border-box" }} value={subForm[key]} onChange={e => setSubForm({ ...subForm, [key]: e.target.value })} />
+                  <input className="fi" style={{ width: "100%", boxSizing: "border-box" }} value={subForm[key]||""} onChange={e => setSubForm({ ...subForm, [key]: e.target.value })} />
                 </div>
               ))}
+              {/* Location fields for map */}
+              <div style={{ background:"#F4F6FB", borderRadius:8, padding:"10px 12px", border:"1px solid #E0E4F0" }}>
+                <div style={{ fontSize:10, color:"#3B6FE8", fontWeight:700, textTransform:"uppercase", letterSpacing:"0.07em", marginBottom:8 }}>📍 Location (for map)</div>
+                <div style={{ display:"grid", gridTemplateColumns:"2fr 1fr 1fr", gap:8 }}>
+                  {[["Street Address","address"],["City","city"],["State","state"]].map(([lbl,key])=>(
+                    <div key={key}>
+                      <div style={{ fontSize:10, color:"#4A5278", marginBottom:4 }}>{lbl}</div>
+                      <input className="fi" style={{ width:"100%", boxSizing:"border-box" }} value={subForm[key]||""} onChange={e=>setSubForm({...subForm,[key]:e.target.value})} placeholder={lbl} />
+                    </div>
+                  ))}
+                </div>
+                <div style={{ marginTop:8 }}>
+                  <div style={{ fontSize:10, color:"#4A5278", marginBottom:4 }}>Coverage Area (describe territory)</div>
+                  <input className="fi" style={{ width:"100%", boxSizing:"border-box" }} value={subForm.coverage||""} onChange={e=>setSubForm({...subForm,coverage:e.target.value})} placeholder="e.g. Southeast Michigan, Toledo OH" />
+                </div>
+                <div style={{ fontSize:10, color:"#9BA3BF", marginTop:6 }}>Coordinates auto-filled from city/state when saved</div>
+              </div>
               <div>
                 <div style={{ fontSize: 10, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 8 }}>Works for Division(s)</div>
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -9586,13 +9807,25 @@ if(bounds.length)map.fitBounds(bounds,{padding:[30,30]});
               <button className="btn-ghost" style={{ flex: 1 }} onClick={() => setShowSubForm(false)}>Cancel</button>
               <button className="btn-primary" style={{ flex: 1 }} onClick={async () => {
                 if (!subForm.name) return;
+                // Auto-geocode from city+state if provided and no coords yet
+                let lat = subForm.lat || null;
+                let lng = subForm.lng || null;
+                const geoQuery = [subForm.city, subForm.state].filter(Boolean).join(", ");
+                if (geoQuery && !lat) {
+                  try {
+                    const r = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(geoQuery)}`, { headers: { "User-Agent": "FarmerGroupApp/1.0" } });
+                    const d = await r.json();
+                    if (d?.[0]) { lat = parseFloat(d[0].lat); lng = parseFloat(d[0].lon); }
+                  } catch(e) {}
+                }
+                const formWithCoords = { ...subForm, lat, lng };
                 if (editSubId) {
-                  const updated = { ...subcontractors.find(s => s.id === editSubId), ...subForm };
+                  const updated = { ...subcontractors.find(s => s.id === editSubId), ...formWithCoords };
                   setSubcontractors(subcontractors.map(s => s.id === editSubId ? updated : s));
                   supa.from("subcontractors").update(subToDB(updated)).eq("id", editSubId);
                 } else {
                   const newId = "sub" + Date.now();
-                  const entry = { id: newId, ...subForm };
+                  const entry = { id: newId, ...formWithCoords };
                   setSubcontractors(s => [...s, entry]);
                   supa.from("subcontractors").insert(subToDB(entry));
                 }
