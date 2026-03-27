@@ -1322,11 +1322,89 @@ function SchedPage({ token, fmJobs, setFmJobs, subcontractors, companies, sites 
   );
 }
 
+// ── CRM Collapsible Contact Table ──
+const CrmContactTable = ({ contacts, title, accent, defaultOpen=true, showRevenue=false, coRevenue=()=>0, onSelect=()=>{}, onEdit=()=>{} }) => {
+  const [open, setOpen] = useState(defaultOpen);
+  const totalRev = showRevenue ? contacts.reduce((s,c) => s + coRevenue(c.companyId), 0) : 0;
+  return (
+    <div style={{marginBottom:16,border:"1px solid #E8EBF4",borderRadius:10,overflow:"hidden"}}>
+      <div onClick={()=>setOpen(o=>!o)}
+        style={{display:"flex",alignItems:"center",justifyContent:"space-between",padding:"12px 16px",background:"#F8F9FD",cursor:"pointer",userSelect:"none",borderBottom:open?"1px solid #E8EBF4":"none"}}>
+        <div style={{display:"flex",alignItems:"center",gap:10}}>
+          <span style={{width:8,height:8,borderRadius:"50%",background:accent,display:"inline-block",flexShrink:0}}></span>
+          <span style={{fontSize:12,fontWeight:700,color:"#1A2240"}}>{title}</span>
+          <span style={{fontSize:11,color:"#9BA3BF",fontWeight:400}}>({contacts.length})</span>
+          {showRevenue && totalRev > 0 && (
+            <span style={{fontSize:11,fontWeight:700,color:accent,background:accent+"15",padding:"2px 8px",borderRadius:4}}>
+              ${(totalRev/1000).toFixed(0)}k revenue
+            </span>
+          )}
+        </div>
+        <span style={{fontSize:11,color:"#9BA3BF",transform:open?"rotate(0deg)":"rotate(-90deg)",transition:"transform 0.2s",display:"inline-block"}}>▼</span>
+      </div>
+      {open && (
+        contacts.length === 0
+          ? <div style={{fontSize:12,color:"#4A5278",padding:"16px",textAlign:"center",background:"#FAFBFD"}}>None in this category</div>
+          : <div style={{background:"#fff",overflowX:"auto"}}>
+              <table style={{width:"100%",borderCollapse:"collapse"}}>
+                <thead>
+                  <tr style={{background:"#F8F9FD",borderBottom:"1px solid #E8EBF4"}}>
+                    {["Name","Company","Phone","Email","Departments",showRevenue?"Revenue":"Follow-up",""].map(h=>(
+                      <th key={h} style={{textAlign:"left",padding:"8px 14px",fontSize:9,color:"#4A5278",textTransform:"uppercase",letterSpacing:"0.07em",fontWeight:700,whiteSpace:"nowrap"}}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {contacts.map((c,i)=>{
+                    const overdue = c.nextFollowUp && c.nextFollowUp <= new Date().toISOString().slice(0,10);
+                    const rev = showRevenue ? coRevenue(c.companyId) : 0;
+                    const DIV_C = {FM:"#3B6FE8",CapEx:"#8B5CF6",MP:"#F97316",Lawn:"#4ADE80",Snow:"#60A5FA"};
+                    return (
+                      <tr key={c.id} style={{borderBottom:"1px solid #F0F2F8",cursor:"pointer",background:i%2===0?"#fff":"#FAFBFD"}}
+                        onClick={()=>onSelect(c)}
+                        onMouseEnter={e=>e.currentTarget.style.background="#EEF3FF"}
+                        onMouseLeave={e=>e.currentTarget.style.background=i%2===0?"#fff":"#FAFBFD"}>
+                        <td style={{padding:"10px 14px",whiteSpace:"nowrap"}}>
+                          <div style={{fontSize:13,fontWeight:600,color:"#1A2240"}}>{c.firstName} {c.lastName}</div>
+                          {c.title&&<div style={{fontSize:10,color:"#4A5278",marginTop:1}}>{c.title}</div>}
+                        </td>
+                        <td style={{padding:"10px 14px",fontSize:12,color:"#4A5278",whiteSpace:"nowrap"}}>{c.company}</td>
+                        <td style={{padding:"10px 14px",fontSize:12,color:"#1A2240",whiteSpace:"nowrap"}}>{c.phone||<span style={{color:"#CBD1E8"}}>—</span>}</td>
+                        <td style={{padding:"10px 14px",fontSize:12,color:"#3B6FE8",whiteSpace:"nowrap",maxWidth:160,overflow:"hidden",textOverflow:"ellipsis"}}>{c.email||<span style={{color:"#CBD1E8"}}>—</span>}</td>
+                        <td style={{padding:"10px 14px"}}>
+                          <div style={{display:"flex",gap:3,flexWrap:"wrap"}}>
+                            {(c.divisions||[]).map(d=>{
+                              const dc = DIV_C[d]||"#9BA3BF";
+                              return <span key={d} style={{fontSize:9,background:dc+"15",color:dc,padding:"2px 6px",borderRadius:3,fontWeight:700}}>{d}</span>;
+                            })}
+                          </div>
+                        </td>
+                        <td style={{padding:"10px 14px",fontSize:11,whiteSpace:"nowrap"}}>
+                          {showRevenue
+                            ? <span style={{color:rev>0?accent:"#CBD1E8",fontWeight:rev>0?700:400}}>{rev>0?"$"+(rev/1000).toFixed(0)+"k":"—"}</span>
+                            : <span style={{color:overdue?"#F87171":"#4A5278",fontWeight:overdue?700:400}}>{c.nextFollowUp?(overdue?"⚠ ":"")+c.nextFollowUp:"—"}</span>
+                          }
+                        </td>
+                        <td style={{padding:"10px 14px"}} onClick={e=>e.stopPropagation()}>
+                          <button style={{fontSize:10,padding:"3px 8px",background:"transparent",border:"1px solid #E8EBF4",borderRadius:5,cursor:"pointer",fontFamily:"inherit",color:"#4A5278"}}
+                            onClick={()=>onEdit(c)}>✎</button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+      )}
+    </div>
+  );
+};
+
 // ── CRM Inline Edit Field ──
 const CrmInlineField = ({ label, field, value, icon, type="text", placeholder="", onSave }) => {
-  const [editing, setEditing] = React.useState(false);
-  const [val, setVal] = React.useState(value||"");
-  React.useEffect(() => { setVal(value||""); }, [value]);
+  const [editing, setEditing] = useState(false);
+  const [val, setVal] = useState(value||"");
+  useEffect(() => { setVal(value||""); }, [value]);
   if (editing) return (
     <div>
       <div style={{fontSize:9,color:"#4A5278",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:2}}>{icon} {label}</div>
@@ -2569,57 +2647,20 @@ Return ONLY valid JSON, no markdown, no extra text:
 
 
             // ── MAIN LIST VIEW ──
-            const ContactTable = ({ contacts, title, accent }) => (
-              <div style={{marginBottom:24}}>
-                <div style={{fontSize:11,fontWeight:700,color:accent,textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:10,display:"flex",alignItems:"center",gap:8}}>
-                  <span style={{width:8,height:8,borderRadius:"50%",background:accent,display:"inline-block"}}></span>
-                  {title} <span style={{color:"#9BA3BF",fontWeight:400}}>({contacts.length})</span>
-                </div>
-                {contacts.length === 0
-                  ? <div style={{fontSize:12,color:"#4A5278",padding:"14px 0",textAlign:"center",background:"#F8F9FD",borderRadius:8,border:"1px dashed #CBD1E8"}}>None in this category</div>
-                  : <div style={{background:"#fff",border:"1px solid #E8EBF4",borderRadius:10,overflow:"hidden"}}>
-                      <table style={{width:"100%",borderCollapse:"collapse"}}>
-                        <thead>
-                          <tr style={{background:"#F8F9FD",borderBottom:"2px solid #E8EBF4"}}>
-                            {["Name","Company","Phone","Email","Divisions","Follow-up",""].map(h=>(
-                              <th key={h} style={{textAlign:"left",padding:"9px 14px",fontSize:9,color:"#4A5278",textTransform:"uppercase",letterSpacing:"0.07em",fontWeight:700,whiteSpace:"nowrap"}}>{h}</th>
-                            ))}
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {contacts.map((c,i)=>{
-                            const overdue = c.nextFollowUp && c.nextFollowUp <= new Date().toISOString().slice(0,10);
-                            return (
-                              <tr key={c.id} style={{borderBottom:"1px solid #F0F2F8",cursor:"pointer",background:i%2===0?"#fff":"#FAFBFD"}}
-                                onClick={()=>setSelectedCrmContact(c)}
-                                onMouseEnter={e=>e.currentTarget.style.background="#EEF3FF"}
-                                onMouseLeave={e=>e.currentTarget.style.background=i%2===0?"#fff":"#FAFBFD"}>
-                                <td style={{padding:"10px 14px",whiteSpace:"nowrap"}}>
-                                  <div style={{fontSize:13,fontWeight:600,color:"#1A2240"}}>{c.firstName} {c.lastName}</div>
-                                  {c.title&&<div style={{fontSize:10,color:"#4A5278",marginTop:1}}>{c.title}</div>}
-                                </td>
-                                <td style={{padding:"10px 14px",fontSize:12,color:"#4A5278",whiteSpace:"nowrap"}}>{c.company}</td>
-                                <td style={{padding:"10px 14px",fontSize:12,color:"#1A2240",whiteSpace:"nowrap"}}>{c.phone||<span style={{color:"#CBD1E8"}}>—</span>}</td>
-                                <td style={{padding:"10px 14px",fontSize:12,color:"#3B6FE8",whiteSpace:"nowrap"}}>{c.email||<span style={{color:"#CBD1E8"}}>—</span>}</td>
-                                <td style={{padding:"10px 14px"}}>
-                                  <div style={{display:"flex",gap:3,flexWrap:"wrap"}}>
-                                    {(c.divisions||[]).map(d=><span key={d} style={{fontSize:9,background:"#3B6FE815",color:"#3B6FE8",padding:"2px 6px",borderRadius:3,fontWeight:600}}>{d}</span>)}
-                                  </div>
-                                </td>
-                                <td style={{padding:"10px 14px",fontSize:11,whiteSpace:"nowrap",color:overdue?"#F87171":"#4A5278",fontWeight:overdue?700:400}}>
-                                  {c.nextFollowUp?(overdue?"⚠ ":"")+c.nextFollowUp:"—"}
-                                </td>
-                                <td style={{padding:"10px 14px"}} onClick={e=>e.stopPropagation()}>
-                                  <button className="btn-ghost" style={{fontSize:10,padding:"3px 8px"}} onClick={()=>{setEditCrmId(c.id);setCrmFormData({...c});setShowCrmForm(true);}}>✎</button>
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-                }
-              </div>
+            // Revenue per active contact's company from FM jobs
+            const coRevenue = (coId) => fmJobs
+              .filter(j => j.companyId === coId)
+              .reduce((s,j) => s + (j.contractValue||0), 0);
+
+            // Use top-level CrmContactTable component (passes callbacks as props)
+            const ContactTable = ({ contacts, title, accent, defaultOpen=true, showRevenue=false }) => (
+              <CrmContactTable
+                contacts={contacts} title={title} accent={accent}
+                defaultOpen={defaultOpen} showRevenue={showRevenue}
+                coRevenue={coRevenue}
+                onSelect={setSelectedCrmContact}
+                onEdit={(c) => { setEditCrmId(c.id); setCrmFormData({...c}); setShowCrmForm(true); }}
+              />
             );
 
             return (
@@ -2630,9 +2671,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                     <div style={{fontSize:22,fontWeight:800,color:"#1A2240"}}>CRM</div>
                     <div style={{fontSize:11,color:"#4A5278",marginTop:3}}>{enriched.length} contacts · {activeContacts.length} active customers · {otherContacts.length} prospects</div>
                   </div>
-                  <div style={{display:"flex",gap:8}}>
-                    <button className="btn-primary" onClick={()=>{setEditCrmId(null);setCrmFormData({status:"prospect",divisions:[],states:[],isDecisionMaker:false});setShowCrmForm(true);}}>+ Add Contact</button>
-                  </div>
+                  <button className="btn-primary" onClick={()=>{setEditCrmId(null);setCrmFormData({status:"prospect",divisions:[],states:[],isDecisionMaker:false});setShowCrmForm(true);}}>+ Add Contact</button>
                 </div>
 
                 {/* Search + Division filter */}
@@ -2648,11 +2687,9 @@ Return ONLY valid JSON, no markdown, no extra text:
                   </div>
                 </div>
 
-                {/* Active Customers table */}
-                <ContactTable contacts={activeContacts} title="Active Customers" accent="#4ADE80" />
-
-                {/* Prospects table */}
-                <ContactTable contacts={otherContacts} title="Prospects & Targets" accent="#818CF8" />
+                {/* Prospects first, Active second */}
+                <ContactTable contacts={otherContacts}  title="Prospects & Targets" accent="#818CF8" defaultOpen={true}  showRevenue={false} />
+                <ContactTable contacts={activeContacts} title="Active Customers"    accent="#4ADE80" defaultOpen={true}  showRevenue={true}  />
               </div>
             );
           })()}
