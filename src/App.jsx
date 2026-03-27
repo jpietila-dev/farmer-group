@@ -1323,9 +1323,9 @@ function SchedPage({ token, fmJobs, setFmJobs, subcontractors, companies, sites 
 }
 
 // ── CRM Collapsible Contact Table ──
-const CrmContactTable = ({ contacts, title, accent, defaultOpen=true, showRevenue=false, coRevenue=()=>0, onSelect=()=>{}, onEdit=()=>{} }) => {
+const CrmContactTable = ({ contacts, title, accent, defaultOpen=true, showJobCount=false, coRevenue=()=>0, onSelect=()=>{}, onEdit=()=>{} }) => {
   const [open, setOpen] = useState(defaultOpen);
-  const totalRev = showRevenue ? contacts.reduce((s,c) => s + coRevenue(c.companyId), 0) : 0;
+  const totalRev = showJobCount ? contacts.reduce((s,c) => s + coRevenue(c.companyId), 0) : 0;
   return (
     <div style={{marginBottom:16,border:"1px solid #E8EBF4",borderRadius:10,overflow:"hidden"}}>
       <div onClick={()=>setOpen(o=>!o)}
@@ -1334,9 +1334,9 @@ const CrmContactTable = ({ contacts, title, accent, defaultOpen=true, showRevenu
           <span style={{width:8,height:8,borderRadius:"50%",background:accent,display:"inline-block",flexShrink:0}}></span>
           <span style={{fontSize:12,fontWeight:700,color:"#1A2240"}}>{title}</span>
           <span style={{fontSize:11,color:"#9BA3BF",fontWeight:400}}>({contacts.length})</span>
-          {showRevenue && totalRev > 0 && (
+          {showJobCount && totalRev > 0 && (
             <span style={{fontSize:11,fontWeight:700,color:accent,background:accent+"15",padding:"2px 8px",borderRadius:4}}>
-              ${(totalRev/1000).toFixed(0)}k revenue
+              {totalRev} open job{totalRev!==1?"s":""}
             </span>
           )}
         </div>
@@ -1349,7 +1349,7 @@ const CrmContactTable = ({ contacts, title, accent, defaultOpen=true, showRevenu
               <table style={{width:"100%",borderCollapse:"collapse"}}>
                 <thead>
                   <tr style={{background:"#F8F9FD",borderBottom:"1px solid #E8EBF4"}}>
-                    {["Name","Company","Phone","Email","Departments",showRevenue?"Revenue":"Follow-up",""].map(h=>(
+                    {["Name","Company","Phone","Email","Departments",showJobCount?"Open Jobs":"Follow-up",""].map(h=>(
                       <th key={h} style={{textAlign:"left",padding:"8px 14px",fontSize:9,color:"#4A5278",textTransform:"uppercase",letterSpacing:"0.07em",fontWeight:700,whiteSpace:"nowrap"}}>{h}</th>
                     ))}
                   </tr>
@@ -1357,7 +1357,7 @@ const CrmContactTable = ({ contacts, title, accent, defaultOpen=true, showRevenu
                 <tbody>
                   {contacts.map((c,i)=>{
                     const overdue = c.nextFollowUp && c.nextFollowUp <= new Date().toISOString().slice(0,10);
-                    const rev = showRevenue ? coRevenue(c.companyId) : 0;
+                    const rev = showJobCount ? coRevenue(c.companyId) : 0;
                     const DIV_C = {FM:"#3B6FE8",CapEx:"#8B5CF6",MP:"#F97316",Lawn:"#4ADE80",Snow:"#60A5FA"};
                     return (
                       <tr key={c.id} style={{borderBottom:"1px solid #F0F2F8",cursor:"pointer",background:i%2===0?"#fff":"#FAFBFD"}}
@@ -1380,8 +1380,8 @@ const CrmContactTable = ({ contacts, title, accent, defaultOpen=true, showRevenu
                           </div>
                         </td>
                         <td style={{padding:"10px 14px",fontSize:11,whiteSpace:"nowrap"}}>
-                          {showRevenue
-                            ? <span style={{color:rev>0?accent:"#CBD1E8",fontWeight:rev>0?700:400}}>{rev>0?"$"+(rev/1000).toFixed(0)+"k":"—"}</span>
+                          {showJobCount
+                            ? <span style={{color:rev>0?accent:"#CBD1E8",fontWeight:rev>0?700:400}}>{rev>0?rev+" open job"+(rev!==1?"s":""):"—"}</span>
                             : <span style={{color:overdue?"#F87171":"#4A5278",fontWeight:overdue?700:400}}>{c.nextFollowUp?(overdue?"⚠ ":"")+c.nextFollowUp:"—"}</span>
                           }
                         </td>
@@ -1846,12 +1846,26 @@ export default function App() {
     const entry = { ...capexForm, contractValue: Number(capexForm.contractValue), pct: Number(capexForm.pct || 0) };
     if (editCapexId) setCapexJobs(capexJobs.map(j => j.id === editCapexId ? { ...entry, id: editCapexId } : j));
     else setCapexJobs([...capexJobs, { ...entry, id: "cx" + Date.now() }]);
+    autoTagCrmContacts(capexForm.companyId, "CapEx");
     setShowCapexForm(false);
   };
   const deleteCapex = (id) => { setCapexJobs(capexJobs.filter(j => j.id !== id)); setSelectedCapexJob(null); };
   const moveCapexStage = (id, dir) => setCapexJobs(capexJobs.map(j => { if (j.id !== id) return j; const idx = CAPEX_FM_STAGES.findIndex(s => s.id === j.stage); return { ...j, stage: CAPEX_FM_STAGES[Math.max(0, Math.min(CAPEX_FM_STAGES.length - 1, idx + dir))].id }; }));
 
-  // FM job helpers
+  // ── Auto-tag CRM contacts when a job is created/updated ──
+  const autoTagCrmContacts = (companyId, division) => {
+    if (!companyId) return;
+    setCrmContacts(prev => prev.map(c => {
+      if (c.companyId !== companyId) return c;
+      const divs = c.divisions || [];
+      if (divs.includes(division)) return c; // already tagged
+      const updated = { ...c, divisions: [...divs, division] };
+      try { supa.from("crm_contacts").update({ divisions: updated.divisions }).eq("id", c.id); } catch(e) {}
+      return updated;
+    }));
+  };
+
+    // FM job helpers
   const openAddFm = () => { setEditFmId(null); setFmForm({ name: "", companyId: "", siteId: "", contractValue: "", grossProfit: "", stage: "estimating", startDate: "", endDate: "", pm: "", pct: 0, bidDueDate: "", quoteDueDate: "", proposalDate: "", followUpDate: "", buyoutDate: "", invoiceDate: "", notes: "", storeCode: "", projectNo: "", ownersProjectNo: "", vendorInvoiceAmount: "", vendorInvoiceNumber: "", subcontractorId: "", vendorNextStep: "", vendorQuotePrice: "", vendorQuoteScope: "", scopeOfWork: "", coordinator: "" }); setFmCompanySearch(""); setFmSiteSearch(""); setShowFmForm(true); };
   const openEditFm = (j) => { setEditFmId(j.id); setFmForm({ ...j, contractValue: String(j.contractValue) }); setFmCompanySearch(""); setFmSiteSearch(""); setShowFmForm(true); };
   const saveFm = () => {
@@ -1862,6 +1876,7 @@ export default function App() {
       setFmJobs(fmJobs.map(j => j.id === editFmId ? updated : j));
       try { supa.from("fm_jobs").update(fmJobToDB(updated)).eq("id", editFmId); } catch(e) {}
     } else {
+      autoTagCrmContacts(fmForm.companyId, "FM");
       const newId = "fm" + Date.now();
       const newJob = { ...entry, id: newId };
       setFmJobs([...fmJobs, newJob]);
@@ -2082,6 +2097,9 @@ Return ONLY valid JSON, no markdown, no extra text:
       if (selectedOpp && selectedOpp.id === editId) setSelectedOpp({ ...entry, id: editId });
     } else {
       setPipeline([...pipeline, { ...entry, id: Date.now() }]);
+      // Auto-tag CRM contacts for this company with the division
+      const divTag = form.bu==="major"?"MP":form.bu==="capital"?"CapEx":form.bu==="facility"?"FM":form.bu==="lawn"?"Lawn":form.bu==="snow"?"Snow":null;
+      if (divTag) autoTagCrmContacts(form.companyId, divTag);
     }
     setShowForm(false);
   };
@@ -2647,16 +2665,18 @@ Return ONLY valid JSON, no markdown, no extra text:
 
 
             // ── MAIN LIST VIEW ──
-            // Revenue per active contact's company from FM jobs
-            const coRevenue = (coId) => fmJobs
-              .filter(j => j.companyId === coId)
-              .reduce((s,j) => s + (j.contractValue||0), 0);
+            // Open job count per company across FM + CapEx + MP
+            const coRevenue = (coId) => coId ? [
+              ...fmJobs.filter(j => j.companyId === coId),
+              ...capexJobs.filter(j => j.companyId === coId),
+              ...majorJobs.filter(j => j.companyId === coId),
+            ].length : 0;
 
             // Use top-level CrmContactTable component (passes callbacks as props)
-            const ContactTable = ({ contacts, title, accent, defaultOpen=true, showRevenue=false }) => (
+            const ContactTable = ({ contacts, title, accent, defaultOpen=true, showJobCount=false }) => (
               <CrmContactTable
                 contacts={contacts} title={title} accent={accent}
-                defaultOpen={defaultOpen} showRevenue={showRevenue}
+                defaultOpen={defaultOpen} showJobCount={showJobCount}
                 coRevenue={coRevenue}
                 onSelect={setSelectedCrmContact}
                 onEdit={(c) => { setEditCrmId(c.id); setCrmFormData({...c}); setShowCrmForm(true); }}
@@ -2688,8 +2708,8 @@ Return ONLY valid JSON, no markdown, no extra text:
                 </div>
 
                 {/* Prospects first, Active second */}
-                <ContactTable contacts={otherContacts}  title="Prospects & Targets" accent="#818CF8" defaultOpen={true}  showRevenue={false} />
-                <ContactTable contacts={activeContacts} title="Active Customers"    accent="#4ADE80" defaultOpen={true}  showRevenue={true}  />
+                <ContactTable contacts={otherContacts}  title="Prospects & Targets" accent="#818CF8" defaultOpen={true}  showJobCount={false} />
+                <ContactTable contacts={activeContacts} title="Active Customers"    accent="#4ADE80" defaultOpen={true}  showJobCount={true}  />
               </div>
             );
           })()}
