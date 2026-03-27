@@ -1743,7 +1743,9 @@ export default function App() {
           supa.from("fm_jobs").select("*"),
           supa.from("fm_team").select("*"),
           supa.from("crm_contacts").select("*"),
-          supa.from("contacts").select("id,company_id,first_name,last_name,title,email,phone").limit(1000),
+          fetch(`${SUPA_URL}/rest/v1/contacts?select=id,company_id,first_name,last_name,title,email,phone&limit=1000`, {
+            headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}` }
+          }).then(r => r.json()).then(data => ({ data, error: null })).catch(error => ({ data: null, error })),
         ]);
         if (coRes.data?.length)   setCompanies(coRes.data.map(dbToCompany));
         if (siteRes.data?.length) setSites(siteRes.data.map(dbToSite));
@@ -1751,7 +1753,16 @@ export default function App() {
         if (fmRes.data?.length)   setFmJobs(fmRes.data.map(dbToFmJob));
         if (teamRes.data?.length) setFmTeam(teamRes.data.map(dbToTeamMember));
         if (crmRes.data?.length)  setCrmContacts(crmRes.data.map(dbToCrmContact));
-        if (ctRes.data?.length)   setContacts(ctRes.data.map(dbToContact));
+        // contacts table — deduplicate by name+company before setting
+        if (Array.isArray(ctRes.data) && ctRes.data.length) {
+          const seen = new Set();
+          const deduped = ctRes.data.filter(r => {
+            const key = (r.first_name+r.last_name+r.company_id).toLowerCase();
+            if (seen.has(key)) return false;
+            seen.add(key); return true;
+          });
+          setContacts(deduped.map(dbToContact));
+        }
         setSupaReady(true);
       } catch(e) {
         setDbError("Could not connect to database.");
