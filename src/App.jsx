@@ -125,6 +125,7 @@ const dbToFmJob = r => ({
   vendorNextStep: r.vendor_next_step||"", vendorQuotePrice: r.vendor_quote_price||"",
   vendorQuoteScope: r.vendor_quote_scope||"", scopeOfWork: r.scope_of_work||"",
   coordinator: r.coordinator||"",
+  approverContactId: r.approver_contact_id||"",
   vendorToken: r.vendor_token||"", vendorSentAt: r.vendor_sent_at||"",
   vendorPortalStatus: r.vendor_portal_status||"", vendorPortalPrice: r.vendor_portal_price||"",
   vendorPortalDate: r.vendor_portal_date||"", vendorPortalTime: r.vendor_portal_time||"",
@@ -147,6 +148,7 @@ const fmJobToDB = j => ({
   vendor_next_step: j.vendorNextStep||"", vendor_quote_price: j.vendorQuotePrice||"",
   vendor_quote_scope: j.vendorQuoteScope||"", scope_of_work: j.scopeOfWork||"",
   coordinator: j.coordinator||"",
+  approver_contact_id: j.approverContactId||null,
   vendor_token: j.vendorToken||null, vendor_sent_at: j.vendorSentAt||null,
   vendor_portal_status: j.vendorPortalStatus||null, vendor_portal_price: j.vendorPortalPrice||null,
   vendor_portal_date: j.vendorPortalDate||null, vendor_portal_time: j.vendorPortalTime||null,
@@ -1491,14 +1493,14 @@ export default function App() {
   const [jobs,        setJobs]        = useState([]);
   const [showJobForm, setShowJobForm] = useState(false);
   const [editJobId,   setEditJobId]   = useState(null);
-  const [jobForm,     setJobForm]     = useState({ name: "", companyId: "", client: "", contractValue: "", startDate: "", endDate: "", pm: "", pct: 0, status: "On Schedule", notes: "", bu: "major" });
+  const [jobForm,     setJobForm]     = useState({ name: "", companyId: "", client: "", approverContactId: "", contractValue: "", startDate: "", endDate: "", pm: "", pct: 0, status: "On Schedule", notes: "", bu: "major" });
   const [selectedJob, setSelectedJob] = useState(null);
 
   // CapEx Jobs
   const [capexJobs,        setCapexJobs]        = useState(INIT_CAPEX_JOBS);
   const [showCapexForm,    setShowCapexForm]    = useState(false);
   const [editCapexId,      setEditCapexId]      = useState(null);
-  const [capexForm,        setCapexForm]        = useState({ name: "", companyId: "", siteId: "", contractValue: "", stage: "estimating", startDate: "", endDate: "", pm: "", pct: 0, bidDueDate: "", followUpDate: "", buyoutDate: "", invoiceDate: "", notes: "" });
+  const [capexForm,        setCapexForm]        = useState({ name: "", companyId: "", siteId: "", approverContactId: "", contractValue: "", stage: "estimating", startDate: "", endDate: "", pm: "", pct: 0, bidDueDate: "", followUpDate: "", buyoutDate: "", invoiceDate: "", notes: "" });
   const [selectedCapexJob, setSelectedCapexJob] = useState(null);
   const [capexSearch,      setCapexSearch]      = useState("");
 
@@ -1508,7 +1510,7 @@ export default function App() {
   const [editFmId,      setEditFmId]      = useState(null);
   const [fmCompanySearch, setFmCompanySearch] = useState("");
   const [fmSiteSearch,    setFmSiteSearch]    = useState("");
-  const [fmForm,        setFmForm]        = useState({ name: "", companyId: "", siteId: "", contractValue: "", grossProfit: "", nte: "", stage: "estimating", startDate: "", endDate: "", pm: "", pct: 0, bidDueDate: "", quoteDueDate: "", proposalDate: "", followUpDate: "", buyoutDate: "", invoiceDate: "", notes: "", storeCode: "", projectNo: "", ownersProjectNo: "", vendorInvoiceAmount: "", vendorInvoiceNumber: "", subcontractorId: "", vendorNextStep: "", vendorQuotePrice: "", vendorQuoteScope: "", scopeOfWork: "", coordinator: "" });
+  const [fmForm,        setFmForm]        = useState({ name: "", companyId: "", siteId: "", approverContactId: "", contractValue: "", grossProfit: "", nte: "", stage: "estimating", startDate: "", endDate: "", pm: "", pct: 0, bidDueDate: "", quoteDueDate: "", proposalDate: "", followUpDate: "", buyoutDate: "", invoiceDate: "", notes: "", storeCode: "", projectNo: "", ownersProjectNo: "", vendorInvoiceAmount: "", vendorInvoiceNumber: "", subcontractorId: "", vendorNextStep: "", vendorQuotePrice: "", vendorQuoteScope: "", scopeOfWork: "", coordinator: "" });
   const [selectedFmJob, setSelectedFmJob] = useState(null);
   const [fmSearch,      setFmSearch]      = useState("");
   const [fmCoordFilter, setFmCoordFilter] = useState("all");
@@ -1839,7 +1841,7 @@ export default function App() {
   }, [companies]);
 
   // CapEx job helpers
-  const openAddCapex = () => { setEditCapexId(null); setCapexForm({ name: "", companyId: "", siteId: "", contractValue: "", stage: "estimating", startDate: "", endDate: "", pm: "", pct: 0, bidDueDate: "", followUpDate: "", buyoutDate: "", invoiceDate: "", notes: "" }); setShowCapexForm(true); };
+  const openAddCapex = () => { setEditCapexId(null); setCapexForm({ name: "", companyId: "", siteId: "", approverContactId: "", contractValue: "", stage: "estimating", startDate: "", endDate: "", pm: "", pct: 0, bidDueDate: "", followUpDate: "", buyoutDate: "", invoiceDate: "", notes: "" }); setShowCapexForm(true); };
   const openEditCapex = (j) => { setEditCapexId(j.id); setCapexForm({ ...j, contractValue: String(j.contractValue) }); setShowCapexForm(true); };
   const saveCapex = () => {
     if (!capexForm.name.trim()) return;
@@ -1866,7 +1868,7 @@ export default function App() {
   };
 
     // FM job helpers
-  const openAddFm = () => { setEditFmId(null); setFmForm({ name: "", companyId: "", siteId: "", contractValue: "", grossProfit: "", stage: "estimating", startDate: "", endDate: "", pm: "", pct: 0, bidDueDate: "", quoteDueDate: "", proposalDate: "", followUpDate: "", buyoutDate: "", invoiceDate: "", notes: "", storeCode: "", projectNo: "", ownersProjectNo: "", vendorInvoiceAmount: "", vendorInvoiceNumber: "", subcontractorId: "", vendorNextStep: "", vendorQuotePrice: "", vendorQuoteScope: "", scopeOfWork: "", coordinator: "" }); setFmCompanySearch(""); setFmSiteSearch(""); setShowFmForm(true); };
+  const openAddFm = () => { setEditFmId(null); setFmForm({ name: "", companyId: "", siteId: "", approverContactId: "", contractValue: "", grossProfit: "", stage: "estimating", startDate: "", endDate: "", pm: "", pct: 0, bidDueDate: "", quoteDueDate: "", proposalDate: "", followUpDate: "", buyoutDate: "", invoiceDate: "", notes: "", storeCode: "", projectNo: "", ownersProjectNo: "", vendorInvoiceAmount: "", vendorInvoiceNumber: "", subcontractorId: "", vendorNextStep: "", vendorQuotePrice: "", vendorQuoteScope: "", scopeOfWork: "", coordinator: "" }); setFmCompanySearch(""); setFmSiteSearch(""); setShowFmForm(true); };
   const openEditFm = (j) => { setEditFmId(j.id); setFmForm({ ...j, contractValue: String(j.contractValue) }); setFmCompanySearch(""); setFmSiteSearch(""); setShowFmForm(true); };
   const saveFm = () => {
     if (!fmForm.name.trim()) return;
@@ -2462,16 +2464,17 @@ Return ONLY valid JSON, no markdown, no extra text:
               const c = { ...selectedCrmContact, liveStatus: getStatus(selectedCrmContact) };
               const stc = stColor(c.liveStatus);
 
-              // Jobs linked to this contact's company across FM + CapEx + MP
+              // Jobs linked to this contact — by approverContactId (direct) OR company fallback
               const coId = c.companyId;
               const FM_ACTIVE  = ["buyout","do_work"];
               const FM_WAITING = ["waiting_quote"];
               const FM_PIPE    = ["estimating"];
               const FM_BILL    = ["bill"];
 
-              const contactFmJobs  = coId ? fmJobs.filter(j => j.companyId === coId) : [];
-              const contactCxJobs  = coId ? capexJobs.filter(j => j.companyId === coId) : [];
-              const contactMpJobs  = coId ? majorJobs.filter(j => j.companyId === coId) : [];
+              // Direct link via approverContactId takes priority, company fallback shows all at company
+              const contactFmJobs  = fmJobs.filter(j => j.approverContactId === c.id || (coId && j.companyId === coId && !j.approverContactId));
+              const contactCxJobs  = capexJobs.filter(j => j.approverContactId === c.id || (coId && j.companyId === coId && !j.approverContactId));
+              const contactMpJobs  = majorJobs.filter(j => coId && j.companyId === coId);
 
               // Categorise FM jobs
               const activeJobs   = contactFmJobs.filter(j => FM_ACTIVE.includes(j.stage));
@@ -7966,6 +7969,25 @@ Return ONLY valid JSON, no markdown, no extra text:
                 <div><label className="lbl">Contract Value</label><input className="fi" type="number" value={capexForm.contractValue} onChange={e => setCapexForm(f => ({ ...f, contractValue: e.target.value }))} /></div>
                 <div><label className="lbl">Project Manager</label><input className="fi" value={capexForm.pm} onChange={e => setCapexForm(f => ({ ...f, pm: e.target.value }))} /></div>
               </div>
+              {/* Approver */}
+              <div>
+                <label className="lbl">Approver / Billing Contact <span style={{color:"#9BA3BF",fontWeight:400,textTransform:"none",letterSpacing:0,fontSize:10}}>— who approves the invoice</span></label>
+                {(() => {
+                  const coContacts = capexForm.companyId ? crmContacts.filter(c => c.companyId === capexForm.companyId) : crmContacts;
+                  return (
+                    <select className="fi" value={capexForm.approverContactId||""} onChange={e => setCapexForm(f => ({ ...f, approverContactId: e.target.value }))}>
+                      <option value="">— Select approver —</option>
+                      {(coContacts.length > 0 ? coContacts : crmContacts).map(c => (
+                        <option key={c.id} value={c.id}>{c.firstName} {c.lastName}{c.title?" — "+c.title:""}{!capexForm.companyId?" ("+c.company+")":""}</option>
+                      ))}
+                    </select>
+                  );
+                })()}
+                {capexForm.approverContactId && (() => {
+                  const ap = crmContacts.find(c => c.id === capexForm.approverContactId);
+                  return ap ? <div style={{marginTop:4,fontSize:11,color:"#3B6FE8",fontWeight:600}}>{ap.firstName} {ap.lastName}{ap.phone?" · "+ap.phone:""}</div> : null;
+                })()}
+              </div>
               <div><label className="lbl">Stage</label>
                 <select className="fi" value={capexForm.stage} onChange={e => setCapexForm(f => ({ ...f, stage: e.target.value }))}>
                   {CAPEX_FM_STAGES.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
@@ -8083,6 +8105,48 @@ Return ONLY valid JSON, no markdown, no extra text:
                     );
                   })()}
                 </div>
+              </div>
+              {/* ── Approver (Billing Contact) ── */}
+              <div>
+                <label className="lbl">
+                  Approver / Billing Contact
+                  <span style={{color:"#9BA3BF",fontWeight:400,textTransform:"none",letterSpacing:0,fontSize:10}}> — who will approve the invoice</span>
+                </label>
+                {(() => {
+                  const coId = fmForm.companyId;
+                  const coContacts = coId
+                    ? crmContacts.filter(c => c.companyId === coId)
+                    : crmContacts;
+                  return (
+                    <select className="fi" value={fmForm.approverContactId||""}
+                      onChange={e => setFmForm(f => ({ ...f, approverContactId: e.target.value }))}>
+                      <option value="">— Select approver —</option>
+                      {coContacts.length > 0
+                        ? coContacts.map(c => (
+                            <option key={c.id} value={c.id}>
+                              {c.firstName} {c.lastName}{c.title ? " — " + c.title : ""}
+                            </option>
+                          ))
+                        : crmContacts.map(c => (
+                            <option key={c.id} value={c.id}>
+                              {c.firstName} {c.lastName} ({c.company}){c.title ? " — " + c.title : ""}
+                            </option>
+                          ))
+                      }
+                    </select>
+                  );
+                })()}
+                {fmForm.approverContactId && (() => {
+                  const ap = crmContacts.find(c => c.id === fmForm.approverContactId);
+                  return ap ? (
+                    <div style={{marginTop:5,padding:"6px 10px",background:"#3B6FE810",border:"1px solid #3B6FE830",borderRadius:6,display:"flex",gap:12,alignItems:"center"}}>
+                      <span style={{fontSize:12,fontWeight:600,color:"#3B6FE8"}}>{ap.firstName} {ap.lastName}</span>
+                      {ap.title&&<span style={{fontSize:11,color:"#4A5278"}}>{ap.title}</span>}
+                      {ap.phone&&<span style={{fontSize:11,color:"#4A5278"}}>📞 {ap.phone}</span>}
+                      {ap.email&&<span style={{fontSize:11,color:"#4A5278"}}>✉ {ap.email}</span>}
+                    </div>
+                  ) : null;
+                })()}
               </div>
               <div><label className="lbl">Subcontractor / Vendor</label>
                 <select className="fi" value={fmForm.subcontractorId} onChange={e => setFmForm(f => ({ ...f, subcontractorId: e.target.value }))}>
