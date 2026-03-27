@@ -1322,6 +1322,36 @@ function SchedPage({ token, fmJobs, setFmJobs, subcontractors, companies, sites 
   );
 }
 
+// ── CRM Inline Edit Field ──
+const CrmInlineField = ({ label, field, value, icon, type="text", placeholder="", onSave }) => {
+  const [editing, setEditing] = React.useState(false);
+  const [val, setVal] = React.useState(value||"");
+  React.useEffect(() => { setVal(value||""); }, [value]);
+  if (editing) return (
+    <div>
+      <div style={{fontSize:9,color:"#4A5278",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:2}}>{icon} {label}</div>
+      <div style={{display:"flex",gap:6}}>
+        <input autoFocus className="fi" type={type} value={val} onChange={e=>setVal(e.target.value)}
+          style={{flex:1,padding:"4px 8px",fontSize:12}}
+          onKeyDown={e=>{ if(e.key==="Enter"){onSave(field,val);setEditing(false);} if(e.key==="Escape")setEditing(false); }} />
+        <button className="btn-primary" style={{fontSize:10,padding:"3px 8px"}} onClick={()=>{onSave(field,val);setEditing(false);}}>✓</button>
+        <button className="btn-ghost"   style={{fontSize:10,padding:"3px 8px"}} onClick={()=>setEditing(false)}>✕</button>
+      </div>
+    </div>
+  );
+  return (
+    <div style={{cursor:"pointer"}} onClick={()=>setEditing(true)} title="Click to edit">
+      <div style={{fontSize:9,color:"#4A5278",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:2}}>{icon} {label}</div>
+      {value
+        ? field==="linkedIn"
+          ? <a href={value} target="_blank" rel="noreferrer" onClick={e=>e.stopPropagation()} style={{fontSize:12,color:"#3B6FE8",textDecoration:"none",fontWeight:500}}>{value.replace("https://linkedin.com/in/","").replace("https://www.linkedin.com/in/","")}</a>
+          : <div style={{fontSize:12,color:"#1A2240",fontWeight:500,display:"flex",alignItems:"center",gap:6}}>{value}<span style={{fontSize:9,color:"#CBD1E8",marginLeft:2}}>✎</span></div>
+        : <div style={{fontSize:11,color:"#CBD1E8",fontStyle:"italic"}}>{placeholder||"Click to add…"}</div>
+      }
+    </div>
+  );
+};
+
 export default function App() {
   // URL routing — sub-facing page
   const urlToken  = useMemo(() => new URLSearchParams(window.location.search).get("subtoken"), []);
@@ -2335,89 +2365,197 @@ Return ONLY valid JSON, no markdown, no extra text:
             if (selectedCrmContact) {
               const c = { ...selectedCrmContact, liveStatus: getStatus(selectedCrmContact) };
               const stc = stColor(c.liveStatus);
+
+              // Jobs linked to this contact's company across FM + CapEx + MP
+              const coId = c.companyId;
+              const FM_ACTIVE  = ["buyout","do_work"];
+              const FM_WAITING = ["waiting_quote"];
+              const FM_PIPE    = ["estimating"];
+              const FM_BILL    = ["bill"];
+
+              const contactFmJobs  = coId ? fmJobs.filter(j => j.companyId === coId) : [];
+              const contactCxJobs  = coId ? capexJobs.filter(j => j.companyId === coId) : [];
+              const contactMpJobs  = coId ? majorJobs.filter(j => j.companyId === coId) : [];
+
+              // Categorise FM jobs
+              const activeJobs   = contactFmJobs.filter(j => FM_ACTIVE.includes(j.stage));
+              const waitingJobs  = contactFmJobs.filter(j => FM_WAITING.includes(j.stage));
+              const pipelineJobs = contactFmJobs.filter(j => FM_PIPE.includes(j.stage));
+              const billingJobs  = contactFmJobs.filter(j => FM_BILL.includes(j.stage));
+
+              // All jobs summary
+              const allActive = [
+                ...activeJobs.map(j => ({...j, div:"FM"})),
+                ...contactCxJobs.filter(j=>j.stage==="do_work").map(j=>({...j,div:"CapEx"})),
+                ...contactMpJobs.filter(j=>!["Closeout"].includes(j.status)).map(j=>({...j,div:"MP",name:j.name,contractValue:j.contractValue})),
+              ];
+              const allWaiting = [
+                ...waitingJobs.map(j=>({...j,div:"FM"})),
+                ...contactCxJobs.filter(j=>j.stage==="waiting_quote").map(j=>({...j,div:"CapEx"})),
+              ];
+              const allPipeline = [
+                ...pipelineJobs.map(j=>({...j,div:"FM"})),
+                ...contactCxJobs.filter(j=>["estimating","bidding"].includes(j.stage)).map(j=>({...j,div:"CapEx"})),
+              ];
+
+              // Division colors
+              const DIV_COLORS = { FM:"#3B6FE8", CapEx:"#8B5CF6", MP:"#F97316", Lawn:"#4ADE80", Snow:"#60A5FA" };
+
+              // Inline edit state — handled via selectedCrmContact updates
+              const saveField = (field, value) => {
+                const updated = { ...selectedCrmContact, [field]: value };
+                setSelectedCrmContact(updated);
+                setCrmContacts(prev => prev.map(x => x.id === c.id ? updated : x));
+                try { supa.from("crm_contacts").update({ [field === "linkedIn" ? "linked_in" : field]: value }).eq("id", c.id); } catch(e) {}
+              };
+
+              const toggleDiv = (div) => {
+                const cur = c.divisions || [];
+                const next = cur.includes(div) ? cur.filter(x=>x!==div) : [...cur, div];
+                saveField("divisions", next);
+              };
+
+              const InlineField = ({ label, field, value, icon, type="text", placeholder="" }) =>
+                <CrmInlineField label={label} field={field} value={value} icon={icon} type={type} placeholder={placeholder} onSave={saveField} />;
+
+              const JobSection = ({ title, jobs, color, emptyMsg }) => (
+                <div style={{marginBottom:14}}>
+                  <div style={{fontSize:10,fontWeight:700,color,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:8,display:"flex",alignItems:"center",gap:6}}>
+                    <span style={{width:6,height:6,borderRadius:"50%",background:color,display:"inline-block"}}></span>
+                    {title} <span style={{color:"#9BA3BF",fontWeight:400}}>({jobs.length})</span>
+                  </div>
+                  {jobs.length === 0
+                    ? <div style={{fontSize:11,color:"#9BA3BF",fontStyle:"italic",paddingLeft:12}}>{emptyMsg}</div>
+                    : jobs.map(j => (
+                        <div key={j.id} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 10px",background:"#F8F9FD",borderRadius:6,marginBottom:5,border:"1px solid #EEF0F8"}}>
+                          <span style={{fontSize:9,fontWeight:700,background:DIV_COLORS[j.div]+"15",color:DIV_COLORS[j.div],padding:"2px 5px",borderRadius:3,flexShrink:0}}>{j.div}</span>
+                          <span style={{fontSize:12,color:"#1A2240",flex:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{j.name}</span>
+                          {j.contractValue>0 && <span style={{fontSize:11,color:"#4A5278",flexShrink:0,fontWeight:600}}>${j.contractValue.toLocaleString()}</span>}
+                          {j.storeCode && <span style={{fontSize:10,color:"#9BA3BF",flexShrink:0}}>{j.storeCode}</span>}
+                        </div>
+                      ))
+                  }
+                </div>
+              );
+
               return (
                 <div className="fade-in" style={{display:"flex",flexDirection:"column",gap:20}}>
+                  {/* Back + Delete */}
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                     <button className="btn-ghost" onClick={()=>setSelectedCrmContact(null)} style={{padding:"8px 14px"}}>← Back to CRM</button>
-                    <div style={{display:"flex",gap:8}}>
-                      <button className="btn-ghost" onClick={()=>{setEditCrmId(c.id);setCrmFormData({...c});setShowCrmForm(true);}}>✎ Edit</button>
-                      <button className="btn-ghost" style={{color:"#F87171",borderColor:"#F8717120"}} onClick={()=>{
-                        if(!window.confirm("Delete?"))return;
-                        setCrmContacts(prev=>prev.filter(x=>x.id!==c.id));
-                        try{supa.from("crm_contacts").delete().eq("id",c.id);}catch(e){}
-                        setSelectedCrmContact(null);
-                      }}>✕ Delete</button>
-                    </div>
+                    <button className="btn-ghost" style={{color:"#F87171",borderColor:"#F8717120"}} onClick={()=>{
+                      if(!window.confirm("Delete this contact?"))return;
+                      setCrmContacts(prev=>prev.filter(x=>x.id!==c.id));
+                      try{supa.from("crm_contacts").delete().eq("id",c.id);}catch(e){}
+                      setSelectedCrmContact(null);
+                    }}>✕ Delete</button>
                   </div>
-                  <div style={{display:"grid",gridTemplateColumns:"1fr 340px",gap:20,alignItems:"start"}}>
+
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 380px",gap:20,alignItems:"start"}}>
+                    {/* ── LEFT COLUMN ── */}
                     <div style={{display:"flex",flexDirection:"column",gap:16}}>
-                      <div className="stat-card" style={{padding:24}}>
+
+                      {/* Identity card */}
+                      <div className="stat-card" style={{padding:22}}>
+                        {/* Avatar + name */}
                         <div style={{display:"flex",alignItems:"center",gap:16,marginBottom:18}}>
                           <div style={{width:56,height:56,borderRadius:"50%",background:stc+"20",border:"2px solid "+stc+"50",display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,fontWeight:800,color:stc,flexShrink:0}}>
                             {(c.firstName?.[0]||"")}{(c.lastName?.[0]||"")}
                           </div>
-                          <div>
-                            <div style={{fontSize:22,fontWeight:800,color:"#1A2240"}}>{c.firstName} {c.lastName}</div>
-                            <div style={{fontSize:13,color:"#4A5278",marginTop:2}}>{c.title}{c.company?" · "+c.company:""}</div>
-                            <div style={{display:"flex",gap:6,marginTop:6,flexWrap:"wrap"}}>
+                          <div style={{flex:1}}>
+                            <div style={{fontSize:20,fontWeight:800,color:"#1A2240"}}>{c.firstName} {c.lastName}</div>
+                            <div style={{fontSize:12,color:"#4A5278",marginTop:2}}>{c.title}{c.company?" · "+c.company:""}</div>
+                            <div style={{display:"flex",gap:5,marginTop:6,flexWrap:"wrap",alignItems:"center"}}>
                               <span style={{fontSize:10,fontWeight:700,background:stc+"20",color:stc,padding:"2px 8px",borderRadius:4}}>{stLabel(c.liveStatus)}</span>
-                              {c.isDecisionMaker&&<span style={{fontSize:10,fontWeight:700,background:"#FCD34D20",color:"#78600A",padding:"2px 8px",borderRadius:4}}>⭐ Decision Maker</span>}
-                              {(c.divisions||[]).map(d=><span key={d} style={{fontSize:10,fontWeight:700,background:"#3B6FE820",color:"#3B6FE8",padding:"2px 8px",borderRadius:4}}>{d}</span>)}
+                              {c.isDecisionMaker&&<span style={{fontSize:10,fontWeight:700,background:"#FCD34D20",color:"#78600A",padding:"2px 8px",borderRadius:4}}>⭐ DM</span>}
                             </div>
                           </div>
                         </div>
-                        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
-                          {[
-                            {label:"Email",    value:c.email,    icon:"✉"},
-                            {label:"Phone",    value:c.phone,    icon:"📞"},
-                            {label:"Territory",value:c.territory,icon:"📍"},
-                            {label:"States",   value:(c.states||[]).join(", "),icon:"🗺"},
-                            {label:"Contract", value:c.contractType,icon:"📋"},
-                            {label:"Source",   value:c.source,   icon:"🔗"},
-                            {label:"Owner",    value:c.relationshipOwner,icon:"👤"},
-                            {label:"Est. Spend",value:c.annualSpendEst>0?"$"+c.annualSpendEst.toLocaleString():"",icon:"💰"},
-                          ].filter(f=>f.value).map(f=>(
-                            <div key={f.label}>
-                              <div style={{fontSize:9,color:"#4A5278",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:2}}>{f.icon} {f.label}</div>
-                              <div style={{fontSize:12,color:"#1A2240",fontWeight:500}}>{f.value}</div>
-                            </div>
-                          ))}
-                        </div>
-                        {c.notes&&<div style={{marginTop:14,paddingTop:14,borderTop:"1px solid #EEF0F8"}}>
-                          <div style={{fontSize:9,color:"#4A5278",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:4}}>📝 Notes</div>
-                          <div style={{fontSize:12,color:"#252E52",lineHeight:1.6}}>{c.notes}</div>
-                        </div>}
-                      </div>
-                      <div className="stat-card" style={{padding:14,display:"flex",gap:16,alignItems:"center"}}>
-                        <div style={{flex:1}}>
-                          <div style={{fontSize:9,color:"#4A5278",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:2}}>Last Contact</div>
-                          <div style={{fontSize:13,fontWeight:600,color:"#1A2240"}}>{c.lastContactDate||"—"}</div>
-                        </div>
-                        <div style={{flex:1}}>
-                          <div style={{fontSize:9,color:c.nextFollowUp&&c.nextFollowUp<=new Date().toISOString().slice(0,10)?"#F87171":"#4A5278",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:2}}>
-                            {c.nextFollowUp&&c.nextFollowUp<=new Date().toISOString().slice(0,10)?"⚠ OVERDUE":"Next Follow-up"}
+
+                        {/* Department tags — click to toggle */}
+                        <div style={{marginBottom:16}}>
+                          <div style={{fontSize:9,color:"#4A5278",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:6}}>Departments</div>
+                          <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                            {[
+                              {id:"FM",    label:"FM",    color:"#3B6FE8"},
+                              {id:"CapEx", label:"CapEx", color:"#8B5CF6"},
+                              {id:"MP",    label:"Major Projects", color:"#F97316"},
+                              {id:"Lawn",  label:"Lawn",  color:"#4ADE80"},
+                              {id:"Snow",  label:"Snow",  color:"#60A5FA"},
+                            ].map(d => {
+                              const on = (c.divisions||[]).includes(d.id);
+                              return (
+                                <button key={d.id} onClick={()=>toggleDiv(d.id)} type="button"
+                                  style={{padding:"4px 10px",borderRadius:20,border:"2px solid "+(on?d.color:"#E8EBF4"),background:on?d.color+"18":"transparent",color:on?d.color:"#9BA3BF",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"inherit",transition:"all 0.15s",display:"flex",alignItems:"center",gap:4}}>
+                                  {on&&<span style={{fontSize:9}}>✓</span>}{d.label}
+                                </button>
+                              );
+                            })}
                           </div>
-                          <div style={{fontSize:13,fontWeight:600,color:c.nextFollowUp&&c.nextFollowUp<=new Date().toISOString().slice(0,10)?"#F87171":"#1A2240"}}>{c.nextFollowUp||"—"}</div>
                         </div>
-                        {c.linkedIn&&<a href={c.linkedIn} target="_blank" rel="noreferrer" style={{fontSize:11,color:"#3B6FE8",textDecoration:"none",background:"#3B6FE810",border:"1px solid #3B6FE830",borderRadius:6,padding:"6px 12px"}}>LinkedIn →</a>}
+
+                        {/* Inline-editable contact fields */}
+                        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
+                          <InlineField label="Email"    field="email"    value={c.email}    icon="✉"  type="email"    placeholder="Add email…" />
+                          <InlineField label="Phone"    field="phone"    value={c.phone}    icon="📞" type="tel"      placeholder="Add phone…" />
+                          <InlineField label="LinkedIn" field="linkedIn" value={c.linkedIn} icon="🔗" type="url"      placeholder="Add LinkedIn URL…" />
+                          <InlineField label="Title"    field="title"    value={c.title}    icon="💼"                 placeholder="Add title…" />
+                        </div>
+
+                        {/* Follow-up row */}
+                        <div style={{display:"flex",gap:14,marginTop:16,paddingTop:14,borderTop:"1px solid #EEF0F8"}}>
+                          <div style={{flex:1}}>
+                            <div style={{fontSize:9,color:"#4A5278",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:2}}>Last Contact</div>
+                            <div style={{fontSize:12,fontWeight:600,color:"#1A2240"}}>{c.lastContactDate||"—"}</div>
+                          </div>
+                          <div style={{flex:1}}>
+                            <div style={{fontSize:9,color:c.nextFollowUp&&c.nextFollowUp<=new Date().toISOString().slice(0,10)?"#F87171":"#4A5278",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:2}}>
+                              {c.nextFollowUp&&c.nextFollowUp<=new Date().toISOString().slice(0,10)?"⚠ Overdue":"Next Follow-up"}
+                            </div>
+                            <div style={{fontSize:12,fontWeight:600,color:c.nextFollowUp&&c.nextFollowUp<=new Date().toISOString().slice(0,10)?"#F87171":"#1A2240"}}>{c.nextFollowUp||"—"}</div>
+                          </div>
+                          <div style={{flex:1}}>
+                            <div style={{fontSize:9,color:"#4A5278",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:2}}>Owner</div>
+                            <div style={{fontSize:12,fontWeight:600,color:"#1A2240"}}>{c.relationshipOwner||"—"}</div>
+                          </div>
+                        </div>
+                        {c.notes&&<div style={{marginTop:14,paddingTop:14,borderTop:"1px solid #EEF0F8",fontSize:12,color:"#252E52",lineHeight:1.6}}>{c.notes}</div>}
                       </div>
+
+                      {/* ── JOBS SECTION ── */}
+                      {(allActive.length>0||allWaiting.length>0||allPipeline.length>0||billingJobs.length>0||contactMpJobs.length>0) ? (
+                        <div className="stat-card" style={{padding:20}}>
+                          <div style={{fontSize:11,fontWeight:700,color:"#1A2240",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:16}}>Jobs with {c.company||"this company"}</div>
+                          <JobSection title="Active" jobs={allActive} color="#4ADE80" emptyMsg="No active jobs" />
+                          <JobSection title="Waiting on Approval" jobs={allWaiting} color="#FCD34D" emptyMsg="None waiting" />
+                          <JobSection title="Pipeline" jobs={allPipeline} color="#818CF8" emptyMsg="Nothing in pipeline" />
+                          {billingJobs.length>0&&<JobSection title="Ready to Bill" jobs={billingJobs.map(j=>({...j,div:"FM"}))} color="#F97316" emptyMsg="" />}
+                        </div>
+                      ) : (
+                        <div className="stat-card" style={{padding:20,textAlign:"center"}}>
+                          <div style={{fontSize:13,color:"#4A5278",marginBottom:4}}>{c.company ? "No open jobs with "+c.company : "No company linked"}</div>
+                          <div style={{fontSize:11,color:"#9BA3BF"}}>Jobs will appear here once added in FM, CapEx, or MP</div>
+                        </div>
+                      )}
                     </div>
-                    <div className="stat-card" style={{padding:16}}>
+
+                    {/* ── RIGHT COLUMN: Activity log ── */}
+                    <div className="stat-card" style={{padding:16,position:"sticky",top:20}}>
                       <div style={{fontSize:11,fontWeight:700,color:"#1A2240",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:14}}>Activity Log</div>
-                      <div style={{display:"flex",gap:6,marginBottom:8,flexWrap:"wrap"}}>
+                      <div style={{display:"flex",gap:5,marginBottom:8,flexWrap:"wrap"}}>
                         {["📞 Call","📧 Email","🤝 Meeting","📝 Note"].map(t=>(
-                          <button key={t} className="btn-ghost" style={{fontSize:10,padding:"3px 8px"}} onClick={()=>setNewActivity(t+" — ")}>{t}</button>
+                          <button key={t} className="btn-ghost" style={{fontSize:10,padding:"3px 7px"}} onClick={()=>setNewActivity(t+" — ")}>{t}</button>
                         ))}
                       </div>
                       <textarea className="fi" rows={2} value={newActivity} onChange={e=>setNewActivity(e.target.value)} placeholder="Log a call, email, meeting…" style={{resize:"none",fontSize:12}} />
                       <button className="btn-primary" style={{width:"100%",marginTop:6,fontSize:11,padding:"7px"}} onClick={()=>addActivity(c.id, newActivity)}>+ Add Entry</button>
-                      <div style={{display:"flex",flexDirection:"column",gap:8,maxHeight:360,overflowY:"auto",marginTop:12}}>
+                      <div style={{display:"flex",flexDirection:"column",gap:8,maxHeight:400,overflowY:"auto",marginTop:12}}>
                         {(c.activityLog||[]).length===0&&<div style={{fontSize:11,color:"#4A5278",textAlign:"center",padding:"20px 0"}}>No activity yet</div>}
                         {(c.activityLog||[]).map((a,i)=>(
                           <div key={a.id||i} style={{background:"#F8F9FD",borderRadius:8,padding:"10px 12px"}}>
                             <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
                               <span style={{fontSize:10,color:"#3B6FE8",fontWeight:600}}>{a.by||"Team"}</span>
-                              <span style={{fontSize:10,color:"#9BA3BF"}}>{a.date?new Date(a.date).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"}):""}</span>
+                              <span style={{fontSize:10,color:"#9BA3BF"}}>{a.date?new Date(a.date).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"2-digit"}):""}</span>
                             </div>
                             <div style={{fontSize:12,color:"#252E52",lineHeight:1.5}}>{a.note}</div>
                           </div>
@@ -2428,6 +2566,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                 </div>
               );
             }
+
 
             // ── MAIN LIST VIEW ──
             const ContactTable = ({ contacts, title, accent }) => (
