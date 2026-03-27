@@ -1446,6 +1446,7 @@ export default function App() {
   const [crmMode, setCrmMode] = useState(false); // top-level CRM/Sales view
   const [salesTab, setSalesTab] = useState("major"); // major | capex | acquisition
   const [crmTagFilter, setCrmTagFilter] = useState(null); // null | "FM" | "CapEx" | "Major" | "Lawn" | "Snow"
+  const [selectedContact, setSelectedContact] = useState(null); // { contact, company }
   // CRM module state
   const [crmContacts,    setCrmContacts]    = useState([]);
   const [crmView,        setCrmView]        = useState("contacts"); // contacts | pipeline | dashboard
@@ -3373,7 +3374,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                 <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
                   {/* Back + Header */}
                   <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                    <button onClick={() => { setSelectedCustomer(null); setCrmTab("overview"); }} style={{ background: "#F0F2F8", border: "1px solid #CBD1E8", borderRadius: 6, padding: "6px 12px", fontSize: 12, color: "#4A5278", cursor: "pointer", fontFamily: "inherit" }}>← Back</button>
+                    <button onClick={() => { setSelectedCustomer(null); setCrmTab("overview"); setSelectedContact(null); }} style={{ background: "#F0F2F8", border: "1px solid #CBD1E8", borderRadius: 6, padding: "6px 12px", fontSize: 12, color: "#4A5278", cursor: "pointer", fontFamily: "inherit" }}>← Back</button>
                     <div style={{ display: "flex", alignItems: "center", gap: 12, flex: 1 }}>
                       <div style={{ width: 48, height: 48, borderRadius: 10, background: "#E8EEFA", border: "1px solid #3B6FE840", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, fontWeight: 700, color: "#3B6FE8", flexShrink: 0 }}>
                         {co.logo ? <img src={co.logo} style={{ width: 44, height: 44, borderRadius: 8, objectFit: "cover" }} alt="" /> : co.name.charAt(0).toUpperCase()}
@@ -3418,7 +3419,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                   {/* Tabs */}
                   <div style={{ display: "flex", borderBottom: "2px solid #EEF0F8" }}>
                     {TABS.map(t => (
-                      <button key={t.id} onClick={() => setCrmTab(t.id)} style={{ padding: "10px 18px", border: "none", background: "transparent", cursor: "pointer", fontFamily: "inherit", fontSize: 12, fontWeight: crmTab === t.id ? 700 : 500, color: crmTab === t.id ? "#3B6FE8" : "#4A5278", borderBottom: crmTab === t.id ? "2px solid #3B6FE8" : "2px solid transparent", marginBottom: -2 }}>
+                      <button key={t.id} onClick={() => { setCrmTab(t.id); setSelectedContact(null); }} style={{ padding: "10px 18px", border: "none", background: "transparent", cursor: "pointer", fontFamily: "inherit", fontSize: 12, fontWeight: crmTab === t.id ? 700 : 500, color: crmTab === t.id ? "#3B6FE8" : "#4A5278", borderBottom: crmTab === t.id ? "2px solid #3B6FE8" : "2px solid transparent", marginBottom: -2 }}>
                         {t.label}
                       </button>
                     ))}
@@ -3498,24 +3499,115 @@ Return ONLY valid JSON, no markdown, no extra text:
                   )}
 
                   {/* Contacts tab */}
-                  {crmTab === "contacts" && (
-                    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                      {coContacts.length === 0 && <div style={{ fontSize: 13, color: "#4A5278", fontStyle: "italic" }}>No contacts yet.</div>}
-                      {coContacts.map(c => (
-                        <div key={c.id} style={{ background: "#fff", border: "1px solid #D4D9EE", borderRadius: 10, padding: "14px 16px", display: "flex", alignItems: "center", gap: 14 }}>
-                          <div style={{ width: 40, height: 40, borderRadius: "50%", background: "#E8EEFA", border: "1px solid #3B6FE840", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 700, color: "#3B6FE8", flexShrink: 0 }}>{(c.firstName||"?").charAt(0)}</div>
-                          <div style={{ flex: 1 }}>
-                            <div style={{ fontSize: 13, fontWeight: 700, color: "#1A2240" }}>{c.firstName} {c.lastName}</div>
-                            {c.title && <div style={{ fontSize: 11, color: "#4A5278" }}>{c.title}</div>}
-                            <div style={{ display: "flex", gap: 12, marginTop: 4 }}>
-                              {c.email && <a href={"mailto:" + c.email} style={{ fontSize: 11, color: "#3B6FE8", textDecoration: "none" }}>✉ {c.email}</a>}
-                              {c.phone && <a href={"tel:" + c.phone} style={{ fontSize: 11, color: "#4A5278", textDecoration: "none" }}>📞 {c.phone}</a>}
+                  {crmTab === "contacts" && (() => {
+                    // ── Contact detail drill-down ──
+                    if (selectedContact) {
+                      const sc = selectedContact;
+                      const contactSites = sites.filter(s => (s.contactIds||[]).includes(sc.id));
+                      const contactFmJobs  = fmJobs.filter(j => j.companyId === co.id);
+                      const jobsAtSites = contactSites.map(s => ({
+                        site: s,
+                        jobs: contactFmJobs.filter(j => j.siteId === s.id),
+                      }));
+                      return (
+                        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                          {/* Back + header */}
+                          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                            <button onClick={() => setSelectedContact(null)} style={{ background: "#F0F2F8", border: "1px solid #CBD1E8", borderRadius: 6, padding: "5px 11px", fontSize: 12, color: "#4A5278", cursor: "pointer", fontFamily: "inherit" }}>← Back</button>
+                            <div style={{ fontSize: 16, fontWeight: 700, color: "#1A2240" }}>{sc.firstName} {sc.lastName}</div>
+                            {sc.title && <span style={{ fontSize: 11, color: "#fff", background: "#3B6FE8", borderRadius: 4, padding: "2px 8px" }}>{sc.title}</span>}
+                          </div>
+
+                          {/* Contact info card */}
+                          <div style={{ background: "#fff", border: "1px solid #D4D9EE", borderRadius: 10, padding: "16px 18px", display: "flex", alignItems: "center", gap: 16 }}>
+                            <div style={{ width: 52, height: 52, borderRadius: "50%", background: "#E8EEFA", border: "2px solid #3B6FE840", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, fontWeight: 800, color: "#3B6FE8", flexShrink: 0 }}>
+                              {(sc.firstName||"?").charAt(0)}
+                            </div>
+                            <div style={{ flex: 1 }}>
+                              <div style={{ fontSize: 15, fontWeight: 700, color: "#1A2240", marginBottom: 4 }}>{sc.firstName} {sc.lastName}</div>
+                              {sc.title && <div style={{ fontSize: 12, color: "#4A5278", marginBottom: 6 }}>{sc.title}</div>}
+                              <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+                                {sc.phone && <a href={"tel:"+sc.phone} style={{ fontSize: 12, color: "#3B6FE8", textDecoration: "none", display: "flex", alignItems: "center", gap: 4 }}>📞 {sc.phone}</a>}
+                                {sc.email && <a href={"mailto:"+sc.email} style={{ fontSize: 12, color: "#3B6FE8", textDecoration: "none", display: "flex", alignItems: "center", gap: 4 }}>✉ {sc.email}</a>}
+                              </div>
+                            </div>
+                            <div style={{ textAlign: "right" }}>
+                              <div style={{ fontSize: 24, fontWeight: 800, color: "#3B6FE8" }}>{contactSites.length}</div>
+                              <div style={{ fontSize: 10, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.08em" }}>Stores</div>
                             </div>
                           </div>
+
+                          {/* Sites list */}
+                          <div style={{ fontSize: 12, fontWeight: 700, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+                            Responsible For — {contactSites.length} Store{contactSites.length !== 1 ? "s" : ""}
+                          </div>
+                          {contactSites.length === 0 && (
+                            <div style={{ fontSize: 13, color: "#4A5278", fontStyle: "italic" }}>No sites linked to this contact yet.</div>
+                          )}
+                          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                            {contactSites.map(s => {
+                              const siteJobs = contactFmJobs.filter(j => j.siteId === s.id);
+                              const activeJob = siteJobs.find(j => ["do_work","buyout"].includes(j.stage));
+                              return (
+                                <div key={s.id} style={{ background: "#fff", border: "1px solid #D4D9EE", borderRadius: 8, padding: "12px 14px", display: "flex", alignItems: "center", gap: 12 }}>
+                                  <div style={{ width: 44, height: 44, borderRadius: 8, background: "#3B6FE812", border: "1px solid #3B6FE830", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                                    <div style={{ fontSize: 9, color: "#3B6FE8", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em" }}>Store</div>
+                                    <div style={{ fontSize: 13, fontWeight: 800, color: "#3B6FE8", lineHeight: 1.1 }}>{(s.storeNumber||"—").replace(/^[A-Za-z]+\s*/,"")}</div>
+                                  </div>
+                                  <div style={{ flex: 1, minWidth: 0 }}>
+                                    <div style={{ fontSize: 12, fontWeight: 600, color: "#1A2240", marginBottom: 2 }}>#{s.storeNumber}</div>
+                                    <div style={{ fontSize: 11, color: "#4A5278", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{s.address}</div>
+                                    {s.phone && <div style={{ fontSize: 10, color: "#9BA3BF", marginTop: 2 }}>📞 {s.phone}</div>}
+                                  </div>
+                                  <div style={{ textAlign: "right", flexShrink: 0 }}>
+                                    {activeJob ? (
+                                      <span style={{ fontSize: 10, fontWeight: 700, background: "#4ADE8015", color: "#4ADE80", border: "1px solid #4ADE8040", borderRadius: 4, padding: "2px 7px" }}>Active Job</span>
+                                    ) : siteJobs.length > 0 ? (
+                                      <span style={{ fontSize: 10, color: "#9BA3BF" }}>{siteJobs.length} job{siteJobs.length>1?"s":""}</span>
+                                    ) : null}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
                         </div>
-                      ))}
-                    </div>
-                  )}
+                      );
+                    }
+
+                    // ── Default: contact list ──
+                    return (
+                      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                        {coContacts.length === 0 && <div style={{ fontSize: 13, color: "#4A5278", fontStyle: "italic" }}>No contacts yet.</div>}
+                        {coContacts.map(c => {
+                          const cSites = sites.filter(s => (s.contactIds||[]).includes(c.id));
+                          return (
+                            <div key={c.id}
+                              onClick={() => setSelectedContact(c)}
+                              style={{ background: "#fff", border: "1px solid #D4D9EE", borderRadius: 10, padding: "14px 16px", display: "flex", alignItems: "center", gap: 14, cursor: "pointer", transition: "border-color 0.15s, box-shadow 0.15s" }}
+                              onMouseEnter={e => { e.currentTarget.style.borderColor = "#3B6FE8"; e.currentTarget.style.boxShadow = "0 2px 12px rgba(59,111,232,0.12)"; }}
+                              onMouseLeave={e => { e.currentTarget.style.borderColor = "#D4D9EE"; e.currentTarget.style.boxShadow = "none"; }}>
+                              <div style={{ width: 40, height: 40, borderRadius: "50%", background: "#E8EEFA", border: "1px solid #3B6FE840", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 700, color: "#3B6FE8", flexShrink: 0 }}>
+                                {(c.firstName||"?").charAt(0)}
+                              </div>
+                              <div style={{ flex: 1 }}>
+                                <div style={{ fontSize: 13, fontWeight: 700, color: "#1A2240" }}>{c.firstName} {c.lastName}</div>
+                                {c.title && <div style={{ fontSize: 11, color: "#4A5278" }}>{c.title}</div>}
+                                <div style={{ display: "flex", gap: 12, marginTop: 4 }}>
+                                  {c.email && <a href={"mailto:"+c.email} onClick={e=>e.stopPropagation()} style={{ fontSize: 11, color: "#3B6FE8", textDecoration: "none" }}>✉ {c.email}</a>}
+                                  {c.phone && <a href={"tel:"+c.phone} onClick={e=>e.stopPropagation()} style={{ fontSize: 11, color: "#4A5278", textDecoration: "none" }}>📞 {c.phone}</a>}
+                                </div>
+                              </div>
+                              <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4, flexShrink: 0 }}>
+                                <div style={{ fontSize: 18, fontWeight: 800, color: "#3B6FE8" }}>{cSites.length}</div>
+                                <div style={{ fontSize: 10, color: "#9BA3BF", textTransform: "uppercase", letterSpacing: "0.07em" }}>stores</div>
+                                <div style={{ fontSize: 10, color: "#CBD1E8" }}>→</div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })()}
 
                   {/* Jobs tab */}
                   {crmTab === "jobs" && (
