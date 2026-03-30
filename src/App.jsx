@@ -1647,7 +1647,6 @@ export default function App() {
   const [mpPipelineType,   setMpPipelineType]   = useState("all"); // all | opportunity | budgeting | hard_bid
   const [mpJobs,           setMpJobs]           = useState([]);
   const [mpWeeklyReports,  setMpWeeklyReports]  = useState([]);
-  const [selectedMpJob,    setSelectedMpJob]     = useState(null);
   const [mpDetailTab,      setMpDetailTab]       = useState("gantt");
   const [selectedCoord, setSelectedCoord] = useState(null); // coordinator report
   const [fmInbox,       setFmInbox]       = useState([]);   // unassigned leads
@@ -4064,7 +4063,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                       <div style={{fontSize:20,fontWeight:800,color:"#1A2240",letterSpacing:"-0.01em"}}>{job.name}</div>
                       <div style={{fontSize:11,color:"#4A5278",marginTop:2}}>{job.client}{job.pm?" · PM: "+job.pm:""}</div>
                     </div>
-                    <div style={{display:"flex",gap:8"}}>
+                    <div style={{display:"flex",gap:8}}>
                       {[{id:"gantt",icon:"📊",label:"Gantt"},{id:"weekly",icon:"📋",label:"Weekly Report"},{id:"history",icon:"📅",label:"History"}].map(t=>(
                         <button key={t.id} onClick={()=>setMpDetailTab(t.id)}
                           style={{padding:"7px 14px",border:"1px solid "+(mpDetailTab===t.id?"#3B6FE8":"#CBD1E8"),background:mpDetailTab===t.id?"#3B6FE8":"#fff",color:mpDetailTab===t.id?"#fff":"#4A5278",borderRadius:8,cursor:"pointer",fontFamily:"inherit",fontSize:12,fontWeight:600,display:"flex",alignItems:"center",gap:5}}>
