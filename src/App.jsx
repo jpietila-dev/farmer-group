@@ -3401,7 +3401,123 @@ Return ONLY valid JSON, no markdown, no extra text:
                 </div>
               )}
 
-              {activeBU === "major"   && <GanttSection jobList={majorJobs} showAddBtn={true} />}
+              {activeBU === "major" && (() => {
+                const dashJobs = mpJobs.length > 0 ? mpJobs : majorJobs;
+                if (!dashJobs.length) return (
+                  <div style={{background:"#fff",borderRadius:12,border:"1px solid #D4D9EE",padding:"32px",textAlign:"center",color:"#9BA3BF"}}>
+                    <div style={{fontSize:28,marginBottom:8}}>📊</div>
+                    <div style={{fontSize:14,fontWeight:600,color:"#1A2240",marginBottom:4}}>No MP data yet</div>
+                    <div style={{fontSize:12}}>Import your MP data to see the Gantt here.</div>
+                  </div>
+                );
+                // Build month grid from milestones + today
+                const today = new Date();
+                const allDates = [];
+                dashJobs.forEach(j => {
+                  [j.startDate,j.endDate,j.km1Date,j.km2Date,j.km3Date].filter(Boolean).forEach(d=>allDates.push(new Date(d)));
+                });
+                allDates.push(today);
+                if (allDates.length < 2) return <GanttSection jobList={majorJobs} showAddBtn={true} />;
+                const minD = new Date(Math.min(...allDates)); minD.setDate(1);
+                const maxD = new Date(Math.max(...allDates)); maxD.setDate(1); maxD.setMonth(maxD.getMonth()+1);
+                const months = [];
+                let cur = new Date(minD);
+                while(cur <= maxD){ months.push({y:cur.getFullYear(),m:cur.getMonth()}); cur.setMonth(cur.getMonth()+1); }
+                const tMs = maxD - minD || 1;
+                const pct = d => d ? Math.max(0,Math.min(100,((new Date(d)-minD)/tMs)*100)) : null;
+                const nowPct = Math.max(0,Math.min(100,((today-minD)/tMs)*100));
+                const MON = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+                return (
+                  <div style={{background:"#fff",borderRadius:12,border:"1px solid #D4D9EE",overflow:"hidden",boxShadow:"0 2px 10px rgba(0,0,0,0.04)"}}>
+                    <div style={{padding:"12px 16px",borderBottom:"1px solid #D4D9EE",display:"flex",alignItems:"center",gap:10,background:"#F9FAFC"}}>
+                      <span style={{fontSize:12,fontWeight:700,color:"#1A2240",flex:1}}>📊 Major Projects — Gantt Overview</span>
+                      <span style={{fontSize:11,color:"#4A5278"}}>{dashJobs.length} projects</span>
+                    </div>
+                    {/* Month header */}
+                    <div style={{display:"flex",borderBottom:"1px solid #D4D9EE"}}>
+                      <div style={{width:220,flexShrink:0,padding:"8px 14px",fontSize:10,color:"#9BA3BF",textTransform:"uppercase",letterSpacing:"0.08em",borderRight:"1px solid #D4D9EE"}}> </div>
+                      <div style={{width:60,flexShrink:0,borderRight:"1px solid #D4D9EE",padding:"8px 4px",fontSize:10,color:"#9BA3BF",textAlign:"center"}}>Days</div>
+                      <div style={{width:55,flexShrink:0,borderRight:"1px solid #D4D9EE",padding:"8px 4px",fontSize:10,color:"#9BA3BF",textAlign:"center"}}>GPM</div>
+                      <div style={{flex:1,display:"grid",gridTemplateColumns:"repeat("+months.length+",1fr)"}}>
+                        {months.map((m,i)=>(
+                          <div key={i} style={{padding:"8px 4px",fontSize:9,textTransform:"uppercase",textAlign:"center",borderRight:i<months.length-1?"1px solid #EEF0F8":"none",fontWeight:m.m===today.getMonth()&&m.y===today.getFullYear()?700:400,color:m.m===today.getMonth()&&m.y===today.getFullYear()?"#3B6FE8":"#9BA3BF"}}>
+                            {MON[m.m]} '{String(m.y).slice(2)}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    {/* Project rows */}
+                    {dashJobs.map(job => {
+                      const reports = mpWeeklyReports.filter(r=>r.projectId===job.id).sort((a,b)=>b.reportDate.localeCompare(a.reportDate));
+                      const latest = reports[0];
+                      const da = latest?.daysAhead ?? job.daysAhead;
+                      const gpm = latest?.gpm ?? job.gpm;
+                      const schedColor = da===null?"#9BA3BF":da>7?"#4ADE80":da<-7?"#F87171":"#FCD34D";
+                      return (
+                        <div key={job.id}
+                          onClick={()=>{setActiveNav("jobs");setSelectedMpJob(job.id);setMpDetailTab("gantt");}}
+                          style={{display:"flex",borderBottom:"1px solid #F4F6FB",cursor:"pointer",alignItems:"stretch"}}
+                          onMouseEnter={e=>e.currentTarget.style.background="#F5F8FF"}
+                          onMouseLeave={e=>e.currentTarget.style.background=""}>
+                          {/* Name col */}
+                          <div style={{width:220,flexShrink:0,padding:"10px 14px",borderRight:"1px solid #D4D9EE",display:"flex",alignItems:"center",gap:8}}>
+                            <div style={{width:8,height:8,borderRadius:"50%",background:schedColor,flexShrink:0}}/>
+                            <div>
+                              <div style={{fontSize:12,fontWeight:700,color:"#1A2240",lineHeight:1.3}}>{job.name}</div>
+                              {job.pm && <div style={{fontSize:10,color:"#9BA3BF"}}>PM: {job.pm}</div>}
+                            </div>
+                          </div>
+                          {/* Days ahead */}
+                          <div style={{width:60,flexShrink:0,borderRight:"1px solid #D4D9EE",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                            <div style={{textAlign:"center"}}>
+                              <div style={{fontSize:13,fontWeight:800,color:schedColor}}>{da===null?"—":Math.abs(da)}</div>
+                              <div style={{fontSize:8,color:"#9BA3BF"}}>{da===null?"":da>=0?"ahead":"behind"}</div>
+                            </div>
+                          </div>
+                          {/* GPM */}
+                          <div style={{width:55,flexShrink:0,borderRight:"1px solid #D4D9EE",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                            <div style={{fontSize:12,fontWeight:700,color:"#4ADE80"}}>{gpm?(gpm*100).toFixed(0)+"%":"—"}</div>
+                          </div>
+                          {/* Timeline */}
+                          <div style={{flex:1,position:"relative",minHeight:44}}>
+                            {/* Today line */}
+                            <div style={{position:"absolute",left:nowPct+"%",top:0,bottom:0,width:1.5,background:"#F87171",opacity:0.5,zIndex:1}}/>
+                            {/* Project bar if dates exist */}
+                            {job.startDate && job.endDate && pct(job.startDate)!==null && (
+                              <div style={{position:"absolute",left:pct(job.startDate)+"%",right:(100-pct(job.endDate))+"%",top:"50%",transform:"translateY(-50%)",height:14,background:"linear-gradient(90deg,#3B6FE830,#3B6FE850)",border:"1px solid #3B6FE840",borderRadius:7}}/>
+                            )}
+                            {/* Milestones */}
+                            {[
+                              {d:job.km1Date,c:"#F87171"},
+                              {d:job.km2Date,c:"#FCD34D"},
+                              {d:job.km3Date,c:"#4ADE80"},
+                            ].filter(m=>m.d && pct(m.d)!==null).map((m,i)=>(
+                              <div key={i} style={{position:"absolute",left:"calc("+pct(m.d)+"% - 6px)",top:"50%",width:12,height:12,background:m.c,transform:"translateY(-50%) rotate(45deg)",borderRadius:1,boxShadow:"0 1px 4px rgba(0,0,0,0.25)",zIndex:2}}/>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })}
+                    {/* Legend */}
+                    <div style={{padding:"8px 16px",background:"#F9FAFC",borderTop:"1px solid #D4D9EE",display:"flex",gap:16,alignItems:"center",flexWrap:"wrap"}}>
+                      <span style={{fontSize:10,color:"#4A5278",fontWeight:600}}>Legend:</span>
+                      {[{c:"#4ADE80",l:"Ahead"},{c:"#FCD34D",l:"On Track"},{c:"#F87171",l:"Behind"}].map(l=>(
+                        <div key={l.l} style={{display:"flex",alignItems:"center",gap:4,fontSize:10,color:"#4A5278"}}>
+                          <span style={{width:8,height:8,borderRadius:"50%",background:l.c,display:"inline-block"}}/>
+                          {l.l}
+                        </div>
+                      ))}
+                      {[{c:"#F87171",l:"KM1"},{c:"#FCD34D",l:"KM2"},{c:"#4ADE80",l:"KM3"}].map(l=>(
+                        <div key={l.l} style={{display:"flex",alignItems:"center",gap:4,fontSize:10,color:"#4A5278"}}>
+                          <span style={{width:9,height:9,background:l.c,transform:"rotate(45deg)",display:"inline-block",borderRadius:1}}/>
+                          {l.l}
+                        </div>
+                      ))}
+                      <span style={{fontSize:10,color:"#4A5278",marginLeft:"auto"}}>Click any row to open →</span>
+                    </div>
+                  </div>
+                );
+              })()}
               {activeBU === "capital" && <GanttSection jobList={capexJobs.filter(j => j.stage === "do_work" && j.startDate && j.endDate).map(j => ({ ...j, client: companies.find(c => c.id === j.companyId)?.name || "", status: "On Schedule" }))} showAddBtn={false} />}
 
               {/* Punch list */}
@@ -4271,42 +4387,89 @@ Return ONLY valid JSON, no markdown, no extra text:
 
                   {/* ── HISTORY TAB ── */}
                   {mpDetailTab==="history" && (
-                    <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                    <div style={{display:"flex",flexDirection:"column",gap:10}}>
                       {reports.length===0 && <div style={{textAlign:"center",padding:"40px",color:"#9BA3BF",background:"#fff",borderRadius:12,border:"1px solid #D4D9EE"}}>No weekly history yet</div>}
-                      {reports.map((r,i)=>(
-                        <div key={r.id} style={{background:"#fff",borderRadius:10,border:"1px solid #D4D9EE",overflow:"hidden"}}>
-                          <div style={{padding:"10px 16px",background:"#F9FAFC",borderBottom:"1px solid #D4D9EE",display:"flex",alignItems:"center",gap:10}}>
-                            <div style={{fontSize:12,fontWeight:700,color:"#1A2240",flex:1}}>Week of {r.reportDate}</div>
-                            {i===0 && <span style={{fontSize:10,fontWeight:700,background:"#3B6FE815",color:"#3B6FE8",borderRadius:4,padding:"2px 8px"}}>LATEST</span>}
-                            <div style={{display:"flex",gap:6}}>
-                              {[{v:r.changeOrderStatus,l:"CO"},{v:r.budgetStatus,l:"Budget"},{v:r.billingStatus,l:"Billing"}].map(b=>(
-                                <span key={b.l} style={{fontSize:10,padding:"1px 7px",borderRadius:4,background:b.v==="Yes"?"#4ADE8015":b.v==="Hold"?"#FCD34D15":"#F8717115",color:b.v==="Yes"?"#4ADE80":b.v==="Hold"?"#D97706":"#F87171",fontWeight:600,border:"1px solid "+(b.v==="Yes"?"#4ADE8040":b.v==="Hold"?"#FCD34D40":"#F8717140")}}>{b.l}: {b.v||"—"}</span>
-                              ))}
+                      {reports.map((r,i)=>{
+                        // Status check helper
+                        const chk = v => v==="Yes" ? {icon:"✅",color:"#4ADE80"} : v==="Hold" ? {icon:"⏸",color:"#FCD34D"} : v==="No" ? {icon:"❌",color:"#F87171"} : {icon:"—",color:"#9BA3BF"};
+                        // Stars for site cleanliness (1-5)
+                        const safetyNum = parseInt(r.siteSafety) || 0;
+                        const safetyLabel = ["","One","Two","Three","Four","Five"];
+                        const starsFromLabel = safetyLabel.indexOf(r.siteSafety);
+                        const stars = starsFromLabel > 0 ? starsFromLabel : safetyNum;
+                        const StarRating = ({n}) => (
+                          <span>
+                            {[1,2,3,4,5].map(s=>(
+                              <span key={s} style={{fontSize:14,color:s<=n?"#F59E0B":"#E5E7EB"}}>{s<=n?"★":"☆"}</span>
+                            ))}
+                          </span>
+                        );
+                        return (
+                          <div key={r.id} style={{background:"#fff",borderRadius:12,border:"1px solid #D4D9EE",overflow:"hidden",boxShadow:"0 1px 4px rgba(0,0,0,0.04)"}}>
+                            {/* Card header */}
+                            <div style={{padding:"11px 16px",background:"#F9FAFC",borderBottom:"1px solid #D4D9EE",display:"flex",alignItems:"center",gap:10}}>
+                              <div style={{fontSize:13,fontWeight:700,color:"#1A2240",flex:1}}>Week of {r.reportDate}</div>
+                              {i===0 && <span style={{fontSize:10,fontWeight:700,background:"#3B6FE815",color:"#3B6FE8",borderRadius:4,padding:"2px 8px",border:"1px solid #3B6FE830"}}>LATEST</span>}
+                              {r.daysAhead!==null && r.daysAhead!==undefined && (
+                                <span style={{fontSize:11,fontWeight:700,color:r.daysAhead>7?"#4ADE80":r.daysAhead<-7?"#F87171":"#FCD34D"}}>
+                                  {Math.abs(r.daysAhead)}d {r.daysAhead>=0?"▲ ahead":"▼ behind"}
+                                </span>
+                              )}
                             </div>
+
+                            {/* Status row — checkmarks */}
+                            <div style={{padding:"10px 16px",borderBottom:"1px solid #F4F6FB",display:"flex",gap:0,flexWrap:"wrap"}}>
+                              {[
+                                {label:"Change Order",   val:r.changeOrderStatus},
+                                {label:"Budget",         val:r.budgetStatus},
+                                {label:"Billing",        val:r.billingStatus},
+                                {label:"Daily Reports",  val:r.criticalPath==="Yes"?"Yes":r.criticalPath},
+                                {label:"3-Week Lookahead",val:r.completionSchedule},
+                              ].map((item,j)=>{
+                                const s = chk(item.val);
+                                return (
+                                  <div key={j} style={{flex:"1 1 0",minWidth:90,display:"flex",flexDirection:"column",alignItems:"center",padding:"6px 4px",borderRight:j<4?"1px solid #F0F2F8":"none"}}>
+                                    <div style={{fontSize:18,lineHeight:1}}>{s.icon}</div>
+                                    <div style={{fontSize:9,color:"#9BA3BF",textTransform:"uppercase",letterSpacing:"0.06em",marginTop:3,textAlign:"center"}}>{item.label}</div>
+                                    <div style={{fontSize:10,color:s.color,fontWeight:600}}>{item.val||"—"}</div>
+                                  </div>
+                                );
+                              })}
+                              {/* Site cleanliness stars */}
+                              <div style={{flex:"1 1 0",minWidth:90,display:"flex",flexDirection:"column",alignItems:"center",padding:"6px 4px"}}>
+                                <StarRating n={stars}/>
+                                <div style={{fontSize:9,color:"#9BA3BF",textTransform:"uppercase",letterSpacing:"0.06em",marginTop:3}}>Site Safety</div>
+                                <div style={{fontSize:10,color:"#F59E0B",fontWeight:600}}>{r.siteSafety||"—"}</div>
+                              </div>
+                            </div>
+
+                            {/* This week / Next week */}
+                            <div style={{padding:"12px 16px",display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,borderBottom:(r.km1||r.km2||r.km3)?"1px solid #F4F6FB":"none"}}>
+                              <div>
+                                <div style={{fontSize:10,color:"#9BA3BF",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:5}}>✅ This Week</div>
+                                <div style={{fontSize:12,color:"#1A2240",lineHeight:1.7,whiteSpace:"pre-line"}}>{(r.currentWeek||"—").replace(/\\n/g,"\n")}</div>
+                              </div>
+                              <div>
+                                <div style={{fontSize:10,color:"#9BA3BF",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:5}}>📅 Next Week</div>
+                                <div style={{fontSize:12,color:"#1A2240",lineHeight:1.7,whiteSpace:"pre-line"}}>{(r.nextWeek||"—").replace(/\\n/g,"\n")}</div>
+                              </div>
+                            </div>
+
+                            {/* Milestones */}
+                            {(r.km1||r.km2||r.km3) && (
+                              <div style={{padding:"10px 16px",display:"flex",gap:8,flexWrap:"wrap"}}>
+                                {[{l:r.km1,d:r.km1Date,c:"#F87171"},{l:r.km2,d:r.km2Date,c:"#FCD34D"},{l:r.km3,d:r.km3Date,c:"#4ADE80"}].filter(m=>m.l).map((m,j)=>(
+                                  <div key={j} style={{display:"flex",alignItems:"center",gap:6,fontSize:11,background:m.c+"12",border:"1px solid "+m.c+"35",borderRadius:6,padding:"4px 10px"}}>
+                                    <span style={{color:m.c,fontSize:10}}>◆</span>
+                                    <span style={{color:"#1A2240",fontWeight:600}}>{m.l}</span>
+                                    {m.d && <span style={{color:"#9BA3BF",fontSize:10}}>· {m.d}</span>}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
                           </div>
-                          <div style={{padding:"12px 16px",display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
-                            <div>
-                              <div style={{fontSize:10,color:"#9BA3BF",fontWeight:600,marginBottom:4}}>THIS WEEK</div>
-                              <div style={{fontSize:12,color:"#1A2240",lineHeight:1.6,whiteSpace:"pre-line"}}>{(r.currentWeek||"").replace(/\\n/g,"\n")}</div>
-                            </div>
-                            <div>
-                              <div style={{fontSize:10,color:"#9BA3BF",fontWeight:600,marginBottom:4}}>NEXT WEEK</div>
-                              <div style={{fontSize:12,color:"#1A2240",lineHeight:1.6,whiteSpace:"pre-line"}}>{(r.nextWeek||"").replace(/\\n/g,"\n")}</div>
-                            </div>
-                          </div>
-                          {(r.km1||r.km2||r.km3) && (
-                            <div style={{padding:"8px 16px 12px",borderTop:"1px solid #F0F2F8",display:"flex",gap:10,flexWrap:"wrap"}}>
-                              {[{l:r.km1,d:r.km1Date,c:"#F87171"},{l:r.km2,d:r.km2Date,c:"#FCD34D"},{l:r.km3,d:r.km3Date,c:"#4ADE80"}].filter(m=>m.l).map((m,j)=>(
-                                <div key={j} style={{display:"flex",alignItems:"center",gap:6,fontSize:11,background:m.c+"15",border:"1px solid "+m.c+"40",borderRadius:6,padding:"3px 10px"}}>
-                                  <span style={{color:m.c}}>◆</span>
-                                  <span style={{color:"#1A2240",fontWeight:500}}>{m.l}</span>
-                                  {m.d && <span style={{color:"#9BA3BF"}}>· {m.d}</span>}
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   )}
                 </div>
