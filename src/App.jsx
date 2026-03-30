@@ -1505,6 +1505,50 @@ function PhotoAdder({ onAdd }) {
   );
 }
 
+// ── MP Job mappers ──────────────────────────────────────────────────────────
+const dbToMpJob = r => ({
+  id: r.id, name: r.name||"", client: r.client||"", status: r.status||"active",
+  contractValue: r.contract_value||0, startDate: r.start_date||"", endDate: r.end_date||"",
+  pm: r.pm||"", pct: r.pct||0, daysAhead: r.days_ahead,
+  completionSchedule: r.completion_schedule||"",
+  changeOrderStatus: r.change_order_status||"",
+  budgetStatus: r.budget_status||"",
+  billingStatus: r.billing_status||"",
+  gpm: r.gpm||0, longLeadItems: r.long_lead_items||"",
+  km1: r.km1||"", km1Date: r.km1_date||"",
+  km2: r.km2||"", km2Date: r.km2_date||"",
+  km3: r.km3||"", km3Date: r.km3_date||"",
+  notes: r.notes||""
+});
+const mpJobToDB = j => ({
+  id: j.id, name: j.name||"", client: j.client||"", status: j.status||"active",
+  contract_value: j.contractValue||null, start_date: j.startDate||null, end_date: j.endDate||null,
+  pm: j.pm||null, pct: j.pct||0, days_ahead: j.daysAhead||null,
+  completion_schedule: j.completionSchedule||null,
+  change_order_status: j.changeOrderStatus||null,
+  budget_status: j.budgetStatus||null,
+  billing_status: j.billingStatus||null,
+  gpm: j.gpm||null, long_lead_items: j.longLeadItems||null,
+  km1: j.km1||null, km1_date: j.km1Date||null,
+  km2: j.km2||null, km2_date: j.km2Date||null,
+  km3: j.km3||null, km3_date: j.km3Date||null,
+  notes: j.notes||null
+});
+const dbToMpWeekly = r => ({
+  id: r.id, projectId: r.project_id, reportDate: r.report_date||"",
+  currentWeek: r.current_week||"", nextWeek: r.next_week||"",
+  criticalPath: r.critical_path||"", daysAhead: r.days_ahead,
+  completionSchedule: r.completion_schedule||"",
+  changeOrderStatus: r.change_order_status||"",
+  budgetStatus: r.budget_status||"",
+  billingStatus: r.billing_status||"",
+  siteSafety: r.site_safety||"", ownerComms: r.owner_comms||"",
+  gpm: r.gpm||0, longLeadItems: r.long_lead_items||"",
+  km1: r.km1||"", km1Date: r.km1_date||"",
+  km2: r.km2||"", km2Date: r.km2_date||"",
+  km3: r.km3||"", km3Date: r.km3_date||""
+});
+
 export default function App() {
   // URL routing — sub-facing page
   const urlToken  = useMemo(() => new URLSearchParams(window.location.search).get("subtoken"), []);
@@ -1602,6 +1646,9 @@ export default function App() {
   const [mpFormData,       setMpFormData]       = useState({});
   const [mpPipelineType,   setMpPipelineType]   = useState("all"); // all | opportunity | budgeting | hard_bid
   const [mpJobs,           setMpJobs]           = useState([]);
+  const [mpWeeklyReports,  setMpWeeklyReports]  = useState([]);
+  const [selectedMpJob,    setSelectedMpJob]     = useState(null);
+  const [mpDetailTab,      setMpDetailTab]       = useState("gantt");
   const [selectedCoord, setSelectedCoord] = useState(null); // coordinator report
   const [fmInbox,       setFmInbox]       = useState([]);   // unassigned leads
   const [showInboxForm, setShowInboxForm] = useState(false);
@@ -1814,7 +1861,7 @@ export default function App() {
     const load = async () => {
       setDbLoading(l => ({ ...l, companies: true, sites: true, lawnSites: true, subcontractors: true }));
       try {
-        const [coRes, siteRes, subRes, fmRes, teamRes, crmRes, ctRes] = await Promise.all([
+        const [coRes, siteRes, subRes, fmRes, teamRes, crmRes, ctRes, mpRes, mpwRes] = await Promise.all([
           supa.from("companies").select("*"),
           fetch(`${SUPA_URL}/rest/v1/sites?select=*&limit=1000`, {
             headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}` }
@@ -1828,6 +1875,12 @@ export default function App() {
           fetch(`${SUPA_URL}/rest/v1/contacts?select=id,company_id,first_name,last_name,title,email,phone&limit=1000`, {
             headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}` }
           }).then(r => r.json()).then(data => ({ data, error: null })).catch(error => ({ data: null, error })),
+          fetch(`${SUPA_URL}/rest/v1/mp_jobs?select=*&limit=100`, {
+            headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}` }
+          }).then(r => r.json()).then(data => ({ data, error: null })).catch(() => ({ data: null, error: null })),
+          fetch(`${SUPA_URL}/rest/v1/mp_weekly_reports?select=*&limit=1000`, {
+            headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}` }
+          }).then(r => r.json()).then(data => ({ data, error: null })).catch(() => ({ data: null, error: null })),
         ]);
         if (coRes.data?.length)   setCompanies(coRes.data.map(dbToCompany));
         if (siteRes.data?.length) setSites(siteRes.data.map(dbToSite));
@@ -1835,6 +1888,8 @@ export default function App() {
         if (fmRes.data?.length)   setFmJobs(fmRes.data.map(dbToFmJob));
         if (teamRes.data?.length) setFmTeam(teamRes.data.map(dbToTeamMember));
         if (crmRes.data?.length)  setCrmContacts(crmRes.data.map(dbToCrmContact));
+        if (Array.isArray(mpRes.data)  && mpRes.data.length)  setMpJobs(mpRes.data.map(dbToMpJob));
+        if (Array.isArray(mpwRes.data) && mpwRes.data.length) setMpWeeklyReports(mpwRes.data.map(dbToMpWeekly));
         // contacts table — deduplicate by name+company before setting
         if (Array.isArray(ctRes.data) && ctRes.data.length) {
           const seen = new Set();
@@ -3970,285 +4025,380 @@ Return ONLY valid JSON, no markdown, no extra text:
 
           {/* ── ACTIVE JOBS (MP only) ── */}
           {activeNav === "jobs" && activeBU !== "capital" && activeBU !== "facility" && (() => {
-            const activeJobs   = majorJobs.filter(j => j.status !== "Closeout");
-            const closeoutJobs = majorJobs.filter(j => j.status === "Closeout");
+            // Use Supabase mp_jobs if loaded, fall back to hardcoded majorJobs
+            const allMpJobs = mpJobs.length > 0 ? mpJobs : majorJobs;
+            const activeJobs   = allMpJobs.filter(j => j.status !== "Closeout" && j.status !== "completed");
+            const closeoutJobs = allMpJobs.filter(j => j.status === "Closeout" || j.status === "completed");
 
-            // ── Enhanced Gantt with milestone diamonds ──
-            const MpGantt = ({ jobs }) => {
-              if (!jobs.length) return <div style={{textAlign:"center",padding:"32px",color:"#3D4570",fontSize:12,background:"#F5F7FC",borderRadius:10,border:"1px dashed #CBD1E8"}}>No jobs</div>;
-              const months = getGanttMonths(jobs);
-              if (!months.length) return null;
-              const tStart = new Date(months[0].year, months[0].month, 1);
-              const tEnd   = new Date(months[months.length-1].year, months[months.length-1].month+1, 1);
-              const tMs    = tEnd - tStart || 1;
-              const tPct   = Math.max(0,Math.min(100,((new Date()-tStart)/tMs)*100));
-              const nowM = new Date().getMonth(), nowY = new Date().getFullYear();
-              const datePct = (d) => { if(!d) return null; const dt = new Date(d); return Math.max(0,Math.min(100,((dt-tStart)/tMs)*100)); };
-              const MILESTONE_STYLES = [
-                { color:"#F87171", label:"KM1" },
-                { color:"#FCD34D", label:"KM2" },
-                { color:"#4ADE80", label:"KM3" },
-              ];
-              const SC = { "On Schedule":{ color:"#4ADE80",bg:"#4ADE8015" }, "Behind Schedule":{ color:"#F87171",bg:"#F8717115" }, "At Risk":{ color:"#F97316",bg:"#F9731615" }, "Closeout":{ color:"#818CF8",bg:"#818CF815" } };
+            const STATUS_STYLE = {
+              "active":    { color:"#4ADE80", bg:"#4ADE8015" },
+              "On Schedule":{ color:"#4ADE80", bg:"#4ADE8015" },
+              "Behind Schedule":{ color:"#F87171", bg:"#F8717115" },
+              "At Risk":   { color:"#F97316", bg:"#F9731615" },
+              "Hold":      { color:"#FCD34D", bg:"#FCD34D15" },
+              "Closeout":  { color:"#818CF8", bg:"#818CF815" },
+            };
+
+            // If a job is selected, show detail view
+            if (selectedMpJob) {
+              const job = allMpJobs.find(j => j.id === selectedMpJob) || selectedMpJob;
+              const reports = mpWeeklyReports.filter(r => r.projectId === job.id)
+                .sort((a,b) => (b.reportDate||"").localeCompare(a.reportDate||""));
+              const latest = reports[0];
+
+              const getStatusColor = (s) => STATUS_STYLE[s]?.color || "#9BA3BF";
+              const getStatusBg    = (s) => STATUS_STYLE[s]?.bg    || "#F4F6FB";
+
+              // Schedule indicator
+              const daysAhead = latest?.daysAhead ?? job.daysAhead;
+              const scheduleStatus = daysAhead === null ? "Unknown" :
+                daysAhead > 7 ? "Ahead" : daysAhead < -7 ? "Behind" : "On Track";
+              const scheduleColor = scheduleStatus==="Ahead"?"#4ADE80":scheduleStatus==="Behind"?"#F87171":"#FCD34D";
+
               return (
-                <div style={{background:"#F5F7FC",border:"1px solid #CBD1E8",borderRadius:10,overflow:"hidden"}}>
-                  {/* Header row */}
-                  <div style={{display:"flex",borderBottom:"1px solid #CBD1E8"}}>
-                    <div style={{width:260,flexShrink:0,padding:"8px 14px",fontSize:10,color:"#4A5278",textTransform:"uppercase",letterSpacing:"0.08em",borderRight:"1px solid #CBD1E8"}}>Project</div>
-                    <div style={{width:60,flexShrink:0,padding:"8px 6px",fontSize:10,color:"#4A5278",textTransform:"uppercase",textAlign:"center",borderRight:"1px solid #CBD1E8"}}>%</div>
-                    <div style={{flex:1,display:"grid",gridTemplateColumns:"repeat("+months.length+",1fr)"}}>
-                      {months.map((m,i)=>(
-                        <div key={i} style={{padding:"8px 4px",fontSize:9,textTransform:"uppercase",textAlign:"center",borderRight:i<months.length-1?"1px solid #D4D8EC":"none",fontWeight:m.month===nowM&&m.year===nowY?700:400,color:m.month===nowM&&m.year===nowY?"#3B6FE8":"#4A5278"}}>
-                          {["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][m.month]}{m.year!==nowY?" '"+String(m.year).slice(2):""}
-                        </div>
+                <div className="fade-in" style={{display:"flex",flexDirection:"column",gap:18}}>
+                  {/* Back + header */}
+                  <div style={{display:"flex",alignItems:"center",gap:12}}>
+                    <button onClick={()=>setSelectedMpJob(null)} style={{background:"#F0F2F8",border:"1px solid #CBD1E8",borderRadius:6,padding:"6px 14px",fontSize:12,color:"#4A5278",cursor:"pointer",fontFamily:"inherit"}}>← All Projects</button>
+                    <div style={{flex:1}}>
+                      <div style={{fontSize:20,fontWeight:800,color:"#1A2240",letterSpacing:"-0.01em"}}>{job.name}</div>
+                      <div style={{fontSize:11,color:"#4A5278",marginTop:2}}>{job.client}{job.pm?" · PM: "+job.pm:""}</div>
+                    </div>
+                    <div style={{display:"flex",gap:8"}}>
+                      {[{id:"gantt",icon:"📊",label:"Gantt"},{id:"weekly",icon:"📋",label:"Weekly Report"},{id:"history",icon:"📅",label:"History"}].map(t=>(
+                        <button key={t.id} onClick={()=>setMpDetailTab(t.id)}
+                          style={{padding:"7px 14px",border:"1px solid "+(mpDetailTab===t.id?"#3B6FE8":"#CBD1E8"),background:mpDetailTab===t.id?"#3B6FE8":"#fff",color:mpDetailTab===t.id?"#fff":"#4A5278",borderRadius:8,cursor:"pointer",fontFamily:"inherit",fontSize:12,fontWeight:600,display:"flex",alignItems:"center",gap:5}}>
+                          {t.icon} {t.label}
+                        </button>
                       ))}
                     </div>
                   </div>
-                  {/* Job rows */}
-                  {jobs.map((job,idx)=>{
-                    const bar = getBarStyle(job,months);
-                    const sc  = SC[job.status] || SC["On Schedule"];
-                    const milestones = [
-                      job.km1 && job.km1Date ? { label: job.km1, date: job.km1Date, ...MILESTONE_STYLES[0] } : null,
-                      job.km2 && job.km2Date ? { label: job.km2, date: job.km2Date, ...MILESTONE_STYLES[1] } : null,
-                      job.km3 && job.km3Date ? { label: job.km3, date: job.km3Date, ...MILESTONE_STYLES[2] } : null,
-                    ].filter(Boolean);
-                    const daysAhead = job.daysAhead || 0;
+
+                  {/* KPI strip */}
+                  <div style={{display:"grid",gridTemplateColumns:"repeat(6,1fr)",gap:10}}>
+                    {[
+                      {label:"Schedule",    value: daysAhead===null?"—":Math.abs(daysAhead)+" days "+(daysAhead>=0?"ahead":"behind"), color:scheduleColor},
+                      {label:"GPM",         value: (latest?.gpm??job.gpm) ? ((latest?.gpm??job.gpm)*100).toFixed(1)+"%" : "—",        color:"#4ADE80"},
+                      {label:"Contract",    value: job.contractValue ? fmt(job.contractValue) : "—",                                   color:"#60A5FA"},
+                      {label:"CO Status",   value: (latest?.changeOrderStatus||job.changeOrderStatus)||"—",                            color:"#FCD34D"},
+                      {label:"Budget",      value: (latest?.budgetStatus||job.budgetStatus)||"—",                                      color:"#A78BFA"},
+                      {label:"Billing",     value: (latest?.billingStatus||job.billingStatus)||"—",                                    color:"#F97316"},
+                    ].map(k=>(
+                      <div key={k.label} style={{background:"#fff",borderRadius:10,border:"1px solid #D4D9EE",padding:"12px 14px",borderTop:"3px solid "+k.color}}>
+                        <div style={{fontSize:10,color:"#9BA3BF",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:4}}>{k.label}</div>
+                        <div style={{fontSize:14,fontWeight:700,color:"#1A2240"}}>{k.value}</div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* ── GANTT TAB ── */}
+                  {mpDetailTab==="gantt" && (() => {
+                    const km1d = job.km1Date||""; const km2d = job.km2Date||""; const km3d = job.km3Date||"";
+                    const allDates = [job.startDate,job.endDate,km1d,km2d,km3d].filter(Boolean).map(d=>new Date(d));
+                    const today = new Date();
+                    allDates.push(today);
+                    if (allDates.length < 2) return (
+                      <div style={{background:"#fff",borderRadius:12,border:"1px solid #D4D9EE",padding:"40px",textAlign:"center",color:"#9BA3BF"}}>
+                        <div style={{fontSize:32,marginBottom:8}}>📊</div>
+                        <div style={{fontSize:14,fontWeight:600,color:"#1A2240",marginBottom:4}}>No dates set for Gantt</div>
+                        <div style={{fontSize:12}}>Add start/end dates and milestones to see the Gantt chart.</div>
+                      </div>
+                    );
+
+                    // Build month range
+                    const minD = new Date(Math.min(...allDates));
+                    const maxD = new Date(Math.max(...allDates));
+                    minD.setDate(1); maxD.setDate(1); maxD.setMonth(maxD.getMonth()+1);
+                    const months = [];
+                    let cur = new Date(minD);
+                    while(cur <= maxD){ months.push({y:cur.getFullYear(),m:cur.getMonth()}); cur.setMonth(cur.getMonth()+1); }
+                    const tMs = maxD - minD || 1;
+                    const pct = d => d ? Math.max(0,Math.min(100,((new Date(d)-minD)/tMs)*100)) : null;
+                    const nowPct = Math.max(0,Math.min(100,((today-minD)/tMs)*100));
+                    const MON = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+
+                    // Weekly milestone data from latest 3 reports
+                    const recentReports = reports.slice(0,3);
+
                     return (
-                      <div key={job.id} style={{display:"flex",borderBottom:idx<jobs.length-1?"1px solid #E0E3F0":"none",cursor:"pointer",minHeight:56}}
-                        onMouseEnter={e=>e.currentTarget.style.background="#EEF3FF"}
-                        onMouseLeave={e=>e.currentTarget.style.background="transparent"}
-                        onClick={()=>{ setSelectedMpJob(job); setMpPanelTab("overview"); }}>
-                        {/* Name col */}
-                        <div style={{width:260,flexShrink:0,padding:"10px 14px",borderRight:"1px solid #CBD1E8",display:"flex",flexDirection:"column",justifyContent:"center",gap:3}}>
-                          <div style={{display:"flex",alignItems:"center",gap:6}}>
-                            <span style={{width:7,height:7,borderRadius:"50%",background:sc.color,flexShrink:0}}></span>
-                            <span style={{fontSize:12,fontWeight:600,color:"#1A2240",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{job.name}</span>
+                      <div style={{display:"flex",flexDirection:"column",gap:12}}>
+                        <div style={{background:"#fff",borderRadius:12,border:"1px solid #D4D9EE",overflow:"hidden",boxShadow:"0 2px 10px rgba(0,0,0,0.05)"}}>
+                          {/* Month headers */}
+                          <div style={{display:"flex",borderBottom:"1px solid #D4D9EE",background:"#F9FAFC"}}>
+                            <div style={{width:220,flexShrink:0,padding:"9px 14px",fontSize:10,color:"#4A5278",textTransform:"uppercase",letterSpacing:"0.08em",borderRight:"1px solid #D4D9EE"}}>Milestone</div>
+                            <div style={{flex:1,display:"grid",gridTemplateColumns:"repeat("+months.length+",1fr)"}}>
+                              {months.map((m,i)=>(
+                                <div key={i} style={{padding:"9px 4px",fontSize:9,textTransform:"uppercase",textAlign:"center",borderRight:i<months.length-1?"1px solid #EEF0F8":"none",fontWeight:m.m===today.getMonth()&&m.y===today.getFullYear()?700:400,color:m.m===today.getMonth()&&m.y===today.getFullYear()?"#3B6FE8":"#9BA3BF"}}>
+                                  {MON[m.m]} '{String(m.y).slice(2)}
+                                </div>
+                              ))}
+                            </div>
                           </div>
-                          <div style={{fontSize:10,color:"#4A5278",paddingLeft:13}}>{job.client||companies.find(c=>c.id===job.companyId)?.name||""}</div>
-                          <div style={{display:"flex",gap:8,paddingLeft:13,alignItems:"center"}}>
-                            <span style={{fontSize:10,color:"#3B6FE8",fontWeight:600}}>{fmt(job.contractValue)}</span>
-                            {daysAhead!==0&&<span style={{fontSize:9,color:daysAhead<0?"#F87171":"#4ADE80",fontWeight:700}}>{daysAhead<0?daysAhead+"d":"+"+ daysAhead+"d"}</span>}
+
+                          {/* Project bar row */}
+                          {job.startDate && job.endDate && (
+                            <div style={{display:"flex",borderBottom:"1px solid #F0F2F8",alignItems:"center"}}>
+                              <div style={{width:220,flexShrink:0,padding:"12px 14px",borderRight:"1px solid #D4D9EE",fontSize:12,fontWeight:700,color:"#1A2240"}}>
+                                {job.name}
+                                <div style={{fontSize:10,color:"#9BA3BF",marginTop:2}}>{job.startDate} → {job.endDate}</div>
+                              </div>
+                              <div style={{flex:1,position:"relative",height:44,padding:"8px 0"}}>
+                                {/* Bar */}
+                                <div style={{position:"absolute",left:pct(job.startDate)+"%",right:(100-pct(job.endDate))+"%",top:"50%",transform:"translateY(-50%)",height:18,background:"linear-gradient(90deg,#3B6FE8,#60A5FA)",borderRadius:9,opacity:0.85}}/>
+                                {/* Today line */}
+                                <div style={{position:"absolute",left:nowPct+"%",top:0,bottom:0,width:2,background:"#F87171",opacity:0.7}}/>
+                                {/* % complete fill */}
+                                {job.pct>0 && <div style={{position:"absolute",left:pct(job.startDate)+"%",width:((pct(job.endDate)-pct(job.startDate))*(job.pct/100))+"%",top:"50%",transform:"translateY(-50%)",height:18,background:"#3B6FE8",borderRadius:9}}/>}
+                              </div>
+                            </div>
+                          )}
+
+                          {/* Milestone rows */}
+                          {[
+                            {label:job.km1||"Milestone 1", date:km1d, color:"#F87171"},
+                            {label:job.km2||"Milestone 2", date:km2d, color:"#FCD34D"},
+                            {label:job.km3||"Milestone 3", date:km3d, color:"#4ADE80"},
+                          ].filter(m=>m.date).map((m,i)=>(
+                            <div key={i} style={{display:"flex",borderBottom:"1px solid #F4F6FB",alignItems:"center"}}>
+                              <div style={{width:220,flexShrink:0,padding:"10px 14px",borderRight:"1px solid #D4D9EE",fontSize:12,color:"#1A2240",display:"flex",alignItems:"center",gap:8}}>
+                                <span style={{fontSize:14,color:m.color}}>◆</span>
+                                <div>
+                                  <div style={{fontWeight:600,fontSize:12}}>{m.label}</div>
+                                  <div style={{fontSize:10,color:"#9BA3BF"}}>{m.date}</div>
+                                </div>
+                              </div>
+                              <div style={{flex:1,position:"relative",height:40}}>
+                                <div style={{position:"absolute",left:nowPct+"%",top:0,bottom:0,width:2,background:"#F8717130"}}/>
+                                {pct(m.date)!==null && (
+                                  <div style={{position:"absolute",left:"calc("+pct(m.date)+"% - 8px)",top:"50%",transform:"translateY(-50%)",width:16,height:16,background:m.color,borderRadius:2,transform:"translateY(-50%) rotate(45deg)",boxShadow:"0 2px 6px rgba(0,0,0,0.2)"}}/>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+
+                          {/* Today row */}
+                          <div style={{display:"flex",alignItems:"center",background:"#FFF8F8"}}>
+                            <div style={{width:220,flexShrink:0,padding:"8px 14px",borderRight:"1px solid #D4D9EE",fontSize:11,color:"#F87171",fontWeight:600,display:"flex",alignItems:"center",gap:6}}>
+                              <span>📍</span> Today
+                            </div>
+                            <div style={{flex:1,position:"relative",height:32}}>
+                              <div style={{position:"absolute",left:nowPct+"%",top:0,bottom:0,width:2,background:"#F87171"}}/>
+                              <div style={{position:"absolute",left:"calc("+nowPct+"% - 4px)",top:"50%",transform:"translateY(-50%)",width:8,height:8,borderRadius:"50%",background:"#F87171"}}/>
+                            </div>
                           </div>
                         </div>
-                        {/* Pct col */}
-                        <div style={{width:60,flexShrink:0,borderRight:"1px solid #CBD1E8",display:"flex",alignItems:"center",justifyContent:"center"}}>
-                          <span style={{fontSize:12,fontWeight:700,color:sc.color}}>{job.pct||0}%</span>
-                        </div>
-                        {/* Gantt col */}
-                        <div style={{flex:1,position:"relative",padding:"10px 0"}}>
-                          {/* Today line */}
-                          <div style={{position:"absolute",left:tPct+"%",top:0,bottom:0,width:1,background:"#3B6FE840",zIndex:3}}/>
-                          {/* Month grid lines */}
-                          {months.map((_,i)=>i>0&&<div key={i} style={{position:"absolute",left:((i/months.length)*100)+"%",top:0,bottom:0,width:1,background:"#E0E3F0"}}/>)}
-                          {/* Main bar */}
-                          {bar.left&&<div style={{position:"absolute",top:"50%",transform:"translateY(-50%)",left:bar.left,width:bar.width,height:22,borderRadius:4,background:sc.bg,border:"1px solid "+sc.color+"40",overflow:"hidden",zIndex:1}}>
-                            <div style={{height:"100%",width:(job.pct||0)+"%",background:sc.color+"35",borderRadius:"3px 0 0 3px"}}/>
-                          </div>}
-                          {/* Milestone diamonds */}
-                          {milestones.map((km,mi)=>{
-                            const pct = datePct(km.date);
-                            if(pct===null) return null;
-                            return (
-                              <div key={mi} title={km.label+" — "+km.date} style={{position:"absolute",left:"calc("+pct+"% - 7px)",top:"50%",transform:"translateY(-50%)",width:14,height:14,background:km.color,transform:"translateY(-50%) rotate(45deg)",zIndex:4,borderRadius:2,cursor:"pointer"}}/>
-                            );
-                          })}
+
+                        {/* Critical path + long lead items */}
+                        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+                          <div style={{background:"#fff",borderRadius:10,border:"1px solid #D4D9EE",padding:"14px 16px"}}>
+                            <div style={{fontSize:11,fontWeight:700,color:"#4A5278",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:8}}>🚨 Critical Path Items</div>
+                            <div style={{fontSize:13,color:"#1A2240",lineHeight:1.6}}>{latest?.criticalPath||"None noted"}</div>
+                          </div>
+                          <div style={{background:"#fff",borderRadius:10,border:"1px solid #D4D9EE",padding:"14px 16px"}}>
+                            <div style={{fontSize:11,fontWeight:700,color:"#4A5278",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:8}}>📦 Long Lead Items</div>
+                            <div style={{fontSize:13,color:"#1A2240",lineHeight:1.6}}>{latest?.longLeadItems||job.longLeadItems||"None"}</div>
+                          </div>
                         </div>
                       </div>
                     );
-                  })}
-                  {/* Legend */}
-                  <div style={{display:"flex",gap:16,padding:"8px 14px",borderTop:"1px solid #E0E3F0",background:"#F8F9FD"}}>
-                    <span style={{fontSize:9,color:"#4A5278",textTransform:"uppercase",letterSpacing:"0.07em"}}>Milestones:</span>
-                    {[{color:"#F87171",label:"KM1"},{color:"#FCD34D",label:"KM2"},{color:"#4ADE80",label:"KM3"}].map(m=>(
-                      <span key={m.label} style={{display:"flex",alignItems:"center",gap:4,fontSize:9,color:"#4A5278"}}>
-                        <span style={{width:10,height:10,background:m.color,display:"inline-block",transform:"rotate(45deg)",borderRadius:1}}></span>{m.label}
-                      </span>
-                    ))}
-                    <span style={{display:"flex",alignItems:"center",gap:4,fontSize:9,color:"#4A5278",marginLeft:"auto"}}>
-                      <span style={{width:16,height:1,background:"#3B6FE8",display:"inline-block"}}></span>Today
-                    </span>
-                  </div>
-                </div>
-              );
-            };
+                  })()}
 
-            // ── Job detail side panel ──
-            if (selectedMpJob) {
-              const j = selectedMpJob;
-              const sc = { "On Schedule":"#4ADE80","Behind Schedule":"#F87171","At Risk":"#F97316","Closeout":"#818CF8" };
-              const stColor = sc[j.status]||"#3B6FE8";
-              const StatusDot = ({val, good="Yes"}) => val
-                ? <span style={{fontSize:11,color:val===good?"#4ADE80":"#F87171",fontWeight:600}}>{val===good?"✓":"✗"} {val}</span>
-                : <span style={{fontSize:11,color:"#CBD1E8"}}>—</span>;
-              return (
-                <div className="fade-in" style={{display:"flex",flexDirection:"column",gap:16}}>
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                    <button className="btn-ghost" onClick={()=>setSelectedMpJob(null)} style={{padding:"8px 14px"}}>← Back to Jobs</button>
-                    <div style={{display:"flex",gap:8}}>
-                      <button className="btn-ghost" style={{fontSize:11}} onClick={()=>{ setEditMpId(j.id); setMpFormData({...j}); setShowMpForm(true); }}>✎ Edit</button>
-                    </div>
-                  </div>
-                  {/* Header card */}
-                  <div className="stat-card" style={{padding:20}}>
-                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14}}>
-                      <div>
-                        <div style={{fontSize:20,fontWeight:800,color:"#1A2240"}}>{j.name}</div>
-                        <div style={{fontSize:12,color:"#4A5278",marginTop:3}}>{j.client||companies.find(c=>c.id===j.companyId)?.name||""} · {j.pm}</div>
+                  {/* ── WEEKLY REPORT TAB ── */}
+                  {mpDetailTab==="weekly" && (() => {
+                    const r = latest;
+                    if (!r) return (
+                      <div style={{background:"#fff",borderRadius:12,border:"1px solid #D4D9EE",padding:"40px",textAlign:"center",color:"#9BA3BF"}}>
+                        <div style={{fontSize:32,marginBottom:8}}>📋</div>
+                        <div style={{fontSize:14,fontWeight:600,color:"#1A2240"}}>No weekly reports yet</div>
                       </div>
-                      <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:6}}>
-                        <span style={{fontSize:10,fontWeight:700,background:stColor+"20",color:stColor,padding:"3px 10px",borderRadius:4}}>{j.status}</span>
-                        {(j.daysAhead||0)!==0&&<span style={{fontSize:10,fontWeight:700,color:(j.daysAhead||0)<0?"#F87171":"#4ADE80"}}>{(j.daysAhead||0)<0?Math.abs(j.daysAhead)+" days behind":j.daysAhead+" days ahead"}</span>}
+                    );
+                    const Badge = ({label, val, ok, warn}) => {
+                      const color = val===ok?"#4ADE80":val===warn?"#FCD34D":"#F87171";
+                      return <span style={{fontSize:11,fontWeight:700,padding:"3px 10px",borderRadius:5,background:color+"15",color,border:"1px solid "+color+"40"}}>{val||"—"}</span>;
+                    };
+                    return (
+                      <div style={{display:"flex",flexDirection:"column",gap:12}}>
+                        <div style={{display:"flex",alignItems:"center",gap:10}}>
+                          <div style={{fontSize:15,fontWeight:700,color:"#1A2240"}}>Week of {r.reportDate}</div>
+                          <div style={{display:"flex",gap:6}}>
+                            <Badge label="CO" val={r.changeOrderStatus} ok="Yes" warn="Hold"/>
+                            <Badge label="Budget" val={r.budgetStatus} ok="Yes" warn="Hold"/>
+                            <Badge label="Billing" val={r.billingStatus} ok="Yes" warn="Hold"/>
+                          </div>
+                        </div>
+
+                        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+                          <div style={{background:"#fff",borderRadius:10,border:"1px solid #D4D9EE",padding:"16px"}}>
+                            <div style={{fontSize:11,fontWeight:700,color:"#4A5278",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:8}}>✅ This Week</div>
+                            <div style={{fontSize:13,color:"#1A2240",lineHeight:1.7,whiteSpace:"pre-line"}}>{(r.currentWeek||"").replace(/\\n/g,"\n")}</div>
+                          </div>
+                          <div style={{background:"#fff",borderRadius:10,border:"1px solid #D4D9EE",padding:"16px"}}>
+                            <div style={{fontSize:11,fontWeight:700,color:"#4A5278",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:8}}>📅 Next Week</div>
+                            <div style={{fontSize:13,color:"#1A2240",lineHeight:1.7,whiteSpace:"pre-line"}}>{(r.nextWeek||"").replace(/\\n/g,"\n")}</div>
+                          </div>
+                        </div>
+
+                        {/* Milestones this week */}
+                        <div style={{background:"#fff",borderRadius:10,border:"1px solid #D4D9EE",padding:"16px"}}>
+                          <div style={{fontSize:11,fontWeight:700,color:"#4A5278",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:10}}>◆ Milestones</div>
+                          <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                            {[
+                              {label:r.km1, date:r.km1Date, color:"#F87171"},
+                              {label:r.km2, date:r.km2Date, color:"#FCD34D"},
+                              {label:r.km3, date:r.km3Date, color:"#4ADE80"},
+                            ].filter(m=>m.label).map((m,i)=>(
+                              <div key={i} style={{display:"flex",alignItems:"center",gap:12,padding:"8px 12px",background:"#F9FAFC",borderRadius:8}}>
+                                <span style={{color:m.color,fontSize:16}}>◆</span>
+                                <div style={{flex:1,fontSize:13,color:"#1A2240",fontWeight:500}}>{m.label}</div>
+                                {m.date && <div style={{fontSize:12,color:"#9BA3BF",background:"#F0F2F8",padding:"2px 8px",borderRadius:4}}>{m.date}</div>}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+                          <div style={{background:"#fff",borderRadius:10,border:"1px solid #D4D9EE",padding:"14px 16px"}}>
+                            <div style={{fontSize:11,fontWeight:700,color:"#4A5278",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:6}}>👤 Owner Comms</div>
+                            <div style={{fontSize:13,color:"#1A2240",lineHeight:1.6}}>{r.ownerComms||"None planned"}</div>
+                          </div>
+                          <div style={{background:"#fff",borderRadius:10,border:"1px solid #D4D9EE",padding:"14px 16px"}}>
+                            <div style={{fontSize:11,fontWeight:700,color:"#4A5278",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:6}}>🦺 Site Safety</div>
+                            <div style={{fontSize:13,color:"#1A2240",lineHeight:1.6}}>{r.siteSafety||"—"}</div>
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                    <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10}}>
-                      {[
-                        {label:"Contract Value",value:fmt(j.contractValue),color:"#3B6FE8"},
-                        {label:"GPM",value:j.gpm?(Math.round(j.gpm*100))+"%":"—",color:"#4ADE80"},
-                        {label:"Complete",value:(j.pct||0)+"%",color:"#FCD34D"},
-                        {label:"Completion",value:j.completionSchedule||"—",color:"#818CF8"},
-                      ].map(s=>(
-                        <div key={s.label} style={{background:"#F5F7FC",borderRadius:6,padding:"10px 12px"}}>
-                          <div style={{fontSize:9,color:"#4A5278",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:3}}>{s.label}</div>
-                          <div style={{fontSize:16,fontWeight:800,color:s.color}}>{s.value}</div>
+                    );
+                  })()}
+
+                  {/* ── HISTORY TAB ── */}
+                  {mpDetailTab==="history" && (
+                    <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                      {reports.length===0 && <div style={{textAlign:"center",padding:"40px",color:"#9BA3BF",background:"#fff",borderRadius:12,border:"1px solid #D4D9EE"}}>No weekly history yet</div>}
+                      {reports.map((r,i)=>(
+                        <div key={r.id} style={{background:"#fff",borderRadius:10,border:"1px solid #D4D9EE",overflow:"hidden"}}>
+                          <div style={{padding:"10px 16px",background:"#F9FAFC",borderBottom:"1px solid #D4D9EE",display:"flex",alignItems:"center",gap:10}}>
+                            <div style={{fontSize:12,fontWeight:700,color:"#1A2240",flex:1}}>Week of {r.reportDate}</div>
+                            {i===0 && <span style={{fontSize:10,fontWeight:700,background:"#3B6FE815",color:"#3B6FE8",borderRadius:4,padding:"2px 8px"}}>LATEST</span>}
+                            <div style={{display:"flex",gap:6}}>
+                              {[{v:r.changeOrderStatus,l:"CO"},{v:r.budgetStatus,l:"Budget"},{v:r.billingStatus,l:"Billing"}].map(b=>(
+                                <span key={b.l} style={{fontSize:10,padding:"1px 7px",borderRadius:4,background:b.v==="Yes"?"#4ADE8015":b.v==="Hold"?"#FCD34D15":"#F8717115",color:b.v==="Yes"?"#4ADE80":b.v==="Hold"?"#D97706":"#F87171",fontWeight:600,border:"1px solid "+(b.v==="Yes"?"#4ADE8040":b.v==="Hold"?"#FCD34D40":"#F8717140")}}>{b.l}: {b.v||"—"}</span>
+                              ))}
+                            </div>
+                          </div>
+                          <div style={{padding:"12px 16px",display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+                            <div>
+                              <div style={{fontSize:10,color:"#9BA3BF",fontWeight:600,marginBottom:4}}>THIS WEEK</div>
+                              <div style={{fontSize:12,color:"#1A2240",lineHeight:1.6,whiteSpace:"pre-line"}}>{(r.currentWeek||"").replace(/\\n/g,"\n")}</div>
+                            </div>
+                            <div>
+                              <div style={{fontSize:10,color:"#9BA3BF",fontWeight:600,marginBottom:4}}>NEXT WEEK</div>
+                              <div style={{fontSize:12,color:"#1A2240",lineHeight:1.6,whiteSpace:"pre-line"}}>{(r.nextWeek||"").replace(/\\n/g,"\n")}</div>
+                            </div>
+                          </div>
+                          {(r.km1||r.km2||r.km3) && (
+                            <div style={{padding:"8px 16px 12px",borderTop:"1px solid #F0F2F8",display:"flex",gap:10,flexWrap:"wrap"}}>
+                              {[{l:r.km1,d:r.km1Date,c:"#F87171"},{l:r.km2,d:r.km2Date,c:"#FCD34D"},{l:r.km3,d:r.km3Date,c:"#4ADE80"}].filter(m=>m.l).map((m,j)=>(
+                                <div key={j} style={{display:"flex",alignItems:"center",gap:6,fontSize:11,background:m.c+"15",border:"1px solid "+m.c+"40",borderRadius:6,padding:"3px 10px"}}>
+                                  <span style={{color:m.c}}>◆</span>
+                                  <span style={{color:"#1A2240",fontWeight:500}}>{m.l}</span>
+                                  {m.d && <span style={{color:"#9BA3BF"}}>· {m.d}</span>}
+                                </div>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       ))}
-                    </div>
-                  </div>
-                  {/* Tabs */}
-                  <div style={{display:"flex",gap:0,background:"#F0F2F8",borderRadius:8,padding:3}}>
-                    {[["overview","📋 Overview"],["weekly","📅 Weekly Report"],["milestones","◆ Milestones"]].map(([id,label])=>(
-                      <button key={id} onClick={()=>setMpPanelTab(id)}
-                        style={{flex:1,padding:"8px 12px",borderRadius:6,border:"none",background:mpPanelTab===id?"#fff":"transparent",color:mpPanelTab===id?"#1A2240":"#4A5278",fontSize:11,fontWeight:mpPanelTab===id?700:500,cursor:"pointer",fontFamily:"inherit",boxShadow:mpPanelTab===id?"0 1px 3px #00000015":"none",transition:"all 0.15s"}}>
-                        {label}
-                      </button>
-                    ))}
-                  </div>
-                  {/* Overview tab */}
-                  {mpPanelTab==="overview"&&(
-                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
-                      <div className="stat-card" style={{padding:16}}>
-                        <div style={{fontSize:10,fontWeight:700,color:"#4A5278",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:12}}>Project Info</div>
-                        {[
-                          ["Start Date",j.startDate],["End Date",j.endDate],["Contract Type",j.contractType],
-                          ["Change Orders",j.changeOrderStatus],["Long Lead Items",j.longLeadItems],
-                        ].filter(([,v])=>v).map(([label,val])=>(
-                          <div key={label} style={{display:"flex",justifyContent:"space-between",padding:"6px 0",borderBottom:"1px solid #F0F2F8"}}>
-                            <span style={{fontSize:11,color:"#4A5278"}}>{label}</span>
-                            <span style={{fontSize:11,color:"#1A2240",fontWeight:500,textAlign:"right",maxWidth:"60%"}}>{val}</span>
-                          </div>
-                        ))}
-                      </div>
-                      <div className="stat-card" style={{padding:16}}>
-                        <div style={{fontSize:10,fontWeight:700,color:"#4A5278",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:12}}>Status Check</div>
-                        {[
-                          ["Budget Status",j.budgetStatus],["Billing Status",j.billingStatus],
-                          ["Daily Reports",j.dailyReports],["3-Week Lookahead",j.lookahead],
-                          ["Site Safety",j.cleanliness],["Critical Path",j.criticalPath],
-                        ].map(([label,val])=>(
-                          <div key={label} style={{display:"flex",justifyContent:"space-between",padding:"5px 0",borderBottom:"1px solid #F0F2F8"}}>
-                            <span style={{fontSize:11,color:"#4A5278"}}>{label}</span>
-                            <StatusDot val={val} good={label==="Site Safety"?"Five":label==="Budget Status"?"Yes":label==="Billing Status"?"Yes":"Yes"}/>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                  {/* Weekly report tab */}
-                  {mpPanelTab==="weekly"&&(
-                    <div style={{display:"flex",flexDirection:"column",gap:12}}>
-                      <div className="stat-card" style={{padding:16}}>
-                        <div style={{fontSize:10,fontWeight:700,color:"#4ADE80",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:8}}>This Week's Activities</div>
-                        <div style={{fontSize:13,color:"#1A2240",lineHeight:1.7,whiteSpace:"pre-line"}}>{j.currentWeekActivities||"—"}</div>
-                      </div>
-                      <div className="stat-card" style={{padding:16}}>
-                        <div style={{fontSize:10,fontWeight:700,color:"#60A5FA",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:8}}>Next Week's Activities</div>
-                        <div style={{fontSize:13,color:"#1A2240",lineHeight:1.7,whiteSpace:"pre-line"}}>{j.nextWeekActivities||"—"}</div>
-                      </div>
-                      {j.criticalPath==="Yes"&&<div style={{background:"#F8717110",border:"1px solid #F8717130",borderRadius:8,padding:"10px 14px",display:"flex",gap:8,alignItems:"center"}}>
-                        <span style={{fontSize:14}}>⚠</span>
-                        <span style={{fontSize:12,color:"#F87171",fontWeight:600}}>Critical path items active this week</span>
-                      </div>}
-                      {j.nextOwnerComms&&<div className="stat-card" style={{padding:14}}>
-                        <div style={{fontSize:10,fontWeight:700,color:"#4A5278",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:4}}>Next Owner Communication</div>
-                        <div style={{fontSize:13,color:"#1A2240"}}>{typeof j.nextOwnerComms==="string"?j.nextOwnerComms:new Date(j.nextOwnerComms).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"})}</div>
-                      </div>}
-                      {j.notes&&<div className="stat-card" style={{padding:14}}>
-                        <div style={{fontSize:10,fontWeight:700,color:"#4A5278",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:4}}>Notes</div>
-                        <div style={{fontSize:12,color:"#252E52",lineHeight:1.6}}>{j.notes}</div>
-                      </div>}
-                    </div>
-                  )}
-                  {/* Milestones tab */}
-                  {mpPanelTab==="milestones"&&(
-                    <div style={{display:"flex",flexDirection:"column",gap:10}}>
-                      {[[j.km1,j.km1Date,"#F87171"],[j.km2,j.km2Date,"#FCD34D"],[j.km3,j.km3Date,"#4ADE80"]].map(([km,kmDate,color],i)=>
-                        km?(
-                          <div key={i} className="stat-card" style={{padding:16,display:"flex",alignItems:"center",gap:14,borderLeft:"4px solid "+color}}>
-                            <div style={{width:28,height:28,background:color+"20",border:"2px solid "+color,borderRadius:4,transform:"rotate(45deg)",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center"}}>
-                              <span style={{transform:"rotate(-45deg)",fontSize:11,fontWeight:800,color}}>{i+1}</span>
-                            </div>
-                            <div style={{flex:1}}>
-                              <div style={{fontSize:13,fontWeight:700,color:"#1A2240"}}>{km}</div>
-                              {kmDate&&<div style={{fontSize:11,color:"#4A5278",marginTop:2}}>📅 {typeof kmDate==="string"?kmDate:new Date(kmDate).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"})}</div>}
-                            </div>
-                            <span style={{fontSize:9,fontWeight:700,color,background:color+"15",padding:"2px 8px",borderRadius:4}}>KM{i+1}</span>
-                          </div>
-                        ):null
-                      )}
-                      {!j.km1&&!j.km2&&!j.km3&&<div style={{textAlign:"center",padding:"24px",color:"#4A5278",fontSize:12,background:"#F5F7FC",borderRadius:8}}>No milestones set for this project</div>}
                     </div>
                   )}
                 </div>
               );
             }
 
+            // ── Project list / overview ──
             return (
               <div className="fade-in" style={{display:"flex",flexDirection:"column",gap:22}}>
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                   <div>
-                    <div style={{fontSize:22,fontWeight:800,color:"#1A2240",letterSpacing:"-0.01em",textTransform:"uppercase"}}>Active Jobs</div>
-                    <div style={{fontSize:11,color:"#4A5278",marginTop:3,letterSpacing:"0.06em"}}>{activeJobs.length} active · {closeoutJobs.length} in closeout · {fmt(majorJobs.reduce((s,j)=>s+j.contractValue,0))} total</div>
+                    <div style={{fontSize:22,fontWeight:700,color:"#1A2240",letterSpacing:"-0.01em",textTransform:"uppercase"}}>Major Projects</div>
+                    <div style={{fontSize:11,color:"#4A5278",marginTop:3,letterSpacing:"0.06em"}}>{activeJobs.length} ACTIVE · {closeoutJobs.length} IN CLOSEOUT</div>
                   </div>
-                  <button className="btn-primary" onClick={openAddJob}>+ Add Job</button>
+                  <button className="btn-primary" onClick={()=>{ setJobForm({name:"",companyId:"",client:"",approverContactId:"",contractValue:"",startDate:"",endDate:"",pm:"",pct:0,status:"active",notes:"",bu:"major"}); setShowJobForm(true); }}>+ Add Project</button>
                 </div>
-                {/* KPI cards */}
+
+                {/* Stats */}
                 <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12}}>
                   {[
-                    {label:"Contract Value",value:fmt(majorJobs.reduce((s,j)=>s+j.contractValue,0)),color:buColor.accent},
-                    {label:"On Schedule",   value:majorJobs.filter(j=>j.status==="On Schedule").length,color:"#4ADE80"},
-                    {label:"Behind / At Risk",value:majorJobs.filter(j=>["Behind Schedule","At Risk"].includes(j.status)).length,color:"#F87171"},
-                    {label:"Avg Complete",  value:(majorJobs.length?Math.round(majorJobs.reduce((s,j)=>s+(j.pct||0),0)/majorJobs.length):0)+"%",color:"#FCD34D"},
+                    {label:"Active Projects",  value:activeJobs.length,    color:"#3B6FE8"},
+                    {label:"Total Value",       value:fmt(allMpJobs.reduce((s,j)=>s+(j.contractValue||0),0)), color:"#4ADE80"},
+                    {label:"Behind Schedule",  value:allMpJobs.filter(j=>(j.daysAhead??0)<-7).length,  color:"#F87171"},
+                    {label:"Avg GPM",          value:(() => { const v=allMpJobs.filter(j=>j.gpm); return v.length ? (v.reduce((s,j)=>s+j.gpm,0)/v.length*100).toFixed(1)+"%" : "—"; })(), color:"#A78BFA"},
                   ].map(s=>(
                     <div key={s.label} className="stat-card" style={{position:"relative",overflow:"hidden",padding:"14px 18px"}}>
                       <div style={{position:"absolute",top:0,left:0,right:0,height:3,background:s.color}}/>
-                      <div style={{fontSize:9,letterSpacing:"0.1em",textTransform:"uppercase",color:"#4A5278",marginBottom:6}}>{s.label}</div>
-                      <div style={{fontSize:22,fontWeight:800,color:s.color}}>{s.value}</div>
+                      <div style={{fontSize:10,color:"#4A5278",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:6}}>{s.label}</div>
+                      <div style={{fontSize:22,fontWeight:700,color:s.color}}>{s.value}</div>
                     </div>
                   ))}
                 </div>
-                {/* Active Jobs Gantt */}
-                <div>
-                  <div style={{fontSize:12,fontWeight:700,color:"#1A2240",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:10,display:"flex",alignItems:"center",gap:8}}>
-                    <span style={{width:8,height:8,borderRadius:"50%",background:"#4ADE80",display:"inline-block"}}></span>
-                    Active Jobs <span style={{color:"#9BA3BF",fontWeight:400}}>({activeJobs.length})</span>
-                    <span style={{fontSize:10,color:"#4A5278",fontWeight:400,marginLeft:4}}>— click any row to open</span>
+
+                {/* Gantt overview — all projects */}
+                <div style={{background:"#fff",borderRadius:12,border:"1px solid #D4D9EE",overflow:"hidden",boxShadow:"0 2px 10px rgba(0,0,0,0.04)"}}>
+                  <div style={{padding:"12px 16px",borderBottom:"1px solid #D4D9EE",fontSize:12,fontWeight:700,color:"#1A2240",background:"#F9FAFC"}}>
+                    📊 Project Overview — click a row to open
                   </div>
-                  <MpGantt jobs={activeJobs}/>
-                </div>
-                {/* Closeout section */}
-                {closeoutJobs.length>0&&(
-                  <div>
-                    <div style={{fontSize:12,fontWeight:700,color:"#818CF8",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:10,display:"flex",alignItems:"center",gap:8}}>
-                      <span style={{width:8,height:8,borderRadius:"50%",background:"#818CF8",display:"inline-block"}}></span>
-                      Closeout <span style={{color:"#9BA3BF",fontWeight:400}}>({closeoutJobs.length})</span>
+                  {allMpJobs.length===0 ? (
+                    <div style={{padding:"40px",textAlign:"center",color:"#9BA3BF"}}>
+                      <div style={{fontSize:28,marginBottom:8}}>📊</div>
+                      <div style={{fontSize:14,fontWeight:600,color:"#1A2240",marginBottom:4}}>No projects yet</div>
+                      <div style={{fontSize:12}}>Import from Excel or add a project to get started.</div>
                     </div>
-                    <MpGantt jobs={closeoutJobs}/>
-                  </div>
-                )}
+                  ) : allMpJobs.map(job => {
+                    const reports = mpWeeklyReports.filter(r=>r.projectId===job.id).sort((a,b)=>b.reportDate.localeCompare(a.reportDate));
+                    const latest = reports[0];
+                    const da = latest?.daysAhead ?? job.daysAhead;
+                    const schedColor = da===null?"#9BA3BF":da>7?"#4ADE80":da<-7?"#F87171":"#FCD34D";
+                    const gpm = latest?.gpm??job.gpm;
+                    return (
+                      <div key={job.id} onClick={()=>{setSelectedMpJob(job.id||job);setMpDetailTab("gantt");}}
+                        style={{padding:"14px 16px",borderBottom:"1px solid #F4F6FB",display:"flex",alignItems:"center",gap:14,cursor:"pointer",transition:"background 0.15s"}}
+                        onMouseEnter={e=>e.currentTarget.style.background="#F5F8FF"}
+                        onMouseLeave={e=>e.currentTarget.style.background=""}>
+                        {/* Status dot */}
+                        <div style={{width:10,height:10,borderRadius:"50%",background:schedColor,flexShrink:0,boxShadow:"0 0 0 3px "+schedColor+"30"}}/>
+                        {/* Name */}
+                        <div style={{flex:1,minWidth:0}}>
+                          <div style={{fontSize:14,fontWeight:700,color:"#1A2240",marginBottom:2}}>{job.name}</div>
+                          <div style={{fontSize:11,color:"#4A5278"}}>{job.pm?"PM: "+job.pm+" · ":""}{latest?"Last report: "+latest.reportDate:"No reports yet"}</div>
+                        </div>
+                        {/* Schedule */}
+                        <div style={{textAlign:"center",minWidth:90}}>
+                          <div style={{fontSize:15,fontWeight:800,color:schedColor}}>{da===null?"—":Math.abs(da)+"d "+(da>=0?"▲":"▼")}</div>
+                          <div style={{fontSize:9,color:"#9BA3BF",textTransform:"uppercase",letterSpacing:"0.06em"}}>{da===null?"?":da>=0?"Ahead":"Behind"}</div>
+                        </div>
+                        {/* GPM */}
+                        <div style={{textAlign:"center",minWidth:70}}>
+                          <div style={{fontSize:14,fontWeight:700,color:"#4ADE80"}}>{gpm?(gpm*100).toFixed(1)+"%":"—"}</div>
+                          <div style={{fontSize:9,color:"#9BA3BF",textTransform:"uppercase",letterSpacing:"0.06em"}}>GPM</div>
+                        </div>
+                        {/* Milestones */}
+                        <div style={{display:"flex",gap:6,flexShrink:0}}>
+                          {[{l:job.km1,d:job.km1Date,c:"#F87171"},{l:job.km2,d:job.km2Date,c:"#FCD34D"},{l:job.km3,d:job.km3Date,c:"#4ADE80"}].filter(m=>m.d).map((m,i)=>(
+                            <div key={i} style={{fontSize:10,background:m.c+"15",border:"1px solid "+m.c+"40",borderRadius:5,padding:"2px 8px",color:"#1A2240",display:"flex",alignItems:"center",gap:4}}>
+                              <span style={{color:m.c,fontSize:9}}>◆</span>
+                              <span style={{maxWidth:120,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{m.l}</span>
+                              <span style={{color:"#9BA3BF"}}>· {m.d}</span>
+                            </div>
+                          ))}
+                        </div>
+                        <div style={{color:"#CBD1E8",fontSize:16}}>›</div>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             );
           })()}
+
 
           {/* ── PIPELINE ── */}
           {activeNav === "pipeline" && (
