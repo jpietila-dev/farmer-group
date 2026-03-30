@@ -1519,7 +1519,7 @@ const dbToMpJob = r => ({
   km2: r.km2||"", km2Date: r.km2_date||"",
   km3: r.km3||"", km3Date: r.km3_date||"",
   notes: r.notes||"",
-  amountBilled: r.amount_billed||0,
+  amountBilled: (r.amount_billed != null ? Number(r.amount_billed) : 0),
 });
 const mpJobToDB = j => ({
   id: j.id, name: j.name||"", client: j.client||"", status: j.status||"active",
@@ -1534,7 +1534,7 @@ const mpJobToDB = j => ({
   km2: j.km2||null, km2_date: j.km2Date||null,
   km3: j.km3||null, km3_date: j.km3Date||null,
   notes: j.notes||null,
-  amount_billed: j.amountBilled||null,
+  amount_billed: j.amountBilled||0,
 });
 const dbToMpWeekly = r => ({
   id: r.id, projectId: r.project_id, reportDate: r.report_date||"",
@@ -1989,7 +1989,9 @@ export default function App() {
         if (fmRes.data?.length)   setFmJobs(fmRes.data.map(dbToFmJob));
         if (teamRes.data?.length) setFmTeam(teamRes.data.map(dbToTeamMember));
         if (crmRes.data?.length)  setCrmContacts(crmRes.data.map(dbToCrmContact));
-        if (Array.isArray(mpRes.data)  && mpRes.data.length)  setMpJobs(mpRes.data.map(dbToMpJob));
+        if (Array.isArray(mpRes.data) && mpRes.data.length) {
+          try { setMpJobs(mpRes.data.map(dbToMpJob)); } catch(e) { console.warn("mpJobs map error:", e); }
+        }
         if (Array.isArray(mpwRes.data) && mpwRes.data.length) setMpWeeklyReports(mpwRes.data.map(dbToMpWeekly));
         // contacts table — deduplicate by name+company before setting
         if (Array.isArray(ctRes.data) && ctRes.data.length) {
@@ -4377,39 +4379,36 @@ Return ONLY valid JSON, no markdown, no extra text:
 
                   {/* ── GANTT TAB ── */}
                   {mpDetailTab==="gantt" && (() => {
-                    const km1d = job.km1Date||""; const km2d = job.km2Date||""; const km3d = job.km3Date||"";
-                    const allDates = [job.startDate,job.endDate,km1d,km2d,km3d].filter(Boolean).map(d=>new Date(d));
                     const today = new Date();
-                    allDates.push(today);
+                    const km1d = job.km1Date||""; const km2d = job.km2Date||""; const km3d = job.km3Date||"";
+                    // Build date range from start/end + milestones + today
+                    const allDates = [job.startDate, job.endDate, km1d, km2d, km3d, today.toISOString().slice(0,10)].filter(Boolean).map(d=>new Date(d));
                     if (allDates.length < 2) return (
                       <div style={{background:"#fff",borderRadius:12,border:"1px solid #D4D9EE",padding:"40px",textAlign:"center",color:"#9BA3BF"}}>
                         <div style={{fontSize:32,marginBottom:8}}>📊</div>
-                        <div style={{fontSize:14,fontWeight:600,color:"#1A2240",marginBottom:4}}>No dates set for Gantt</div>
-                        <div style={{fontSize:12}}>Add start/end dates and milestones to see the Gantt chart.</div>
+                        <div style={{fontSize:14,fontWeight:600,color:"#1A2240",marginBottom:4}}>Set start & end dates to view Gantt</div>
+                        <div style={{fontSize:12}}>Edit this project to add dates.</div>
                       </div>
                     );
-
-                    // Build month range
-                    const minD = new Date(Math.min(...allDates));
-                    const maxD = new Date(Math.max(...allDates));
-                    minD.setDate(1); maxD.setDate(1); maxD.setMonth(maxD.getMonth()+1);
-                    const months = [];
-                    let cur = new Date(minD);
-                    while(cur <= maxD){ months.push({y:cur.getFullYear(),m:cur.getMonth()}); cur.setMonth(cur.getMonth()+1); }
-                    const tMs = maxD - minD || 1;
+                    const minD = new Date(Math.min(...allDates)); minD.setDate(1);
+                    const maxD = new Date(Math.max(...allDates)); maxD.setDate(1); maxD.setMonth(maxD.getMonth()+1);
+                    const months=[]; let cur=new Date(minD);
+                    while(cur<=maxD){months.push({y:cur.getFullYear(),m:cur.getMonth()});cur.setMonth(cur.getMonth()+1);}
+                    const tMs = maxD-minD||1;
                     const pct = d => d ? Math.max(0,Math.min(100,((new Date(d)-minD)/tMs)*100)) : null;
                     const nowPct = Math.max(0,Math.min(100,((today-minD)/tMs)*100));
-                    const MON = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-
-                    // Weekly milestone data from latest 3 reports
-                    const recentReports = reports.slice(0,3);
-
+                    const MON=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+                    const MILESTONES=[
+                      {label:job.km1||"Milestone 1", date:km1d, color:"#F87171", num:"KM1"},
+                      {label:job.km2||"Milestone 2", date:km2d, color:"#FCD34D", num:"KM2"},
+                      {label:job.km3||"Milestone 3", date:km3d, color:"#4ADE80", num:"KM3"},
+                    ].filter(m=>m.date);
                     return (
                       <div style={{display:"flex",flexDirection:"column",gap:12}}>
-                        <div style={{background:"#fff",borderRadius:12,border:"1px solid #D4D9EE",overflow:"hidden",boxShadow:"0 2px 10px rgba(0,0,0,0.05)"}}>
+                        <div style={{background:"#fff",borderRadius:12,border:"1px solid #D4D9EE",overflow:"hidden"}}>
                           {/* Month headers */}
-                          <div style={{display:"flex",borderBottom:"1px solid #D4D9EE",background:"#F9FAFC"}}>
-                            <div style={{width:220,flexShrink:0,padding:"9px 14px",fontSize:10,color:"#4A5278",textTransform:"uppercase",letterSpacing:"0.08em",borderRight:"1px solid #D4D9EE"}}>Milestone</div>
+                          <div style={{display:"flex",background:"#F9FAFC",borderBottom:"1px solid #D4D9EE"}}>
+                            <div style={{width:200,flexShrink:0,padding:"9px 14px",fontSize:10,color:"#9BA3BF",textTransform:"uppercase",letterSpacing:"0.08em",borderRight:"1px solid #D4D9EE"}}>Item</div>
                             <div style={{flex:1,display:"grid",gridTemplateColumns:"repeat("+months.length+",1fr)"}}>
                               {months.map((m,i)=>(
                                 <div key={i} style={{padding:"9px 4px",fontSize:9,textTransform:"uppercase",textAlign:"center",borderRight:i<months.length-1?"1px solid #EEF0F8":"none",fontWeight:m.m===today.getMonth()&&m.y===today.getFullYear()?700:400,color:m.m===today.getMonth()&&m.y===today.getFullYear()?"#3B6FE8":"#9BA3BF"}}>
@@ -4420,62 +4419,63 @@ Return ONLY valid JSON, no markdown, no extra text:
                           </div>
 
                           {/* Project bar row */}
-                          {job.startDate && job.endDate && (
-                            <div style={{display:"flex",borderBottom:"1px solid #F0F2F8",alignItems:"center"}}>
-                              <div style={{width:220,flexShrink:0,padding:"12px 14px",borderRight:"1px solid #D4D9EE",fontSize:12,fontWeight:700,color:"#1A2240"}}>
-                                {job.name}
-                                <div style={{fontSize:10,color:"#9BA3BF",marginTop:2}}>{job.startDate} → {job.endDate}</div>
-                              </div>
-                              <div style={{flex:1,position:"relative",height:44,padding:"8px 0"}}>
-                                {/* Bar */}
-                                <div style={{position:"absolute",left:pct(job.startDate)+"%",right:(100-pct(job.endDate))+"%",top:"50%",transform:"translateY(-50%)",height:18,background:"linear-gradient(90deg,#3B6FE8,#60A5FA)",borderRadius:9,opacity:0.85}}/>
-                                {/* Today line */}
-                                <div style={{position:"absolute",left:nowPct+"%",top:0,bottom:0,width:2,background:"#F87171",opacity:0.7}}/>
-                                {/* % complete fill */}
-                                {job.pct>0 && <div style={{position:"absolute",left:pct(job.startDate)+"%",width:((pct(job.endDate)-pct(job.startDate))*(job.pct/100))+"%",top:"50%",transform:"translateY(-50%)",height:18,background:"#3B6FE8",borderRadius:9}}/>}
-                              </div>
+                          <div style={{display:"flex",borderBottom:"1px solid #F0F2F8",alignItems:"center",minHeight:52}}>
+                            <div style={{width:200,flexShrink:0,padding:"10px 14px",borderRight:"1px solid #D4D9EE"}}>
+                              <div style={{fontSize:12,fontWeight:700,color:"#1A2240"}}>{job.name}</div>
+                              <div style={{fontSize:10,color:"#9BA3BF",marginTop:2}}>{job.startDate||"—"} → {job.endDate||"—"}</div>
                             </div>
-                          )}
+                            <div style={{flex:1,position:"relative",height:52,padding:"0 8px"}}>
+                              {/* Today line */}
+                              <div style={{position:"absolute",left:nowPct+"%",top:0,bottom:0,width:2,background:"#F87171",opacity:0.6,zIndex:3}}/>
+                              {/* Project bar */}
+                              {job.startDate && job.endDate && (
+                                <div style={{position:"absolute",left:"calc("+pct(job.startDate)+"% + 8px)",right:"calc("+(100-pct(job.endDate))+"% + 8px)",top:"50%",transform:"translateY(-50%)",height:18,background:"linear-gradient(90deg,#3B6FE8,#60A5FA)",borderRadius:9,boxShadow:"0 2px 6px rgba(59,111,232,0.3)"}}>
+                                  {/* % complete overlay */}
+                                  {job.pct>0 && <div style={{position:"absolute",left:0,top:0,bottom:0,width:job.pct+"%",background:"rgba(255,255,255,0.35)",borderRadius:9}}/>}
+                                </div>
+                              )}
+                              {/* Milestone diamonds on the bar */}
+                              {MILESTONES.map((m,i)=>pct(m.date)!==null && (
+                                <div key={i} title={m.label+" · "+m.date} style={{position:"absolute",left:"calc("+pct(m.date)+"% + 8px - 9px)",top:"50%",width:18,height:18,background:m.color,transform:"translateY(-50%) rotate(45deg)",borderRadius:2,boxShadow:"0 2px 6px rgba(0,0,0,0.25)",zIndex:4,cursor:"default",border:"2px solid white"}}/>
+                              ))}
+                            </div>
+                          </div>
 
                           {/* Milestone rows */}
-                          {[
-                            {label:job.km1||"Milestone 1", date:km1d, color:"#F87171"},
-                            {label:job.km2||"Milestone 2", date:km2d, color:"#FCD34D"},
-                            {label:job.km3||"Milestone 3", date:km3d, color:"#4ADE80"},
-                          ].filter(m=>m.date).map((m,i)=>(
-                            <div key={i} style={{display:"flex",borderBottom:"1px solid #F4F6FB",alignItems:"center"}}>
-                              <div style={{width:220,flexShrink:0,padding:"10px 14px",borderRight:"1px solid #D4D9EE",fontSize:12,color:"#1A2240",display:"flex",alignItems:"center",gap:8}}>
-                                <span style={{fontSize:14,color:m.color}}>◆</span>
+                          {MILESTONES.map((m,i)=>(
+                            <div key={i} style={{display:"flex",borderBottom:"1px solid #F4F6FB",alignItems:"center",minHeight:40}}>
+                              <div style={{width:200,flexShrink:0,padding:"8px 14px",borderRight:"1px solid #D4D9EE",display:"flex",alignItems:"center",gap:8}}>
+                                <div style={{width:12,height:12,background:m.color,transform:"rotate(45deg)",borderRadius:1,flexShrink:0}}/>
                                 <div>
-                                  <div style={{fontWeight:600,fontSize:12}}>{m.label}</div>
+                                  <div style={{fontSize:11,fontWeight:600,color:"#1A2240"}}>{m.label}</div>
                                   <div style={{fontSize:10,color:"#9BA3BF"}}>{m.date}</div>
                                 </div>
                               </div>
-                              <div style={{flex:1,position:"relative",height:40}}>
-                                <div style={{position:"absolute",left:nowPct+"%",top:0,bottom:0,width:2,background:"#F8717130"}}/>
+                              <div style={{flex:1,position:"relative",height:40,padding:"0 8px"}}>
+                                <div style={{position:"absolute",left:nowPct+"%",top:0,bottom:0,width:2,background:"#F8717125"}}/>
                                 {pct(m.date)!==null && (
-                                  <div style={{position:"absolute",left:"calc("+pct(m.date)+"% - 8px)",top:"50%",transform:"translateY(-50%)",width:16,height:16,background:m.color,borderRadius:2,transform:"translateY(-50%) rotate(45deg)",boxShadow:"0 2px 6px rgba(0,0,0,0.2)"}}/>
+                                  <div style={{position:"absolute",left:"calc("+pct(m.date)+"% + 8px - 7px)",top:"50%",width:14,height:14,background:m.color,transform:"translateY(-50%) rotate(45deg)",borderRadius:1,boxShadow:"0 1px 4px rgba(0,0,0,0.2)",zIndex:2}}/>
                                 )}
                               </div>
                             </div>
                           ))}
 
                           {/* Today row */}
-                          <div style={{display:"flex",alignItems:"center",background:"#FFF8F8"}}>
-                            <div style={{width:220,flexShrink:0,padding:"8px 14px",borderRight:"1px solid #D4D9EE",fontSize:11,color:"#F87171",fontWeight:600,display:"flex",alignItems:"center",gap:6}}>
-                              <span>📍</span> Today
+                          <div style={{display:"flex",alignItems:"center",background:"#FFF5F5"}}>
+                            <div style={{width:200,flexShrink:0,padding:"8px 14px",borderRight:"1px solid #D4D9EE",fontSize:11,color:"#F87171",fontWeight:600,display:"flex",alignItems:"center",gap:6}}>
+                              <span style={{width:8,height:8,borderRadius:"50%",background:"#F87171",display:"inline-block"}}/>Today
                             </div>
-                            <div style={{flex:1,position:"relative",height:32}}>
-                              <div style={{position:"absolute",left:nowPct+"%",top:0,bottom:0,width:2,background:"#F87171"}}/>
-                              <div style={{position:"absolute",left:"calc("+nowPct+"% - 4px)",top:"50%",transform:"translateY(-50%)",width:8,height:8,borderRadius:"50%",background:"#F87171"}}/>
+                            <div style={{flex:1,position:"relative",height:28,padding:"0 8px"}}>
+                              <div style={{position:"absolute",left:"calc("+nowPct+"% + 8px)",top:0,bottom:0,width:2,background:"#F87171"}}/>
+                              <div style={{position:"absolute",left:"calc("+nowPct+"% + 8px - 4px)",top:"50%",transform:"translateY(-50%)",width:8,height:8,borderRadius:"50%",background:"#F87171"}}/>
                             </div>
                           </div>
                         </div>
 
-                        {/* Critical path + long lead items */}
+                        {/* Critical path + long lead */}
                         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
                           <div style={{background:"#fff",borderRadius:10,border:"1px solid #D4D9EE",padding:"14px 16px"}}>
-                            <div style={{fontSize:11,fontWeight:700,color:"#4A5278",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:8}}>🚨 Critical Path Items</div>
+                            <div style={{fontSize:11,fontWeight:700,color:"#4A5278",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:8}}>🚨 Critical Path</div>
                             <div style={{fontSize:13,color:"#1A2240",lineHeight:1.6}}>{latest?.criticalPath||"None noted"}</div>
                           </div>
                           <div style={{background:"#fff",borderRadius:10,border:"1px solid #D4D9EE",padding:"14px 16px"}}>
@@ -4486,6 +4486,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                       </div>
                     );
                   })()}
+
 
                   {/* ── WEEKLY REPORT TAB ── */}
                   {mpDetailTab==="weekly" && (() => {
@@ -4603,59 +4604,122 @@ Return ONLY valid JSON, no markdown, no extra text:
                 </div>
 
                 {/* Gantt overview — all projects */}
-                <div style={{background:"#fff",borderRadius:12,border:"1px solid #D4D9EE",overflow:"hidden",boxShadow:"0 2px 10px rgba(0,0,0,0.04)"}}>
-                  <div style={{padding:"12px 16px",borderBottom:"1px solid #D4D9EE",fontSize:12,fontWeight:700,color:"#1A2240",background:"#F9FAFC"}}>
-                    📊 Project Overview — click a row to open
-                  </div>
-                  {allMpJobs.length===0 ? (
-                    <div style={{padding:"40px",textAlign:"center",color:"#9BA3BF"}}>
+                {(() => {
+                  const today = new Date();
+                  // Build unified month grid across all jobs
+                  const allDates = [];
+                  allMpJobs.forEach(j => {
+                    [j.startDate,j.endDate,j.km1Date,j.km2Date,j.km3Date].filter(Boolean).forEach(d=>allDates.push(new Date(d)));
+                  });
+                  allDates.push(today);
+                  if (!allMpJobs.length || allDates.length < 2) return (
+                    <div style={{background:"#fff",borderRadius:12,border:"1px solid #D4D9EE",padding:"40px",textAlign:"center",color:"#9BA3BF"}}>
                       <div style={{fontSize:28,marginBottom:8}}>📊</div>
                       <div style={{fontSize:14,fontWeight:600,color:"#1A2240",marginBottom:4}}>No projects yet</div>
                       <div style={{fontSize:12}}>Import from Excel or add a project to get started.</div>
                     </div>
-                  ) : allMpJobs.map(job => {
-                    const reports = mpWeeklyReports.filter(r=>r.projectId===job.id).sort((a,b)=>b.reportDate.localeCompare(a.reportDate));
-                    const latest = reports[0];
-                    const da = latest?.daysAhead ?? job.daysAhead;
-                    const schedColor = da===null?"#9BA3BF":da>7?"#4ADE80":da<-7?"#F87171":"#FCD34D";
-                    const gpm = latest?.gpm??job.gpm;
-                    return (
-                      <div key={job.id} onClick={()=>{setSelectedMpJob(job.id||job);setMpDetailTab("weekly");}}
-                        style={{padding:"14px 16px",borderBottom:"1px solid #F4F6FB",display:"flex",alignItems:"center",gap:14,cursor:"pointer",transition:"background 0.15s"}}
-                        onMouseEnter={e=>e.currentTarget.style.background="#F5F8FF"}
-                        onMouseLeave={e=>e.currentTarget.style.background=""}>
-                        {/* Status dot */}
-                        <div style={{width:10,height:10,borderRadius:"50%",background:schedColor,flexShrink:0,boxShadow:"0 0 0 3px "+schedColor+"30"}}/>
-                        {/* Name */}
-                        <div style={{flex:1,minWidth:0}}>
-                          <div style={{fontSize:14,fontWeight:700,color:"#1A2240",marginBottom:2}}>{job.name}</div>
-                          <div style={{fontSize:11,color:"#4A5278"}}>{job.pm?"PM: "+job.pm+" · ":""}{latest?"Last report: "+latest.reportDate:"No reports yet"}</div>
-                        </div>
-                        {/* Schedule */}
-                        <div style={{textAlign:"center",minWidth:90}}>
-                          <div style={{fontSize:15,fontWeight:800,color:schedColor}}>{da===null?"—":Math.abs(da)+"d "+(da>=0?"▲":"▼")}</div>
-                          <div style={{fontSize:9,color:"#9BA3BF",textTransform:"uppercase",letterSpacing:"0.06em"}}>{da===null?"?":da>=0?"Ahead":"Behind"}</div>
-                        </div>
-                        {/* GPM */}
-                        <div style={{textAlign:"center",minWidth:70}}>
-                          <div style={{fontSize:14,fontWeight:700,color:"#4ADE80"}}>{gpm?(gpm*100).toFixed(1)+"%":"—"}</div>
-                          <div style={{fontSize:9,color:"#9BA3BF",textTransform:"uppercase",letterSpacing:"0.06em"}}>GPM</div>
-                        </div>
-                        {/* Milestones */}
-                        <div style={{display:"flex",gap:6,flexShrink:0}}>
-                          {[{l:job.km1,d:job.km1Date,c:"#F87171"},{l:job.km2,d:job.km2Date,c:"#FCD34D"},{l:job.km3,d:job.km3Date,c:"#4ADE80"}].filter(m=>m.d).map((m,i)=>(
-                            <div key={i} style={{fontSize:10,background:m.c+"15",border:"1px solid "+m.c+"40",borderRadius:5,padding:"2px 8px",color:"#1A2240",display:"flex",alignItems:"center",gap:4}}>
-                              <span style={{color:m.c,fontSize:9}}>◆</span>
-                              <span style={{maxWidth:120,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{m.l}</span>
-                              <span style={{color:"#9BA3BF"}}>· {m.d}</span>
+                  );
+                  const minD = new Date(Math.min(...allDates)); minD.setDate(1);
+                  const maxD = new Date(Math.max(...allDates)); maxD.setDate(1); maxD.setMonth(maxD.getMonth()+1);
+                  const months=[]; let cur=new Date(minD);
+                  while(cur<=maxD){months.push({y:cur.getFullYear(),m:cur.getMonth()});cur.setMonth(cur.getMonth()+1);}
+                  const tMs=maxD-minD||1;
+                  const pct=d=>d?Math.max(0,Math.min(100,((new Date(d)-minD)/tMs)*100)):null;
+                  const nowPct=Math.max(0,Math.min(100,((today-minD)/tMs)*100));
+                  const MON=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+                  return (
+                    <div style={{background:"#fff",borderRadius:12,border:"1px solid #D4D9EE",overflow:"hidden",boxShadow:"0 2px 10px rgba(0,0,0,0.04)"}}>
+                      <div style={{padding:"12px 16px",borderBottom:"1px solid #D4D9EE",background:"#F9FAFC",display:"flex",alignItems:"center",gap:10}}>
+                        <span style={{fontSize:12,fontWeight:700,color:"#1A2240",flex:1}}>📊 Gantt — click any row to open</span>
+                        <div style={{display:"flex",gap:12,alignItems:"center"}}>
+                          {[{c:"#4ADE80",l:"Ahead"},{c:"#FCD34D",l:"On Track"},{c:"#F87171",l:"Behind"}].map(l=>(
+                            <div key={l.l} style={{display:"flex",alignItems:"center",gap:4,fontSize:10,color:"#4A5278"}}>
+                              <span style={{width:7,height:7,borderRadius:"50%",background:l.c,display:"inline-block"}}/>
+                              {l.l}
                             </div>
                           ))}
                         </div>
-                        <div style={{color:"#CBD1E8",fontSize:16}}>›</div>
                       </div>
-                    );
-                  })}
-                </div>
+                      {/* Header */}
+                      <div style={{display:"flex",borderBottom:"1px solid #D4D9EE",background:"#FAFBFD"}}>
+                        <div style={{width:220,flexShrink:0,padding:"7px 14px",fontSize:9,color:"#9BA3BF",textTransform:"uppercase",letterSpacing:"0.07em",borderRight:"1px solid #D4D9EE"}}>Project</div>
+                        <div style={{width:64,flexShrink:0,padding:"7px 4px",fontSize:9,color:"#9BA3BF",textAlign:"center",borderRight:"1px solid #D4D9EE",letterSpacing:"0.05em",textTransform:"uppercase"}}>Days</div>
+                        <div style={{width:52,flexShrink:0,padding:"7px 4px",fontSize:9,color:"#9BA3BF",textAlign:"center",borderRight:"1px solid #D4D9EE",textTransform:"uppercase"}}>GPM</div>
+                        <div style={{flex:1,display:"grid",gridTemplateColumns:"repeat("+months.length+",1fr)"}}>
+                          {months.map((m,i)=>(
+                            <div key={i} style={{padding:"7px 4px",fontSize:9,textTransform:"uppercase",textAlign:"center",borderRight:i<months.length-1?"1px solid #EEF0F8":"none",fontWeight:m.m===today.getMonth()&&m.y===today.getFullYear()?700:400,color:m.m===today.getMonth()&&m.y===today.getFullYear()?"#3B6FE8":"#9BA3BF"}}>
+                              {MON[m.m]} '{String(m.y).slice(2)}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                      {/* Project rows */}
+                      {allMpJobs.map(job=>{
+                        const rpts = mpWeeklyReports.filter(r=>r.projectId===job.id).sort((a,b)=>b.reportDate.localeCompare(a.reportDate));
+                        const latest = rpts[0];
+                        const da = latest?.daysAhead ?? job.daysAhead;
+                        const gpm = latest?.gpm ?? job.gpm;
+                        const sc = da===null?"#9BA3BF":da>7?"#4ADE80":da<-7?"#F87171":"#FCD34D";
+                        const startPct = pct(job.startDate);
+                        const endPct   = pct(job.endDate);
+                        return (
+                          <div key={job.id} onClick={()=>{setSelectedMpJob(job.id);setMpDetailTab("weekly");}}
+                            style={{display:"flex",borderBottom:"1px solid #F4F6FB",cursor:"pointer",minHeight:46,alignItems:"stretch"}}
+                            onMouseEnter={e=>e.currentTarget.style.background="#F5F8FF"}
+                            onMouseLeave={e=>e.currentTarget.style.background=""}>
+                            {/* Name */}
+                            <div style={{width:220,flexShrink:0,padding:"8px 14px",borderRight:"1px solid #D4D9EE",display:"flex",alignItems:"center",gap:8}}>
+                              <div style={{width:8,height:8,borderRadius:"50%",background:sc,flexShrink:0,boxShadow:"0 0 0 2px "+sc+"30"}}/>
+                              <div style={{minWidth:0}}>
+                                <div style={{fontSize:12,fontWeight:700,color:"#1A2240",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{job.name}</div>
+                                {(job.startDate||job.endDate) && <div style={{fontSize:9,color:"#9BA3BF"}}>{job.startDate||"?"} → {job.endDate||"?"}</div>}
+                              </div>
+                            </div>
+                            {/* Days */}
+                            <div style={{width:64,flexShrink:0,borderRight:"1px solid #D4D9EE",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                              <div style={{textAlign:"center"}}>
+                                <div style={{fontSize:13,fontWeight:800,color:sc,lineHeight:1}}>{da===null?"—":Math.abs(da)}</div>
+                                <div style={{fontSize:8,color:"#9BA3BF"}}>{da===null?"":da>=0?"ahead":"behind"}</div>
+                              </div>
+                            </div>
+                            {/* GPM */}
+                            <div style={{width:52,flexShrink:0,borderRight:"1px solid #D4D9EE",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                              <div style={{fontSize:11,fontWeight:700,color:"#4ADE80"}}>{gpm?(gpm*100).toFixed(0)+"%":"—"}</div>
+                            </div>
+                            {/* Timeline */}
+                            <div style={{flex:1,position:"relative",padding:"0 6px"}}>
+                              {/* Today line */}
+                              <div style={{position:"absolute",left:"calc("+nowPct+"% + 6px)",top:0,bottom:0,width:1.5,background:"#F87171",opacity:0.5,zIndex:2}}/>
+                              {/* Project bar — start to end */}
+                              {startPct!==null && endPct!==null && (
+                                <div style={{position:"absolute",left:"calc("+startPct+"% + 6px)",right:"calc("+(100-endPct)+"% + 6px)",top:"50%",transform:"translateY(-50%)",height:14,background:"linear-gradient(90deg,#3B6FE840,#3B6FE870)",border:"1px solid #3B6FE850",borderRadius:7}}/>
+                              )}
+                              {/* Milestone diamonds */}
+                              {[
+                                {d:job.km1Date,c:"#F87171"},
+                                {d:job.km2Date,c:"#FCD34D"},
+                                {d:job.km3Date,c:"#4ADE80"},
+                              ].filter(m=>m.d && pct(m.d)!==null).map((m,i)=>(
+                                <div key={i} style={{position:"absolute",left:"calc("+pct(m.d)+"% + 6px - 7px)",top:"50%",width:13,height:13,background:m.c,transform:"translateY(-50%) rotate(45deg)",borderRadius:1,boxShadow:"0 1px 4px rgba(0,0,0,0.2)",zIndex:3,border:"1.5px solid white"}}/>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })}
+                      {/* Legend */}
+                      <div style={{padding:"7px 16px",background:"#F9FAFC",borderTop:"1px solid #D4D9EE",display:"flex",gap:16,flexWrap:"wrap",alignItems:"center"}}>
+                        <span style={{fontSize:10,color:"#9BA3BF"}}>Milestones:</span>
+                        {[{c:"#F87171",l:"KM1"},{c:"#FCD34D",l:"KM2"},{c:"#4ADE80",l:"KM3"}].map(l=>(
+                          <div key={l.l} style={{display:"flex",alignItems:"center",gap:4,fontSize:10,color:"#4A5278"}}>
+                            <span style={{width:9,height:9,background:l.c,transform:"rotate(45deg)",display:"inline-block",borderRadius:1}}/>
+                            {l.l}
+                          </div>
+                        ))}
+                        <span style={{fontSize:10,color:"#9BA3BF",marginLeft:"auto"}}>Click row to open →</span>
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
             );
           })()}
