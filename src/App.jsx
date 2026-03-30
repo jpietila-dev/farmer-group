@@ -1518,7 +1518,8 @@ const dbToMpJob = r => ({
   km1: r.km1||"", km1Date: r.km1_date||"",
   km2: r.km2||"", km2Date: r.km2_date||"",
   km3: r.km3||"", km3Date: r.km3_date||"",
-  notes: r.notes||""
+  notes: r.notes||"",
+  amountBilled: r.amount_billed||0,
 });
 const mpJobToDB = j => ({
   id: j.id, name: j.name||"", client: j.client||"", status: j.status||"active",
@@ -1532,7 +1533,8 @@ const mpJobToDB = j => ({
   km1: j.km1||null, km1_date: j.km1Date||null,
   km2: j.km2||null, km2_date: j.km2Date||null,
   km3: j.km3||null, km3_date: j.km3Date||null,
-  notes: j.notes||null
+  notes: j.notes||null,
+  amount_billed: j.amountBilled||null,
 });
 const dbToMpWeekly = r => ({
   id: r.id, projectId: r.project_id, reportDate: r.report_date||"",
@@ -1548,6 +1550,106 @@ const dbToMpWeekly = r => ({
   km2: r.km2||"", km2Date: r.km2_date||"",
   km3: r.km3||"", km3Date: r.km3_date||""
 });
+
+// ── MP History card — collapsible ───────────────────────────────────────────
+function MpHistoryCard({ r, i, fmt }) {
+  const [open, setOpen] = useState(false);
+  const chk = v => v==="Yes" ? {icon:"✅",color:"#4ADE80"} : v==="Hold" ? {icon:"⏸",color:"#FCD34D"} : v==="No" ? {icon:"❌",color:"#F87171"} : {icon:"—",color:"#CBD1E8"};
+  const safetyLabel = ["","One","Two","Three","Four","Five"];
+  const starsFromLabel = safetyLabel.indexOf(r.siteSafety);
+  const stars = starsFromLabel > 0 ? starsFromLabel : (parseInt(r.siteSafety)||0);
+  const CHECKS = [
+    {label:"CO",       val:r.changeOrderStatus},
+    {label:"Budget",   val:r.budgetStatus},
+    {label:"Billing",  val:r.billingStatus},
+    {label:"Reports",  val:r.criticalPath},
+    {label:"Lookahead",val:r.completionSchedule},
+  ];
+  return (
+    <div style={{background:"#fff",borderRadius:12,border:"1px solid #D4D9EE",overflow:"hidden",boxShadow:"0 1px 3px rgba(0,0,0,0.04)"}}>
+      {/* Collapsed row — always visible */}
+      <div onClick={()=>setOpen(o=>!o)} style={{padding:"10px 16px",display:"flex",alignItems:"center",gap:10,cursor:"pointer",userSelect:"none"}}
+        onMouseEnter={e=>e.currentTarget.style.background="#F5F8FF"}
+        onMouseLeave={e=>e.currentTarget.style.background=""}>
+        {/* Week label */}
+        <div style={{fontSize:12,fontWeight:700,color:"#1A2240",minWidth:110}}>
+          {open?"▼":"▶"} {r.reportDate}
+        </div>
+        {i===0 && <span style={{fontSize:9,fontWeight:700,background:"#3B6FE815",color:"#3B6FE8",borderRadius:4,padding:"2px 6px",border:"1px solid #3B6FE830"}}>LATEST</span>}
+        {/* Days ahead badge */}
+        {r.daysAhead!==null && r.daysAhead!==undefined && (
+          <span style={{fontSize:11,fontWeight:700,color:r.daysAhead>7?"#4ADE80":r.daysAhead<-7?"#F87171":"#FCD34D",minWidth:70}}>
+            {Math.abs(r.daysAhead)}d {r.daysAhead>=0?"▲":"▼"}
+          </span>
+        )}
+        {/* Checkboxes inline */}
+        <div style={{display:"flex",gap:8,flex:1,alignItems:"center"}}>
+          {CHECKS.map(c=>{
+            const s=chk(c.val);
+            return (
+              <div key={c.label} style={{display:"flex",alignItems:"center",gap:3,fontSize:11}}>
+                <span style={{fontSize:13}}>{s.icon}</span>
+                <span style={{color:"#9BA3BF",fontSize:9,textTransform:"uppercase",letterSpacing:"0.05em"}}>{c.label}</span>
+              </div>
+            );
+          })}
+        </div>
+        {/* Stars */}
+        <div style={{display:"flex",gap:1}}>
+          {[1,2,3,4,5].map(s=>(
+            <span key={s} style={{fontSize:11,color:s<=stars?"#F59E0B":"#E5E7EB"}}>{s<=stars?"★":"☆"}</span>
+          ))}
+        </div>
+      </div>
+
+      {/* Expanded content */}
+      {open && (
+        <div style={{borderTop:"1px solid #F0F2F8"}}>
+          {/* Status row with labels */}
+          <div style={{padding:"10px 16px",borderBottom:"1px solid #F4F6FB",display:"flex",gap:0}}>
+            {[...CHECKS, {label:"Site Safety", val:r.siteSafety, stars:true}].map((item,j)=>{
+              const s = item.stars ? null : chk(item.val);
+              return (
+                <div key={j} style={{flex:"1 1 0",display:"flex",flexDirection:"column",alignItems:"center",padding:"6px 4px",borderRight:j<5?"1px solid #F0F2F8":"none"}}>
+                  {item.stars ? (
+                    <span>{[1,2,3,4,5].map(n=><span key={n} style={{fontSize:14,color:n<=stars?"#F59E0B":"#E5E7EB"}}>{n<=stars?"★":"☆"}</span>)}</span>
+                  ) : (
+                    <span style={{fontSize:18}}>{s.icon}</span>
+                  )}
+                  <div style={{fontSize:9,color:"#9BA3BF",textTransform:"uppercase",letterSpacing:"0.06em",marginTop:2,textAlign:"center"}}>{item.label}</div>
+                  {!item.stars && <div style={{fontSize:10,color:s.color,fontWeight:600}}>{item.val||"—"}</div>}
+                </div>
+              );
+            })}
+          </div>
+          {/* This week / next week */}
+          <div style={{padding:"12px 16px",display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,borderBottom:(r.km1||r.km2||r.km3)?"1px solid #F4F6FB":"none"}}>
+            <div>
+              <div style={{fontSize:10,color:"#9BA3BF",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:5}}>✅ This Week</div>
+              <div style={{fontSize:12,color:"#1A2240",lineHeight:1.7,whiteSpace:"pre-line"}}>{(r.currentWeek||"—").replace(/\\n/g,"\n")}</div>
+            </div>
+            <div>
+              <div style={{fontSize:10,color:"#9BA3BF",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:5}}>📅 Next Week</div>
+              <div style={{fontSize:12,color:"#1A2240",lineHeight:1.7,whiteSpace:"pre-line"}}>{(r.nextWeek||"—").replace(/\\n/g,"\n")}</div>
+            </div>
+          </div>
+          {/* Milestones */}
+          {(r.km1||r.km2||r.km3) && (
+            <div style={{padding:"10px 16px",display:"flex",gap:8,flexWrap:"wrap"}}>
+              {[{l:r.km1,d:r.km1Date,c:"#F87171"},{l:r.km2,d:r.km2Date,c:"#FCD34D"},{l:r.km3,d:r.km3Date,c:"#4ADE80"}].filter(m=>m.l).map((m,j)=>(
+                <div key={j} style={{display:"flex",alignItems:"center",gap:6,fontSize:11,background:m.c+"12",border:"1px solid "+m.c+"35",borderRadius:6,padding:"4px 10px"}}>
+                  <span style={{color:m.c,fontSize:10}}>◆</span>
+                  <span style={{color:"#1A2240",fontWeight:600}}>{m.l}</span>
+                  {m.d && <span style={{color:"#9BA3BF",fontSize:10}}>· {m.d}</span>}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function App() {
   // URL routing — sub-facing page
@@ -1647,7 +1749,7 @@ export default function App() {
   const [mpPipelineType,   setMpPipelineType]   = useState("all"); // all | opportunity | budgeting | hard_bid
   const [mpJobs,           setMpJobs]           = useState([]);
   const [mpWeeklyReports,  setMpWeeklyReports]  = useState([]);
-  const [mpDetailTab,      setMpDetailTab]       = useState("gantt");
+  const [mpDetailTab,      setMpDetailTab]       = useState("weekly");
   const [selectedCoord, setSelectedCoord] = useState(null); // coordinator report
   const [fmInbox,       setFmInbox]       = useState([]);   // unassigned leads
   const [showInboxForm, setShowInboxForm] = useState(false);
@@ -3455,7 +3557,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                       const schedColor = da===null?"#9BA3BF":da>7?"#4ADE80":da<-7?"#F87171":"#FCD34D";
                       return (
                         <div key={job.id}
-                          onClick={()=>{setActiveNav("jobs");setSelectedMpJob(job.id);setMpDetailTab("gantt");}}
+                          onClick={()=>{setActiveNav("jobs");setSelectedMpJob(job.id);setMpDetailTab("weekly");}}
                           style={{display:"flex",borderBottom:"1px solid #F4F6FB",cursor:"pointer",alignItems:"stretch"}}
                           onMouseEnter={e=>e.currentTarget.style.background="#F5F8FF"}
                           onMouseLeave={e=>e.currentTarget.style.background=""}>
@@ -4170,6 +4272,17 @@ Return ONLY valid JSON, no markdown, no extra text:
                 daysAhead > 7 ? "Ahead" : daysAhead < -7 ? "Behind" : "On Track";
               const scheduleColor = scheduleStatus==="Ahead"?"#4ADE80":scheduleStatus==="Behind"?"#F87171":"#FCD34D";
 
+              // Billing tracker
+              const billedAmt = job.amountBilled || 0;
+              const contractAmt = job.contractValue || 0;
+              const billedPct = contractAmt > 0 ? Math.min(100, (billedAmt / contractAmt) * 100) : 0;
+
+              const saveMpField = async (field, value) => {
+                const updated = { ...job, [field]: value };
+                setMpJobs(prev => prev.map(j => j.id === job.id ? updated : j));
+                try { await supa.from("mp_jobs").update(mpJobToDB(updated)).eq("id", job.id); } catch(e) {}
+              };
+
               return (
                 <div className="fade-in" style={{display:"flex",flexDirection:"column",gap:18}}>
                   {/* Back + header */}
@@ -4192,18 +4305,74 @@ Return ONLY valid JSON, no markdown, no extra text:
                   {/* KPI strip */}
                   <div style={{display:"grid",gridTemplateColumns:"repeat(6,1fr)",gap:10}}>
                     {[
-                      {label:"Schedule",    value: daysAhead===null?"—":Math.abs(daysAhead)+" days "+(daysAhead>=0?"ahead":"behind"), color:scheduleColor},
-                      {label:"GPM",         value: (latest?.gpm??job.gpm) ? ((latest?.gpm??job.gpm)*100).toFixed(1)+"%" : "—",        color:"#4ADE80"},
-                      {label:"Contract",    value: job.contractValue ? fmt(job.contractValue) : "—",                                   color:"#60A5FA"},
-                      {label:"CO Status",   value: (latest?.changeOrderStatus||job.changeOrderStatus)||"—",                            color:"#FCD34D"},
-                      {label:"Budget",      value: (latest?.budgetStatus||job.budgetStatus)||"—",                                      color:"#A78BFA"},
-                      {label:"Billing",     value: (latest?.billingStatus||job.billingStatus)||"—",                                    color:"#F97316"},
+                      {label:"Schedule",  value: daysAhead===null?"—":Math.abs(daysAhead)+" days "+(daysAhead>=0?"ahead":"behind"), color:scheduleColor},
+                      {label:"GPM",       value: (latest?.gpm??job.gpm) ? ((latest?.gpm??job.gpm)*100).toFixed(1)+"%" : "—", color:"#4ADE80"},
+                      {label:"Contract",  value: contractAmt ? fmt(contractAmt) : "—", color:"#60A5FA"},
+                      {label:"CO Status", value: (latest?.changeOrderStatus||job.changeOrderStatus)||"—", color:"#FCD34D"},
+                      {label:"Budget",    value: (latest?.budgetStatus||job.budgetStatus)||"—", color:"#A78BFA"},
+                      {label:"Billing",   value: (latest?.billingStatus||job.billingStatus)||"—", color:"#F97316"},
                     ].map(k=>(
                       <div key={k.label} style={{background:"#fff",borderRadius:10,border:"1px solid #D4D9EE",padding:"12px 14px",borderTop:"3px solid "+k.color}}>
                         <div style={{fontSize:10,color:"#9BA3BF",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:4}}>{k.label}</div>
                         <div style={{fontSize:14,fontWeight:700,color:"#1A2240"}}>{k.value}</div>
                       </div>
                     ))}
+                  </div>
+
+                  {/* Billing progress tracker */}
+                  <div style={{background:"#fff",borderRadius:12,border:"1px solid #D4D9EE",padding:"16px 20px"}}>
+                    <div style={{display:"flex",alignItems:"center",gap:16,marginBottom:12}}>
+                      <div style={{fontSize:13,fontWeight:700,color:"#1A2240",flex:1}}>💰 Billing Tracker</div>
+                      <div style={{fontSize:12,color:"#9BA3BF"}}>
+                        {contractAmt ? fmt(billedAmt) + " of " + fmt(contractAmt) : "Set contract value to track"}
+                      </div>
+                      <div style={{fontSize:16,fontWeight:800,color:billedPct>=100?"#4ADE80":billedPct>=60?"#60A5FA":"#F97316"}}>
+                        {billedPct.toFixed(1)}% billed
+                      </div>
+                    </div>
+                    {/* Progress bar */}
+                    <div style={{background:"#F0F2F8",borderRadius:8,height:20,overflow:"hidden",position:"relative",marginBottom:12}}>
+                      <div style={{position:"absolute",left:0,top:0,bottom:0,width:billedPct+"%",background:"linear-gradient(90deg,#3B6FE8,#60A5FA)",borderRadius:8,transition:"width 0.4s",minWidth:billedPct>0?4:0}}/>
+                      {billedPct>8 && <div style={{position:"absolute",left:"50%",top:"50%",transform:"translate(-50%,-50%)",fontSize:11,fontWeight:700,color:"#fff"}}>{billedPct.toFixed(0)}%</div>}
+                    </div>
+                    {/* Editable fields */}
+                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+                      {[
+                        {label:"Contract Value ($)", field:"contractValue", value:contractAmt},
+                        {label:"Amount Billed ($)",  field:"amountBilled",  value:billedAmt},
+                      ].map(f => {
+                        const [editing, setEditing] = useState(false);
+                        const [val, setVal] = useState(f.value||"");
+                        useEffect(()=>setVal(f.value||""),[f.value]);
+                        return (
+                          <div key={f.field}>
+                            <div style={{fontSize:10,color:"#9BA3BF",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:4}}>{f.label}</div>
+                            {editing ? (
+                              <div style={{display:"flex",gap:6}}>
+                                <input type="number" value={val} autoFocus
+                                  onChange={e=>setVal(e.target.value)}
+                                  onKeyDown={e=>{if(e.key==="Enter"){saveMpField(f.field,parseFloat(val)||0);setEditing(false);}if(e.key==="Escape")setEditing(false);}}
+                                  style={{flex:1,padding:"6px 10px",border:"1.5px solid #3B6FE8",borderRadius:6,fontSize:13,fontFamily:"inherit",outline:"none"}} />
+                                <button onClick={()=>{saveMpField(f.field,parseFloat(val)||0);setEditing(false);}} style={{padding:"6px 10px",background:"#3B6FE8",color:"#fff",border:"none",borderRadius:6,cursor:"pointer",fontSize:12}}>✓</button>
+                              </div>
+                            ) : (
+                              <div onClick={()=>setEditing(true)} style={{padding:"6px 10px",background:"#F9FAFC",borderRadius:6,border:"1px solid #E0E4F0",fontSize:14,fontWeight:700,color:f.value?"#1A2240":"#CBD1E8",cursor:"pointer"}}
+                                onMouseEnter={e=>e.currentTarget.style.borderColor="#3B6FE8"}
+                                onMouseLeave={e=>e.currentTarget.style.borderColor="#E0E4F0"}>
+                                {f.value ? fmt(f.value) : <span style={{fontStyle:"italic",fontWeight:400,fontSize:12}}>Click to set…</span>}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                    {/* Remaining */}
+                    {contractAmt > 0 && (
+                      <div style={{marginTop:10,display:"flex",gap:16,paddingTop:10,borderTop:"1px solid #F0F2F8"}}>
+                        <div style={{fontSize:12,color:"#4A5278"}}>Remaining: <strong style={{color:"#1A2240"}}>{fmt(contractAmt - billedAmt)}</strong></div>
+                        <div style={{fontSize:12,color:"#4A5278"}}>Unbilled: <strong style={{color:contractAmt-billedAmt>0?"#F97316":"#4ADE80"}}>{((1-(billedAmt/contractAmt))*100).toFixed(1)}%</strong></div>
+                      </div>
+                    )}
                   </div>
 
                   {/* ── GANTT TAB ── */}
@@ -4387,89 +4556,19 @@ Return ONLY valid JSON, no markdown, no extra text:
 
                   {/* ── HISTORY TAB ── */}
                   {mpDetailTab==="history" && (
-                    <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                    <div style={{display:"flex",flexDirection:"column",gap:6}}>
                       {reports.length===0 && <div style={{textAlign:"center",padding:"40px",color:"#9BA3BF",background:"#fff",borderRadius:12,border:"1px solid #D4D9EE"}}>No weekly history yet</div>}
-                      {reports.map((r,i)=>{
-                        // Status check helper
-                        const chk = v => v==="Yes" ? {icon:"✅",color:"#4ADE80"} : v==="Hold" ? {icon:"⏸",color:"#FCD34D"} : v==="No" ? {icon:"❌",color:"#F87171"} : {icon:"—",color:"#9BA3BF"};
-                        // Stars for site cleanliness (1-5)
-                        const safetyNum = parseInt(r.siteSafety) || 0;
-                        const safetyLabel = ["","One","Two","Three","Four","Five"];
-                        const starsFromLabel = safetyLabel.indexOf(r.siteSafety);
-                        const stars = starsFromLabel > 0 ? starsFromLabel : safetyNum;
-                        const StarRating = ({n}) => (
-                          <span>
-                            {[1,2,3,4,5].map(s=>(
-                              <span key={s} style={{fontSize:14,color:s<=n?"#F59E0B":"#E5E7EB"}}>{s<=n?"★":"☆"}</span>
-                            ))}
-                          </span>
-                        );
-                        return (
-                          <div key={r.id} style={{background:"#fff",borderRadius:12,border:"1px solid #D4D9EE",overflow:"hidden",boxShadow:"0 1px 4px rgba(0,0,0,0.04)"}}>
-                            {/* Card header */}
-                            <div style={{padding:"11px 16px",background:"#F9FAFC",borderBottom:"1px solid #D4D9EE",display:"flex",alignItems:"center",gap:10}}>
-                              <div style={{fontSize:13,fontWeight:700,color:"#1A2240",flex:1}}>Week of {r.reportDate}</div>
-                              {i===0 && <span style={{fontSize:10,fontWeight:700,background:"#3B6FE815",color:"#3B6FE8",borderRadius:4,padding:"2px 8px",border:"1px solid #3B6FE830"}}>LATEST</span>}
-                              {r.daysAhead!==null && r.daysAhead!==undefined && (
-                                <span style={{fontSize:11,fontWeight:700,color:r.daysAhead>7?"#4ADE80":r.daysAhead<-7?"#F87171":"#FCD34D"}}>
-                                  {Math.abs(r.daysAhead)}d {r.daysAhead>=0?"▲ ahead":"▼ behind"}
-                                </span>
-                              )}
-                            </div>
-
-                            {/* Status row — checkmarks */}
-                            <div style={{padding:"10px 16px",borderBottom:"1px solid #F4F6FB",display:"flex",gap:0,flexWrap:"wrap"}}>
-                              {[
-                                {label:"Change Order",   val:r.changeOrderStatus},
-                                {label:"Budget",         val:r.budgetStatus},
-                                {label:"Billing",        val:r.billingStatus},
-                                {label:"Daily Reports",  val:r.criticalPath==="Yes"?"Yes":r.criticalPath},
-                                {label:"3-Week Lookahead",val:r.completionSchedule},
-                              ].map((item,j)=>{
-                                const s = chk(item.val);
-                                return (
-                                  <div key={j} style={{flex:"1 1 0",minWidth:90,display:"flex",flexDirection:"column",alignItems:"center",padding:"6px 4px",borderRight:j<4?"1px solid #F0F2F8":"none"}}>
-                                    <div style={{fontSize:18,lineHeight:1}}>{s.icon}</div>
-                                    <div style={{fontSize:9,color:"#9BA3BF",textTransform:"uppercase",letterSpacing:"0.06em",marginTop:3,textAlign:"center"}}>{item.label}</div>
-                                    <div style={{fontSize:10,color:s.color,fontWeight:600}}>{item.val||"—"}</div>
-                                  </div>
-                                );
-                              })}
-                              {/* Site cleanliness stars */}
-                              <div style={{flex:"1 1 0",minWidth:90,display:"flex",flexDirection:"column",alignItems:"center",padding:"6px 4px"}}>
-                                <StarRating n={stars}/>
-                                <div style={{fontSize:9,color:"#9BA3BF",textTransform:"uppercase",letterSpacing:"0.06em",marginTop:3}}>Site Safety</div>
-                                <div style={{fontSize:10,color:"#F59E0B",fontWeight:600}}>{r.siteSafety||"—"}</div>
-                              </div>
-                            </div>
-
-                            {/* This week / Next week */}
-                            <div style={{padding:"12px 16px",display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,borderBottom:(r.km1||r.km2||r.km3)?"1px solid #F4F6FB":"none"}}>
-                              <div>
-                                <div style={{fontSize:10,color:"#9BA3BF",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:5}}>✅ This Week</div>
-                                <div style={{fontSize:12,color:"#1A2240",lineHeight:1.7,whiteSpace:"pre-line"}}>{(r.currentWeek||"—").replace(/\\n/g,"\n")}</div>
-                              </div>
-                              <div>
-                                <div style={{fontSize:10,color:"#9BA3BF",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:5}}>📅 Next Week</div>
-                                <div style={{fontSize:12,color:"#1A2240",lineHeight:1.7,whiteSpace:"pre-line"}}>{(r.nextWeek||"—").replace(/\\n/g,"\n")}</div>
-                              </div>
-                            </div>
-
-                            {/* Milestones */}
-                            {(r.km1||r.km2||r.km3) && (
-                              <div style={{padding:"10px 16px",display:"flex",gap:8,flexWrap:"wrap"}}>
-                                {[{l:r.km1,d:r.km1Date,c:"#F87171"},{l:r.km2,d:r.km2Date,c:"#FCD34D"},{l:r.km3,d:r.km3Date,c:"#4ADE80"}].filter(m=>m.l).map((m,j)=>(
-                                  <div key={j} style={{display:"flex",alignItems:"center",gap:6,fontSize:11,background:m.c+"12",border:"1px solid "+m.c+"35",borderRadius:6,padding:"4px 10px"}}>
-                                    <span style={{color:m.c,fontSize:10}}>◆</span>
-                                    <span style={{color:"#1A2240",fontWeight:600}}>{m.l}</span>
-                                    {m.d && <span style={{color:"#9BA3BF",fontSize:10}}>· {m.d}</span>}
-                                  </div>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
+                      <div style={{display:"flex",alignItems:"center",gap:8,padding:"6px 0",marginBottom:2}}>
+                        <span style={{fontSize:11,fontWeight:700,color:"#4A5278",minWidth:110,paddingLeft:28}}>Week</span>
+                        <span style={{fontSize:11,fontWeight:700,color:"#4A5278",minWidth:70}}>Schedule</span>
+                        {["CO","Budget","Billing","Reports","Lookahead"].map(l=>(
+                          <span key={l} style={{fontSize:9,fontWeight:700,color:"#9BA3BF",textTransform:"uppercase",letterSpacing:"0.06em",flex:"1 1 0",textAlign:"center"}}>{l}</span>
+                        ))}
+                        <span style={{fontSize:9,fontWeight:700,color:"#9BA3BF",textTransform:"uppercase",letterSpacing:"0.06em",minWidth:60,textAlign:"right"}}>Safety</span>
+                      </div>
+                      {reports.map((r,i)=>(
+                        <MpHistoryCard key={r.id} r={r} i={i} fmt={fmt} />
+                      ))}
                     </div>
                   )}
                 </div>
@@ -4521,7 +4620,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                     const schedColor = da===null?"#9BA3BF":da>7?"#4ADE80":da<-7?"#F87171":"#FCD34D";
                     const gpm = latest?.gpm??job.gpm;
                     return (
-                      <div key={job.id} onClick={()=>{setSelectedMpJob(job.id||job);setMpDetailTab("gantt");}}
+                      <div key={job.id} onClick={()=>{setSelectedMpJob(job.id||job);setMpDetailTab("weekly");}}
                         style={{padding:"14px 16px",borderBottom:"1px solid #F4F6FB",display:"flex",alignItems:"center",gap:14,cursor:"pointer",transition:"background 0.15s"}}
                         onMouseEnter={e=>e.currentTarget.style.background="#F5F8FF"}
                         onMouseLeave={e=>e.currentTarget.style.background=""}>
