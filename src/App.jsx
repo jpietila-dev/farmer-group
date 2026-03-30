@@ -1551,6 +1551,34 @@ const dbToMpWeekly = r => ({
   km3: r.km3||"", km3Date: r.km3_date||""
 });
 
+// ── MP Billing editable number field ────────────────────────────────────────
+function MpBillingField({ label, value, onSave, fmt }) {
+  const [editing, setEditing] = useState(false);
+  const [val, setVal] = useState(value||"");
+  useEffect(()=>setVal(value||""),[value]);
+  return (
+    <div>
+      <div style={{fontSize:10,color:"#9BA3BF",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:4}}>{label}</div>
+      {editing ? (
+        <div style={{display:"flex",gap:6}}>
+          <input type="number" value={val} autoFocus
+            onChange={e=>setVal(e.target.value)}
+            onKeyDown={e=>{if(e.key==="Enter"){onSave(parseFloat(val)||0);setEditing(false);}if(e.key==="Escape")setEditing(false);}}
+            style={{flex:1,padding:"6px 10px",border:"1.5px solid #3B6FE8",borderRadius:6,fontSize:13,fontFamily:"inherit",outline:"none"}} />
+          <button onClick={()=>{onSave(parseFloat(val)||0);setEditing(false);}} style={{padding:"6px 10px",background:"#3B6FE8",color:"#fff",border:"none",borderRadius:6,cursor:"pointer",fontSize:12}}>✓</button>
+        </div>
+      ) : (
+        <div onClick={()=>setEditing(true)}
+          style={{padding:"6px 10px",background:"#F9FAFC",borderRadius:6,border:"1px solid #E0E4F0",fontSize:14,fontWeight:700,color:value?"#1A2240":"#CBD1E8",cursor:"pointer"}}
+          onMouseEnter={e=>e.currentTarget.style.borderColor="#3B6FE8"}
+          onMouseLeave={e=>e.currentTarget.style.borderColor="#E0E4F0"}>
+          {value ? fmt(value) : <span style={{fontStyle:"italic",fontWeight:400,fontSize:12}}>Click to set…</span>}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── MP History card — collapsible ───────────────────────────────────────────
 function MpHistoryCard({ r, i, fmt }) {
   const [open, setOpen] = useState(false);
@@ -4339,34 +4367,8 @@ Return ONLY valid JSON, no markdown, no extra text:
                     </div>
                     {/* Editable fields */}
                     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-                      {[
-                        {label:"Contract Value ($)", field:"contractValue", value:contractAmt},
-                        {label:"Amount Billed ($)",  field:"amountBilled",  value:billedAmt},
-                      ].map(f => {
-                        const [editing, setEditing] = useState(false);
-                        const [val, setVal] = useState(f.value||"");
-                        useEffect(()=>setVal(f.value||""),[f.value]);
-                        return (
-                          <div key={f.field}>
-                            <div style={{fontSize:10,color:"#9BA3BF",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:4}}>{f.label}</div>
-                            {editing ? (
-                              <div style={{display:"flex",gap:6}}>
-                                <input type="number" value={val} autoFocus
-                                  onChange={e=>setVal(e.target.value)}
-                                  onKeyDown={e=>{if(e.key==="Enter"){saveMpField(f.field,parseFloat(val)||0);setEditing(false);}if(e.key==="Escape")setEditing(false);}}
-                                  style={{flex:1,padding:"6px 10px",border:"1.5px solid #3B6FE8",borderRadius:6,fontSize:13,fontFamily:"inherit",outline:"none"}} />
-                                <button onClick={()=>{saveMpField(f.field,parseFloat(val)||0);setEditing(false);}} style={{padding:"6px 10px",background:"#3B6FE8",color:"#fff",border:"none",borderRadius:6,cursor:"pointer",fontSize:12}}>✓</button>
-                              </div>
-                            ) : (
-                              <div onClick={()=>setEditing(true)} style={{padding:"6px 10px",background:"#F9FAFC",borderRadius:6,border:"1px solid #E0E4F0",fontSize:14,fontWeight:700,color:f.value?"#1A2240":"#CBD1E8",cursor:"pointer"}}
-                                onMouseEnter={e=>e.currentTarget.style.borderColor="#3B6FE8"}
-                                onMouseLeave={e=>e.currentTarget.style.borderColor="#E0E4F0"}>
-                                {f.value ? fmt(f.value) : <span style={{fontStyle:"italic",fontWeight:400,fontSize:12}}>Click to set…</span>}
-                              </div>
-                            )}
-                          </div>
-                        );
-                      })}
+                      <MpBillingField label="Contract Value ($)" value={contractAmt} fmt={fmt} onSave={v=>saveMpField("contractValue",v)} />
+                      <MpBillingField label="Amount Billed ($)"  value={billedAmt}   fmt={fmt} onSave={v=>saveMpField("amountBilled",v)} />
                     </div>
                     {/* Remaining */}
                     {contractAmt > 0 && (
