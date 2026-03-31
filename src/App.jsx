@@ -4356,6 +4356,20 @@ Return ONLY valid JSON, no markdown, no extra text:
                     </div>
                   </div>
 
+                  {/* Editable project fields */}
+                  <div style={{background:"#fff",borderRadius:10,border:"1px solid #D4D9EE",display:"grid",gridTemplateColumns:"repeat(4,1fr)",overflow:"hidden"}}>
+                    {[
+                      {label:"Start Date",  field:"startDate",  value:job.startDate, type:"date"},
+                      {label:"End Date",    field:"endDate",    value:job.endDate,   type:"date"},
+                      {label:"PM",          field:"pm",         value:job.pm,        type:"text"},
+                      {label:"Status",      field:"status",     value:job.status,    type:"text"},
+                    ].map((f,i)=>(
+                      <div key={f.field} style={{borderRight:i<3?"1px solid #F0F2F8":"none"}}>
+                        <HvacField label={f.label} value={f.value||""} type={f.type} onSave={val=>saveMpField(f.field,val)} />
+                      </div>
+                    ))}
+                  </div>
+
                   {/* KPI strip */}
                   <div style={{display:"grid",gridTemplateColumns:"repeat(6,1fr)",gap:10}}>
                     {[
