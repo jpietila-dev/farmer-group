@@ -4511,7 +4511,7 @@ Return ONLY valid JSON, no markdown, no extra text:
               setPipeline(prev=>[...prev, entry]);
               // Persist
               const row = { id:String(id), name:fields.name, company_id:fields.companyId||null, contact_name:fields.contactName||"", value:parseFloat(fields.value)||0, stage:fields.stage||"budgeting_lead", notes:fields.notes||"", bu:"major", close_date:fields.closeDate||null };
-              try { await fetch(\`${SUPA_URL}/rest/v1/mp_pipeline\`, { method:"POST", headers:{apikey:SUPA_KEY,Authorization:\`Bearer ${SUPA_KEY}\`,"Content-Type":"application/json",Prefer:"return=minimal"}, body:JSON.stringify(row) }); } catch(e){}
+              try { await fetch(`${SUPA_URL}/rest/v1/mp_pipeline`, { method:"POST", headers:{apikey:SUPA_KEY,Authorization:`Bearer ${SUPA_KEY}`,"Content-Type":"application/json",Prefer:"return=minimal"}, body:JSON.stringify(row) }); } catch(e){}
             };
 
             const parseEmail = async () => {
