@@ -1779,7 +1779,8 @@ export default function App() {
     current_week:"", next_week:"", critical_path:"",
     change_order_status:"", long_lead_items:"", long_lead_status:"",
     billing_status:"", gpm:"", completion_schedule:"", daily_reports:"",
-    site_safety:"", owner_comms:"", km1:"", km1_date:"", km2:"", km2_date:"", km3:"", km3_date:""
+    site_safety:"", support_needed:"", owner_comms:"",
+    km1:"", km1_date:"", km2:"", km2_date:"", km3:"", km3_date:""
   });
   const [editMpId,         setEditMpId]         = useState(null);
   const [mpFormData,       setMpFormData]       = useState({});
@@ -8188,25 +8189,92 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
       {showWeeklyForm && (() => {
         const W = weeklyForm;
         const setW = (k,v) => setWeeklyForm(f=>({...f,[k]:v}));
-        const mpTeam = fmTeam.filter(t=>t.division==="major"||["Project Manager","Assistant Project Manager"].includes(t.role));
-        const YES_NO = ["","Yes","No","Hold","N/A"];
-        const SAFETY = ["","One","Two","Three","Four","Five"];
+
+        // Current/Next week activity options from your projects
+        const ACTIVITIES = [
+          "","Masonry","Concrete","Standard Doors","Janus Hallway Systems","Painting and Coating",
+          "Fire Suppression","Fire Detection and Alarm Systems","HVAC","Electrical","Plumbing",
+          "Roofing Systems","Structural Steel Framing","Drywall","Sealants and Caulking",
+          "Fluid Applied Flooring","Floor Grinding","Access Control Systems","Video Surveillance",
+          "Elevators","Lighting Systems","Lockers and Personal Storage Units",
+          "Cleaning and Site Maintenance","Site Preparation and Clearing","Asphalt Paving",
+          "Utility Disconnections and Adjustments","Final Inspections","Certificate of Occupancy",
+          "Punchlist / Change Order Items","Other"
+        ];
+        const YES_NO_HOLD = ["","Yes","No","Hold","N/A"];
+        const SAFETY_OPTS = ["","One ★","Two ★★","Three ★★★","Four ★★★★","Five ★★★★★"];
+        const SAFETY_VAL  = {"One ★":"One","Two ★★":"Two","Three ★★★":"Three","Four ★★★★":"Four","Five ★★★★★":"Five"};
+        const LEAD_STATUS = ["","Yes — On Site","No — Ordered","No — Not Yet Ordered","Lead Time Concern"];
+        const SUPPORT_OPTS= ["","No Support Needed","Permitting Assistance","Owner Communication","Budget Approval","Change Order Approval","Subcontractor Issue","Other"];
+
+        // Styled select helper
+        const Sel = ({k, opts, placeholder}) => (
+          <select value={W[k]} onChange={e=>setW(k,e.target.value)}
+            style={{width:"100%",padding:"10px 12px",border:"1.5px solid #CBD1E8",borderRadius:8,fontSize:13,fontFamily:"inherit",background:"#fff",color:W[k]?"#1A2240":"#9BA3BF",outline:"none",appearance:"auto",cursor:"pointer"}}>
+            <option value="">{placeholder||"Select…"}</option>
+            {opts.filter(o=>o).map(o=><option key={o} value={SAFETY_VAL[o]||o}>{o}</option>)}
+          </select>
+        );
+        const TextInp = ({k, placeholder, type="text"}) => (
+          <input type={type} value={W[k]||""} onChange={e=>setW(k,e.target.value)} placeholder={placeholder||""}
+            style={{width:"100%",padding:"10px 12px",border:"1.5px solid #CBD1E8",borderRadius:8,fontSize:13,fontFamily:"inherit",background:"#fff",outline:"none",boxSizing:"border-box"}} />
+        );
+        // Multi-select activity pills
+        const ActivityField = ({k}) => {
+          const selected = (W[k]||"").split("\n").filter(Boolean);
+          const toggle = (act) => {
+            const cur = selected.includes(act) ? selected.filter(x=>x!==act) : [...selected, act];
+            setW(k, cur.join("\n"));
+          };
+          return (
+            <div>
+              <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:8}}>
+                {ACTIVITIES.filter(a=>a).map(a=>(
+                  <button key={a} type="button" onClick={()=>toggle(a)}
+                    style={{padding:"4px 10px",borderRadius:20,border:"1px solid "+(selected.includes(a)?"#3B6FE8":"#CBD1E8"),background:selected.includes(a)?"#3B6FE8":"#fff",color:selected.includes(a)?"#fff":"#4A5278",fontSize:11,fontWeight:selected.includes(a)?600:400,cursor:"pointer",fontFamily:"inherit",transition:"all 0.1s"}}>
+                    {a}
+                  </button>
+                ))}
+              </div>
+              {selected.length>0 && <div style={{fontSize:11,color:"#3B6FE8",fontWeight:600}}>Selected: {selected.join(", ")}</div>}
+            </div>
+          );
+        };
+        const Label = ({text, required, hint}) => (
+          <div style={{marginBottom:6}}>
+            <div style={{fontSize:13,fontWeight:700,color:"#1A2240"}}>{text}{required&&<span style={{color:"#F87171"}}> *</span>}</div>
+            {hint&&<div style={{fontSize:11,color:"#9BA3BF",marginTop:1}}>{hint}</div>}
+          </div>
+        );
+        const FormRow = ({children, cols=1}) => (
+          <div style={{display:"grid",gridTemplateColumns:`repeat(${cols},1fr)`,gap:12}}>
+            {children}
+          </div>
+        );
+        const FormField = ({label, required, hint, children}) => (
+          <div style={{display:"flex",flexDirection:"column",gap:0}}>
+            <Label text={label} required={required} hint={hint}/>
+            {children}
+          </div>
+        );
 
         const submit = async () => {
-          if (!W.project_id) return;
+          if (!W.project_id) { alert("Please select a project"); return; }
           const id = "mpw" + Date.now();
-          import("https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm").catch(()=>{});
           const row = {
             id, project_id: W.project_id, report_date: W.report_date,
             current_week: W.current_week, next_week: W.next_week,
-            critical_path: W.critical_path, days_ahead: null,
+            critical_path: W.critical_path,
+            days_ahead: null,
             completion_schedule: W.completion_schedule,
             change_order_status: W.change_order_status,
-            budget_status: W.budget_status||"",
+            budget_status: "",
             billing_status: W.billing_status,
-            site_safety: W.site_safety, owner_comms: W.owner_comms,
+            site_safety: W.site_safety,
+            owner_comms: W.support_needed ? W.support_needed+"|"+W.owner_comms : W.owner_comms,
             gpm: W.gpm ? parseFloat(W.gpm) : null,
             long_lead_items: W.long_lead_items,
+            long_lead_status: W.long_lead_status,
             km1: W.km1, km1_date: W.km1_date||null,
             km2: W.km2, km2_date: W.km2_date||null,
             km3: W.km3, km3_date: W.km3_date||null,
@@ -8217,105 +8285,161 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
             body: JSON.stringify(row)
           });
           if (res.ok || res.status===201 || res.status===204) {
-            setMpWeeklyReports(prev => [dbToMpWeekly(row), ...prev]);
-            // Update the job's latest KM/GPM fields
+            setMpWeeklyReports(prev => [dbToMpWeekly({...row,project_id:row.project_id}), ...prev.filter(r=>r.id!==id)]);
             const job = mpJobs.find(j=>j.id===W.project_id);
             if (job) {
-              const updated = {...job, gpm:row.gpm??job.gpm, km1:row.km1||job.km1, km1Date:row.km1_date||job.km1Date, km2:row.km2||job.km2, km2Date:row.km2_date||job.km2Date, km3:row.km3||job.km3, km3Date:row.km3_date||job.km3Date};
+              const updated = {...job,
+                gpm: row.gpm??job.gpm,
+                km1: row.km1||job.km1, km1Date: row.km1_date||job.km1Date,
+                km2: row.km2||job.km2, km2Date: row.km2_date||job.km2Date,
+                km3: row.km3||job.km3, km3Date: row.km3_date||job.km3Date
+              };
               setMpJobs(prev=>prev.map(j=>j.id===W.project_id?updated:j));
               supa.from("mp_jobs").update(mpJobToDB(updated)).eq("id",W.project_id);
             }
             setShowWeeklyForm(false);
+            setWeeklyForm(f=>({...f,current_week:"",next_week:"",critical_path:"",change_order_status:"",long_lead_items:"",long_lead_status:"",billing_status:"",gpm:"",completion_schedule:"",daily_reports:"",site_safety:"",support_needed:"",owner_comms:"",km1:"",km1_date:"",km2:"",km2_date:"",km3:"",km3_date:""}));
+          } else {
+            alert("Error saving — check console");
           }
         };
 
-        const Field = ({label, kids, required}) => (
-          <div style={{display:"flex",flexDirection:"column",gap:5}}>
-            <label style={{fontSize:12,fontWeight:600,color:"#1A2240"}}>{label}{required&&<span style={{color:"#F87171"}}> *</span>}</label>
-            {kids}
-          </div>
-        );
-        const sel = (key, opts) => (
-          <select value={W[key]} onChange={e=>setW(key,e.target.value)}
-            style={{padding:"8px 10px",border:"1px solid #CBD1E8",borderRadius:7,fontSize:13,fontFamily:"inherit",background:"#fff",outline:"none"}}>
-            {opts.map(o=><option key={o} value={o}>{o||"Select…"}</option>)}
-          </select>
-        );
-        const inp = (key, placeholder="", type="text") => (
-          <input type={type} value={W[key]} onChange={e=>setW(key,e.target.value)} placeholder={placeholder}
-            style={{padding:"8px 10px",border:"1px solid #CBD1E8",borderRadius:7,fontSize:13,fontFamily:"inherit",outline:"none"}} />
-        );
-        const txt = (key, placeholder="") => (
-          <textarea value={W[key]} onChange={e=>setW(key,e.target.value)} placeholder={placeholder} rows={3}
-            style={{padding:"8px 10px",border:"1px solid #CBD1E8",borderRadius:7,fontSize:13,fontFamily:"inherit",outline:"none",resize:"vertical"}} />
-        );
-
         return (
-          <div style={{position:"fixed",inset:0,background:"rgba(10,16,36,0.7)",zIndex:2000,display:"flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(3px)",overflowY:"auto",padding:"24px"}}
+          <div style={{position:"fixed",inset:0,background:"rgba(10,16,36,0.75)",zIndex:2000,display:"flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(4px)",padding:"16px"}}
             onClick={e=>e.target===e.currentTarget&&setShowWeeklyForm(false)}>
-            <div style={{background:"#F4F6FB",borderRadius:16,width:"min(580px,100%)",boxShadow:"0 8px 48px rgba(0,0,0,0.2)",overflow:"hidden",maxHeight:"90vh",display:"flex",flexDirection:"column"}}>
+            <div style={{background:"#F4F6FB",borderRadius:16,width:"min(620px,100%)",maxHeight:"92vh",display:"flex",flexDirection:"column",boxShadow:"0 12px 60px rgba(0,0,0,0.25)",overflow:"hidden"}}>
+
               {/* Header */}
-              <div style={{background:"linear-gradient(135deg,#1A2240,#253260)",padding:"20px 24px",color:"#fff",flexShrink:0}}>
+              <div style={{background:"linear-gradient(135deg,#1A2240 0%,#253260 100%)",padding:"20px 24px",flexShrink:0}}>
                 <div style={{display:"flex",alignItems:"center",gap:10}}>
-                  <div style={{fontSize:16,fontWeight:800,flex:1}}>📋 MP Construction Meeting</div>
-                  <button onClick={()=>setShowWeeklyForm(false)} style={{background:"rgba(255,255,255,0.15)",border:"none",color:"#fff",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontSize:12,fontFamily:"inherit"}}>✕ Close</button>
+                  <div style={{width:36,height:36,background:"rgba(255,255,255,0.15)",borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18}}>📋</div>
+                  <div style={{flex:1}}>
+                    <div style={{fontSize:17,fontWeight:800,color:"#fff"}}>MP Construction Meeting</div>
+                    <div style={{fontSize:11,color:"rgba(255,255,255,0.5)",marginTop:1}}>Weekly Report Submission</div>
+                  </div>
+                  <button onClick={()=>setShowWeeklyForm(false)} style={{background:"rgba(255,255,255,0.12)",border:"none",color:"rgba(255,255,255,0.8)",borderRadius:6,padding:"5px 12px",cursor:"pointer",fontSize:12,fontFamily:"inherit"}}>✕</button>
                 </div>
-                <div style={{fontSize:11,color:"rgba(255,255,255,0.5)",marginTop:4}}>Weekly Report Submission</div>
               </div>
 
-              {/* Form body */}
-              <div style={{overflowY:"auto",padding:"20px 24px",display:"flex",flexDirection:"column",gap:14}}>
+              {/* Scrollable body */}
+              <div style={{overflowY:"auto",flex:1,padding:"20px 24px",display:"flex",flexDirection:"column",gap:16}}>
+
                 {/* Project + Date */}
-                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
-                  <Field label="Project Name" required>
+                <FormRow cols={2}>
+                  <FormField label="Project Name" required>
                     <select value={W.project_id} onChange={e=>setW("project_id",e.target.value)}
-                      style={{padding:"8px 10px",border:"1px solid #CBD1E8",borderRadius:7,fontSize:13,fontFamily:"inherit",background:"#fff",outline:"none"}}>
+                      style={{width:"100%",padding:"10px 12px",border:"1.5px solid #CBD1E8",borderRadius:8,fontSize:13,fontFamily:"inherit",background:"#fff",outline:"none"}}>
                       <option value="">Select project…</option>
                       {mpJobs.map(j=><option key={j.id} value={j.id}>{j.name}</option>)}
                     </select>
-                  </Field>
-                  <Field label="Target Completion Date">
-                    {inp("report_date","",  "date")}
-                  </Field>
-                </div>
+                  </FormField>
+                  <FormField label="Target Completion Date">
+                    <TextInp k="report_date" type="date"/>
+                  </FormField>
+                </FormRow>
 
-                <Field label="Current Week Activities" required>{txt("current_week","What was done this week?")}</Field>
-                <Field label="Next Week Activities" required>{txt("next_week","What is planned for next week?")}</Field>
-                <Field label="Are any of these critical path?" required>{sel("critical_path",YES_NO)}</Field>
-                <Field label="Change orders pending or approved">{sel("change_order_status",YES_NO)}</Field>
-                <Field label="Long Lead Items" kids={<><div style={{fontSize:11,color:"#9BA3BF",marginBottom:4}}>All items needed that are not currently on site</div>{txt("long_lead_items","List long lead items…")}</>} />
-                <Field label="Long Lead Item Status">{sel("long_lead_status",YES_NO)}</Field>
-                <Field label="Billing Status" required>{sel("billing_status",YES_NO)}</Field>
-                <Field label="Current GPM" required kids={<><div style={{fontSize:11,color:"#9BA3BF",marginBottom:4}}>Decimal format: for 20% put .20</div>{inp("gpm","e.g. 0.20")}</>} />
-                <Field label="Is your 3 Week schedule complete?" required>{sel("completion_schedule",YES_NO)}</Field>
-                <Field label="Have you submitted all your daily reports?" required>{sel("daily_reports",YES_NO)}</Field>
-                <Field label="Site Cleanliness/Safety" required>{sel("site_safety",SAFETY)}</Field>
-                <Field label="Support Needed from Leadership">{txt("owner_comms","Any support needed?")}</Field>
-                <Field label="Next Owner Communications Planned">{inp("owner_comms_date","","date")}</Field>
+                <div style={{height:1,background:"#E0E4F0"}}/>
+
+                {/* Activities */}
+                <FormField label="Current Week Activities" required hint="Select all that apply">
+                  <ActivityField k="current_week"/>
+                </FormField>
+
+                <FormField label="Next Week Activities" required hint="Select all that apply">
+                  <ActivityField k="next_week"/>
+                </FormField>
+
+                <div style={{height:1,background:"#E0E4F0"}}/>
+
+                {/* Status dropdowns — 2 col grid */}
+                <FormRow cols={2}>
+                  <FormField label="Are any of these critical path?" required>
+                    <Sel k="critical_path" opts={YES_NO_HOLD}/>
+                  </FormField>
+                  <FormField label="Change orders pending or approved">
+                    <Sel k="change_order_status" opts={YES_NO_HOLD}/>
+                  </FormField>
+                </FormRow>
+
+                <FormRow cols={2}>
+                  <FormField label="Long Lead Items" hint="All items needed, not currently on site">
+                    <Sel k="long_lead_items" opts={["","Yes — Items Outstanding","No — All Items on Site","N/A"]}/>
+                  </FormField>
+                  <FormField label="Long Lead Item Status">
+                    <Sel k="long_lead_status" opts={LEAD_STATUS}/>
+                  </FormField>
+                </FormRow>
+
+                <FormRow cols={2}>
+                  <FormField label="Billing Status" required>
+                    <Sel k="billing_status" opts={YES_NO_HOLD}/>
+                  </FormField>
+                  <FormField label="Current GPM" required hint="Decimal format: for 20% enter 0.20">
+                    <TextInp k="gpm" placeholder="e.g. 0.20"/>
+                  </FormField>
+                </FormRow>
+
+                <FormRow cols={2}>
+                  <FormField label="Is your 3 Week schedule complete?" required>
+                    <Sel k="completion_schedule" opts={YES_NO_HOLD}/>
+                  </FormField>
+                  <FormField label="Have you submitted all your daily reports?" required>
+                    <Sel k="daily_reports" opts={YES_NO_HOLD}/>
+                  </FormField>
+                </FormRow>
+
+                <FormRow cols={2}>
+                  <FormField label="Site Cleanliness / Safety" required>
+                    <Sel k="site_safety" opts={SAFETY_OPTS}/>
+                  </FormField>
+                  <FormField label="Support Needed from Leadership">
+                    <Sel k="support_needed" opts={SUPPORT_OPTS}/>
+                  </FormField>
+                </FormRow>
+
+                <FormField label="Next Owner Communications Planned">
+                  <TextInp k="owner_comms" placeholder="Date and description…"/>
+                </FormField>
+
+                <div style={{height:1,background:"#E0E4F0"}}/>
 
                 {/* Milestones */}
-                <div style={{background:"#fff",borderRadius:10,border:"1px solid #D4D9EE",padding:"14px 16px"}}>
-                  <div style={{fontSize:12,fontWeight:700,color:"#1A2240",marginBottom:12}}>◆ Key Milestones</div>
-                  <div style={{display:"flex",flexDirection:"column",gap:10}}>
-                    {[{km:"km1",kd:"km1_date",num:"#1"},{km:"km2",kd:"km2_date",num:"#2",note:"If none, leave blank"},{km:"km3",kd:"km3_date",num:"#3"}].map(m=>(
-                      <div key={m.km} style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-                        <Field label={"Key Milestone "+m.num} kids={<><div style={{fontSize:11,color:"#9BA3BF",marginBottom:2}}>{m.note||""}</div><input value={W[m.km]} onChange={e=>setW(m.km,e.target.value)} placeholder="Milestone description…" style={{padding:"7px 10px",border:"1px solid #CBD1E8",borderRadius:7,fontSize:13,fontFamily:"inherit",outline:"none"}} /></>} />
-                        <Field label={"Date to complete KM "+m.num}>{inp(m.kd,"","date")}</Field>
-                      </div>
-                    ))}
-                  </div>
+                <div style={{fontSize:13,fontWeight:700,color:"#1A2240",display:"flex",alignItems:"center",gap:8}}>
+                  <span style={{fontSize:16}}>◆</span> Key Milestones
                 </div>
+                {[
+                  {km:"km1",kd:"km1_date",num:"1",hint:""},
+                  {km:"km2",kd:"km2_date",num:"2",hint:"If none, leave blank"},
+                  {km:"km3",kd:"km3_date",num:"3",hint:"If none, leave blank"},
+                ].map(m=>(
+                  <FormRow key={m.km} cols={2}>
+                    <FormField label={"Key Milestone #"+m.num} hint={m.hint}>
+                      <TextInp k={m.km} placeholder="Milestone description…"/>
+                    </FormField>
+                    <FormField label={"Date to complete Key Milestone #"+m.num}>
+                      <TextInp k={m.kd} type="date"/>
+                    </FormField>
+                  </FormRow>
+                ))}
+
               </div>
 
               {/* Footer */}
-              <div style={{padding:"14px 24px",borderTop:"1px solid #D4D9EE",display:"flex",gap:8,background:"#fff",flexShrink:0}}>
-                <button onClick={()=>setShowWeeklyForm(false)} style={{flex:1,padding:"10px",background:"#F0F2F8",border:"1px solid #CBD1E8",borderRadius:8,cursor:"pointer",fontFamily:"inherit",fontSize:13,color:"#4A5278",fontWeight:600}}>Cancel</button>
-                <button onClick={submit} style={{flex:2,padding:"10px",background:"#3B6FE8",border:"none",borderRadius:8,cursor:"pointer",fontFamily:"inherit",fontSize:13,color:"#fff",fontWeight:700}}>Submit Weekly Report</button>
+              <div style={{padding:"14px 24px",borderTop:"1px solid #D4D9EE",background:"#fff",display:"flex",gap:10,flexShrink:0}}>
+                <button onClick={()=>setShowWeeklyForm(false)}
+                  style={{flex:1,padding:"11px",background:"#F0F2F8",border:"1px solid #CBD1E8",borderRadius:8,cursor:"pointer",fontFamily:"inherit",fontSize:13,color:"#4A5278",fontWeight:600}}>
+                  Cancel
+                </button>
+                <button onClick={submit}
+                  style={{flex:2,padding:"11px",background:"#3B6FE8",border:"none",borderRadius:8,cursor:"pointer",fontFamily:"inherit",fontSize:14,color:"#fff",fontWeight:700}}>
+                  Submit Weekly Report
+                </button>
               </div>
             </div>
           </div>
         );
       })()}
+
 
       {/* ── COMPANY FORM ── */}
       {showCompanyForm && (
