@@ -6207,11 +6207,19 @@ if(bounds.length)map.fitBounds(bounds,{padding:[30,30]});
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: 14 }}>
                 {visibleTeam.map(m => {
                   // Match jobs by pm field (primary) or coordinator field
-                  const myJobs   = fmJobs.filter(j => j.pm === m.name || j.coordinator === m.name);
-                  const active   = myJobs.filter(j => ["buyout","do_work","bill"].includes(j.stage));
-                  const pipeline = myJobs.filter(j => ["estimating","waiting_quote"].includes(j.stage));
-                  const revenue  = myJobs.reduce((s,j) => s + (j.contractValue||0), 0);
-                  const gp       = myJobs.reduce((s,j) => s + (j.grossProfit||0), 0);
+                  const isMpMember = (m.divisions||[m.division]).includes("major") || m.role?.toLowerCase().includes("project manager");
+                  const myFmJobs = fmJobs.filter(j => j.pm === m.name || j.coordinator === m.name);
+                  const myMpJobs = isMpMember ? mpJobs.filter(j => j.pm === m.name) : [];
+                  const myJobs   = [...myFmJobs, ...myMpJobs];
+                  // FM stats
+                  const active   = myFmJobs.filter(j => ["buyout","do_work","bill"].includes(j.stage));
+                  const pipeline = myFmJobs.filter(j => ["estimating","waiting_quote"].includes(j.stage));
+                  const revenue  = myFmJobs.reduce((s,j) => s + (j.contractValue||0), 0);
+                  const gp       = myFmJobs.reduce((s,j) => s + (j.grossProfit||0), 0);
+                  // MP stats
+                  const mpActive  = myMpJobs.filter(j => j.status === "active");
+                  const mpRevenue = myMpJobs.reduce((s,j) => s + (j.contractValue||0), 0);
+                  const mpGpm     = myMpJobs.length ? (myMpJobs.reduce((s,j) => s + (j.gpm||0), 0) / myMpJobs.length) : 0;
                   const urgentCount = myJobs.filter(j => {
                     const st = FM_STAGES.find(s => s.id === j.stage);
                     if (!st) return false;
@@ -6235,12 +6243,17 @@ if(bounds.length)map.fitBounds(bounds,{padding:[30,30]});
                       {/* Stats */}
                       <div style={{ padding: "14px 20px" }}>
                         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 8, marginBottom: 14 }}>
-                          {[
+                          {(isMpMember ? [
+                            { label: "MP Projects", value: mpActive.length,                                                              color: "#818CF8" },
+                            { label: "FM Active",   value: active.length,                                                               color: "#4ADE80" },
+                            { label: "MP Revenue",  value: mpRevenue>0?"$"+(mpRevenue/1000).toFixed(0)+"k":"—",                         color: "#3B6FE8" },
+                            { label: "Avg GPM",     value: mpGpm>0?(mpGpm*100).toFixed(0)+"%":"—",                                      color: "#FCD34D" },
+                          ] : [
                             { label: "Pipeline", value: pipeline.length, color: "#818CF8" },
                             { label: "Active",   value: active.length,   color: "#4ADE80" },
                             { label: "Revenue",  value: "$" + (revenue >= 1000 ? (revenue/1000).toFixed(0)+"k" : revenue), color: "#3B6FE8" },
-                            { label: "GP",       value: "$" + (gp >= 1000 ? (gp/1000).toFixed(0)+"k" : gp),             color: "#FCD34D" },
-                          ].map(s => (
+                            { label: "GP",       value: "$" + (gp >= 1000 ? (gp/1000).toFixed(0)+"k" : gp), color: "#FCD34D" },
+                          ]).map(s => (
                             <div key={s.label} style={{ textAlign: "center" }}>
                               <div style={{ fontSize: 16, fontWeight: 700, color: s.color }}>{s.value}</div>
                               <div style={{ fontSize: 9, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.06em", marginTop: 2 }}>{s.label}</div>
@@ -6287,7 +6300,11 @@ if(bounds.length)map.fitBounds(bounds,{padding:[30,30]});
             const curYear = now.getFullYear();
             const curMonth = now.getMonth();
             const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-            const myJobs = fmJobs.filter(j => j.pm === selectedCoord || j.coordinator === selectedCoord);
+            const teamMember = fmTeam.find(m=>m.name===selectedCoord);
+            const isMpPM = teamMember && ((teamMember.divisions||[teamMember.division]).includes("major") || teamMember.role?.toLowerCase().includes("project manager"));
+            const myFmJobs = fmJobs.filter(j => j.pm === selectedCoord || j.coordinator === selectedCoord);
+            const myMpJobs = isMpPM ? mpJobs.filter(j => j.pm === selectedCoord) : [];
+            const myJobs   = myFmJobs; // FM dashboard uses FM jobs for charts
 
             // Monthly GP data
             const gpByMonth = Array.from({length:12}, (_,i) => {
@@ -6361,19 +6378,104 @@ if(bounds.length)map.fitBounds(bounds,{padding:[30,30]});
                     <div style={{ width:52, height:52, borderRadius:"50%", background:"#3B6FE820", border:"2px solid #3B6FE840", display:"flex", alignItems:"center", justifyContent:"center", fontSize:20, fontWeight:800, color:"#3B6FE8" }}>{initials}</div>
                     <div>
                       <div style={{ fontSize:22, fontWeight:800, color:"#1A2240" }}>{selectedCoord}</div>
-                      <div style={{ fontSize:11, color:"#4A5278", marginTop:2 }}>{fmTeam.find(m=>m.name===selectedCoord)?.role || "Project Coordinator"} · {myJobs.length} Total Jobs</div>
+                      <div style={{ fontSize:11, color:"#4A5278", marginTop:2 }}>{teamMember?.role || "Project Coordinator"} · {myFmJobs.length} FM Jobs{myMpJobs.length>0?" · "+myMpJobs.length+" MP Projects":""}</div>
                     </div>
                   </div>
                   <button className="btn-ghost" onClick={() => setSelectedCoord(null)} style={{ padding:"8px 16px" }}>← Back to Team</button>
                 </div>
 
-                {/* KPI row */}
+                {/* ── MP PROJECTS SECTION (if MP PM) ── */}
+                {myMpJobs.length > 0 && (
+                  <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
+                    <div style={{ fontSize:12, fontWeight:700, color:"#4A5278", textTransform:"uppercase", letterSpacing:"0.08em" }}>
+                      Major Projects — Assigned
+                    </div>
+                    {/* MP KPI strip */}
+                    <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:12 }}>
+                      {[
+                        { label:"Active Projects", value: myMpJobs.filter(j=>j.status==="active").length, color:"#818CF8" },
+                        { label:"Total Contract",  value: myMpJobs.reduce((s,j)=>s+(j.contractValue||0),0) > 0 ? fmt(myMpJobs.reduce((s,j)=>s+(j.contractValue||0),0)) : "—", color:"#60A5FA" },
+                        { label:"Amount Billed",   value: myMpJobs.reduce((s,j)=>s+(j.amountBilled||0),0) > 0 ? fmt(myMpJobs.reduce((s,j)=>s+(j.amountBilled||0),0)) : "—", color:"#4ADE80" },
+                        { label:"Avg GPM",         value: (() => { const v=myMpJobs.filter(j=>j.gpm); return v.length?(v.reduce((s,j)=>s+j.gpm,0)/v.length*100).toFixed(1)+"%":"—"; })(), color:"#FCD34D" },
+                      ].map(s=>(
+                        <div key={s.label} className="stat-card" style={{ padding:"12px 14px", position:"relative", overflow:"hidden" }}>
+                          <div style={{ position:"absolute", top:0, left:0, right:0, height:3, background:s.color }}/>
+                          <div style={{ fontSize:9, color:"#4A5278", textTransform:"uppercase", letterSpacing:"0.07em", marginBottom:4 }}>{s.label}</div>
+                          <div style={{ fontSize:18, fontWeight:800, color:s.color }}>{s.value}</div>
+                        </div>
+                      ))}
+                    </div>
+                    {/* MP Jobs list */}
+                    <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+                      {myMpJobs.map(job => {
+                        const reports = mpWeeklyReports.filter(r=>r.projectId===job.id).sort((a,b)=>b.reportDate.localeCompare(a.reportDate));
+                        const latest  = reports[0];
+                        const da      = latest?.daysAhead ?? job.daysAhead;
+                        const gpm     = latest?.gpm ?? job.gpm;
+                        const sc      = da===null?"#9BA3BF":da>7?"#4ADE80":da<-7?"#F87171":"#FCD34D";
+                        const billedPct = job.contractValue>0 ? Math.min(100,((job.amountBilled||0)/job.contractValue)*100) : 0;
+                        return (
+                          <div key={job.id}
+                            onClick={()=>{setActiveNav("jobs");setSelectedMpJob(job.id);setMpDetailTab("weekly");}}
+                            style={{ background:"#fff", border:"1px solid #D4D9EE", borderRadius:10, padding:"14px 16px", cursor:"pointer" }}
+                            onMouseEnter={e=>e.currentTarget.style.background="#F5F8FF"}
+                            onMouseLeave={e=>e.currentTarget.style.background="#fff"}>
+                            <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:10 }}>
+                              <div style={{ width:8, height:8, borderRadius:"50%", background:sc, boxShadow:"0 0 0 2px "+sc+"30", flexShrink:0 }}/>
+                              <div style={{ fontSize:14, fontWeight:700, color:"#1A2240", flex:1 }}>{job.name}</div>
+                              <div style={{ display:"flex", gap:16 }}>
+                                <div style={{ textAlign:"center" }}>
+                                  <div style={{ fontSize:14, fontWeight:800, color:sc }}>{da===null?"—":Math.abs(da)+"d "+(da>=0?"▲":"▼")}</div>
+                                  <div style={{ fontSize:9, color:"#9BA3BF", textTransform:"uppercase" }}>Schedule</div>
+                                </div>
+                                <div style={{ textAlign:"center" }}>
+                                  <div style={{ fontSize:14, fontWeight:800, color:"#4ADE80" }}>{gpm?(gpm*100).toFixed(1)+"%":"—"}</div>
+                                  <div style={{ fontSize:9, color:"#9BA3BF", textTransform:"uppercase" }}>GPM</div>
+                                </div>
+                                {job.contractValue>0 && (
+                                  <div style={{ textAlign:"center" }}>
+                                    <div style={{ fontSize:14, fontWeight:800, color:"#60A5FA" }}>{billedPct.toFixed(0)}%</div>
+                                    <div style={{ fontSize:9, color:"#9BA3BF", textTransform:"uppercase" }}>Billed</div>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                            {/* Billing progress bar */}
+                            {job.contractValue > 0 && (
+                              <div style={{ background:"#F0F2F8", borderRadius:4, height:6, overflow:"hidden" }}>
+                                <div style={{ width:billedPct+"%", height:"100%", background:"linear-gradient(90deg,#3B6FE8,#60A5FA)", borderRadius:4, transition:"width 0.3s" }}/>
+                              </div>
+                            )}
+                            {/* Milestones */}
+                            {(job.km1||job.km2||job.km3) && (
+                              <div style={{ display:"flex", gap:8, marginTop:8, flexWrap:"wrap" }}>
+                                {[{l:job.km1,d:job.km1Date,c:"#F87171"},{l:job.km2,d:job.km2Date,c:"#FCD34D"},{l:job.km3,d:job.km3Date,c:"#4ADE80"}].filter(m=>m.l).map((m,i)=>(
+                                  <div key={i} style={{ display:"flex", alignItems:"center", gap:4, fontSize:10, background:m.c+"12", border:"1px solid "+m.c+"30", borderRadius:5, padding:"2px 8px" }}>
+                                    <span style={{ color:m.c }}>◆</span>
+                                    <span style={{ color:"#1A2240" }}>{m.l}</span>
+                                    {m.d && <span style={{ color:"#9BA3BF" }}>· {m.d}</span>}
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                            {latest && <div style={{ fontSize:10, color:"#9BA3BF", marginTop:6 }}>Last report: {latest.reportDate}</div>}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* ── FM KPI row ── */}
+                <div style={{ fontSize:12, fontWeight:700, color:"#4A5278", textTransform:"uppercase", letterSpacing:"0.08em" }}>
+                  {myMpJobs.length>0?"FM Jobs":"Performance"}
+                </div>
                 <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:12 }}>
                   {[
-                    { label:"Total Revenue", value:"$"+Math.round(myJobs.reduce((s,j)=>s+(j.contractValue||0),0)).toLocaleString(), color:"#3B6FE8" },
-                    { label:"Total GP",      value:"$"+Math.round(myJobs.reduce((s,j)=>s+(j.grossProfit||0),0)).toLocaleString(), color:"#4ADE80" },
-                    { label:"Active Jobs",   value:myJobs.filter(j=>["buyout","do_work","bill"].includes(j.stage)).length, color:"#FCD34D" },
-                    { label:"Ready to Bill", value:myJobs.filter(j=>j.stage==="bill").length, color:"#F97316" },
+                    { label:"Total Revenue", value:"$"+Math.round(myFmJobs.reduce((s,j)=>s+(j.contractValue||0),0)).toLocaleString(), color:"#3B6FE8" },
+                    { label:"Total GP",      value:"$"+Math.round(myFmJobs.reduce((s,j)=>s+(j.grossProfit||0),0)).toLocaleString(), color:"#4ADE80" },
+                    { label:"Active Jobs",   value:myFmJobs.filter(j=>["buyout","do_work","bill"].includes(j.stage)).length, color:"#FCD34D" },
+                    { label:"Ready to Bill", value:myFmJobs.filter(j=>j.stage==="bill").length, color:"#F97316" },
                   ].map(s => (
                     <div key={s.label} className="stat-card" style={{ padding:"14px 16px", position:"relative", overflow:"hidden" }}>
                       <div style={{ position:"absolute", top:0, left:0, right:0, height:3, background:s.color }} />
