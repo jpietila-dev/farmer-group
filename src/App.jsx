@@ -1551,6 +1551,233 @@ const dbToMpWeekly = r => ({
   km3: r.km3||"", km3Date: r.km3_date||""
 });
 
+// ── MP Weekly Report Form ────────────────────────────────────────────────────
+const WEEK_ACTIVITIES = [
+  "Masonry","Concrete","Standard Doors","Janus Hallway Systems","Painting and Coating",
+  "Fire Suppression","Fire Detection and Alarm Systems","HVAC","Electrical","Plumbing",
+  "Roofing Systems","Structural Steel Framing","Drywall","Sealants and Caulking",
+  "Fluid Applied Flooring","Floor Grinding","Access Control Systems","Video Surveillance",
+  "Elevators","Lighting Systems","Lockers and Personal Storage Units",
+  "Cleaning and Site Maintenance","Site Preparation and Clearing","Asphalt Paving",
+  "Utility Disconnections and Adjustments","Final Inspections","Certificate of Occupancy",
+  "Punchlist / Change Order Items","Other"
+];
+
+function MpWeeklyForm({ mpJobs, weeklyForm, setWeeklyForm, onClose, onSave, supaUrl, supaKey }) {
+  const W = weeklyForm;
+  const setW = (k,v) => setWeeklyForm(f=>({...f,[k]:v}));
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  const YES_NO  = ["Yes","No","Hold","N/A"];
+  const SAFETY  = [
+    {label:"One ★",   val:"One"},
+    {label:"Two ★★",  val:"Two"},
+    {label:"Three ★★★",val:"Three"},
+    {label:"Four ★★★★",val:"Four"},
+    {label:"Five ★★★★★",val:"Five"},
+  ];
+
+  // Toggle an activity in a newline-delimited string
+  const toggleAct = (field, act) => {
+    const cur = (W[field]||"").split("\n").filter(Boolean);
+    const next = cur.includes(act) ? cur.filter(x=>x!==act) : [...cur, act];
+    setW(field, next.join("\n"));
+  };
+  const selectedActs = (field) => (W[field]||"").split("\n").filter(Boolean);
+
+  const submit = async () => {
+    if (!W.project_id) { setError("Please select a project"); return; }
+    setSaving(true); setError("");
+    const id = "mpw" + Date.now();
+    const row = {
+      id,
+      project_id: W.project_id,
+      report_date: W.report_date || new Date().toISOString().slice(0,10),
+      current_week: W.current_week,
+      next_week: W.next_week,
+      critical_path: W.critical_path,
+      days_ahead: null,
+      completion_schedule: W.completion_schedule,
+      change_order_status: W.change_order_status,
+      budget_status: "",
+      billing_status: W.billing_status,
+      site_safety: W.site_safety,
+      owner_comms: [W.support_needed, W.owner_comms].filter(Boolean).join(" | "),
+      gpm: W.gpm ? parseFloat(W.gpm) : null,
+      long_lead_items: W.long_lead_items,
+      km1: W.km1, km1_date: W.km1_date||null,
+      km2: W.km2, km2_date: W.km2_date||null,
+      km3: W.km3, km3_date: W.km3_date||null,
+    };
+    const res = await fetch(`${supaUrl}/rest/v1/mp_weekly_reports`, {
+      method:"POST",
+      headers:{apikey:supaKey, Authorization:`Bearer ${supaKey}`, "Content-Type":"application/json", Prefer:"resolution=merge-duplicates,return=minimal"},
+      body: JSON.stringify(row)
+    });
+    setSaving(false);
+    if (res.ok || res.status===201 || res.status===204) {
+      onSave(row);
+    } else {
+      const txt = await res.text();
+      setError("Save failed: " + txt.slice(0,120));
+    }
+  };
+
+  const inputStyle = {width:"100%",padding:"10px 12px",border:"1.5px solid #CBD1E8",borderRadius:8,fontSize:13,fontFamily:"Inter,sans-serif",background:"#fff",outline:"none",boxSizing:"border-box"};
+  const selStyle   = {...inputStyle, cursor:"pointer", appearance:"auto"};
+
+  return (
+    <div style={{position:"fixed",inset:0,background:"rgba(10,16,36,0.75)",zIndex:2000,display:"flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(4px)",padding:"16px"}}
+      onClick={e=>e.target===e.currentTarget&&onClose()}>
+      <div style={{background:"#F4F6FB",borderRadius:16,width:"min(640px,100%)",maxHeight:"92vh",display:"flex",flexDirection:"column",boxShadow:"0 12px 60px rgba(0,0,0,0.25)",overflow:"hidden"}}>
+
+        {/* Header */}
+        <div style={{background:"linear-gradient(135deg,#1A2240,#253260)",padding:"20px 24px",flexShrink:0,display:"flex",alignItems:"center",gap:12}}>
+          <div style={{width:38,height:38,background:"rgba(255,255,255,0.12)",borderRadius:9,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>📋</div>
+          <div style={{flex:1}}>
+            <div style={{fontSize:17,fontWeight:800,color:"#fff"}}>MP Construction Meeting</div>
+            <div style={{fontSize:11,color:"rgba(255,255,255,0.45)",marginTop:1}}>Weekly Report Submission</div>
+          </div>
+          <button onClick={onClose} style={{background:"rgba(255,255,255,0.12)",border:"none",color:"rgba(255,255,255,0.8)",borderRadius:6,padding:"5px 12px",cursor:"pointer",fontSize:12,fontFamily:"inherit"}}>✕ Close</button>
+        </div>
+
+        {/* Scrollable body */}
+        <div style={{overflowY:"auto",flex:1,padding:"22px 24px",display:"flex",flexDirection:"column",gap:16}}>
+
+          {/* Project + Date */}
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
+            <div>
+              <div style={{fontSize:12,fontWeight:700,color:"#1A2240",marginBottom:5}}>Project Name <span style={{color:"#F87171"}}>*</span></div>
+              <select value={W.project_id} onChange={e=>setW("project_id",e.target.value)} style={selStyle}>
+                <option value="">Select project…</option>
+                {mpJobs.map(j=><option key={j.id} value={j.id}>{j.name}</option>)}
+              </select>
+            </div>
+            <div>
+              <div style={{fontSize:12,fontWeight:700,color:"#1A2240",marginBottom:5}}>Target Completion Date</div>
+              <input type="date" value={W.report_date||""} onChange={e=>setW("report_date",e.target.value)} style={inputStyle}/>
+            </div>
+          </div>
+
+          <div style={{height:1,background:"#E0E4F0"}}/>
+
+          {/* Activity pill selectors */}
+          {[
+            {label:"Current Week Activities",field:"current_week",required:true},
+            {label:"Next Week Activities",   field:"next_week",   required:true},
+          ].map(af=>(
+            <div key={af.field}>
+              <div style={{fontSize:12,fontWeight:700,color:"#1A2240",marginBottom:4}}>{af.label}{af.required&&<span style={{color:"#F87171"}}> *</span>}</div>
+              <div style={{fontSize:11,color:"#9BA3BF",marginBottom:8}}>Click to select all that apply</div>
+              <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:6}}>
+                {WEEK_ACTIVITIES.map(a=>{
+                  const on = selectedActs(af.field).includes(a);
+                  return (
+                    <button key={a} type="button" onClick={()=>toggleAct(af.field,a)}
+                      style={{padding:"5px 11px",borderRadius:20,border:"1.5px solid "+(on?"#3B6FE8":"#CBD1E8"),background:on?"#3B6FE8":"#fff",color:on?"#fff":"#4A5278",fontSize:11,fontWeight:on?600:400,cursor:"pointer",fontFamily:"inherit",transition:"all 0.1s",lineHeight:1.4}}>
+                      {a}
+                    </button>
+                  );
+                })}
+              </div>
+              {selectedActs(af.field).length>0 && (
+                <div style={{fontSize:11,color:"#3B6FE8",fontWeight:600,padding:"4px 8px",background:"#EEF3FF",borderRadius:5}}>
+                  ✓ {selectedActs(af.field).join(" · ")}
+                </div>
+              )}
+            </div>
+          ))}
+
+          <div style={{height:1,background:"#E0E4F0"}}/>
+
+          {/* Dropdowns grid */}
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
+            {[
+              {label:"Are any of these critical path?",required:true, field:"critical_path", opts:YES_NO},
+              {label:"Change orders pending or approved",              field:"change_order_status", opts:YES_NO},
+              {label:"Long Lead Items",hint:"Items not currently on site",field:"long_lead_items",opts:["Yes — Items Outstanding","No — All Items on Site","N/A"]},
+              {label:"Billing Status",required:true,                  field:"billing_status", opts:YES_NO},
+              {label:"Is your 3 Week schedule complete?",required:true,field:"completion_schedule", opts:YES_NO},
+              {label:"Have you submitted all daily reports?",required:true,field:"daily_reports", opts:YES_NO},
+              {label:"Support Needed from Leadership",                 field:"support_needed", opts:["No Support Needed","Permitting Assistance","Owner Communication","Budget Approval","Change Order Approval","Subcontractor Issue","Other"]},
+            ].map(f=>(
+              <div key={f.field}>
+                <div style={{fontSize:12,fontWeight:700,color:"#1A2240",marginBottom:2}}>{f.label}{f.required&&<span style={{color:"#F87171"}}> *</span>}</div>
+                {f.hint&&<div style={{fontSize:10,color:"#9BA3BF",marginBottom:4}}>{f.hint}</div>}
+                <select value={W[f.field]||""} onChange={e=>setW(f.field,e.target.value)} style={selStyle}>
+                  <option value="">Select…</option>
+                  {f.opts.map(o=><option key={o} value={o}>{o}</option>)}
+                </select>
+              </div>
+            ))}
+
+            {/* Site Safety stars */}
+            <div>
+              <div style={{fontSize:12,fontWeight:700,color:"#1A2240",marginBottom:2}}>Site Cleanliness / Safety <span style={{color:"#F87171"}}>*</span></div>
+              <select value={W.site_safety||""} onChange={e=>setW("site_safety",e.target.value)} style={selStyle}>
+                <option value="">Select…</option>
+                {SAFETY.map(s=><option key={s.val} value={s.val}>{s.label}</option>)}
+              </select>
+            </div>
+
+            {/* GPM */}
+            <div>
+              <div style={{fontSize:12,fontWeight:700,color:"#1A2240",marginBottom:2}}>Current GPM <span style={{color:"#F87171"}}>*</span></div>
+              <div style={{fontSize:10,color:"#9BA3BF",marginBottom:4}}>Decimal format — for 20% enter .20</div>
+              <input type="text" value={W.gpm||""} onChange={e=>setW("gpm",e.target.value)} placeholder="e.g. 0.20" style={inputStyle}/>
+            </div>
+          </div>
+
+          {/* Owner comms */}
+          <div>
+            <div style={{fontSize:12,fontWeight:700,color:"#1A2240",marginBottom:5}}>Next Owner Communications Planned</div>
+            <input type="text" value={W.owner_comms||""} onChange={e=>setW("owner_comms",e.target.value)} placeholder="Date and description of planned communication…" style={inputStyle}/>
+          </div>
+
+          <div style={{height:1,background:"#E0E4F0"}}/>
+
+          {/* Milestones */}
+          <div style={{fontSize:13,fontWeight:700,color:"#1A2240",display:"flex",alignItems:"center",gap:6}}>
+            <span style={{color:"#3B6FE8"}}>◆</span> Key Milestones
+          </div>
+          {[
+            {km:"km1",kd:"km1_date",num:"1",hint:""},
+            {km:"km2",kd:"km2_date",num:"2",hint:"If none, leave blank"},
+            {km:"km3",kd:"km3_date",num:"3",hint:"If none, leave blank"},
+          ].map(m=>(
+            <div key={m.km} style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+              <div>
+                <div style={{fontSize:12,fontWeight:700,color:"#1A2240",marginBottom:2}}>Key Milestone #{m.num}</div>
+                {m.hint&&<div style={{fontSize:10,color:"#9BA3BF",marginBottom:4}}>{m.hint}</div>}
+                <input type="text" value={W[m.km]||""} onChange={e=>setW(m.km,e.target.value)} placeholder="Milestone description…" style={inputStyle}/>
+              </div>
+              <div>
+                <div style={{fontSize:12,fontWeight:700,color:"#1A2240",marginBottom:2}}>Date to complete KM #{m.num}</div>
+                <div style={{fontSize:10,color:"#9BA3BF",marginBottom:4}}>&nbsp;</div>
+                <input type="date" value={W[m.kd]||""} onChange={e=>setW(m.kd,e.target.value)} style={inputStyle}/>
+              </div>
+            </div>
+          ))}
+
+          {error && <div style={{background:"#FEE2E2",border:"1px solid #FECACA",borderRadius:8,padding:"10px 14px",fontSize:12,color:"#DC2626"}}>{error}</div>}
+        </div>
+
+        {/* Footer */}
+        <div style={{padding:"14px 24px",borderTop:"1px solid #D4D9EE",background:"#fff",display:"flex",gap:10,flexShrink:0}}>
+          <button onClick={onClose} style={{flex:1,padding:"11px",background:"#F0F2F8",border:"1px solid #CBD1E8",borderRadius:8,cursor:"pointer",fontFamily:"inherit",fontSize:13,color:"#4A5278",fontWeight:600}}>
+            Cancel
+          </button>
+          <button onClick={submit} disabled={saving}
+            style={{flex:2,padding:"11px",background:saving?"#9BA3BF":"#3B6FE8",border:"none",borderRadius:8,cursor:saving?"not-allowed":"pointer",fontFamily:"inherit",fontSize:14,color:"#fff",fontWeight:700}}>
+            {saving?"Saving…":"Submit Weekly Report"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── MP Billing editable number field ────────────────────────────────────────
 function MpBillingField({ label, value, onSave, fmt }) {
   const [editing, setEditing] = useState(false);
@@ -8186,259 +8413,28 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
       })()}
 
       {/* ── MP WEEKLY REPORT FORM ── */}
-      {showWeeklyForm && (() => {
-        const W = weeklyForm;
-        const setW = (k,v) => setWeeklyForm(f=>({...f,[k]:v}));
-
-        // Current/Next week activity options from your projects
-        const ACTIVITIES = [
-          "","Masonry","Concrete","Standard Doors","Janus Hallway Systems","Painting and Coating",
-          "Fire Suppression","Fire Detection and Alarm Systems","HVAC","Electrical","Plumbing",
-          "Roofing Systems","Structural Steel Framing","Drywall","Sealants and Caulking",
-          "Fluid Applied Flooring","Floor Grinding","Access Control Systems","Video Surveillance",
-          "Elevators","Lighting Systems","Lockers and Personal Storage Units",
-          "Cleaning and Site Maintenance","Site Preparation and Clearing","Asphalt Paving",
-          "Utility Disconnections and Adjustments","Final Inspections","Certificate of Occupancy",
-          "Punchlist / Change Order Items","Other"
-        ];
-        const YES_NO_HOLD = ["","Yes","No","Hold","N/A"];
-        const SAFETY_OPTS = ["","One ★","Two ★★","Three ★★★","Four ★★★★","Five ★★★★★"];
-        const SAFETY_VAL  = {"One ★":"One","Two ★★":"Two","Three ★★★":"Three","Four ★★★★":"Four","Five ★★★★★":"Five"};
-        const LEAD_STATUS = ["","Yes — On Site","No — Ordered","No — Not Yet Ordered","Lead Time Concern"];
-        const SUPPORT_OPTS= ["","No Support Needed","Permitting Assistance","Owner Communication","Budget Approval","Change Order Approval","Subcontractor Issue","Other"];
-
-        // Styled select helper
-        const Sel = ({k, opts, placeholder}) => (
-          <select value={W[k]} onChange={e=>setW(k,e.target.value)}
-            style={{width:"100%",padding:"10px 12px",border:"1.5px solid #CBD1E8",borderRadius:8,fontSize:13,fontFamily:"inherit",background:"#fff",color:W[k]?"#1A2240":"#9BA3BF",outline:"none",appearance:"auto",cursor:"pointer"}}>
-            <option value="">{placeholder||"Select…"}</option>
-            {opts.filter(o=>o).map(o=><option key={o} value={SAFETY_VAL[o]||o}>{o}</option>)}
-          </select>
-        );
-        const TextInp = ({k, placeholder, type="text"}) => (
-          <input type={type} value={W[k]||""} onChange={e=>setW(k,e.target.value)} placeholder={placeholder||""}
-            style={{width:"100%",padding:"10px 12px",border:"1.5px solid #CBD1E8",borderRadius:8,fontSize:13,fontFamily:"inherit",background:"#fff",outline:"none",boxSizing:"border-box"}} />
-        );
-        // Multi-select activity pills
-        const ActivityField = ({k}) => {
-          const selected = (W[k]||"").split("\n").filter(Boolean);
-          const toggle = (act) => {
-            const cur = selected.includes(act) ? selected.filter(x=>x!==act) : [...selected, act];
-            setW(k, cur.join("\n"));
-          };
-          return (
-            <div>
-              <div style={{display:"flex",flexWrap:"wrap",gap:6,marginBottom:8}}>
-                {ACTIVITIES.filter(a=>a).map(a=>(
-                  <button key={a} type="button" onClick={()=>toggle(a)}
-                    style={{padding:"4px 10px",borderRadius:20,border:"1px solid "+(selected.includes(a)?"#3B6FE8":"#CBD1E8"),background:selected.includes(a)?"#3B6FE8":"#fff",color:selected.includes(a)?"#fff":"#4A5278",fontSize:11,fontWeight:selected.includes(a)?600:400,cursor:"pointer",fontFamily:"inherit",transition:"all 0.1s"}}>
-                    {a}
-                  </button>
-                ))}
-              </div>
-              {selected.length>0 && <div style={{fontSize:11,color:"#3B6FE8",fontWeight:600}}>Selected: {selected.join(", ")}</div>}
-            </div>
-          );
-        };
-        const Label = ({text, required, hint}) => (
-          <div style={{marginBottom:6}}>
-            <div style={{fontSize:13,fontWeight:700,color:"#1A2240"}}>{text}{required&&<span style={{color:"#F87171"}}> *</span>}</div>
-            {hint&&<div style={{fontSize:11,color:"#9BA3BF",marginTop:1}}>{hint}</div>}
-          </div>
-        );
-        const FormRow = ({children, cols=1}) => (
-          <div style={{display:"grid",gridTemplateColumns:`repeat(${cols},1fr)`,gap:12}}>
-            {children}
-          </div>
-        );
-        const FormField = ({label, required, hint, children}) => (
-          <div style={{display:"flex",flexDirection:"column",gap:0}}>
-            <Label text={label} required={required} hint={hint}/>
-            {children}
-          </div>
-        );
-
-        const submit = async () => {
-          if (!W.project_id) { alert("Please select a project"); return; }
-          const id = "mpw" + Date.now();
-          const row = {
-            id, project_id: W.project_id, report_date: W.report_date,
-            current_week: W.current_week, next_week: W.next_week,
-            critical_path: W.critical_path,
-            days_ahead: null,
-            completion_schedule: W.completion_schedule,
-            change_order_status: W.change_order_status,
-            budget_status: "",
-            billing_status: W.billing_status,
-            site_safety: W.site_safety,
-            owner_comms: W.support_needed ? W.support_needed+"|"+W.owner_comms : W.owner_comms,
-            gpm: W.gpm ? parseFloat(W.gpm) : null,
-            long_lead_items: W.long_lead_items,
-            long_lead_status: W.long_lead_status,
-            km1: W.km1, km1_date: W.km1_date||null,
-            km2: W.km2, km2_date: W.km2_date||null,
-            km3: W.km3, km3_date: W.km3_date||null,
-          };
-          const res = await fetch(`${SUPA_URL}/rest/v1/mp_weekly_reports`, {
-            method:"POST",
-            headers:{ apikey:SUPA_KEY, Authorization:`Bearer ${SUPA_KEY}`, "Content-Type":"application/json", Prefer:"resolution=merge-duplicates,return=minimal" },
-            body: JSON.stringify(row)
-          });
-          if (res.ok || res.status===201 || res.status===204) {
-            setMpWeeklyReports(prev => [dbToMpWeekly({...row,project_id:row.project_id}), ...prev.filter(r=>r.id!==id)]);
-            const job = mpJobs.find(j=>j.id===W.project_id);
-            if (job) {
-              const updated = {...job,
-                gpm: row.gpm??job.gpm,
-                km1: row.km1||job.km1, km1Date: row.km1_date||job.km1Date,
-                km2: row.km2||job.km2, km2Date: row.km2_date||job.km2Date,
-                km3: row.km3||job.km3, km3Date: row.km3_date||job.km3Date
-              };
-              setMpJobs(prev=>prev.map(j=>j.id===W.project_id?updated:j));
-              supa.from("mp_jobs").update(mpJobToDB(updated)).eq("id",W.project_id);
+      {showWeeklyForm && (
+        <MpWeeklyForm
+          mpJobs={mpJobs}
+          weeklyForm={weeklyForm}
+          setWeeklyForm={setWeeklyForm}
+          onClose={()=>setShowWeeklyForm(false)}
+          onSave={(row)=>{
+            setMpWeeklyReports(prev=>[dbToMpWeekly(row),...prev.filter(r=>r.id!==row.id)]);
+            const job=mpJobs.find(j=>j.id===row.project_id);
+            if(job){
+              const updated={...job,gpm:row.gpm??job.gpm,km1:row.km1||job.km1,km1Date:row.km1_date||job.km1Date,km2:row.km2||job.km2,km2Date:row.km2_date||job.km2Date,km3:row.km3||job.km3,km3Date:row.km3_date||job.km3Date};
+              setMpJobs(prev=>prev.map(j=>j.id===row.project_id?updated:j));
+              supa.from("mp_jobs").update(mpJobToDB(updated)).eq("id",row.project_id);
             }
             setShowWeeklyForm(false);
-            setWeeklyForm(f=>({...f,current_week:"",next_week:"",critical_path:"",change_order_status:"",long_lead_items:"",long_lead_status:"",billing_status:"",gpm:"",completion_schedule:"",daily_reports:"",site_safety:"",support_needed:"",owner_comms:"",km1:"",km1_date:"",km2:"",km2_date:"",km3:"",km3_date:""}));
-          } else {
-            alert("Error saving — check console");
-          }
-        };
+            setWeeklyForm(f=>({...f,current_week:"",next_week:"",critical_path:"",change_order_status:"",long_lead_items:"",billing_status:"",gpm:"",completion_schedule:"",daily_reports:"",site_safety:"",support_needed:"",owner_comms:"",km1:"",km1_date:"",km2:"",km2_date:"",km3:"",km3_date:""}));
+          }}
+          supaUrl={SUPA_URL}
+          supaKey={SUPA_KEY}
+        />
+      )}
 
-        return (
-          <div style={{position:"fixed",inset:0,background:"rgba(10,16,36,0.75)",zIndex:2000,display:"flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(4px)",padding:"16px"}}
-            onClick={e=>e.target===e.currentTarget&&setShowWeeklyForm(false)}>
-            <div style={{background:"#F4F6FB",borderRadius:16,width:"min(620px,100%)",maxHeight:"92vh",display:"flex",flexDirection:"column",boxShadow:"0 12px 60px rgba(0,0,0,0.25)",overflow:"hidden"}}>
-
-              {/* Header */}
-              <div style={{background:"linear-gradient(135deg,#1A2240 0%,#253260 100%)",padding:"20px 24px",flexShrink:0}}>
-                <div style={{display:"flex",alignItems:"center",gap:10}}>
-                  <div style={{width:36,height:36,background:"rgba(255,255,255,0.15)",borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18}}>📋</div>
-                  <div style={{flex:1}}>
-                    <div style={{fontSize:17,fontWeight:800,color:"#fff"}}>MP Construction Meeting</div>
-                    <div style={{fontSize:11,color:"rgba(255,255,255,0.5)",marginTop:1}}>Weekly Report Submission</div>
-                  </div>
-                  <button onClick={()=>setShowWeeklyForm(false)} style={{background:"rgba(255,255,255,0.12)",border:"none",color:"rgba(255,255,255,0.8)",borderRadius:6,padding:"5px 12px",cursor:"pointer",fontSize:12,fontFamily:"inherit"}}>✕</button>
-                </div>
-              </div>
-
-              {/* Scrollable body */}
-              <div style={{overflowY:"auto",flex:1,padding:"20px 24px",display:"flex",flexDirection:"column",gap:16}}>
-
-                {/* Project + Date */}
-                <FormRow cols={2}>
-                  <FormField label="Project Name" required>
-                    <select value={W.project_id} onChange={e=>setW("project_id",e.target.value)}
-                      style={{width:"100%",padding:"10px 12px",border:"1.5px solid #CBD1E8",borderRadius:8,fontSize:13,fontFamily:"inherit",background:"#fff",outline:"none"}}>
-                      <option value="">Select project…</option>
-                      {mpJobs.map(j=><option key={j.id} value={j.id}>{j.name}</option>)}
-                    </select>
-                  </FormField>
-                  <FormField label="Target Completion Date">
-                    <TextInp k="report_date" type="date"/>
-                  </FormField>
-                </FormRow>
-
-                <div style={{height:1,background:"#E0E4F0"}}/>
-
-                {/* Activities */}
-                <FormField label="Current Week Activities" required hint="Select all that apply">
-                  <ActivityField k="current_week"/>
-                </FormField>
-
-                <FormField label="Next Week Activities" required hint="Select all that apply">
-                  <ActivityField k="next_week"/>
-                </FormField>
-
-                <div style={{height:1,background:"#E0E4F0"}}/>
-
-                {/* Status dropdowns — 2 col grid */}
-                <FormRow cols={2}>
-                  <FormField label="Are any of these critical path?" required>
-                    <Sel k="critical_path" opts={YES_NO_HOLD}/>
-                  </FormField>
-                  <FormField label="Change orders pending or approved">
-                    <Sel k="change_order_status" opts={YES_NO_HOLD}/>
-                  </FormField>
-                </FormRow>
-
-                <FormRow cols={2}>
-                  <FormField label="Long Lead Items" hint="All items needed, not currently on site">
-                    <Sel k="long_lead_items" opts={["","Yes — Items Outstanding","No — All Items on Site","N/A"]}/>
-                  </FormField>
-                  <FormField label="Long Lead Item Status">
-                    <Sel k="long_lead_status" opts={LEAD_STATUS}/>
-                  </FormField>
-                </FormRow>
-
-                <FormRow cols={2}>
-                  <FormField label="Billing Status" required>
-                    <Sel k="billing_status" opts={YES_NO_HOLD}/>
-                  </FormField>
-                  <FormField label="Current GPM" required hint="Decimal format: for 20% enter 0.20">
-                    <TextInp k="gpm" placeholder="e.g. 0.20"/>
-                  </FormField>
-                </FormRow>
-
-                <FormRow cols={2}>
-                  <FormField label="Is your 3 Week schedule complete?" required>
-                    <Sel k="completion_schedule" opts={YES_NO_HOLD}/>
-                  </FormField>
-                  <FormField label="Have you submitted all your daily reports?" required>
-                    <Sel k="daily_reports" opts={YES_NO_HOLD}/>
-                  </FormField>
-                </FormRow>
-
-                <FormRow cols={2}>
-                  <FormField label="Site Cleanliness / Safety" required>
-                    <Sel k="site_safety" opts={SAFETY_OPTS}/>
-                  </FormField>
-                  <FormField label="Support Needed from Leadership">
-                    <Sel k="support_needed" opts={SUPPORT_OPTS}/>
-                  </FormField>
-                </FormRow>
-
-                <FormField label="Next Owner Communications Planned">
-                  <TextInp k="owner_comms" placeholder="Date and description…"/>
-                </FormField>
-
-                <div style={{height:1,background:"#E0E4F0"}}/>
-
-                {/* Milestones */}
-                <div style={{fontSize:13,fontWeight:700,color:"#1A2240",display:"flex",alignItems:"center",gap:8}}>
-                  <span style={{fontSize:16}}>◆</span> Key Milestones
-                </div>
-                {[
-                  {km:"km1",kd:"km1_date",num:"1",hint:""},
-                  {km:"km2",kd:"km2_date",num:"2",hint:"If none, leave blank"},
-                  {km:"km3",kd:"km3_date",num:"3",hint:"If none, leave blank"},
-                ].map(m=>(
-                  <FormRow key={m.km} cols={2}>
-                    <FormField label={"Key Milestone #"+m.num} hint={m.hint}>
-                      <TextInp k={m.km} placeholder="Milestone description…"/>
-                    </FormField>
-                    <FormField label={"Date to complete Key Milestone #"+m.num}>
-                      <TextInp k={m.kd} type="date"/>
-                    </FormField>
-                  </FormRow>
-                ))}
-
-              </div>
-
-              {/* Footer */}
-              <div style={{padding:"14px 24px",borderTop:"1px solid #D4D9EE",background:"#fff",display:"flex",gap:10,flexShrink:0}}>
-                <button onClick={()=>setShowWeeklyForm(false)}
-                  style={{flex:1,padding:"11px",background:"#F0F2F8",border:"1px solid #CBD1E8",borderRadius:8,cursor:"pointer",fontFamily:"inherit",fontSize:13,color:"#4A5278",fontWeight:600}}>
-                  Cancel
-                </button>
-                <button onClick={submit}
-                  style={{flex:2,padding:"11px",background:"#3B6FE8",border:"none",borderRadius:8,cursor:"pointer",fontFamily:"inherit",fontSize:14,color:"#fff",fontWeight:700}}>
-                  Submit Weekly Report
-                </button>
-              </div>
-            </div>
-          </div>
-        );
-      })()}
 
 
       {/* ── COMPANY FORM ── */}
