@@ -2012,6 +2012,13 @@ export default function App() {
   const [editMpId,         setEditMpId]         = useState(null);
   const [mpFormData,       setMpFormData]       = useState({});
   const [mpPipelineType,   setMpPipelineType]   = useState("all"); // all | opportunity | budgeting | hard_bid
+  const [mpPipeCompFilter, setMpPipeCompFilter] = useState(null);
+  const [showEmailParse,   setShowEmailParse]   = useState(false);
+  const [emailText,        setEmailText]        = useState("");
+  const [parsedFields,     setParsedFields]     = useState(null);
+  const [showAddCo,        setShowAddCo]        = useState(false);
+  const [newCoName,        setNewCoName]        = useState("");
+  const [newCoContact,     setNewCoContact]     = useState({ firstName:"", lastName:"", title:"", phone:"", email:"" });
   const [mpJobs,           setMpJobs]           = useState([]);
   const [mpWeeklyReports,  setMpWeeklyReports]  = useState([]);
   const [mpDetailTab,      setMpDetailTab]       = useState("weekly");
@@ -2227,7 +2234,7 @@ export default function App() {
     const load = async () => {
       setDbLoading(l => ({ ...l, companies: true, sites: true, lawnSites: true, subcontractors: true }));
       try {
-        const [coRes, siteRes, subRes, fmRes, teamRes, crmRes, ctRes, mpRes, mpwRes] = await Promise.all([
+        const [coRes, siteRes, subRes, fmRes, teamRes, crmRes, ctRes, mpPipeRes, mpRes, mpwRes] = await Promise.all([
           supa.from("companies").select("*"),
           fetch(`${SUPA_URL}/rest/v1/sites?select=*&limit=1000`, {
             headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}` }
@@ -2241,6 +2248,9 @@ export default function App() {
           fetch(`${SUPA_URL}/rest/v1/contacts?select=id,company_id,first_name,last_name,title,email,phone&limit=1000`, {
             headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}` }
           }).then(r => r.json()).then(data => ({ data, error: null })).catch(error => ({ data: null, error })),
+          fetch(`${SUPA_URL}/rest/v1/mp_pipeline?select=*&limit=500`, {
+            headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}` }
+          }).then(r => r.json()).then(data => ({ data, error: null })).catch(() => ({ data: null, error: null })),
           fetch(`${SUPA_URL}/rest/v1/mp_jobs?select=*&limit=100`, {
             headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}` }
           }).then(r => r.json()).then(data => ({ data, error: null })).catch(() => ({ data: null, error: null })),
@@ -2254,6 +2264,18 @@ export default function App() {
         if (fmRes.data?.length)   setFmJobs(fmRes.data.map(dbToFmJob));
         if (teamRes.data?.length) setFmTeam(teamRes.data.map(dbToTeamMember));
         if (crmRes.data?.length)  setCrmContacts(crmRes.data.map(dbToCrmContact));
+        if (Array.isArray(mpPipeRes.data) && mpPipeRes.data.length) {
+          const pipeLoaded = mpPipeRes.data.map(r => ({
+            id: r.id, name: r.name||"", companyId: r.company_id||"", contactName: r.contact_name||"",
+            value: r.value||0, stage: r.stage||"budgeting_lead", notes: r.notes||"",
+            bu: "major", closeDate: r.close_date||"", nextSteps: [],
+            pipelineType: "budgeting", budgetDueDate: "", bidDueDate: "", dbId: r.id
+          }));
+          setPipeline(prev => {
+            const existing = prev.filter(p => p.bu !== "major");
+            return [...existing, ...pipeLoaded];
+          });
+        }
         if (Array.isArray(mpRes.data) && mpRes.data.length) {
           try { setMpJobs(mpRes.data.map(dbToMpJob)); } catch(e) { console.warn("mpJobs map error:", e); }
         }
@@ -4440,93 +4462,322 @@ Return ONLY valid JSON, no markdown, no extra text:
           })()}
           {/* ── BUDGETING ── */}
           {activeNav === "pipeline" && activeBU === "major" && (() => {
-            const PIPE_TYPES = [
-              { id:"opportunity", label:"Opportunity",  color:"#818CF8", icon:"🔍", desc:"Heard about it — need to find out more" },
-              { id:"budgeting",   label:"Budgeting",    color:"#60A5FA", icon:"📧", desc:"Got email/sketch — doing rough numbers" },
-              { id:"hard_bid",    label:"Hard Bid",     color:"#FCD34D", icon:"📋", desc:"Estimating team doing formal estimate" },
+            const MP_STAGES = [
+              { id:"budgeting_lead", label:"Budgeting Lead",  color:"#818CF8", short:"Lead" },
+              { id:"proposal_bid",   label:"Proposal / Bid",  color:"#60A5FA", short:"Bid" },
+              { id:"negotiation",    label:"Negotiation",     color:"#FCD34D", short:"Neg." },
+              { id:"won",            label:"Won",             color:"#4ADE80", short:"Won" },
+              { id:"lost",           label:"Lost",            color:"#F87171", short:"Lost" },
             ];
-            const mpPipeline = pipeline.filter(o => o.bu === "major" && !["Won","Lost"].includes(o.stage));
-            // Group by type
-            const grouped = {};
-            PIPE_TYPES.forEach(t => { grouped[t.id] = mpPipeline.filter(o => (o.pipelineType || "budgeting") === t.id); });
-            const allShown = mpPipelineType === "all" ? mpPipeline : mpPipeline.filter(o => (o.pipelineType || "budgeting") === mpPipelineType);
+            const ACTIVE_STAGES = MP_STAGES.filter(s=>!["won","lost"].includes(s.id));
+
+            // All MP opps (from pipeline state, filtered to major)
+            const mpOpps = pipeline.filter(o => o.bu === "major");
+            const activeOpps = mpOpps.filter(o => !["won","lost"].includes(o.stage||o.pipelineType));
+            const wonOpps  = mpOpps.filter(o => o.stage==="won"  || o.stage==="Won");
+            const lostOpps = mpOpps.filter(o => o.stage==="lost" || o.stage==="Lost");
+
+            // Normalize stage key
+            const getStage = (o) => {
+              const s = o.stage||"budgeting_lead";
+              if (s==="Won") return "won"; if (s==="Lost") return "lost";
+              if (s==="Lead" || s==="Budgeting") return "budgeting_lead";
+              if (s==="Proposal / Bid" || s==="hard_bid") return "proposal_bid";
+              if (s==="Negotiation") return "negotiation";
+              return s;
+            };
+
+            // Unique companies that have opps (for filter)
+            const oppCompanyIds = [...new Set(activeOpps.map(o=>o.companyId).filter(Boolean))];
+            const compFilter = mpPipeCompFilter;
+            const setCompFilter = setMpPipeCompFilter;
+            const dropStage = null; // unused
+            const setDropStage = ()=>{}; // unused
+
+            const filtered = (stageId) => activeOpps
+              .filter(o => getStage(o)===stageId)
+              .filter(o => !compFilter || o.companyId===compFilter);
+
+            const moveOpp = (id, newStage) => {
+              const updated = pipeline.map(o => o.id===id ? {...o, stage:newStage} : o);
+              setPipeline(updated);
+              const opp = updated.find(o=>o.id===id);
+              if (opp?.dbId) supa.from("mp_pipeline").update({stage:newStage}).eq("id",opp.dbId);
+            };
+
+            const saveNewOpp = async (fields) => {
+              const id = Date.now();
+              const entry = { ...fields, id, bu:"major", nextSteps:[] };
+              setPipeline(prev=>[...prev, entry]);
+              // Persist
+              const row = { id:String(id), name:fields.name, company_id:fields.companyId||null, contact_name:fields.contactName||"", value:parseFloat(fields.value)||0, stage:fields.stage||"budgeting_lead", notes:fields.notes||"", bu:"major", close_date:fields.closeDate||null };
+              try { await fetch(\`${SUPA_URL}/rest/v1/mp_pipeline\`, { method:"POST", headers:{apikey:SUPA_KEY,Authorization:\`Bearer ${SUPA_KEY}\`,"Content-Type":"application/json",Prefer:"return=minimal"}, body:JSON.stringify(row) }); } catch(e){}
+            };
+
+            const parseEmail = async () => {
+              if (!emailText.trim()) return;
+              // Use Claude API to parse
+              try {
+                const res = await fetch("https://api.anthropic.com/v1/messages", {
+                  method:"POST",
+                  headers:{"Content-Type":"application/json"},
+                  body:JSON.stringify({
+                    model:"claude-sonnet-4-20250514", max_tokens:500,
+                    system:"Extract project lead info from this email. Return ONLY JSON with keys: name (project name), company (company name), value (dollar amount as number, 0 if unknown), contact_name, contact_email, contact_phone, notes (brief summary), stage (one of: budgeting_lead, proposal_bid, negotiation). No markdown, just JSON.",
+                    messages:[{role:"user",content:emailText}]
+                  })
+                });
+                const data = await res.json();
+                const text = data.content?.[0]?.text||"{}";
+                const parsed = JSON.parse(text.replace(/```json|```/g,"").trim());
+                setParsedFields(parsed);
+              } catch(e) {
+                setParsedFields({ name:"", company:"", value:0, contact_name:"", notes:emailText.slice(0,200) });
+              }
+            };
+
+            const addNewCompany = async () => {
+              if (!newCoName.trim()) return;
+              const id = "c"+Date.now();
+              const co = { id, name:newCoName.trim() };
+              setCompanies(prev=>[...prev,co]);
+              await supa.from("companies").insert({id,name:newCoName.trim()});
+              // Also add contact if provided
+              if (newCoContact.firstName) {
+                const cid="p"+Date.now();
+                const ct={id:cid,company_id:id,first_name:newCoContact.firstName,last_name:newCoContact.lastName,title:newCoContact.title,phone:newCoContact.phone,email:newCoContact.email};
+                setContacts(prev=>[...prev,{id:cid,companyId:id,firstName:newCoContact.firstName,lastName:newCoContact.lastName,title:newCoContact.title,phone:newCoContact.phone,email:newCoContact.email}]);
+                await supa.from("contacts").insert(ct);
+              }
+              setShowAddCo(false); setNewCoName(""); setNewCoContact({firstName:"",lastName:"",title:"",phone:"",email:""});
+              return id;
+            };
 
             return (
               <div className="fade-in" style={{display:"flex",flexDirection:"column",gap:20}}>
                 {/* Header */}
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",flexWrap:"wrap",gap:10}}>
                   <div>
                     <div style={{fontSize:22,fontWeight:800,color:"#1A2240",letterSpacing:"-0.01em",textTransform:"uppercase"}}>MP Pipeline</div>
-                    <div style={{fontSize:11,color:"#4A5278",marginTop:3}}>{mpPipeline.length} opportunities · {fmt(mpPipeline.reduce((s,o)=>s+o.value,0))} total value</div>
-                  </div>
-                  <button className="btn-primary" onClick={() => { setForm({ name:"",companyId:"",contactId:"",value:"",stage:"Lead",pipelineType:"opportunity",closeDate:"",notes:"",bu:"major",budgetDueDate:"",bidDueDate:"",nextSteps:[] }); setShowPipelineForm(true); }}>+ Add Opportunity</button>
-                </div>
-
-                {/* Type KPI cards */}
-                <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:12}}>
-                  {PIPE_TYPES.map(t=>(
-                    <div key={t.id} className="stat-card" style={{padding:16,cursor:"pointer",border:mpPipelineType===t.id?"2px solid "+t.color:"1px solid #E8EBF4",transition:"all 0.15s"}}
-                      onClick={()=>setMpPipelineType(mpPipelineType===t.id?"all":t.id)}>
-                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}>
-                        <div>
-                          <div style={{fontSize:11,fontWeight:700,color:t.color,textTransform:"uppercase",letterSpacing:"0.06em"}}>{t.icon} {t.label}</div>
-                          <div style={{fontSize:10,color:"#4A5278",marginTop:2}}>{t.desc}</div>
-                        </div>
-                        <span style={{fontSize:22,fontWeight:800,color:t.color}}>{grouped[t.id]?.length||0}</span>
-                      </div>
-                      <div style={{fontSize:12,color:"#1A2240",fontWeight:600}}>{fmt(grouped[t.id]?.reduce((s,o)=>s+o.value,0)||0)}</div>
+                    <div style={{fontSize:11,color:"#4A5278",marginTop:3}}>
+                      {activeOpps.length} active · {fmt(activeOpps.reduce((s,o)=>s+(parseFloat(o.value)||0),0))} total value · {wonOpps.length} won
                     </div>
-                  ))}
+                  </div>
+                  <div style={{display:"flex",gap:8}}>
+                    <button className="btn-ghost" onClick={()=>setShowEmailParse(true)} style={{display:"flex",alignItems:"center",gap:5}}>📧 Parse Email</button>
+                    <button className="btn-primary" onClick={()=>{setDropStage("budgeting_lead");setForm({name:"",companyId:"",contactId:"",value:"",stage:"budgeting_lead",pipelineType:"budgeting",closeDate:"",notes:"",bu:"major",budgetDueDate:"",bidDueDate:"",nextSteps:[]});setShowPipelineForm(true);}}>+ Add Opportunity</button>
+                  </div>
                 </div>
 
-                {/* Filter pills */}
-                <div style={{display:"flex",gap:8,alignItems:"center"}}>
-                  <span style={{fontSize:11,color:"#4A5278"}}>Show:</span>
-                  {[{id:"all",label:"All"},...PIPE_TYPES].map(t=>(
-                    <button key={t.id} onClick={()=>setMpPipelineType(t.id)}
-                      style={{padding:"4px 12px",borderRadius:20,border:"1px solid "+(mpPipelineType===t.id?(t.color||"#3B6FE8"):"#CBD1E8"),background:mpPipelineType===t.id?(t.color||"#3B6FE8"):"transparent",color:mpPipelineType===t.id?"#fff":"#4A5278",fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>
-                      {t.label}
-                    </button>
-                  ))}
-                </div>
-
-                {/* Opportunity rows */}
-                {allShown.length===0&&<div style={{textAlign:"center",padding:"48px",color:"#4A5278",fontSize:12,background:"#F5F7FC",borderRadius:10,border:"1px dashed #CBD1E8"}}>No opportunities in this category</div>}
-                <div style={{display:"flex",flexDirection:"column",gap:8}}>
-                  {allShown.map(o=>{
-                    const t = PIPE_TYPES.find(t=>t.id===(o.pipelineType||"budgeting"))||PIPE_TYPES[1];
-                    const co = companies.find(c=>c.id===o.companyId);
-                    const dueDateKey = o.pipelineType==="hard_bid" ? o.bidDueDate : o.budgetDueDate;
-                    const isUrgent = dueDateKey && new Date(dueDateKey) <= new Date(Date.now()+7*86400000);
+                {/* Stage KPI strip */}
+                <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:10}}>
+                  {MP_STAGES.map(s=>{
+                    const grp = s.id==="won"?wonOpps:s.id==="lost"?lostOpps:activeOpps.filter(o=>getStage(o)===s.id);
+                    const val = grp.reduce((t,o)=>t+(parseFloat(o.value)||0),0);
                     return (
-                      <div key={o.id} className="opp-row" style={{cursor:"pointer",borderLeft:"3px solid "+t.color,padding:"14px 16px",display:"flex",alignItems:"center",gap:14}}
-                        onClick={()=>{ /* open pipeline detail */ }}>
-                        <div style={{width:28,height:28,background:t.color+"20",border:"1px solid "+t.color+"50",borderRadius:6,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,flexShrink:0}}>{t.icon}</div>
-                        <div style={{flex:1,minWidth:0}}>
-                          <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
-                            <span style={{fontSize:13,fontWeight:700,color:"#1A2240"}}>{o.name}</span>
-                            <span style={{fontSize:9,fontWeight:700,background:t.color+"20",color:t.color,padding:"2px 6px",borderRadius:3}}>{t.label}</span>
-                            {isUrgent&&<span style={{fontSize:9,fontWeight:700,background:"#F8717120",color:"#F87171",padding:"2px 6px",borderRadius:3}}>⚠ Due Soon</span>}
-                          </div>
-                          <div style={{display:"flex",gap:14,marginTop:4,flexWrap:"wrap"}}>
-                            {co&&<span style={{fontSize:11,color:"#3B6FE8"}}>{co.name}</span>}
-                            {dueDateKey&&<span style={{fontSize:11,color:isUrgent?"#F87171":"#4A5278"}}>📋 {o.pipelineType==="hard_bid"?"Bid":"Budget"}: {dueDateKey}</span>}
-                            {o.notes&&<span style={{fontSize:11,color:"#4A5278",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",maxWidth:300}}>{o.notes}</span>}
-                          </div>
-                        </div>
-                        <div style={{textAlign:"right",flexShrink:0}}>
-                          <div style={{fontSize:14,fontWeight:700,color:"#1A2240"}}>{fmt(o.value)}</div>
-                          {o.closeDate&&<div style={{fontSize:10,color:"#4A5278",marginTop:2}}>Close: {o.closeDate}</div>}
-                        </div>
-                        <div style={{display:"flex",gap:5,flexShrink:0}} onClick={e=>e.stopPropagation()}>
-                          <button className="btn-ghost" style={{fontSize:10,padding:"3px 7px",color:"#4ADE80",borderColor:"#4ADE8030"}} onClick={()=>setPipeline(pipeline.map(p=>p.id===o.id?{...p,stage:"Won"}:p))}>Won</button>
-                          <button className="btn-ghost" style={{fontSize:10,padding:"3px 7px",color:"#F87171",borderColor:"#F8717130"}} onClick={()=>setPipeline(pipeline.map(p=>p.id===o.id?{...p,stage:"Lost"}:p))}>Lost</button>
-                          <button className="btn-ghost" style={{fontSize:10,padding:"3px 7px"}} onClick={()=>{ setEditId(o.id); setForm({...o}); setShowPipelineForm(true); }}>✎</button>
-                        </div>
+                      <div key={s.id} className="stat-card" style={{padding:"12px 14px",position:"relative",overflow:"hidden",cursor:"pointer",border:compFilter?"1px solid #D4D9EE":"1px solid #D4D9EE"}}
+                        onClick={()=>setDropStage(dropStage===s.id?null:s.id)}>
+                        <div style={{position:"absolute",top:0,left:0,right:0,height:3,background:s.color}}/>
+                        <div style={{fontSize:10,color:s.color,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:4}}>{s.label}</div>
+                        <div style={{fontSize:20,fontWeight:800,color:"#1A2240"}}>{grp.length}</div>
+                        <div style={{fontSize:11,color:"#4A5278",marginTop:2}}>{val>0?fmt(val):"—"}</div>
                       </div>
                     );
                   })}
                 </div>
+
+                {/* Customer filter + Add Company */}
+                <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+                  <span style={{fontSize:11,color:"#4A5278",fontWeight:600}}>Filter by customer:</span>
+                  <button onClick={()=>setCompFilter(null)}
+                    style={{padding:"4px 12px",borderRadius:20,border:"1px solid "+(compFilter===null?"#3B6FE8":"#CBD1E8"),background:compFilter===null?"#3B6FE8":"transparent",color:compFilter===null?"#fff":"#4A5278",fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>
+                    All
+                  </button>
+                  {oppCompanyIds.map(cid=>{
+                    const co=companies.find(c=>c.id===cid);
+                    if(!co) return null;
+                    return (
+                      <button key={cid} onClick={()=>setCompFilter(compFilter===cid?null:cid)}
+                        style={{padding:"4px 12px",borderRadius:20,border:"1px solid "+(compFilter===cid?"#3B6FE8":"#CBD1E8"),background:compFilter===cid?"#3B6FE8":"transparent",color:compFilter===cid?"#fff":"#4A5278",fontSize:11,fontWeight:500,cursor:"pointer",fontFamily:"inherit"}}>
+                        {co.name}
+                      </button>
+                    );
+                  })}
+                  <button onClick={()=>setShowAddCo(true)}
+                    style={{padding:"4px 12px",borderRadius:20,border:"1px dashed #CBD1E8",background:"transparent",color:"#9BA3BF",fontSize:11,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",gap:4}}>
+                    + Add Customer
+                  </button>
+                </div>
+
+                {/* Kanban columns */}
+                <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:14}}>
+                  {ACTIVE_STAGES.map(stage=>{
+                    const opps=filtered(stage.id);
+                    return (
+                      <div key={stage.id} style={{display:"flex",flexDirection:"column",gap:8}}>
+                        {/* Column header */}
+                        <div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 0",borderBottom:"2px solid "+stage.color}}>
+                          <div style={{fontSize:12,fontWeight:700,color:"#1A2240",flex:1}}>{stage.label}</div>
+                          <span style={{fontSize:10,fontWeight:700,color:stage.color,background:stage.color+"15",border:"1px solid "+stage.color+"40",borderRadius:10,padding:"1px 8px"}}>{opps.length}</span>
+                          <button onClick={()=>{setDropStage(stage.id);setForm({name:"",companyId:"",contactId:"",value:"",stage:stage.id,pipelineType:"budgeting",closeDate:"",notes:"",bu:"major",budgetDueDate:"",bidDueDate:"",nextSteps:[]});setShowPipelineForm(true);}}
+                            style={{background:"none",border:"none",color:stage.color,cursor:"pointer",fontSize:16,padding:"0 2px",fontWeight:700}}>+</button>
+                        </div>
+                        {/* Cards */}
+                        {opps.length===0 && <div style={{textAlign:"center",padding:"24px 12px",color:"#CBD1E8",fontSize:11,border:"1px dashed #E0E4F0",borderRadius:8,background:"#FAFBFD"}}>Drop here</div>}
+                        {opps.map(o=>{
+                          const co=companies.find(c=>c.id===o.companyId);
+                          const stageObj=MP_STAGES.find(s=>s.id===getStage(o))||stage;
+                          return (
+                            <div key={o.id} style={{background:"#fff",borderRadius:10,border:"1px solid #D4D9EE",boxShadow:"0 1px 4px rgba(0,0,0,0.04)",overflow:"hidden"}}>
+                              <div style={{height:3,background:stageObj.color}}/>
+                              <div style={{padding:"12px 14px"}}>
+                                <div style={{fontSize:13,fontWeight:700,color:"#1A2240",marginBottom:4,lineHeight:1.3}}>{o.name}</div>
+                                {co && <div style={{fontSize:11,color:"#3B6FE8",marginBottom:6,fontWeight:500}}>{co.name}</div>}
+                                {o.contactName && <div style={{fontSize:11,color:"#4A5278",marginBottom:4}}>👤 {o.contactName}</div>}
+                                {(parseFloat(o.value)||0)>0 && <div style={{fontSize:14,fontWeight:800,color:"#1A2240",marginBottom:6}}>{fmt(parseFloat(o.value))}</div>}
+                                {o.notes && <div style={{fontSize:11,color:"#4A5278",marginBottom:8,lineHeight:1.5,borderLeft:"2px solid #E0E4F0",paddingLeft:8}}>{o.notes}</div>}
+                                {o.closeDate && <div style={{fontSize:10,color:"#9BA3BF",marginBottom:8}}>📅 Close: {o.closeDate}</div>}
+                                {/* Stage move + actions */}
+                                <div style={{display:"flex",gap:5,flexWrap:"wrap",paddingTop:8,borderTop:"1px solid #F0F2F8"}}>
+                                  {ACTIVE_STAGES.filter(s=>s.id!==getStage(o)).map(s=>(
+                                    <button key={s.id} onClick={()=>moveOpp(o.id,s.id)}
+                                      style={{padding:"2px 8px",borderRadius:4,border:"1px solid "+s.color+"50",background:s.color+"12",color:s.color,fontSize:10,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>
+                                      → {s.short}
+                                    </button>
+                                  ))}
+                                  <div style={{flex:1}}/>
+                                  <button onClick={()=>moveOpp(o.id,"won")} style={{padding:"2px 8px",borderRadius:4,border:"1px solid #4ADE8050",background:"#4ADE8015",color:"#4ADE80",fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>✓ Won</button>
+                                  <button onClick={()=>moveOpp(o.id,"lost")} style={{padding:"2px 8px",borderRadius:4,border:"1px solid #F8717150",background:"#F8717115",color:"#F87171",fontSize:10,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>✗ Lost</button>
+                                  <button onClick={()=>{setEditId(o.id);setForm({...o,stage:getStage(o)});setShowPipelineForm(true);}} style={{background:"none",border:"1px solid #E0E4F0",borderRadius:4,color:"#9BA3BF",fontSize:11,cursor:"pointer",padding:"2px 6px",fontFamily:"inherit"}}>✎</button>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Won / Lost summary */}
+                {(wonOpps.length>0||lostOpps.length>0) && (
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
+                    {[{label:"Won",opps:wonOpps,color:"#4ADE80"},{label:"Lost",opps:lostOpps,color:"#F87171"}].map(({label,opps,color})=>(
+                      <div key={label} style={{background:"#fff",borderRadius:10,border:"1px solid #D4D9EE",overflow:"hidden"}}>
+                        <div style={{padding:"10px 14px",borderBottom:"1px solid #D4D9EE",display:"flex",alignItems:"center",gap:8,background:"#F9FAFC"}}>
+                          <div style={{fontSize:11,fontWeight:700,color,textTransform:"uppercase",letterSpacing:"0.07em",flex:1}}>{label} ({opps.length})</div>
+                          <div style={{fontSize:12,fontWeight:700,color}}>{fmt(opps.reduce((s,o)=>s+(parseFloat(o.value)||0),0))}</div>
+                        </div>
+                        {opps.map(o=>{
+                          const co=companies.find(c=>c.id===o.companyId);
+                          return (
+                            <div key={o.id} style={{padding:"8px 14px",borderBottom:"1px solid #F4F6FB",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                              <div>
+                                <div style={{fontSize:12,fontWeight:600,color:"#1A2240"}}>{o.name}</div>
+                                {co && <div style={{fontSize:10,color:"#9BA3BF"}}>{co.name}</div>}
+                              </div>
+                              <div style={{fontSize:12,fontWeight:700,color:"#1A2240"}}>{fmt(parseFloat(o.value)||0)}</div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* ── EMAIL PARSE MODAL ── */}
+                {showEmailParse && (
+                  <div style={{position:"fixed",inset:0,background:"rgba(10,16,36,0.7)",zIndex:2100,display:"flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(3px)",padding:20}}>
+                    <div style={{background:"#fff",borderRadius:14,width:"min(600px,100%)",maxHeight:"85vh",display:"flex",flexDirection:"column",boxShadow:"0 12px 60px rgba(0,0,0,0.25)",overflow:"hidden"}}>
+                      <div style={{background:"linear-gradient(135deg,#1A2240,#253260)",padding:"18px 22px",color:"#fff",flexShrink:0,display:"flex",alignItems:"center",gap:10}}>
+                        <div style={{fontSize:16,fontWeight:800,flex:1}}>📧 Parse Email into Opportunity</div>
+                        <button onClick={()=>{setShowEmailParse(false);setEmailText("");setParsedFields(null);}} style={{background:"rgba(255,255,255,0.12)",border:"none",color:"#fff",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontSize:12,fontFamily:"inherit"}}>✕</button>
+                      </div>
+                      <div style={{padding:"18px 22px",flex:1,overflowY:"auto",display:"flex",flexDirection:"column",gap:14}}>
+                        <div>
+                          <div style={{fontSize:12,fontWeight:700,color:"#1A2240",marginBottom:6}}>Paste email content</div>
+                          <textarea value={emailText} onChange={e=>setEmailText(e.target.value)} rows={8} placeholder="Paste the full email here — subject, body, any details about the project…"
+                            style={{width:"100%",padding:"10px 12px",border:"1.5px solid #CBD1E8",borderRadius:8,fontSize:13,fontFamily:"inherit",resize:"vertical",outline:"none",boxSizing:"border-box"}}/>
+                        </div>
+                        <button onClick={parseEmail} style={{padding:"10px",background:"#3B6FE8",border:"none",borderRadius:8,color:"#fff",fontWeight:700,cursor:"pointer",fontFamily:"inherit",fontSize:13}}>
+                          ✨ Parse with AI
+                        </button>
+                        {parsedFields && (
+                          <div style={{background:"#F4F6FB",borderRadius:10,border:"1px solid #D4D9EE",padding:"14px 16px",display:"flex",flexDirection:"column",gap:10}}>
+                            <div style={{fontSize:12,fontWeight:700,color:"#1A2240",marginBottom:4}}>Parsed Fields — edit before saving</div>
+                            {[
+                              {label:"Project Name", key:"name", type:"text"},
+                              {label:"Company",      key:"company", type:"text"},
+                              {label:"Contact Name", key:"contact_name", type:"text"},
+                              {label:"Value ($)",    key:"value", type:"number"},
+                              {label:"Notes",        key:"notes", type:"text"},
+                            ].map(f=>(
+                              <div key={f.key}>
+                                <div style={{fontSize:10,color:"#9BA3BF",textTransform:"uppercase",marginBottom:3}}>{f.label}</div>
+                                <input type={f.type} value={parsedFields[f.key]||""} onChange={e=>setParsedFields(p=>({...p,[f.key]:e.target.value}))}
+                                  style={{width:"100%",padding:"7px 10px",border:"1px solid #CBD1E8",borderRadius:6,fontSize:13,fontFamily:"inherit",outline:"none",boxSizing:"border-box"}}/>
+                              </div>
+                            ))}
+                            <div>
+                              <div style={{fontSize:10,color:"#9BA3BF",textTransform:"uppercase",marginBottom:3}}>Stage</div>
+                              <select value={parsedFields.stage||"budgeting_lead"} onChange={e=>setParsedFields(p=>({...p,stage:e.target.value}))}
+                                style={{width:"100%",padding:"7px 10px",border:"1px solid #CBD1E8",borderRadius:6,fontSize:13,fontFamily:"inherit",outline:"none"}}>
+                                {ACTIVE_STAGES.map(s=><option key={s.id} value={s.id}>{s.label}</option>)}
+                              </select>
+                            </div>
+                            <button onClick={async ()=>{
+                              // Match or create company
+                              let coId = companies.find(c=>c.name.toLowerCase()===( parsedFields.company||"").toLowerCase())?.id;
+                              if (!coId && parsedFields.company) {
+                                coId = "c"+Date.now();
+                                setCompanies(prev=>[...prev,{id:coId,name:parsedFields.company}]);
+                                await supa.from("companies").insert({id:coId,name:parsedFields.company});
+                              }
+                              await saveNewOpp({ name:parsedFields.name||"Untitled", companyId:coId||"", contactName:parsedFields.contact_name||"", value:parsedFields.value||0, stage:parsedFields.stage||"budgeting_lead", notes:parsedFields.notes||"", closeDate:"" });
+                              setShowEmailParse(false); setEmailText(""); setParsedFields(null);
+                            }} style={{padding:"10px",background:"#4ADE80",border:"none",borderRadius:8,color:"#fff",fontWeight:700,cursor:"pointer",fontFamily:"inherit",fontSize:13}}>
+                              ✓ Add to Pipeline
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* ── ADD CUSTOMER MODAL ── */}
+                {showAddCo && (
+                  <div style={{position:"fixed",inset:0,background:"rgba(10,16,36,0.7)",zIndex:2100,display:"flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(3px)",padding:20}}>
+                    <div style={{background:"#fff",borderRadius:14,width:"min(480px,100%)",boxShadow:"0 12px 60px rgba(0,0,0,0.25)",overflow:"hidden"}}>
+                      <div style={{background:"linear-gradient(135deg,#1A2240,#253260)",padding:"18px 22px",color:"#fff",display:"flex",alignItems:"center",gap:10}}>
+                        <div style={{fontSize:15,fontWeight:800,flex:1}}>+ Add Customer</div>
+                        <button onClick={()=>setShowAddCo(false)} style={{background:"rgba(255,255,255,0.12)",border:"none",color:"#fff",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontSize:12,fontFamily:"inherit"}}>✕</button>
+                      </div>
+                      <div style={{padding:"18px 22px",display:"flex",flexDirection:"column",gap:12}}>
+                        <div>
+                          <div style={{fontSize:12,fontWeight:700,color:"#1A2240",marginBottom:5}}>Company Name *</div>
+                          <input value={newCoName} onChange={e=>setNewCoName(e.target.value)} placeholder="e.g. ABC Storage"
+                            style={{width:"100%",padding:"9px 12px",border:"1.5px solid #CBD1E8",borderRadius:7,fontSize:13,fontFamily:"inherit",outline:"none",boxSizing:"border-box"}}/>
+                        </div>
+                        <div style={{fontSize:12,fontWeight:700,color:"#4A5278",marginTop:4}}>Primary Contact (optional)</div>
+                        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+                          {[{label:"First Name",key:"firstName"},{label:"Last Name",key:"lastName"},{label:"Title",key:"title"},{label:"Phone",key:"phone"},{label:"Email",key:"email"}].map(f=>(
+                            <div key={f.key} style={{gridColumn:f.key==="email"?"span 2":"auto"}}>
+                              <div style={{fontSize:10,color:"#9BA3BF",marginBottom:3}}>{f.label}</div>
+                              <input value={newCoContact[f.key]||""} onChange={e=>setNewCoContact(p=>({...p,[f.key]:e.target.value}))} placeholder={f.label}
+                                style={{width:"100%",padding:"7px 10px",border:"1px solid #CBD1E8",borderRadius:6,fontSize:12,fontFamily:"inherit",outline:"none",boxSizing:"border-box"}}/>
+                            </div>
+                          ))}
+                        </div>
+                        <div style={{display:"flex",gap:8,marginTop:4}}>
+                          <button onClick={()=>setShowAddCo(false)} style={{flex:1,padding:"10px",background:"#F0F2F8",border:"1px solid #CBD1E8",borderRadius:7,cursor:"pointer",fontFamily:"inherit",fontSize:13,color:"#4A5278"}}>Cancel</button>
+                          <button onClick={addNewCompany} style={{flex:2,padding:"10px",background:"#3B6FE8",border:"none",borderRadius:7,cursor:"pointer",fontFamily:"inherit",fontSize:13,color:"#fff",fontWeight:700}}>Add Customer</button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
               </div>
             );
           })()}
