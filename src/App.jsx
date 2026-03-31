@@ -2017,6 +2017,9 @@ export default function App() {
   const [emailText,        setEmailText]        = useState("");
   const [parsedFields,     setParsedFields]     = useState(null);
   const [showAddCo,        setShowAddCo]        = useState(false);
+  const [showWonConvert,   setShowWonConvert]   = useState(false);
+  const [wonConvertOpp,    setWonConvertOpp]    = useState(null);
+  const [wonConvertForm,   setWonConvertForm]   = useState({ startDate:"", endDate:"", contractValue:"", pm:"", notes:"" });
   const [newCoName,        setNewCoName]        = useState("");
   const [newCoContact,     setNewCoContact]     = useState({ firstName:"", lastName:"", title:"", phone:"", email:"" });
   const [mpJobs,           setMpJobs]           = useState([]);
@@ -4564,8 +4567,8 @@ Return ONLY valid JSON, no markdown, no extra text:
                     </div>
                   </div>
                   <div style={{display:"flex",gap:8}}>
-                    <button className="btn-ghost" onClick={()=>setShowEmailParse(true)} style={{display:"flex",alignItems:"center",gap:5}}>📧 Parse Email</button>
-                    <button className="btn-primary" onClick={()=>{setDropStage("budgeting_lead");setForm({name:"",companyId:"",contactId:"",value:"",stage:"budgeting_lead",pipelineType:"budgeting",closeDate:"",notes:"",bu:"major",budgetDueDate:"",bidDueDate:"",nextSteps:[]});setShowPipelineForm(true);}}>+ Add Opportunity</button>
+                    <button className="btn-ghost" onClick={()=>{setEmailText("");setParsedFields(null);setShowEmailParse(true);}} style={{display:"flex",alignItems:"center",gap:5}}>📧 Parse Email</button>
+                    <button className="btn-primary" onClick={()=>{setDropStage("budgeting_lead");setForm({name:"",companyId:"",contactId:"",value:"",stage:"budgeting_lead",pipelineType:"budgeting",closeDate:"",notes:"",bu:"major",budgetDueDate:"",bidDueDate:"",nextSteps:[]});setShowForm(true);}}>+ Add Opportunity</button>
                   </div>
                 </div>
 
@@ -4619,7 +4622,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                         <div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 0",borderBottom:"2px solid "+stage.color}}>
                           <div style={{fontSize:12,fontWeight:700,color:"#1A2240",flex:1}}>{stage.label}</div>
                           <span style={{fontSize:10,fontWeight:700,color:stage.color,background:stage.color+"15",border:"1px solid "+stage.color+"40",borderRadius:10,padding:"1px 8px"}}>{opps.length}</span>
-                          <button onClick={()=>{setDropStage(stage.id);setForm({name:"",companyId:"",contactId:"",value:"",stage:stage.id,pipelineType:"budgeting",closeDate:"",notes:"",bu:"major",budgetDueDate:"",bidDueDate:"",nextSteps:[]});setShowPipelineForm(true);}}
+                          <button onClick={()=>{setDropStage(stage.id);setForm({name:"",companyId:"",contactId:"",value:"",stage:stage.id,pipelineType:"budgeting",closeDate:"",notes:"",bu:"major",budgetDueDate:"",bidDueDate:"",nextSteps:[]});setShowForm(true);}}
                             style={{background:"none",border:"none",color:stage.color,cursor:"pointer",fontSize:16,padding:"0 2px",fontWeight:700}}>+</button>
                         </div>
                         {/* Cards */}
@@ -4646,9 +4649,9 @@ Return ONLY valid JSON, no markdown, no extra text:
                                     </button>
                                   ))}
                                   <div style={{flex:1}}/>
-                                  <button onClick={()=>moveOpp(o.id,"won")} style={{padding:"2px 8px",borderRadius:4,border:"1px solid #4ADE8050",background:"#4ADE8015",color:"#4ADE80",fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>✓ Won</button>
+                                  <button onClick={()=>{setWonConvertOpp(o);setWonConvertForm({startDate:"",endDate:"",contractValue:o.value||"",pm:"",notes:o.notes||""});setShowWonConvert(true);}} style={{padding:"2px 8px",borderRadius:4,border:"1px solid #4ADE8050",background:"#4ADE8015",color:"#4ADE80",fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>✓ Won</button>
                                   <button onClick={()=>moveOpp(o.id,"lost")} style={{padding:"2px 8px",borderRadius:4,border:"1px solid #F8717150",background:"#F8717115",color:"#F87171",fontSize:10,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>✗ Lost</button>
-                                  <button onClick={()=>{setEditId(o.id);setForm({...o,stage:getStage(o)});setShowPipelineForm(true);}} style={{background:"none",border:"1px solid #E0E4F0",borderRadius:4,color:"#9BA3BF",fontSize:11,cursor:"pointer",padding:"2px 6px",fontFamily:"inherit"}}>✎</button>
+                                  <button onClick={()=>{setEditId(o.id);setForm({...o,stage:getStage(o)});setShowForm(true);}} style={{background:"none",border:"1px solid #E0E4F0",borderRadius:4,color:"#9BA3BF",fontSize:11,cursor:"pointer",padding:"2px 6px",fontFamily:"inherit"}}>✎</button>
                                 </div>
                               </div>
                             </div>
@@ -8759,6 +8762,133 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
                   </div>
                 )}
 
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* ── WON → CONVERT TO ACTIVE PROJECT ── */}
+      {showWonConvert && wonConvertOpp && (() => {
+        const opp = wonConvertOpp;
+        const co  = companies.find(c => c.id === opp.companyId);
+        const mpTeam = fmTeam.filter(t => (t.divisions||[t.division]).includes("major") || t.role?.toLowerCase().includes("project manager"));
+        const W = wonConvertForm;
+        const setW = (k,v) => setWonConvertForm(f=>({...f,[k]:v}));
+
+        const confirm = async () => {
+          // 1. Mark opp as won
+          moveOpp(opp.id, "won");
+          // 2. Create mp_job
+          import("https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm").catch(()=>{});
+          const jobId = "mp" + Date.now();
+          const newJob = {
+            id: jobId,
+            name: opp.name,
+            client: co?.name || "",
+            status: "active",
+            contract_value: parseFloat(W.contractValue) || null,
+            start_date: W.startDate || null,
+            end_date: W.endDate || null,
+            pm: W.pm || null,
+            pct: 0,
+            days_ahead: null,
+            completion_schedule: null,
+            change_order_status: null,
+            budget_status: null,
+            billing_status: null,
+            gpm: null,
+            long_lead_items: null,
+            km1: null, km1_date: null,
+            km2: null, km2_date: null,
+            km3: null, km3_date: null,
+            notes: W.notes || null,
+            amount_billed: 0,
+          };
+          // Add to local state
+          setMpJobs(prev => [...prev, {
+            id: jobId, name: opp.name, client: co?.name||"", status:"active",
+            contractValue: parseFloat(W.contractValue)||0, startDate: W.startDate||"",
+            endDate: W.endDate||"", pm: W.pm||"", pct:0, daysAhead:null,
+            completionSchedule:"", changeOrderStatus:"", budgetStatus:"",
+            billingStatus:"", gpm:0, longLeadItems:"",
+            km1:"",km1Date:"",km2:"",km2Date:"",km3:"",km3Date:"",
+            notes:W.notes||"", amountBilled:0,
+          }]);
+          // Save to Supabase
+          try {
+            await fetch(`${SUPA_URL}/rest/v1/mp_jobs`, {
+              method:"POST",
+              headers:{ apikey:SUPA_KEY, Authorization:`Bearer ${SUPA_KEY}`, "Content-Type":"application/json", Prefer:"return=minimal" },
+              body: JSON.stringify(newJob)
+            });
+            // Also save won status to mp_pipeline
+            await fetch(`${SUPA_URL}/rest/v1/mp_pipeline?id=eq.${String(opp.id)}`, {
+              method:"PATCH",
+              headers:{ apikey:SUPA_KEY, Authorization:`Bearer ${SUPA_KEY}`, "Content-Type":"application/json", Prefer:"return=minimal" },
+              body: JSON.stringify({ stage:"won" })
+            });
+          } catch(e) { console.error("Save error:", e); }
+
+          setShowWonConvert(false);
+          setWonConvertOpp(null);
+          // Navigate to the new project
+          setActiveNav("jobs");
+          setSelectedMpJob(jobId);
+          setMpDetailTab("gantt");
+        };
+
+        const inp = (label, key, type="text", hint) => (
+          <div>
+            <div style={{fontSize:12,fontWeight:700,color:"#1A2240",marginBottom:hint?2:5}}>{label}</div>
+            {hint && <div style={{fontSize:10,color:"#9BA3BF",marginBottom:4}}>{hint}</div>}
+            <input type={type} value={W[key]||""} onChange={e=>setW(key,e.target.value)}
+              style={{width:"100%",padding:"9px 12px",border:"1.5px solid #CBD1E8",borderRadius:7,fontSize:13,fontFamily:"inherit",outline:"none",boxSizing:"border-box"}}/>
+          </div>
+        );
+
+        return (
+          <div style={{position:"fixed",inset:0,background:"rgba(10,16,36,0.75)",zIndex:2200,display:"flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(4px)",padding:16}}>
+            <div style={{background:"#fff",borderRadius:16,width:"min(500px,100%)",boxShadow:"0 12px 60px rgba(0,0,0,0.25)",overflow:"hidden"}}>
+              {/* Header */}
+              <div style={{background:"linear-gradient(135deg,#065F46,#059669)",padding:"20px 24px",color:"#fff"}}>
+                <div style={{fontSize:11,color:"rgba(255,255,255,0.6)",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:4}}>🎉 Opportunity Won</div>
+                <div style={{fontSize:18,fontWeight:800}}>{opp.name}</div>
+                {co && <div style={{fontSize:12,color:"rgba(255,255,255,0.7)",marginTop:2}}>{co.name}</div>}
+              </div>
+
+              {/* Body */}
+              <div style={{padding:"22px 24px",display:"flex",flexDirection:"column",gap:14}}>
+                <div style={{fontSize:13,color:"#4A5278",borderLeft:"3px solid #4ADE80",paddingLeft:12,lineHeight:1.6}}>
+                  This will create a new <strong>Active Project</strong> in MP. Fill in the details below — all fields can be edited later.
+                </div>
+
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+                  {inp("Start Date",    "startDate",    "date")}
+                  {inp("End Date",      "endDate",      "date")}
+                  {inp("Contract Value ($)", "contractValue", "number", "Confirm or update the contract amount")}
+                  <div>
+                    <div style={{fontSize:12,fontWeight:700,color:"#1A2240",marginBottom:5}}>Project Manager</div>
+                    <select value={W.pm||""} onChange={e=>setW("pm",e.target.value)}
+                      style={{width:"100%",padding:"9px 12px",border:"1.5px solid #CBD1E8",borderRadius:7,fontSize:13,fontFamily:"inherit",outline:"none",background:"#fff"}}>
+                      <option value="">— Assign PM —</option>
+                      {mpTeam.map(t=><option key={t.id} value={t.name}>{t.name}</option>)}
+                    </select>
+                  </div>
+                </div>
+                {inp("Notes", "notes", "text")}
+              </div>
+
+              {/* Footer */}
+              <div style={{padding:"14px 24px",borderTop:"1px solid #D4D9EE",display:"flex",gap:10,background:"#F9FAFC"}}>
+                <button onClick={()=>{setShowWonConvert(false);setWonConvertOpp(null);}}
+                  style={{flex:1,padding:"10px",background:"#F0F2F8",border:"1px solid #CBD1E8",borderRadius:8,cursor:"pointer",fontFamily:"inherit",fontSize:13,color:"#4A5278",fontWeight:600}}>
+                  Cancel
+                </button>
+                <button onClick={confirm}
+                  style={{flex:2,padding:"10px",background:"#059669",border:"none",borderRadius:8,cursor:"pointer",fontFamily:"inherit",fontSize:14,color:"#fff",fontWeight:700,display:"flex",alignItems:"center",justifyContent:"center",gap:8}}>
+                  ✓ Confirm Won — Create Active Project
+                </button>
               </div>
             </div>
           </div>
