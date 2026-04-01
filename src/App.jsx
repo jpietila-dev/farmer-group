@@ -2761,7 +2761,8 @@ Return ONLY valid JSON, no markdown, no extra text:
   };
 
   // ── Customer Picker ────────────────────────────────────────────────────────
-  const CustomerPicker = ({ companyId, contactId, onCompanyChange, onContactChange }) => {
+  // eslint-disable-next-line react/display-name
+  const CustomerPicker = React.memo(({ companyId, contactId, onCompanyChange, onContactChange }) => {
     const compContacts = contacts.filter(p => p.companyId === companyId);
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -2819,7 +2820,7 @@ Return ONLY valid JSON, no markdown, no extra text:
         )}
       </div>
     );
-  };
+  });
 
   // ── CSS ────────────────────────────────────────────────────────────────────
   const CSS = `
@@ -4466,7 +4467,8 @@ Return ONLY valid JSON, no markdown, no extra text:
           {/* ── BUDGETING ── */}
           {activeNav === "pipeline" && activeBU === "major" && (() => {
             const MP_STAGES = [
-              { id:"budgeting_lead", label:"Budgeting Lead",  color:"#818CF8", short:"Lead" },
+              { id:"lead",           label:"Lead",            color:"#A78BFA", short:"Lead" },
+              { id:"budgeting_lead", label:"Budgeting Lead",  color:"#818CF8", short:"Budget" },
               { id:"proposal_bid",   label:"Proposal / Bid",  color:"#60A5FA", short:"Bid" },
               { id:"negotiation",    label:"Negotiation",     color:"#FCD34D", short:"Neg." },
               { id:"won",            label:"Won",             color:"#4ADE80", short:"Won" },
@@ -4484,9 +4486,10 @@ Return ONLY valid JSON, no markdown, no extra text:
             const getStage = (o) => {
               const s = o.stage||"budgeting_lead";
               if (s==="Won") return "won"; if (s==="Lost") return "lost";
-              if (s==="Lead" || s==="Budgeting") return "budgeting_lead";
-              if (s==="Proposal / Bid" || s==="hard_bid") return "proposal_bid";
-              if (s==="Negotiation") return "negotiation";
+              if (s==="Budgeting" || s==="budgeting_lead") return "budgeting_lead";
+              if (s==="Lead" || s==="lead") return "lead";
+              if (s==="Proposal / Bid" || s==="hard_bid" || s==="proposal_bid") return "proposal_bid";
+              if (s==="Negotiation" || s==="negotiation") return "negotiation";
               return s;
             };
 
@@ -4568,7 +4571,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                   </div>
                   <div style={{display:"flex",gap:8}}>
                     <button className="btn-ghost" onClick={()=>{setEmailText("");setParsedFields(null);setShowEmailParse(true);}} style={{display:"flex",alignItems:"center",gap:5}}>📧 Parse Email</button>
-                    <button className="btn-primary" onClick={()=>{setDropStage("budgeting_lead");setForm({name:"",companyId:"",contactId:"",value:"",stage:"budgeting_lead",pipelineType:"budgeting",closeDate:"",notes:"",bu:"major",budgetDueDate:"",bidDueDate:"",nextSteps:[]});setShowForm(true);}}>+ Add Opportunity</button>
+                    <button className="btn-primary" onClick={()=>{setDropStage("lead");setForm({name:"",companyId:"",contactId:"",value:"",stage:"lead",pipelineType:"budgeting",closeDate:"",notes:"",bu:"major",budgetDueDate:"",bidDueDate:"",nextSteps:[]});setShowForm(true);}}>+ Add Opportunity</button>
                   </div>
                 </div>
 
@@ -5277,7 +5280,7 @@ Return ONLY valid JSON, no markdown, no extra text:
 
 
           {/* ── PIPELINE ── */}
-          {activeNav === "pipeline" && (
+          {activeNav === "pipeline" && activeBU !== "major" && (
             <div className="fade-in" style={{ display: "flex", flexDirection: "column", gap: 22 }}>
 
               {/* ── FM INBOX (unassigned leads) — FM only ── */}
