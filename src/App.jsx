@@ -1906,6 +1906,71 @@ function MpHistoryCard({ r, i, fmt }) {
   );
 }
 
+// ── Customer Picker ─────────────────────────────────────────────────────────
+function CustomerPicker({ companyId, contactId, onCompanyChange, onContactChange,
+  companies, contacts, showInlineCompany, setShowInlineCompany,
+  inlineCompany, setInlineCompany, addInlineCompany,
+  showInlineContact, setShowInlineContact, inlineContact,
+  setInlineContact, addInlineContact }) {
+  const compContacts = contacts.filter(p => p.companyId === companyId);
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      <div>
+        <label className="lbl">Company</label>
+        <select className="fi" value={companyId} onChange={e => {
+          if (e.target.value === "__new__") { setShowInlineCompany(true); }
+          else { onCompanyChange(e.target.value); onContactChange(""); setShowInlineCompany(false); }
+        }}>
+          <option value="">Select company…</option>
+          {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+          <option value="__new__">+ Add new company</option>
+        </select>
+        {showInlineCompany && (
+          <div style={{ background: "#F0F2F8", border: "1px solid #3B6FE840", borderRadius: 8, padding: 14, marginTop: 8, display: "flex", flexDirection: "column", gap: 10 }}>
+            <div style={{ fontSize: 11, color: "#3B6FE8", fontWeight: 600, letterSpacing: "0.06em" }}>NEW COMPANY</div>
+            <input className="fi" placeholder="Company name *" value={inlineCompany.name}    onChange={e => setInlineCompany(c => ({ ...c, name: e.target.value }))} />
+            <input className="fi" placeholder="Address"        value={inlineCompany.address} onChange={e => setInlineCompany(c => ({ ...c, address: e.target.value }))} />
+            <input className="fi" placeholder="Website"        value={inlineCompany.website} onChange={e => setInlineCompany(c => ({ ...c, website: e.target.value }))} />
+            <div style={{ display: "flex", gap: 8 }}>
+              <button className="btn-ghost"   onClick={() => setShowInlineCompany(false)} style={{ flex: 1 }}>Cancel</button>
+              <button className="btn-primary" onClick={addInlineCompany}                 style={{ flex: 1 }}>Add Company</button>
+            </div>
+          </div>
+        )}
+      </div>
+      {companyId && !showInlineCompany && (
+        <div>
+          <label className="lbl">Contact</label>
+          <select className="fi" value={contactId} onChange={e => {
+            if (e.target.value === "__new__") { setShowInlineContact(true); }
+            else { onContactChange(e.target.value); setShowInlineContact(false); }
+          }}>
+            <option value="">Select contact…</option>
+            {compContacts.map(p => <option key={p.id} value={p.id}>{p.firstName} {p.lastName} — {p.title}</option>)}
+            <option value="__new__">+ Add new contact</option>
+          </select>
+          {showInlineContact && (
+            <div style={{ background: "#F0F2F8", border: "1px solid #3B6FE840", borderRadius: 8, padding: 14, marginTop: 8, display: "flex", flexDirection: "column", gap: 10 }}>
+              <div style={{ fontSize: 11, color: "#3B6FE8", fontWeight: 600, letterSpacing: "0.06em" }}>NEW CONTACT</div>
+              <div className="g2">
+                <input className="fi" placeholder="First name *" value={inlineContact.firstName} onChange={e => setInlineContact(c => ({ ...c, firstName: e.target.value }))} />
+                <input className="fi" placeholder="Last name"    value={inlineContact.lastName}  onChange={e => setInlineContact(c => ({ ...c, lastName: e.target.value }))} />
+              </div>
+              <input className="fi" placeholder="Title / Role" value={inlineContact.title} onChange={e => setInlineContact(c => ({ ...c, title: e.target.value }))} />
+              <input className="fi" placeholder="Email"        value={inlineContact.email} onChange={e => setInlineContact(c => ({ ...c, email: e.target.value }))} />
+              <input className="fi" placeholder="Phone"        value={inlineContact.phone} onChange={e => setInlineContact(c => ({ ...c, phone: e.target.value }))} />
+              <div style={{ display: "flex", gap: 8 }}>
+                <button className="btn-ghost"   onClick={() => setShowInlineContact(false)} style={{ flex: 1 }}>Cancel</button>
+                <button className="btn-primary" onClick={addInlineContact}                  style={{ flex: 1 }}>Add Contact</button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function App() {
   // URL routing — sub-facing page
   const urlToken  = useMemo(() => new URLSearchParams(window.location.search).get("subtoken"), []);
@@ -2762,66 +2827,6 @@ Return ONLY valid JSON, no markdown, no extra text:
 
   // ── Customer Picker ────────────────────────────────────────────────────────
   // eslint-disable-next-line react/display-name
-  const CustomerPicker = React.memo(({ companyId, contactId, onCompanyChange, onContactChange }) => {
-    const compContacts = contacts.filter(p => p.companyId === companyId);
-    return (
-      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-        <div>
-          <label className="lbl">Company</label>
-          <select className="fi" value={companyId} onChange={e => {
-            if (e.target.value === "__new__") { setShowInlineCompany(true); }
-            else { onCompanyChange(e.target.value); onContactChange(""); setShowInlineCompany(false); }
-          }}>
-            <option value="">Select company…</option>
-            {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-            <option value="__new__">+ Add new company</option>
-          </select>
-          {showInlineCompany && (
-            <div style={{ background: "#F0F2F8", border: "1px solid #3B6FE840", borderRadius: 8, padding: 14, marginTop: 8, display: "flex", flexDirection: "column", gap: 10 }}>
-              <div style={{ fontSize: 11, color: "#3B6FE8", fontWeight: 600, letterSpacing: "0.06em" }}>NEW COMPANY</div>
-              <input className="fi" placeholder="Company name *" value={inlineCompany.name}    onChange={e => setInlineCompany(c => ({ ...c, name: e.target.value }))} />
-              <input className="fi" placeholder="Address"        value={inlineCompany.address} onChange={e => setInlineCompany(c => ({ ...c, address: e.target.value }))} />
-              <input className="fi" placeholder="Website"        value={inlineCompany.website} onChange={e => setInlineCompany(c => ({ ...c, website: e.target.value }))} />
-              <div style={{ display: "flex", gap: 8 }}>
-                <button className="btn-ghost"   onClick={() => setShowInlineCompany(false)} style={{ flex: 1 }}>Cancel</button>
-                <button className="btn-primary" onClick={addInlineCompany}                 style={{ flex: 1 }}>Add Company</button>
-              </div>
-            </div>
-          )}
-        </div>
-        {companyId && !showInlineCompany && (
-          <div>
-            <label className="lbl">Contact</label>
-            <select className="fi" value={contactId} onChange={e => {
-              if (e.target.value === "__new__") { setShowInlineContact(true); }
-              else { onContactChange(e.target.value); setShowInlineContact(false); }
-            }}>
-              <option value="">Select contact…</option>
-              {compContacts.map(p => <option key={p.id} value={p.id}>{p.firstName} {p.lastName} — {p.title}</option>)}
-              <option value="__new__">+ Add new contact</option>
-            </select>
-            {showInlineContact && (
-              <div style={{ background: "#F0F2F8", border: "1px solid #3B6FE840", borderRadius: 8, padding: 14, marginTop: 8, display: "flex", flexDirection: "column", gap: 10 }}>
-                <div style={{ fontSize: 11, color: "#3B6FE8", fontWeight: 600, letterSpacing: "0.06em" }}>NEW CONTACT</div>
-                <div className="g2">
-                  <input className="fi" placeholder="First name *" value={inlineContact.firstName} onChange={e => setInlineContact(c => ({ ...c, firstName: e.target.value }))} />
-                  <input className="fi" placeholder="Last name"    value={inlineContact.lastName}  onChange={e => setInlineContact(c => ({ ...c, lastName: e.target.value }))} />
-                </div>
-                <input className="fi" placeholder="Title / Role" value={inlineContact.title} onChange={e => setInlineContact(c => ({ ...c, title: e.target.value }))} />
-                <input className="fi" placeholder="Email"        value={inlineContact.email} onChange={e => setInlineContact(c => ({ ...c, email: e.target.value }))} />
-                <input className="fi" placeholder="Phone"        value={inlineContact.phone} onChange={e => setInlineContact(c => ({ ...c, phone: e.target.value }))} />
-                <div style={{ display: "flex", gap: 8 }}>
-                  <button className="btn-ghost"   onClick={() => setShowInlineContact(false)} style={{ flex: 1 }}>Cancel</button>
-                  <button className="btn-primary" onClick={addInlineContact}                  style={{ flex: 1 }}>Add Contact</button>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-    );
-  });
-
   // ── CSS ────────────────────────────────────────────────────────────────────
   const CSS = `
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
@@ -8394,6 +8399,19 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
                 contactId={jobForm.contactId || ""}
                 onCompanyChange={val => setJobForm(f => ({ ...f, companyId: val, client: companies.find(c => c.id === val)?.name || "" }))}
                 onContactChange={val => setJobForm(f => ({ ...f, contactId: val }))}
+
+                companies={companies}
+                contacts={contacts}
+                showInlineCompany={showInlineCompany}
+                setShowInlineCompany={setShowInlineCompany}
+                inlineCompany={inlineCompany}
+                setInlineCompany={setInlineCompany}
+                addInlineCompany={addInlineCompany}
+                showInlineContact={showInlineContact}
+                setShowInlineContact={setShowInlineContact}
+                inlineContact={inlineContact}
+                setInlineContact={setInlineContact}
+                addInlineContact={addInlineContact}
               />
               <div className="g2">
                 <div><label className="lbl">Contract Value</label><input className="fi" type="number" value={jobForm.contractValue} onChange={fj("contractValue")} placeholder="0" /></div>
@@ -8431,6 +8449,19 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
                 contactId={form.contactId}
                 onCompanyChange={val => setForm(f => ({ ...f, companyId: val, contactId: "" }))}
                 onContactChange={val => setForm(f => ({ ...f, contactId: val }))}
+
+                companies={companies}
+                contacts={contacts}
+                showInlineCompany={showInlineCompany}
+                setShowInlineCompany={setShowInlineCompany}
+                inlineCompany={inlineCompany}
+                setInlineCompany={setInlineCompany}
+                addInlineCompany={addInlineCompany}
+                showInlineContact={showInlineContact}
+                setShowInlineContact={setShowInlineContact}
+                inlineContact={inlineContact}
+                setInlineContact={setInlineContact}
+                addInlineContact={addInlineContact}
               />
               <div className="g2">
                 <div><label className="lbl">Business Unit</label>
