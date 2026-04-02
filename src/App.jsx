@@ -778,7 +778,7 @@ function VendorPage({ token, fmJobs, setFmJobs, subcontractors, companies, sites
           )}
         </div>
 
-        {/* Change schedule — only if not already changed */}
+        {/* Change schedule - only if not already changed */}
         {!job.vendorScheduleChangedAt ? (
           <div style={{ background: "#FCD34D10", border: "1px solid #FCD34D30", borderRadius: 8, padding: "12px 14px", marginBottom: 16 }}>
             <div style={{ fontSize: 11, color: "#FCD34D", fontWeight: 700, marginBottom: 4 }}>⚠ Schedule Change — One Time Only</div>
@@ -1068,7 +1068,7 @@ function SubPage({ token, fmJobs, setFmJobs, subcontractors, companies, sites })
             </div>
           )}
 
-          {/* Access code — shown only after accept */}
+          {/* Access code - shown only after accept */}
           {subAccepted && site?.accessCode && (
             <div style={{ marginTop: 14, paddingTop: 14, borderTop: "1px solid #CBD1E8" }}>
               <div style={{ background: "#4ADE8010", border: "1px solid #4ADE8030", borderRadius: 8, padding: "12px 14px" }}>
@@ -1084,7 +1084,7 @@ function SubPage({ token, fmJobs, setFmJobs, subcontractors, companies, sites })
           )}
         </div>
 
-        {/* Job photos — shown only after accept */}
+        {/* Job photos - shown only after accept */}
         {subAccepted && job.photos && job.photos.length > 0 && (
           <div style={{ background: "#ECEEF8", borderRadius: 12, padding: 20, border: "1px solid #CBD1E8", marginBottom: 16 }}>
             <div style={{ fontSize: 11, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 12 }}>📸 Site Photos</div>
@@ -1823,7 +1823,7 @@ function MpHistoryCard({ r, i, fmt }) {
   ];
   return (
     <div style={{background:"#fff",borderRadius:12,border:"1px solid #D4D9EE",overflow:"hidden",boxShadow:"0 1px 3px rgba(0,0,0,0.04)"}}>
-      {/* Collapsed row — always visible */}
+      {/* Collapsed row - always visible */}
       <div onClick={()=>setOpen(o=>!o)} style={{padding:"10px 16px",display:"flex",alignItems:"center",gap:10,cursor:"pointer",userSelect:"none"}}
         onMouseEnter={e=>e.currentTarget.style.background="#F5F8FF"}
         onMouseLeave={e=>e.currentTarget.style.background=""}>
@@ -2065,7 +2065,7 @@ function MpBudgetTool({ opp, company, items, setItems, overrides, setOverrides }
 
   return (
     <div style={{display:"grid",gridTemplateColumns:"1fr 320px",gap:0,flex:1,minHeight:0,overflow:"hidden"}}>
-      {/* Left — line items */}
+      {/* Left - line items */}
       <div style={{overflowY:"auto",padding:"18px 20px",display:"flex",flexDirection:"column",gap:14}}>
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
           <div style={{fontSize:13,fontWeight:700,color:"#1A2240"}}>
@@ -2133,7 +2133,7 @@ function MpBudgetTool({ opp, company, items, setItems, overrides, setOverrides }
         )}
       </div>
 
-      {/* Right — summary */}
+      {/* Right - summary */}
       <div style={{background:"#F4F6FB",borderLeft:"1px solid #D4D9EE",overflowY:"auto",padding:"16px 18px",display:"flex",flexDirection:"column",gap:12}}>
         {/* Assumptions */}
         <div style={{background:"#fff",borderRadius:10,border:"1px solid #D4D9EE",padding:"14px 16px"}}>
@@ -3293,7 +3293,7 @@ Return ONLY valid JSON, no markdown, no extra text:
     <div style={{ display: "flex", minHeight: "100vh", background: "#EEF0F8", color: "#1A2240", fontFamily: "'Inter','Segoe UI',sans-serif" }}>
       <style>{CSS}</style>
 
-      {/* ── Sidebar ── */}
+      {/* -- Sidebar -- */}
       <div style={{ width: sidebarCollapsed ? 60 : 200, background: "#1E2A48", borderRight: "1px solid #162040", display: "flex", flexDirection: "column", transition: "width 0.2s", flexShrink: 0, position: "sticky", top: 0, height: "100vh", overflow: "hidden" }}>
         <div style={{ padding: "18px 16px 14px", borderBottom: "1px solid #2A3860", display: "flex", alignItems: "center", gap: 10 }}>
           <div style={{ width: 32, height: 32, background: "#3B6FE8", borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, color: "#fff", flexShrink: 0 }}>FG</div>
@@ -3316,7 +3316,7 @@ Return ONLY valid JSON, no markdown, no extra text:
         </div>
       </div>
 
-      {/* ── Main ── */}
+      {/* -- Main -- */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
         {/* Topbar */}
         <div style={{ borderBottom: "1px solid #D4D9EE", padding: "0 28px", height: 52, display: "flex", alignItems: "center", justifyContent: "space-between", background: "#FFFFFF", position: "sticky", top: 0, zIndex: 40, boxShadow: "0 1px 4px rgba(30,42,80,0.06)" }}>
@@ -3337,7 +3337,7 @@ Return ONLY valid JSON, no markdown, no extra text:
         <div style={{ flex: 1, padding: "28px 32px", overflowY: "auto", paddingRight: panelOpen ? "calc(32px + 420px)" : "32px", transition: "padding-right 0.2s" }}>
 
           {/* ══════════════════════════════════════════
-               CRM MODULE — renders when crmMode === true
+               CRM MODULE - renders when crmMode === true
           ══════════════════════════════════════════ */}
           {crmMode && (() => {
             const CRM_STATUSES = [
@@ -3507,7 +3507,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                   </div>
 
                   <div style={{display:"grid",gridTemplateColumns:"1fr 380px",gap:20,alignItems:"start"}}>
-                    {/* ── LEFT COLUMN ── */}
+                    {/* -- LEFT COLUMN -- */}
                     <div style={{display:"flex",flexDirection:"column",gap:16}}>
 
                       {/* Identity card */}
@@ -3527,7 +3527,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                           </div>
                         </div>
 
-                        {/* Department tags — click to toggle */}
+                        {/* Department tags - click to toggle */}
                         <div style={{marginBottom:16}}>
                           <div style={{fontSize:9,color:"#4A5278",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:6}}>Departments</div>
                           <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
@@ -3577,7 +3577,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                         {c.notes&&<div style={{marginTop:14,paddingTop:14,borderTop:"1px solid #EEF0F8",fontSize:12,color:"#252E52",lineHeight:1.6}}>{c.notes}</div>}
                       </div>
 
-                      {/* ── JOBS SECTION ── */}
+                      {/* -- JOBS SECTION -- */}
                       {(allActive.length>0||allWaiting.length>0||allPipeline.length>0||billingJobs.length>0||contactMpJobs.length>0) ? (
                         <div className="stat-card" style={{padding:20}}>
                           <div style={{fontSize:11,fontWeight:700,color:"#1A2240",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:16}}>Jobs with {c.company||"this company"}</div>
@@ -3594,7 +3594,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                       )}
                     </div>
 
-                    {/* ── RIGHT COLUMN: Activity log ── */}
+                    {/* -- RIGHT COLUMN: Activity log -- */}
                     <div className="stat-card" style={{padding:16,position:"sticky",top:20}}>
                       <div style={{fontSize:11,fontWeight:700,color:"#1A2240",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:14}}>Activity Log</div>
                       <div style={{display:"flex",gap:5,marginBottom:8,flexWrap:"wrap"}}>
@@ -3702,7 +3702,7 @@ Return ONLY valid JSON, no markdown, no extra text:
 
                   <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
 
-                    {/* ── NAME ROW ── */}
+                    {/* -- NAME ROW -- */}
                     <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
                       <div>
                         <label className="lbl">First Name <span style={{color:"#F87171"}}>*</span></label>
@@ -3714,7 +3714,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                       </div>
                     </div>
 
-                    {/* ── POSITION + COMPANY ── */}
+                    {/* -- POSITION + COMPANY -- */}
                     <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
                       <div>
                         <label className="lbl">Position / Title</label>
@@ -3738,7 +3738,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                       </div>
                     </div>
 
-                    {/* ── CONTACT INFO ── */}
+                    {/* -- CONTACT INFO -- */}
                     <div style={{ background:"#F8F9FD", borderRadius:10, padding:"14px 16px", display:"flex", flexDirection:"column", gap:12 }}>
                       <div style={{ fontSize:10, fontWeight:700, color:"#4A5278", textTransform:"uppercase", letterSpacing:"0.07em" }}>Contact Info</div>
                       <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
@@ -3757,7 +3757,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                       </div>
                     </div>
 
-                    {/* ── DIVISIONS ── */}
+                    {/* -- DIVISIONS -- */}
                     <div>
                       <label className="lbl">Departments <span style={{color:"#F87171"}}>*</span> <span style={{color:"#9BA3BF",fontWeight:400,textTransform:"none",letterSpacing:0}}>Select all that apply</span></label>
                       <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginTop:6 }}>
@@ -3775,7 +3775,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                       {(f.divisions||[]).length === 0 && <div style={{ fontSize:10, color:"#F87171", marginTop:5 }}>Please select at least one department</div>}
                     </div>
 
-                    {/* ── OPTIONAL FIELDS (collapsed) ── */}
+                    {/* -- OPTIONAL FIELDS (collapsed) -- */}
                     <details style={{ borderTop:"1px solid #EEF0F8", paddingTop:14 }}>
                       <summary style={{ fontSize:11, color:"#4A5278", cursor:"pointer", fontWeight:600, userSelect:"none", letterSpacing:"0.04em", listStyle:"none", display:"flex", alignItems:"center", gap:6 }}>
                         <span>▸</span> More details (relationship, follow-up, notes)
@@ -3815,7 +3815,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                       </div>
                     </details>
 
-                    {/* ── BUTTONS ── */}
+                    {/* -- BUTTONS -- */}
                     <div style={{ display:"flex", gap:8, justifyContent:"flex-end", paddingTop:4, borderTop:"1px solid #EEF0F8" }}>
                       <button className="btn-ghost" onClick={()=>{setShowCrmForm(false);setCrmFormData({});}}>Cancel</button>
                       <button className="btn-primary" style={{ opacity: isValid ? 1 : 0.5, cursor: isValid ? "pointer" : "not-allowed" }}
@@ -3830,7 +3830,7 @@ Return ONLY valid JSON, no markdown, no extra text:
             );
           })()}
 
-          {/* ── DASHBOARD ── */}
+          {/* -- DASHBOARD -- */}
           {!crmMode && activeNav === "dashboard" && (
             <div className="fade-in" style={{ display: "flex", flexDirection: "column", gap: 28 }}>
 
@@ -4008,7 +4008,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                       </div>
                     </div>
 
-                    {/* ── TOP ROW: KPIs left + GP by Quarter right ── */}
+                    {/* -- TOP ROW: KPIs left + GP by Quarter right -- */}
                     <div style={{ display: "grid", gridTemplateColumns: "280px 1fr", gap: 16 }}>
 
                       {/* KPI stack */}
@@ -4036,7 +4036,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                       </div>
                     </div>
 
-                    {/* ── CHARTS ROW 1: FM Opportunities YOY (count by month) ── */}
+                    {/* -- CHARTS ROW 1: FM Opportunities YOY (count by month) -- */}
                     <div className="stat-card" style={{ padding: 20 }}>
                       <div style={{ fontSize: 11, fontWeight: 700, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 8 }}>FM Opportunities YOY</div>
                       <LineChart
@@ -4054,7 +4054,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                       </div>
                     </div>
 
-                    {/* ── CHARTS ROW 2: Revenue per month ── */}
+                    {/* -- CHARTS ROW 2: Revenue per month -- */}
                     <div className="stat-card" style={{ padding: 20 }}>
                       <div style={{ fontSize: 11, fontWeight: 700, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 8 }}>FM Revenue per Month</div>
                       <LineChart
@@ -4071,7 +4071,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                       </div>
                     </div>
 
-                    {/* ── CHARTS ROW 3: GP per month ── */}
+                    {/* -- CHARTS ROW 3: GP per month -- */}
                     <div className="stat-card" style={{ padding: 20 }}>
                       <div style={{ fontSize: 11, fontWeight: 700, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 8 }}>FM Gross Profit per Month</div>
                       <LineChart
@@ -4088,7 +4088,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                       </div>
                     </div>
 
-                    {/* ── PROJECTION CARDS ── */}
+                    {/* -- PROJECTION CARDS -- */}
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
                       <div className="stat-card" style={{ padding: 16 }}>
                         <div style={{ fontSize: 10, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 10, fontWeight: 600 }}>This Month Projection ({MONTHS[curMonth]})</div>
@@ -4134,7 +4134,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                       </div>
                     </div>
 
-                    {/* ── PUNCH LIST ── */}
+                    {/* -- PUNCH LIST -- */}
                     <div>
                       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:10 }}>
                         <div style={{ fontSize:11, fontWeight:700, color:"#4A5278", textTransform:"uppercase", letterSpacing:"0.07em" }}>Today's Punch List</div>
@@ -4305,7 +4305,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                           <div style={{flex:1,position:"relative",padding:"0 6px"}}>
                             {/* Today line */}
                             <div style={{position:"absolute",left:"calc("+nowPct+"% + 6px)",top:0,bottom:0,width:1.5,background:"#F87171",opacity:0.5,zIndex:2}}/>
-                            {/* Bar — solid if has start/end, dashed/faint if milestone-span only */}
+                            {/* Bar - solid if has start/end, dashed/faint if milestone-span only */}
                             {spanStart && spanEnd && pct(spanStart)!==null && pct(spanEnd)!==null && (
                               <div style={{
                                 position:"absolute",
@@ -4383,7 +4383,7 @@ Return ONLY valid JSON, no markdown, no extra text:
             </div>
           )}
 
-          {/* ── CUSTOMERS ── */}
+          {/* -- CUSTOMERS -- */}
           {activeNav === "customers" && (() => {
 
             // ── Derive service tags per company from actual data ──
@@ -4933,7 +4933,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                 ))}
               </div>
 
-              {/* Service type filter pills — only on ALL tab */}
+              {/* Service type filter pills - only on ALL tab */}
               {activeBU === "all" && (
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                 {["all","FM","CapEx","Major","Lawn","Snow"].map(tag => (
@@ -4987,7 +4987,7 @@ Return ONLY valid JSON, no markdown, no extra text:
               </div>
             );
           })()}
-          {/* ── BUDGETING ── */}
+          {/* -- BUDGETING -- */}
           {activeNav === "pipeline" && activeBU === "major" && (() => {
             const MP_STAGES = [
               { id:"lead",           label:"Lead",            color:"#A78BFA", short:"Lead" },
@@ -5140,7 +5140,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                   </button>
                 </div>
 
-                {/* Kanban columns — all stages in one scrollable row */}
+                {/* Kanban columns - all stages in one scrollable row */}
                 <div style={{display:"flex",gap:14,overflowX:"auto",paddingBottom:8,alignItems:"flex-start"}}>
                   {ACTIVE_STAGES.map(stage=>{
                     const opps=filtered(stage.id);
@@ -5220,7 +5220,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                   </div>
                 )}
 
-                {/* ── EMAIL PARSE MODAL ── */}
+                {/* -- EMAIL PARSE MODAL -- */}
                 {showEmailParse && (
                   <div style={{position:"fixed",inset:0,background:"rgba(10,16,36,0.7)",zIndex:2100,display:"flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(3px)",padding:20}}>
                     <div style={{background:"#fff",borderRadius:14,width:"min(600px,100%)",maxHeight:"85vh",display:"flex",flexDirection:"column",boxShadow:"0 12px 60px rgba(0,0,0,0.25)",overflow:"hidden"}}>
@@ -5280,7 +5280,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                   </div>
                 )}
 
-                {/* ── ADD CUSTOMER MODAL ── */}
+                {/* -- ADD CUSTOMER MODAL -- */}
                 {showAddCo && (
                   <div style={{position:"fixed",inset:0,background:"rgba(10,16,36,0.7)",zIndex:2100,display:"flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(3px)",padding:20}}>
                     <div style={{background:"#fff",borderRadius:14,width:"min(480px,100%)",boxShadow:"0 12px 60px rgba(0,0,0,0.25)",overflow:"hidden"}}>
@@ -5317,7 +5317,7 @@ Return ONLY valid JSON, no markdown, no extra text:
             );
           })()}
 
-          {/* ── ACTIVE JOBS (MP only) ── */}
+          {/* -- ACTIVE JOBS (MP only) -- */}
           {activeNav === "jobs" && activeBU !== "capital" && activeBU !== "facility" && (() => {
             // Use Supabase mp_jobs if loaded, fall back to hardcoded majorJobs
             const allMpJobs = mpJobs.length > 0 ? mpJobs : majorJobs;
@@ -5457,7 +5457,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                     )}
                   </div>
 
-                  {/* ── GANTT TAB ── */}
+                  {/* -- GANTT TAB -- */}
                   {mpDetailTab==="gantt" && (() => {
                     const today = new Date();
                     const km1d = job.km1Date||""; const km2d = job.km2Date||""; const km3d = job.km3Date||"";
@@ -5568,7 +5568,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                   })()}
 
 
-                  {/* ── WEEKLY REPORT TAB ── */}
+                  {/* -- WEEKLY REPORT TAB -- */}
                   {mpDetailTab==="weekly" && (() => {
                     const r = latest;
                     if (!r) return (
@@ -5635,7 +5635,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                     );
                   })()}
 
-                  {/* ── HISTORY TAB ── */}
+                  {/* -- HISTORY TAB -- */}
                   {mpDetailTab==="history" && (
                     <div style={{display:"flex",flexDirection:"column",gap:6}}>
                       {reports.length===0 && <div style={{textAlign:"center",padding:"40px",color:"#9BA3BF",background:"#fff",borderRadius:12,border:"1px solid #D4D9EE"}}>No weekly history yet</div>}
@@ -5686,7 +5686,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                   ))}
                 </div>
 
-                {/* Gantt overview — all projects */}
+                {/* Gantt overview - all projects */}
                 {(() => {
                   const today = new Date();
                   // Build unified month grid across all jobs
@@ -5773,7 +5773,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                             <div style={{flex:1,position:"relative",padding:"0 6px"}}>
                               {/* Today line */}
                               <div style={{position:"absolute",left:"calc("+nowPct+"% + 6px)",top:0,bottom:0,width:1.5,background:"#F87171",opacity:0.5,zIndex:2}}/>
-                              {/* Project bar — start to end */}
+                              {/* Project bar - start to end */}
                               {startPct!==null && endPct!==null && (
                                 <div style={{position:"absolute",left:"calc("+startPct+"% + 6px)",right:"calc("+(100-endPct)+"% + 6px)",top:"50%",transform:"translateY(-50%)",height:14,background:"linear-gradient(90deg,#3B6FE840,#3B6FE870)",border:"1px solid #3B6FE850",borderRadius:7}}/>
                               )}
@@ -5808,11 +5808,11 @@ Return ONLY valid JSON, no markdown, no extra text:
           })()}
 
 
-          {/* ── PIPELINE ── */}
+          {/* -- PIPELINE -- */}
           {activeNav === "pipeline" && activeBU !== "major" && (
             <div className="fade-in" style={{ display: "flex", flexDirection: "column", gap: 22 }}>
 
-              {/* ── FM INBOX (unassigned leads) — FM only ── */}
+              {/* -- FM INBOX (unassigned leads) - FM only -- */}
               {activeBU === "facility" && (
                 <div style={{ background: "#F8F9FD", border: "1px solid #FCD34D30", borderRadius: 12, padding: "18px 20px" }}>
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
@@ -5974,7 +5974,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                             </div>
                           </div>
 
-                          {/* NTE breakdown — only when filled */}
+                          {/* NTE breakdown - only when filled */}
                           {inboxForm.authorizedAmount && Number(inboxForm.authorizedAmount) > 0 && (() => {
                             const nte = Number(inboxForm.authorizedAmount);
                             const gp  = fmGrossProfit(nte);
@@ -6038,7 +6038,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                 ))}
               </div>
 
-              {/* ── FM PIPELINE: show fmJobs in pipeline stages ── */}
+              {/* -- FM PIPELINE: show fmJobs in pipeline stages -- */}
               {activeBU === "facility" && (() => {
                 const q = search.toLowerCase();
                 const fmPipelineJobs = fmJobs.filter(j =>
@@ -6108,7 +6108,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                 );
               })()}
 
-              {/* ── NON-FM PIPELINE (kanban + list) ── */}
+              {/* -- NON-FM PIPELINE (kanban + list) -- */}
               {activeBU !== "facility" && pipelineView === "kanban" && (
                 <div style={{ display: "flex", gap: 10, overflowX: "auto", paddingBottom: 8 }}>
                   {stages.map(stage => {
@@ -6178,7 +6178,7 @@ Return ONLY valid JSON, no markdown, no extra text:
             </div>
           )}
 
-          {/* ── SITES (CI / FM) ── */}
+          {/* -- SITES (CI / FM) -- */}
           {activeNav === "sites" && (activeBU === "capital" || activeBU === "facility" || activeBU === "all") && (
             <div className="fade-in" style={{ display: "flex", flexDirection: "column", gap: 22 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -6283,7 +6283,7 @@ Return ONLY valid JSON, no markdown, no extra text:
               </div>
                 );
               })()}
-              {/* ── MAP VIEW ── */}
+              {/* -- MAP VIEW -- */}
               {siteView === "map" && (() => {
                 const CO_COLORS = {};
                 const PALETTE = ["#3B6FE8","#F59E0B","#10B981","#EF4444","#8B5CF6","#EC4899","#06B6D4","#84CC16","#F97316","#6366F1","#14B8A6"];
@@ -6377,7 +6377,7 @@ if(bounds.length)map.fitBounds(bounds,{padding:[30,30]});
                 );
               })()}
 
-              {/* ── LIST VIEW ── */}
+              {/* -- LIST VIEW -- */}
               {siteView === "list" && <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 12 }}>
                 {sites.filter(site => { const buMatch = activeBU === "all" || (site.businessUnits || []).includes(activeBU === "facility" ? "facility" : activeBU); const co = companies.find(c => c.id === site.companyId); const q = siteSearch.toLowerCase(); const textMatch = !q || (site.storeNumber||"").toLowerCase().includes(q) || (site.address||"").toLowerCase().includes(q) || (co?.name||"").toLowerCase().includes(q); return buMatch && textMatch; }).map(site => {
                   const co = companies.find(c => c.id === site.companyId);
@@ -6408,7 +6408,7 @@ if(bounds.length)map.fitBounds(bounds,{padding:[30,30]});
             </div>
           )}
 
-          {/* ── SITES (Lawn / Snow) — Hierarchy View ── */}
+          {/* -- SITES (Lawn / Snow) - Hierarchy View -- */}
           {activeNav === "sites" && LAWN_SNOW_SITES_BUS.includes(activeBU) && (() => {
             // Only show sites tagged for this specific BU — no fallback to all
             const buTag = activeBU;
@@ -6584,7 +6584,7 @@ if(bounds.length)map.fitBounds(bounds,{padding:[30,30]});
                   </div>
                 </div>
 
-                {/* ── Company → State → Sites Hierarchy ── */}
+                {/* -- Company → State → Sites Hierarchy -- */}
                 <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                   {/* Column header */}
                   <div style={{ display: "grid", gridTemplateColumns: "28px 1fr 80px 90px 80px", padding: "6px 14px", fontSize: 9, color: "#3D4570", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", borderBottom: "1px solid #CBD1E8" }}>
@@ -6702,7 +6702,7 @@ if(bounds.length)map.fitBounds(bounds,{padding:[30,30]});
             );
           })()}
 
-          {/* ── CAPEX JOBS ── */}
+          {/* -- CAPEX JOBS -- */}
           {activeNav === "jobs" && activeBU === "capital" && (
             <div className="fade-in" style={{ display: "flex", flexDirection: "column", gap: 22 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -6716,7 +6716,7 @@ if(bounds.length)map.fitBounds(bounds,{padding:[30,30]});
                 </div>
               </div>
 
-              {/* Stage stats — exclude estimating */}
+              {/* Stage stats - exclude estimating */}
               <div style={{ display: "flex", gap: 8, overflowX: "auto" }}>
                 {CAPEX_FM_STAGES.filter(st => st.id !== "estimating").map(st => {
                   const cnt = capexJobs.filter(j => j.stage === st.id).length;
@@ -6732,7 +6732,7 @@ if(bounds.length)map.fitBounds(bounds,{padding:[30,30]});
                 })}
               </div>
 
-              {/* List grouped by stage — all except estimating */}
+              {/* List grouped by stage - all except estimating */}
               {CAPEX_FM_STAGES.filter(st => st.id !== "estimating").map(st => {
                 const stageJobs = capexJobs.filter(j => j.stage === st.id && (j.name.toLowerCase().includes(capexSearch.toLowerCase()) || !capexSearch));
                 if (!stageJobs.length) return null;
@@ -6783,7 +6783,7 @@ if(bounds.length)map.fitBounds(bounds,{padding:[30,30]});
             </div>
           )}
 
-          {/* ── FM JOBS ── */}
+          {/* -- FM JOBS -- */}
           {activeNav === "jobs" && activeBU === "facility" && (() => {
             const coords = ["all", ...Array.from(new Set(fmTeam.map(m => m.name)))];
             const filtered = fmJobs.filter(j => {
@@ -6823,7 +6823,7 @@ if(bounds.length)map.fitBounds(bounds,{padding:[30,30]});
                   </div>
                 </div>
 
-                {/* Stage stats — active phase only */}
+                {/* Stage stats - active phase only */}
                 <div style={{ display: "flex", gap: 8, overflowX: "auto" }}>
                   {FM_ACTIVE_STAGES.map(st => {
                     const cnt = filtered.filter(j => j.stage === st.id).length;
@@ -6949,7 +6949,7 @@ if(bounds.length)map.fitBounds(bounds,{padding:[30,30]});
             );
           })()}
 
-          {/* ── FINANCE ── */}
+          {/* -- FINANCE -- */}
           {activeNav === "finance" && (
             <div className="fade-in">
               <div style={{ marginBottom: 28 }}>
@@ -6963,7 +6963,7 @@ if(bounds.length)map.fitBounds(bounds,{padding:[30,30]});
             </div>
           )}
 
-          {/* ── TEAM ── */}
+          {/* -- TEAM -- */}
           {activeNav === "team" && !selectedCoord && (() => {
             // Filter team by division — ALL shows everyone, other BUs filter to matching division
             const BU_TO_DIV = { facility:"facility", major:"major", capital:"capital", lawn:"lawn", snow:"snow" };
@@ -7080,7 +7080,7 @@ if(bounds.length)map.fitBounds(bounds,{padding:[30,30]});
             );
           })()}
 
-          {/* ── PM PERSONAL DASHBOARD ── */}
+          {/* -- PM PERSONAL DASHBOARD -- */}
           {activeNav === "team" && selectedCoord && (() => {
             const now = new Date();
             const curYear = now.getFullYear();
@@ -7170,7 +7170,7 @@ if(bounds.length)map.fitBounds(bounds,{padding:[30,30]});
                   <button className="btn-ghost" onClick={() => setSelectedCoord(null)} style={{ padding:"8px 16px" }}>← Back to Team</button>
                 </div>
 
-                {/* ── MP PROJECTS SECTION (if MP PM) ── */}
+                {/* -- MP PROJECTS SECTION (if MP PM) -- */}
                 {myMpJobs.length > 0 && (
                   <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
                     <div style={{ fontSize:12, fontWeight:700, color:"#4A5278", textTransform:"uppercase", letterSpacing:"0.08em" }}>
@@ -7252,7 +7252,7 @@ if(bounds.length)map.fitBounds(bounds,{padding:[30,30]});
                   </div>
                 )}
 
-                {/* ── FM KPI row ── */}
+                {/* -- FM KPI row -- */}
                 <div style={{ fontSize:12, fontWeight:700, color:"#4A5278", textTransform:"uppercase", letterSpacing:"0.08em" }}>
                   {myMpJobs.length>0?"FM Jobs":"Performance"}
                 </div>
@@ -7356,7 +7356,7 @@ if(bounds.length)map.fitBounds(bounds,{padding:[30,30]});
                 <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
                   {stageGroups.map(g => (
                     <div key={g.key} style={{ border:"1px solid #E8EBF4", borderRadius:10, overflow:"hidden" }}>
-                      {/* Section header — click to collapse */}
+                      {/* Section header - click to collapse */}
                       <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"12px 16px", background:"#F8F9FD", cursor:"pointer", userSelect:"none" }}
                         onClick={() => toggleSection(g.key)}>
                         <div style={{ display:"flex", alignItems:"center", gap:10 }}>
@@ -7393,7 +7393,7 @@ if(bounds.length)map.fitBounds(bounds,{padding:[30,30]});
           })()}
 
 
-          {/* ── SUBCONTRACTORS (master list — FM, Lawn, Snow) ── */}
+          {/* -- SUBCONTRACTORS (master list - FM, Lawn, Snow) -- */}
           {activeNav === "subcontractors" && ["facility","lawn","snow"].includes(activeBU) && (() => {
             const TRADE_MAP = {"HVAC":["❄️","#60A5FA"],"Plumbing":["🔧","#3B82F6"],"Electrical":["⚡","#F59E0B"],"Roofing":["🏠","#8B5CF6"],"Painting":["🎨","#EC4899"],"Concrete":["🪨","#6B7280"],"Landscaping":["🌿","#10B981"],"Snow":["🌨","#A8C4F8"],"General":["🔨","#7BA7F5"],"Fire":["🔥","#EF4444"],"Pest":["🪲","#84CC16"],"Cleaning":["🧹","#14B8A6"],"Security":["🔒","#6366F1"],"Elevator":["🛗","#D97706"],"Carpentry":["🪵","#92400E"]};
             const getTS = (trade) => { const match = Object.entries(TRADE_MAP).find(([k]) => trade && trade.toLowerCase().includes(k.toLowerCase())); return match ? {icon:match[1][0],color:match[1][1]} : {icon:"🔧",color:"#7BA7F5"}; };
@@ -7519,7 +7519,7 @@ if(bounds.length)map.fitBounds(bounds,{padding:[30,30]});
             );
           })()}
 
-          {/* ── VENDORS PAGE ── */}
+          {/* -- VENDORS PAGE -- */}
           {activeNav === "vendors" && activeBU === "facility" && (() => {
             const subs = subcontractors;
             const TRADE_COLORS = {
@@ -7694,7 +7694,7 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
             );
           })()}
 
-          {/* ── MP BUDGETING ── */}
+          {/* -- MP BUDGETING -- */}
           {activeNav === "budgeting" && activeBU === "major" && (() => {
             // Projects in budgeting_lead stage + normalize stages
             const normalizeStage = (s) => {
@@ -7725,7 +7725,7 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
                 </div>
 
                 <div style={{display:"grid",gridTemplateColumns:"240px 1fr",flex:1,gap:0,minHeight:0,background:"#fff",borderRadius:12,border:"1px solid #D4D9EE",overflow:"hidden"}}>
-                  {/* Left sidebar — project list */}
+                  {/* Left sidebar - project list */}
                   <div style={{borderRight:"1px solid #D4D9EE",overflowY:"auto",background:"#F9FAFC"}}>
                     <div style={{padding:"10px 14px",borderBottom:"1px solid #D4D9EE",fontSize:10,fontWeight:700,color:"#9BA3BF",textTransform:"uppercase",letterSpacing:"0.07em"}}>
                       Budgeting Lead ({budgetOpps.length})
@@ -7786,7 +7786,7 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
                     })}
                   </div>
 
-                  {/* Right — budget tool */}
+                  {/* Right - budget tool */}
                   <div style={{display:"flex",flexDirection:"column",overflow:"hidden"}}>
                     {/* Project header bar */}
                     {activeOpp && (
@@ -7798,7 +7798,7 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
                             {(parseFloat(activeOpp.value)||0)>0?" · Est: $"+(parseFloat(activeOpp.value)/1000).toFixed(0)+"k":""}
                           </div>
                         </div>
-                        {/* Save Budget — updates opportunity estimated value */}
+                        {/* Save Budget - updates opportunity estimated value */}
                         {budgetItems.length > 0 && (() => {
                           // Recompute totalBid from current items + overrides
                           const W = {gcPct:10,contingency:5,margin:15,...budgetOverrides};
@@ -7862,7 +7862,7 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
                       />
                     </div>
                   </div>
-          {/* ── MP ESTIMATING / BID TRACKER ── */}
+          {/* -- MP ESTIMATING / BID TRACKER -- */}
           {activeNav === "estimating" && activeBU === "major" && (() => {
             const BID_TRADES = [
               "Concrete","Masonry","Demo","Rough Carpentry","Fluid Applied Flooring","Roofing",
@@ -7920,7 +7920,7 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
                 </div>
 
                 <div style={{display:"grid",gridTemplateColumns:"220px 1fr",flex:1,gap:0,minHeight:0,background:"#fff",borderRadius:12,border:"1px solid #D4D9EE",overflow:"hidden"}}>
-                  {/* Left — project list */}
+                  {/* Left - project list */}
                   <div style={{borderRight:"1px solid #D4D9EE",overflowY:"auto",background:"#F9FAFC"}}>
                     <div style={{padding:"10px 14px",borderBottom:"1px solid #D4D9EE",fontSize:10,fontWeight:700,color:"#9BA3BF",textTransform:"uppercase",letterSpacing:"0.07em"}}>Projects</div>
                     {allMpOpps.length === 0 && <div style={{padding:"20px 14px",fontSize:11,color:"#9BA3BF",textAlign:"center"}}>No MP projects yet.<br/>Add from Pipeline.</div>}
@@ -7948,7 +7948,7 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
                     })}
                   </div>
 
-                  {/* Right — bid tracker */}
+                  {/* Right - bid tracker */}
                   {!activeOpp ? (
                     <div style={{display:"flex",alignItems:"center",justifyContent:"center",flex:1,flexDirection:"column",gap:10,color:"#9BA3BF"}}>
                       <div style={{fontSize:40}}>📐</div>
@@ -8032,7 +8032,7 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
             );
           })()}
 
-          {/* ── LAWN BUDGETING ── */}
+          {/* -- LAWN BUDGETING -- */}
           {activeNav === "bids" && activeBU === "lawn" && (() => {
             const allLawnSites = lawnSites;
             const currentSites = allLawnSites.filter(site => {
@@ -8086,7 +8086,7 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
                   </div>
                 </div>
 
-                {/* ── Bid Map ── */}
+                {/* -- Bid Map -- */}
                 <div style={{ background: "#F0F2F8", border: "1px solid #CBD1E8", borderRadius: 12, overflow: "hidden" }}>
                   {/* Map filter tabs */}
                   <div style={{ display: "flex", gap: 0, borderBottom: "1px solid #CBD1E8", padding: "10px 14px", alignItems: "center", justifyContent: "space-between" }}>
@@ -8162,7 +8162,7 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
 
                             return (
                               <div key={site.id} style={{ background: "#ECEEF8", border: "1px solid " + (isEditing ? col.color + "50" : "#CBD1E8"), borderRadius: 8, overflow: "hidden", transition: "border-color 0.15s" }}>
-                                {/* Card header — click to expand */}
+                                {/* Card header - click to expand */}
                                 <div onClick={() => setEditLawnBidId(isEditing ? null : site.id)} style={{ padding: "10px 12px", cursor: "pointer" }}>
                                   <div style={{ fontSize: 12, fontWeight: 600, color: "#1A2240", marginBottom: 3 }}>
                                     {co?.name || "Unknown"} #{site.storeNumber || "—"}
@@ -8279,7 +8279,7 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
                                       </div>
                                     </div>
 
-                                    {/* ── SERVICE LINE ITEM PRICING ── */}
+                                    {/* -- SERVICE LINE ITEM PRICING -- */}
                                     <div>
                                       <div style={{ fontSize: 9, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 8 }}>Service Pricing</div>
                                       <div style={{ background: "#F0F2F8", borderRadius: 6, border: "1px solid #CBD1E8", overflow: "hidden" }}>
@@ -8356,7 +8356,7 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
                                       </div>
                                     </div>
 
-                                    {/* Contracts — file attachments */}
+                                    {/* Contracts - file attachments */}
                                     <div>
                                       <div style={{ fontSize: 9, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>Contracts</div>
                                       <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -8446,7 +8446,7 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
                                       )}
                                     </div>
 
-                                    {/* Convert to Active Site — buyout stage + both contracts attached */}
+                                    {/* Convert to Active Site - buyout stage + both contracts attached */}
                                     {bid?.status === "buyout" && bid?.ownerContractFile && bid?.subcontractFile && (
                                       <button onClick={() => {
                                         setEditLawnBidId(null);
@@ -8486,7 +8486,7 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
             );
           })()}
 
-          {/* ── PRICING SHEET (lawn) ── */}
+          {/* -- PRICING SHEET (lawn) -- */}
           {activeNav === "pricing" && activeBU === "lawn" && (() => {
             const allSites = lawnSites;
             const searchQ = pricingSearch.toLowerCase();
@@ -8661,7 +8661,7 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
             );
           })()}
 
-          {/* ── ACTIVE SITES (lawn / snow) ── */}
+          {/* -- ACTIVE SITES (lawn / snow) -- */}
           {activeNav === "active-sites" && LAWN_SNOW_SITES_BUS.includes(activeBU) && (() => {
             const currentSites = activeBU === "lawn" ? lawnSites : snowSites;
             const activeSites = currentSites.filter(site => {
@@ -8721,7 +8721,7 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
                       const includedServices = LAWN_SERVICES.filter(s => bid?.services?.[s.id]?.included);
                       return (
                         <div key={site.id} style={{ background: "#1A2240", border: "1px solid " + (isExpanded ? "#4ADE8060" : "#4ADE8030"), borderRadius: 10, overflow: "hidden", transition: "border-color 0.2s" }}>
-                          {/* Card header row — always visible, click to expand */}
+                          {/* Card header row - always visible, click to expand */}
                           <div onClick={() => setExpandedActiveSiteId(isExpanded ? null : site.id)} style={{ padding: "14px 18px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, cursor: "pointer" }}>
                             <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                               <div style={{ width: 36, height: 36, borderRadius: 8, background: "#4ADE8015", border: "1px solid #4ADE8030", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, flexShrink: 0 }}>✅</div>
@@ -8890,7 +8890,7 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
             );
           })()}
 
-          {/* ── COMING SOON (other nav items) ── */}
+          {/* -- COMING SOON (other nav items) -- */}
           {!["dashboard", "customers", "jobs", "pipeline", "budgeting", "finance", "sites", "projects", "team", "subcontractors", "bids", "active-sites", "pricing"].includes(activeNav) && (
             <div className="fade-in">
               <div style={{ marginBottom: 28 }}>
@@ -8909,7 +8909,7 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
       </div>
       {/* end main */}
 
-      {/* ── SITE SIDE PANEL ── */}
+      {/* -- SITE SIDE PANEL -- */}
       {selectedSite && !selectedCompany && (
         <div className="side-panel slide-in">
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
@@ -8961,7 +8961,7 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
 
                 {selectedSite.notes && <div style={{ fontSize: 12, color: "#6B7694", lineHeight: 1.6, background: "#F0F2F8", padding: "10px 12px", borderRadius: 6, border: "1px solid #CBD1E8" }}>{selectedSite.notes}</div>}
 
-                {/* Lawn bid pricing section — shown when this site has a lawn bid */}
+                {/* Lawn bid pricing section - shown when this site has a lawn bid */}
                 {(() => {
                   const bid = getLawnBid ? getLawnBid(selectedSite.id) : null;
                   if (!bid) return null;
@@ -9031,7 +9031,7 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
         </div>
       )}
 
-      {/* ── COMPANY SIDE PANEL ── */}
+      {/* -- COMPANY SIDE PANEL -- */}
       {selectedCompany && (
         <div className="side-panel slide-in">
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
@@ -9134,7 +9134,7 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
         </div>
       )}
 
-      {/* ── JOB SIDE PANEL ── */}
+      {/* -- JOB SIDE PANEL -- */}
       {selectedJob && !selectedOpp && !selectedCompany && (
         <div className="side-panel slide-in">
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
@@ -9180,7 +9180,7 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
       )}
 
 
-      {/* ── JOB FORM ── */}
+      {/* -- JOB FORM -- */}
       {showJobForm && (
         <div className="modal-bg" onClick={e => e.target === e.currentTarget && setShowJobForm(false)}>
           <div className="modal fade-in">
@@ -9230,7 +9230,7 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
         </div>
       )}
 
-      {/* ── OPP FORM ── */}
+      {/* -- OPP FORM -- */}
       {showForm && (
         <div className="modal-bg" onClick={e => e.target === e.currentTarget && setShowForm(false)}>
           <div className="modal fade-in">
@@ -9363,7 +9363,7 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
       )}
 
 
-      {/* ── SITE DETAIL MODAL ── */}
+      {/* -- SITE DETAIL MODAL -- */}
       {selectedSiteDetail && (() => {
         const s = selectedSiteDetail;
         const co = companies.find(c => c.id === s.companyId);
@@ -9410,7 +9410,7 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
             onClick={e=>{ if(e.target===e.currentTarget)setSelectedSiteDetail(null); }}>
             <div style={{width:"min(700px,100vw)",height:"100vh",background:"#F4F6FB",display:"flex",flexDirection:"column",boxShadow:"-8px 0 48px rgba(0,0,0,0.2)",overflowY:"auto"}}>
 
-              {/* ── Header ── */}
+              {/* -- Header -- */}
               <div style={{background:"linear-gradient(135deg,#1A2240,#253260)",padding:"22px 24px 18px",color:"#fff",flexShrink:0}}>
                 <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
                   <button onClick={()=>setSelectedSiteDetail(null)} style={{background:"rgba(255,255,255,0.12)",border:"none",color:"#fff",borderRadius:6,padding:"5px 12px",cursor:"pointer",fontSize:12,fontFamily:"inherit"}}>✕ Close</button>
@@ -9443,7 +9443,7 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
                 </div>
               </div>
 
-              {/* ── Tab bar ── */}
+              {/* -- Tab bar -- */}
               <div style={{display:"flex",background:"#fff",borderBottom:"1px solid #D4D9EE",flexShrink:0,overflowX:"auto"}}>
                 {TABS.map(t=>(
                   <button key={t.id} onClick={()=>setSiteDetailTab(t.id)}
@@ -9453,7 +9453,7 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
                 ))}
               </div>
 
-              {/* ── Tab content ── */}
+              {/* -- Tab content -- */}
               <div style={{flex:1,padding:"20px 22px",display:"flex",flexDirection:"column",gap:14}}>
 
                 {/* ══ INFO TAB ══ */}
@@ -9645,7 +9645,7 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
         );
       })()}
 
-      {/* ── BUDGET PRINT / PDF MODAL ── */}
+      {/* -- BUDGET PRINT / PDF MODAL -- */}
       {showBudgetPrint && budgetPrintOpp && (() => {
         const opp  = budgetPrintOpp;
         const co   = companies.find(c=>c.id===opp.companyId);
@@ -9663,7 +9663,7 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
         return (
           <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",zIndex:3000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
             <div style={{background:"#fff",borderRadius:12,width:"min(900px,100%)",maxHeight:"94vh",display:"flex",flexDirection:"column",boxShadow:"0 20px 80px rgba(0,0,0,0.3)",overflow:"hidden"}}>
-              {/* Controls — hidden on print */}
+              {/* Controls - hidden on print */}
               <div className="no-print" style={{background:"#F4F6FB",padding:"12px 20px",display:"flex",gap:10,alignItems:"center",borderBottom:"1px solid #D4D9EE",flexShrink:0}}>
                 <div style={{fontSize:13,fontWeight:700,color:"#1A2240",flex:1}}>🖨 Budget PDF Preview</div>
                 <div style={{display:"flex",alignItems:"center",gap:8}}>
@@ -9785,7 +9785,7 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
         );
       })()}
 
-      {/* ── PIPELINE OPP DETAIL PANEL ── */}
+      {/* -- PIPELINE OPP DETAIL PANEL -- */}
       {selectedOpp && !selectedCompany && (() => {
         const o    = selectedOpp;
         const co   = companies.find(c => c.id === o.companyId);
@@ -9864,7 +9864,7 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
             {/* Tab content */}
             <div style={{overflowY:"auto",flex:1,padding:"16px 20px",display:"flex",flexDirection:"column",gap:12}}>
 
-              {/* ── INFO / PROPERTY TAB ── */}
+              {/* -- INFO / PROPERTY TAB -- */}
               {activeTab==="info" && (
                 <div style={{display:"flex",flexDirection:"column",gap:12}}>
                   {/* Company + Contact */}
@@ -9953,7 +9953,7 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
                 </div>
               )}
 
-              {/* ── BUDGET TAB ── */}
+              {/* -- BUDGET TAB -- */}
               {activeTab==="budget" && (
                 <div style={{display:"flex",flexDirection:"column",gap:10}}>
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
@@ -9997,7 +9997,7 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
                 </div>
               )}
 
-              {/* ── ESTIMATING TAB ── */}
+              {/* -- ESTIMATING TAB -- */}
               {activeTab==="estimating" && (
                 <div style={{display:"flex",flexDirection:"column",gap:10}}>
                   <div style={{background:"#FFF9E6",border:"1px solid #FCD34D30",borderRadius:8,padding:"10px 12px",fontSize:11,color:"#B45309"}}>
@@ -10032,7 +10032,7 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
                 </div>
               )}
 
-              {/* ── CLOSED TAB ── */}
+              {/* -- CLOSED TAB -- */}
               {activeTab==="closed" && (
                 <div style={{display:"flex",flexDirection:"column",gap:10}}>
                   <div style={{background:"#F0FDF4",border:"1px solid #4ADE8030",borderRadius:8,padding:"12px 14px"}}>
@@ -10051,7 +10051,7 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
                 </div>
               )}
 
-              {/* ── NOTES TAB ── */}
+              {/* -- NOTES TAB -- */}
               {activeTab==="notes" && (
                 <div style={{display:"flex",flexDirection:"column",gap:10}}>
                   <div>
@@ -10093,7 +10093,7 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
       })()}
 
 
-      {/* ── ADD VENDOR MODAL ── */}
+      {/* -- ADD VENDOR MODAL -- */}
       {showAddVendor && activeBidOpp && (() => {
         const pkg = bidPackages[activeBidOpp] || { vendors:[], trades:[] };
         const BID_TRADES = [
@@ -10169,7 +10169,7 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
         );
       })()}
 
-      {/* ── BID PACKAGE PDF PRINT MODAL ── */}
+      {/* -- BID PACKAGE PDF PRINT MODAL -- */}
       {showBidPrintModal && bidPrintOppId && (() => {
         const opp  = pipeline.find(o=>o.id===bidPrintOppId);
         const co   = companies.find(c=>c.id===opp?.companyId);
@@ -10273,7 +10273,7 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
         );
       })()}
 
-      {/* ── WON → CONVERT TO ACTIVE PROJECT ── */}
+      {/* -- WON → CONVERT TO ACTIVE PROJECT -- */}
       {showWonConvert && wonConvertOpp && (() => {
         const opp = wonConvertOpp;
         const co  = companies.find(c => c.id === opp.companyId);
@@ -10400,7 +10400,7 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
         );
       })()}
 
-      {/* ── MP WEEKLY REPORT FORM ── */}
+      {/* -- MP WEEKLY REPORT FORM -- */}
       {showWeeklyForm && (
         <MpWeeklyForm
           mpJobs={mpJobs}
@@ -10425,7 +10425,7 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
 
 
 
-      {/* ── COMPANY FORM ── */}
+      {/* -- COMPANY FORM -- */}
       {showCompanyForm && (
         <div className="modal-bg" onClick={e => e.target === e.currentTarget && setShowCompanyForm(false)}>
           <div className="modal fade-in">
@@ -10447,7 +10447,7 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
         </div>
       )}
 
-      {/* ── CONTACT FORM ── */}
+      {/* -- CONTACT FORM -- */}
       {showContactForm && (
         <div className="modal-bg" onClick={e => e.target === e.currentTarget && setShowContactForm(false)}>
           <div className="modal fade-in">
@@ -10477,7 +10477,7 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
         </div>
       )}
 
-      {/* ── SITE FORM ── */}
+      {/* -- SITE FORM -- */}
       {showSiteForm && (
         <div className="modal-bg" onClick={e => e.target === e.currentTarget && setShowSiteForm(false)}>
           <div className="modal fade-in">
@@ -10527,7 +10527,7 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
         </div>
       )}
 
-      {/* ── CAPEX JOB SIDE PANEL ── */}
+      {/* -- CAPEX JOB SIDE PANEL -- */}
       {selectedCapexJob && (
         <div className="side-panel slide-in">
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
@@ -10583,7 +10583,7 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
         </div>
       )}
 
-      {/* ── FM JOB SIDE PANEL ── */}
+      {/* -- FM JOB SIDE PANEL -- */}
       {selectedFmJob && (
         <div className="side-panel slide-in" style={{ overflowY: "auto" }}>
           {(() => {
@@ -10616,7 +10616,7 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
                 {co && <div style={{ fontSize: 12, color: "#3B6FE8", cursor: "pointer" }} onClick={() => { setSelectedFmJob(null); setSelectedCompany(co); }}>🏢 {co.name}</div>}
                 {site && <div style={{ fontSize: 11, color: "#4A5278" }}>📍 {site.address}</div>}
 
-                {/* Stage selector — full pipeline across all 6 stages */}
+                {/* Stage selector - full pipeline across all 6 stages */}
                 <div>
                   <div style={{ fontSize: 10, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 8 }}>Stage</div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
@@ -10696,7 +10696,7 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
                   </div>
                 )}
 
-                {/* Do Work — scheduling info */}
+                {/* Do Work - scheduling info */}
                 {job.stage === "do_work" && job.schedToken && (
                   <div style={{ background: "#4ADE8010", border: "1px solid #4ADE8030", borderRadius: 8, padding: "12px 14px" }}>
                     <div style={{ fontSize: 10, color: "#4ADE80", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 8 }}>📅 Scheduling</div>
@@ -10749,7 +10749,7 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
                   </select>
                 </div>
 
-                {/* ── ESTIMATING stage panel ── */}
+                {/* -- ESTIMATING stage panel -- */}
                 {job.stage === "estimating" && (() => {
                   const nte      = Number(job.contractValue || job.nte || 0);
                   const gp       = job.grossProfit > 0 ? job.grossProfit : fmGrossProfit(nte);
@@ -10799,7 +10799,7 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
                         </div>
                       )}
 
-                      {/* ── PATH SELECTOR ── */}
+                      {/* -- PATH SELECTOR -- */}
                       {!estPath && (
                         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                           <div style={{ fontSize: 10, color: "#4A5278", marginBottom: 2 }}>How are we estimating this job?</div>
@@ -10821,7 +10821,7 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
                         </div>
                       )}
 
-                      {/* ── PATH 1: KNOWN VENDOR ── */}
+                      {/* -- PATH 1: KNOWN VENDOR -- */}
                       {estPath === "known_vendor" && (
                         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                           <div>
@@ -10896,7 +10896,7 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
                         </div>
                       )}
 
-                      {/* ── PATH 2: BID OUT ── */}
+                      {/* -- PATH 2: BID OUT -- */}
                       {estPath === "bid_out" && (() => {
                         const invites = job.bidInvites || [];
                         const responded = invites.filter(i => i.price);
@@ -10985,7 +10985,7 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
                         );
                       })()}
 
-                      {/* ── PATH 3: SELF-ESTIMATE ── */}
+                      {/* -- PATH 3: SELF-ESTIMATE -- */}
                       {estPath === "self_estimate" && (() => {
                         const se = job.selfEstimate || {};
                         const step = se.step || "category";
@@ -11291,7 +11291,7 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
                   );
                 })()}
 
-                {/* ── WAITING FOR QUOTE panel ── */}
+                {/* -- WAITING FOR QUOTE panel -- */}
                 {job.stage === "waiting_quote" && (() => {
                   const nte = Number(job.contractValue || 0);
                   const vendorNTE = job.vendorNTE ? Number(job.vendorNTE) : fmVendorNTE(nte);
@@ -11352,7 +11352,7 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
                   );
                 })()}
 
-                {/* ── GENERATE PROPOSAL panel ── */}
+                {/* -- GENERATE PROPOSAL panel -- */}
                 {job.stage === "generate_proposal" && (
                   <div style={{ background: "#F0F2F8", border: "1px solid #C084FC40", borderRadius: 8, padding: "14px" }}>
                     <div style={{ fontSize: 10, color: "#C084FC", textTransform: "uppercase", letterSpacing: "0.07em", fontWeight: 700, marginBottom: 12 }}>📄 Generate Proposal</div>
@@ -11405,7 +11405,7 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
                   </div>
                 )}
 
-                {/* ── Vendor Status (auto-derived, read-only) ── */}
+                {/* -- Vendor Status (auto-derived, read-only) -- */}
                 {job.subcontractorId && (() => {
                   const vps = job.vendorPortalStatus;
                   const stage = job.stage;
@@ -11516,7 +11516,7 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
         </div>
       )}
 
-      {/* ── CAPEX JOB FORM ── */}
+      {/* -- CAPEX JOB FORM -- */}
       {showCapexForm && (
         <div className="modal-bg" onClick={e => e.target === e.currentTarget && setShowCapexForm(false)}>
           <div className="modal fade-in">
@@ -11588,7 +11588,7 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
         </div>
       )}
 
-      {/* ── FM JOB FORM ── */}
+      {/* -- FM JOB FORM -- */}
       {showFmForm && (
         <div className="modal-bg" onClick={e => e.target === e.currentTarget && (setShowFmForm(false), setFmCompanySearch(""), setFmSiteSearch(""))}>
           <div className="modal fade-in">
@@ -11678,7 +11678,7 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
                   })()}
                 </div>
               </div>
-              {/* ── Approver (Billing Contact) ── */}
+              {/* -- Approver (Billing Contact) -- */}
               <div>
                 <label className="lbl">
                   Approver / Billing Contact
@@ -11776,7 +11776,7 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
         </div>
       )}
 
-      {/* ── LAWN/SNOW SITE SIDE PANEL ── */}
+      {/* -- LAWN/SNOW SITE SIDE PANEL -- */}
       {selectedLsSite && (() => {
         const slCo  = companies.find(c => c.id === selectedLsSite.companyId);
         const slBid = getLawnBid(selectedLsSite.id);
@@ -11908,7 +11908,7 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
         );
       })()}
 
-      {/* ── LAWN/SNOW SITE FORM ── */}
+      {/* -- LAWN/SNOW SITE FORM -- */}
       {showLsSiteForm && (
         <div className="modal-bg" onClick={e => e.target === e.currentTarget && setShowLsSiteForm(false)}>
           <div className="modal fade-in">
@@ -11981,7 +11981,7 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
         </div>
       )}
 
-      {/* ── PROPOSAL MODAL — BID QUOTE TAKE-OFF ── */}
+      {/* -- PROPOSAL MODAL - BID QUOTE TAKE-OFF -- */}
       {showProposal && proposalJob && (() => {
         const job = proposalJob;
         const co   = companies.find(c => c.id === job.companyId);
@@ -12076,7 +12076,7 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
               <div style={{ background: "#FFF", margin: 16, borderRadius: 8, padding: "24px 32px" }}>
                 <div id="bqto-content">
 
-                  {/* Header — real logo + company info */}
+                  {/* Header - real logo + company info */}
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8, paddingBottom: 10, borderBottom: "2px solid #ccc" }}>
                     <img src={FDI_LOGO} alt="Farmer Development Inc." style={{ height: 72, width: "auto", objectFit: "contain" }} />
                     <div style={{ textAlign: "right", fontFamily: "Arial, sans-serif" }}>
@@ -12104,7 +12104,7 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
                     </div>
                   </div>
 
-                  {/* Scope of Work — editable, pulls from job */}
+                  {/* Scope of Work - editable, pulls from job */}
                   <div style={{ border: "1px solid #ddd", borderRadius: 4, padding: "10px 14px", marginBottom: 16, fontFamily: "Arial, sans-serif" }}>
                     <div style={{ fontSize: 10, fontWeight: "bold", color: "#555", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6 }}>Scope of Work</div>
                     <textarea value={proposalScope} onChange={e => setProposalScope(e.target.value)} rows={3}
@@ -12189,7 +12189,7 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
                     <button onClick={addSection} style={{ fontSize: 11, color: "#3B6FE8", background: "none", border: "1px dashed #3B6FE840", borderRadius: 4, cursor: "pointer", padding: "4px 12px" }}>+ Add Section</button>
                   </div>
 
-                  {/* Summary block — right aligned matching template */}
+                  {/* Summary block - right aligned matching template */}
                   <div style={{ display: "flex", justifyContent: "flex-end" }}>
                     <div style={{ width: 320, fontFamily: "Arial, sans-serif", fontSize: 11 }}>
                       <div style={{ display: "flex", justifyContent: "space-between", padding: "4px 0", borderBottom: "1px solid #eee" }}>
@@ -12245,7 +12245,7 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
         );
       })()}
 
-      {/* ── LAWN BID DOCUMENT MODAL ── */}
+      {/* -- LAWN BID DOCUMENT MODAL -- */}
       {lawnBidDocSiteId && (() => {
         const site = lawnSites.find(s => s.id === lawnBidDocSiteId);
         if (!site) { setLawnBidDocSiteId(null); return null; }
@@ -12400,15 +12400,15 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
                               <span style={{ display: "inline-block", background: "#eee", borderRadius: 3, padding: "1px 7px", fontSize: 10, color: "#555" }}>{svc.freq}</span>
                             </td>
                             <td style={{ padding: "9px 8px", fontSize: 10, color: "#666" }}>{unitLabel}</td>
-                            {/* Unit price — blank writeable line */}
+                            {/* Unit price - blank writeable line */}
                             <td style={{ padding: "9px 8px", textAlign: "right" }}>
                               <span style={{ display: "inline-block", borderBottom: "1.5px solid #aaa", width: 85, minHeight: 15 }}>&nbsp;</span>
                             </td>
-                            {/* Est. annual — blank writeable line */}
+                            {/* Est. annual - blank writeable line */}
                             <td style={{ padding: "9px 8px", textAlign: "right" }}>
                               <span style={{ display: "inline-block", borderBottom: "1.5px solid #aaa", width: 85, minHeight: 15 }}>&nbsp;</span>
                             </td>
-                            {/* Notes — blank writeable line */}
+                            {/* Notes - blank writeable line */}
                             <td style={{ padding: "9px 8px" }}>
                               <span style={{ display: "inline-block", borderBottom: "1px solid #ccc", width: "100%", minHeight: 15 }}>&nbsp;</span>
                             </td>
@@ -12461,7 +12461,7 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
         );
       })()}
 
-      {/* ── TEAM MEMBER FORM MODAL ── */}
+      {/* -- TEAM MEMBER FORM MODAL -- */}
       {showTeamForm && (
         <div style={{ position: "fixed", inset: 0, background: "#00000090", zIndex: 9000, display: "flex", alignItems: "center", justifyContent: "center" }}>
           <div style={{ background: "#ECEEF8", border: "1px solid #CBD1E8", borderRadius: 12, padding: 28, width: 400 }}>
@@ -12521,7 +12521,7 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
         </div>
       )}
 
-      {/* ── SUBCONTRACTOR FORM MODAL ── */}
+      {/* -- SUBCONTRACTOR FORM MODAL -- */}
       {showSubForm && (
         <div style={{ position: "fixed", inset: 0, background: "#00000090", zIndex: 9000, display: "flex", alignItems: "center", justifyContent: "center" }}>
           <div style={{ background: "#ECEEF8", border: "1px solid #CBD1E8", borderRadius: 12, padding: 28, width: 480 }}>
@@ -12621,8 +12621,8 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
         </div>
       )}
 
-      {/* ── LANDSCAPING SUBCONTRACT MODAL ── */}
-      {/* ── ACREAGE MOWING CALCULATOR MODAL ── */}
+      {/* -- LANDSCAPING SUBCONTRACT MODAL -- */}
+      {/* -- ACREAGE MOWING CALCULATOR MODAL -- */}
       {acreageModalSiteId && (() => {
         const site = lawnSites.find(s => s.id === acreageModalSiteId);
         if (!site) { setAcreageModalSiteId(null); return null; }
@@ -12710,7 +12710,7 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
         );
       })()}
 
-      {/* ── OWNER PROPOSAL TEMPLATE PICKER ── */}
+      {/* -- OWNER PROPOSAL TEMPLATE PICKER -- */}
       {ownerProposalSiteId && (() => {
         const site = lawnSites.find(s => s.id === ownerProposalSiteId);
         if (!site) { setOwnerProposalSiteId(null); return null; }
