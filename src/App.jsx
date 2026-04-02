@@ -7862,6 +7862,11 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
                       />
                     </div>
                   </div>
+                </div>
+              </div>
+            );
+          })()}
+
           {/* -- MP ESTIMATING / BID TRACKER -- */}
           {activeNav === "estimating" && activeBU === "major" && (() => {
             const BID_TRADES = [
@@ -8891,7 +8896,7 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
           })()}
 
           {/* -- COMING SOON (other nav items) -- */}
-          {!["dashboard", "customers", "jobs", "pipeline", "budgeting", "finance", "sites", "projects", "team", "subcontractors", "bids", "active-sites", "pricing"].includes(activeNav) && (
+          {!["dashboard", "customers", "jobs", "pipeline", "budgeting", "estimating", "finance", "sites", "projects", "team", "subcontractors", "bids", "active-sites", "pricing"].includes(activeNav) && (
             <div className="fade-in">
               <div style={{ marginBottom: 28 }}>
                 <div style={{ fontSize: 22, fontWeight: 700, color: "#1A2240", textTransform: "uppercase" }}>{navItems.find(n => n.id === activeNav)?.label}</div>
@@ -8905,9 +8910,9 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
           )}
 
         </div>
-        {/* end content */}
+
       </div>
-      {/* end main */}
+
 
       {/* -- SITE SIDE PANEL -- */}
       {selectedSite && !selectedCompany && (
