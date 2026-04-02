@@ -2058,7 +2058,7 @@ function MpBudgetTool({ opp, company, items, setItems, overrides, setOverrides }
   const fmtC = n => "$"+Math.round(n).toLocaleString();
   const pctSty = {width:70,padding:"5px 8px",border:"1.5px solid #CBD1E8",borderRadius:6,fontSize:13,fontFamily:"inherit",outline:"none",textAlign:"right"};
 
-  const addTrade = (t) => { setItems(prev=>[...prev,{...t,qty:0,rate:t.rate,desc:""}]); setShowAdd(false); };
+  const addTrade = (t) => { setItems(prev=>[...prev,{...t,qty:0,rate:t.rate,desc:""}]); }; // keep picker open
   const updateItem = (id,u) => setItems(prev=>prev.map(i=>i.id===id?u:i));
   const removeItem = (id)   => setItems(prev=>prev.filter(i=>i.id!==id));
 
@@ -2268,7 +2268,7 @@ export default function App() {
   const [pipeline,     setPipeline]     = useState([]);
   const [showForm,     setShowForm]     = useState(false);
   const [editId,       setEditId]       = useState(null);
-  const [form,         setForm]         = useState({ name: "", companyId: "", contactId: "", value: "", stage: "Budgeting", closeDate: "", notes: "", bu: "major", budgetDueDate: "", bidDueDate: "", nextSteps: [], sf:"", buildingType:"" });
+  const [form,         setForm]         = useState({ name: "", companyId: "", contactId: "", value: "", stage: "Budgeting", closeDate: "", notes: "", bu: "major", budgetDueDate: "", bidDueDate: "", nextSteps: [], sf:"", buildingType:"", buildingTypes:[], sf_multistory:"", sf_singlestory:"", sf_canopy:"", sf_mezzanine:"" });
   const [pipelineView, setPipelineView] = useState("kanban");
   const [filterBU,     setFilterBU]     = useState("all");
   const [search,       setSearch]       = useState("");
@@ -2947,7 +2947,7 @@ Return ONLY valid JSON, no markdown, no extra text:
   // Pipeline helpers
   const openAdd = (defaultStage) => {
     setEditId(null);
-    setForm({ name: "", companyId: "", contactId: "", value: "", stage: defaultStage || "Budgeting", pipelineType: "budgeting", closeDate: "", notes: "", bu: activeBU === "all" ? "major" : activeBU, budgetDueDate: "", bidDueDate: "", nextSteps: [], sf:"", buildingType:"" });
+    setForm({ name: "", companyId: "", contactId: "", value: "", stage: defaultStage || "Budgeting", pipelineType: "budgeting", closeDate: "", notes: "", bu: activeBU === "all" ? "major" : activeBU, budgetDueDate: "", bidDueDate: "", nextSteps: [], sf:"", buildingType:"", buildingTypes:[], sf_multistory:"", sf_singlestory:"", sf_canopy:"", sf_mezzanine:"" });
     setShowForm(true);
   };
   const openEdit = (o) => {
@@ -7465,20 +7465,38 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
                       return (
                         <div key={o.id} onClick={()=>{
                           setActiveBudgetOpp(o.id);
-                          // Auto-populate building type if set
-                          if (o.buildingType && o.sf) {
+                          // Auto-populate budget from building types
+                          const types = o.buildingTypes||[];
+                          if (types.length > 0) {
+                            const descs = {multistory:"Multistory conversion",singlestory:"Single story conversion",canopy:"Canopy structure",mezzanine:"Mezzanine"};
+                            const autoItems = types.map(btId=>{
+                              const trade = TRADE_DEFAULTS.find(t=>t.id===btId);
+                              if (!trade) return null;
+                              const sf = parseFloat(o["sf_"+btId]||o.sf)||0;
+                              return {...trade, qty:sf, rate:trade.rate, desc:descs[btId]||trade.label};
+                            }).filter(Boolean);
+                            setBudgetItems(autoItems.length > 0 ? autoItems : []);
+                          } else if (o.buildingType && o.sf) {
                             const trade = TRADE_DEFAULTS.find(t=>t.id===o.buildingType);
-                            if (trade) {
-                              setBudgetItems([{...trade, qty:parseFloat(o.sf)||0, rate:trade.rate, desc:o.buildingType==="multistory"?"Multistory conversion":o.buildingType==="singlestory"?"Single story conversion":o.buildingType==="canopy"?"Canopy structure":"Mezzanine"}]);
-                            } else { setBudgetItems([]); }
+                            if (trade) setBudgetItems([{...trade,qty:parseFloat(o.sf)||0,rate:trade.rate,desc:trade.label}]);
+                            else setBudgetItems([]);
                           } else { setBudgetItems([]); }
                         }}
                           style={{padding:"10px 14px",cursor:"pointer",background:isActive?"#EEF3FF":"transparent",borderBottom:"1px solid #F0F2F8",borderLeft:isActive?"3px solid #3B6FE8":"3px solid transparent"}}
                           onMouseEnter={e=>{if(!isActive)e.currentTarget.style.background="#F4F6FB";}}
                           onMouseLeave={e=>{if(!isActive)e.currentTarget.style.background="transparent";}}>
                           <div style={{fontSize:12,fontWeight:700,color:"#1A2240",lineHeight:1.3,marginBottom:2}}>{o.name}</div>
-                          <div style={{fontSize:10,color:"#9BA3BF"}}>{co?.name||"—"}</div>
-                          <div style={{display:"flex",justifyContent:"space-between",marginTop:4,alignItems:"center"}}>
+                          <div style={{fontSize:10,color:"#9BA3BF",marginBottom:2}}>{co?.name||"—"}</div>
+                          {(o.buildingTypes||[]).length>0 && (
+                            <div style={{fontSize:9,color:"#3B6FE8",marginBottom:2}}>
+                              {(o.buildingTypes||[]).map(bt=>{
+                                const labels={multistory:"Multi",singlestory:"Single",canopy:"Canopy",mezzanine:"Mezz"};
+                                const sf=parseFloat(o["sf_"+bt]||0);
+                                return sf>0?`${labels[bt]||bt}: ${sf.toLocaleString()}SF`:`${labels[bt]||bt}`;
+                              }).join(" · ")}
+                            </div>
+                          )}
+                          <div style={{display:"flex",justifyContent:"space-between",marginTop:2,alignItems:"center"}}>
                             <span style={{fontSize:9,fontWeight:700,background:(stgColors[stg]||"#9BA3BF")+"20",color:stgColors[stg]||"#9BA3BF",borderRadius:3,padding:"1px 5px"}}>
                               {stgLabels[stg]||stg}
                             </span>
@@ -7493,14 +7511,55 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
                   <div style={{display:"flex",flexDirection:"column",overflow:"hidden"}}>
                     {/* Project header bar */}
                     {activeOpp && (
-                      <div style={{background:"linear-gradient(135deg,#1A2240,#253260)",padding:"12px 18px",flexShrink:0,display:"flex",alignItems:"center",gap:12}}>
+                      <div style={{background:"linear-gradient(135deg,#1A2240,#253260)",padding:"12px 18px",flexShrink:0,display:"flex",alignItems:"center",gap:10}}>
                         <div style={{flex:1}}>
                           <div style={{fontSize:14,fontWeight:800,color:"#fff"}}>{activeOpp.name}</div>
                           <div style={{fontSize:10,color:"rgba(255,255,255,0.5)",marginTop:1}}>
-                            {companies.find(c=>c.id===activeOpp.companyId)?.name||""}{(parseFloat(activeOpp.value)||0)>0?" · Target: $"+(parseFloat(activeOpp.value)/1000).toFixed(0)+"k":""}
+                            {companies.find(c=>c.id===activeOpp.companyId)?.name||""}
+                            {(parseFloat(activeOpp.value)||0)>0?" · Est: $"+(parseFloat(activeOpp.value)/1000).toFixed(0)+"k":""}
                           </div>
                         </div>
-                        <button onClick={()=>{ setWonConvertOpp(activeOpp); setWonConvertForm({startDate:"",endDate:"",contractValue:activeOpp.value||"",pm:"",notes:activeOpp.notes||""}); setShowWonConvert(true); }}
+                        {/* Save Budget — updates opportunity estimated value */}
+                        {budgetItems.length > 0 && (() => {
+                          // Recompute totalBid from current items + overrides
+                          const W = {gcPct:10,contingency:5,margin:15,...budgetOverrides};
+                          const direct = budgetItems.reduce((s,i)=>s+(i.qty||0)*(i.rate||0),0);
+                          const gc = direct*(W.gcPct/100);
+                          const cont = (direct+gc)*(W.contingency/100);
+                          const sub = direct+gc+cont;
+                          const mAmt = sub*(W.margin/(100-Math.min(W.margin,99)));
+                          const total = Math.round(sub+mAmt);
+                          return (
+                            <button onClick={async ()=>{
+                              // Update local pipeline state
+                              setPipeline(prev=>prev.map(o=>o.id===activeOpp.id?{...o,value:total}:o));
+                              // Persist to Supabase
+                              try {
+                                await fetch(`${SUPA_URL}/rest/v1/mp_pipeline?id=eq.${String(activeOpp.id)}`,{
+                                  method:"PATCH",
+                                  headers:{apikey:SUPA_KEY,Authorization:`Bearer ${SUPA_KEY}`,"Content-Type":"application/json",Prefer:"return=minimal"},
+                                  body:JSON.stringify({value:total})
+                                });
+                              } catch(e){}
+                              // Flash feedback
+                              alert("Budget saved! Estimated value updated to $"+total.toLocaleString());
+                            }}
+                              style={{padding:"6px 14px",background:"#3B6FE8",border:"none",borderRadius:6,color:"#fff",fontWeight:700,fontSize:11,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",gap:5}}>
+                              💾 Save Budget · ${(total/1000).toFixed(0)}k
+                            </button>
+                          );
+                        })()}
+                        <button onClick={()=>{
+                          // Pre-fill contract value with budget total if available
+                          const W2={gcPct:10,contingency:5,margin:15,...budgetOverrides};
+                          const d2=budgetItems.reduce((s,i)=>s+(i.qty||0)*(i.rate||0),0);
+                          const g2=d2*(W2.gcPct/100); const c2=(d2+g2)*(W2.contingency/100);
+                          const s2=d2+g2+c2; const m2=s2*(W2.margin/(100-Math.min(W2.margin,99)));
+                          const bidTotal=budgetItems.length>0?Math.round(s2+m2):null;
+                          setWonConvertOpp(activeOpp);
+                          setWonConvertForm({startDate:"",endDate:"",contractValue:bidTotal||activeOpp.value||"",pm:"",notes:activeOpp.notes||""});
+                          setShowWonConvert(true);
+                        }}
                           style={{padding:"6px 12px",background:"#4ADE80",border:"none",borderRadius:6,color:"#1A2240",fontWeight:700,fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>
                           ✓ Won — Create Project
                         </button>
@@ -8863,22 +8922,51 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
               {form.bu === "major" && (
                 <div style={{ background:"#F4F6FB", border:"1px solid #D4D9EE", borderRadius:8, padding:"12px 14px", display:"flex", flexDirection:"column", gap:10 }}>
                   <div style={{ fontSize:11, fontWeight:700, color:"#3B6FE8", textTransform:"uppercase", letterSpacing:"0.07em" }}>📐 Building Details (auto-populates budget)</div>
-                  <div className="g2">
-                    <div>
-                      <label className="lbl">Building Type</label>
-                      <select className="fi" value={form.buildingType||""} onChange={e=>setForm(f=>({...f,buildingType:e.target.value}))}>
-                        <option value="">Select type…</option>
-                        <option value="multistory">Multistory Building ($18/SF)</option>
-                        <option value="singlestory">Single Story Building ($16/SF)</option>
-                        <option value="canopy">Canopy ($16/SF)</option>
-                        <option value="mezzanine">Mezzanine</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label className="lbl">Square Footage (SF)</label>
-                      <input className="fi" type="number" value={form.sf||""} onChange={e=>setForm(f=>({...f,sf:e.target.value}))} placeholder="e.g. 40000"/>
+                  <div>
+                    <label className="lbl">Building Types — select all that apply</label>
+                    <div style={{ display:"flex", flexWrap:"wrap", gap:6, marginTop:4 }}>
+                      {[
+                        {id:"multistory",  label:"Multistory", rate:"$18/SF"},
+                        {id:"singlestory", label:"Single Story", rate:"$16/SF"},
+                        {id:"canopy",      label:"Canopy", rate:"$16/SF"},
+                        {id:"mezzanine",   label:"Mezzanine", rate:"custom"},
+                      ].map(bt=>{
+                        const sel = (form.buildingTypes||[]).includes(bt.id);
+                        return (
+                          <button key={bt.id} type="button"
+                            onClick={()=>{
+                              const cur = form.buildingTypes||[];
+                              const next = sel ? cur.filter(x=>x!==bt.id) : [...cur, bt.id];
+                              setForm(f=>({...f, buildingTypes:next, buildingType:next[0]||""}));
+                            }}
+                            style={{padding:"5px 12px",borderRadius:6,border:"1.5px solid "+(sel?"#3B6FE8":"#CBD1E8"),background:sel?"#3B6FE8":"#fff",color:sel?"#fff":"#4A5278",fontSize:12,cursor:"pointer",fontFamily:"inherit",display:"flex",gap:5,alignItems:"center"}}>
+                            {sel?"✓ ":""}{bt.label}
+                            <span style={{fontSize:10,opacity:0.7}}>{bt.rate}</span>
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
+                  {/* SF per building type */}
+                  {(form.buildingTypes||[]).length > 0 && (
+                    <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+                      <label className="lbl">Square Footage per Type</label>
+                      {(form.buildingTypes||[]).map(btId=>{
+                        const labels={"multistory":"Multistory","singlestory":"Single Story","canopy":"Canopy","mezzanine":"Mezzanine"};
+                        const sfKey = "sf_"+btId;
+                        return (
+                          <div key={btId} style={{display:"flex",alignItems:"center",gap:8}}>
+                            <span style={{fontSize:12,color:"#1A2240",fontWeight:500,minWidth:100}}>{labels[btId]}</span>
+                            <input className="fi" type="number"
+                              value={form[sfKey]||""}
+                              onChange={e=>setForm(f=>({...f,[sfKey]:e.target.value}))}
+                              placeholder="SF" style={{flex:1}}/>
+                            <span style={{fontSize:11,color:"#9BA3BF"}}>SF</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               )}
               <div><label className="lbl">Expected Close Date</label><input className="fi" type="date" value={form.closeDate} onChange={fp("closeDate")} /></div>
