@@ -2325,6 +2325,11 @@ export default function App() {
   const [parsedFields,     setParsedFields]     = useState(null);
   const [showAddCo,        setShowAddCo]        = useState(false);
   const [showWonConvert,   setShowWonConvert]   = useState(false);
+  const [showBudgetPrint,  setShowBudgetPrint]  = useState(false);
+  const [budgetPrintOpp,   setBudgetPrintOpp]   = useState(null);
+  const [budgetAttachment, setBudgetAttachment] = useState("");
+  const [editingContact,   setEditingContact]   = useState(null);  // contact being edited inline
+  const [editContactForm,  setEditContactForm]  = useState({});
   const [budgetItems,      setBudgetItems]      = useState([]);
   const [activeBudgetOpp,  setActiveBudgetOpp]  = useState(null);
   const [budgetOverrides,  setBudgetOverrides]  = useState({ gcPct:10, contingency:5, margin:15 });
@@ -4502,6 +4507,32 @@ Return ONLY valid JSON, no markdown, no extra text:
                         {coContacts.length === 0 && <div style={{ fontSize: 13, color: "#4A5278", fontStyle: "italic" }}>No contacts yet.</div>}
                         {coContacts.map(c => {
                           const cSites = sites.filter(s => (s.contactIds||[]).includes(c.id));
+                          const isEditing = editingContact === c.id;
+                          if (isEditing) {
+                            return (
+                              <div key={c.id} style={{background:"#F4F6FB",border:"1.5px solid #3B6FE8",borderRadius:10,padding:"14px 16px",display:"flex",flexDirection:"column",gap:10}}>
+                                <div style={{fontSize:11,fontWeight:700,color:"#3B6FE8",textTransform:"uppercase",letterSpacing:"0.07em"}}>Editing Contact</div>
+                                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                                  {[{k:"firstName",l:"First Name"},{k:"lastName",l:"Last Name"},{k:"title",l:"Title"},{k:"phone",l:"Phone"},{k:"email",l:"Email"}].map(f=>(
+                                    <div key={f.k} style={{gridColumn:f.k==="email"?"span 2":"auto"}}>
+                                      <div style={{fontSize:10,color:"#9BA3BF",marginBottom:2}}>{f.l}</div>
+                                      <input value={editContactForm[f.k]||""} onChange={e=>setEditContactForm(p=>({...p,[f.k]:e.target.value}))}
+                                        style={{width:"100%",padding:"7px 9px",border:"1px solid #CBD1E8",borderRadius:6,fontSize:12,fontFamily:"inherit",outline:"none",boxSizing:"border-box"}}/>
+                                    </div>
+                                  ))}
+                                </div>
+                                <div style={{display:"flex",gap:8}}>
+                                  <button onClick={()=>setEditingContact(null)} style={{flex:1,padding:"7px",background:"#F0F2F8",border:"1px solid #CBD1E8",borderRadius:6,cursor:"pointer",fontFamily:"inherit",fontSize:12,color:"#4A5278"}}>Cancel</button>
+                                  <button onClick={async ()=>{
+                                    const updated={...c,...editContactForm};
+                                    setContacts(prev=>prev.map(ct=>ct.id===c.id?updated:ct));
+                                    try{await supa.from("contacts").update(contactToDB(updated)).eq("id",c.id);}catch(e){}
+                                    setEditingContact(null);
+                                  }} style={{flex:2,padding:"7px",background:"#3B6FE8",border:"none",borderRadius:6,cursor:"pointer",fontFamily:"inherit",fontSize:12,color:"#fff",fontWeight:700}}>Save Changes</button>
+                                </div>
+                              </div>
+                            );
+                          }
                           return (
                             <div key={c.id}
                               onClick={() => setSelectedContact(c)}
@@ -4522,7 +4553,10 @@ Return ONLY valid JSON, no markdown, no extra text:
                               <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4, flexShrink: 0 }}>
                                 <div style={{ fontSize: 18, fontWeight: 800, color: "#3B6FE8" }}>{cSites.length}</div>
                                 <div style={{ fontSize: 10, color: "#9BA3BF", textTransform: "uppercase", letterSpacing: "0.07em" }}>stores</div>
-                                <div style={{ fontSize: 10, color: "#CBD1E8" }}>→</div>
+                                <button onClick={e=>{e.stopPropagation();setEditingContact(c.id);setEditContactForm({firstName:c.firstName,lastName:c.lastName,title:c.title,phone:c.phone,email:c.email});}}
+                                  style={{fontSize:10,color:"#3B6FE8",background:"#EEF3FF",border:"1px solid #3B6FE830",borderRadius:4,padding:"2px 7px",cursor:"pointer",fontFamily:"inherit",fontWeight:600}}>
+                                  ✎ Edit
+                                </button>
                               </div>
                             </div>
                           );
@@ -7549,6 +7583,13 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
                             </button>
                           );
                         })()}
+                        {/* Print Budget PDF button */}
+                        {budgetItems.length > 0 && (
+                          <button onClick={()=>{ setBudgetPrintOpp(activeOpp); setBudgetAttachment(""); setShowBudgetPrint(true); }}
+                            style={{padding:"6px 12px",background:"rgba(255,255,255,0.15)",border:"1px solid rgba(255,255,255,0.3)",borderRadius:6,color:"#fff",fontWeight:600,fontSize:11,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",gap:5}}>
+                            🖨 Print PDF
+                          </button>
+                        )}
                         <button onClick={()=>{
                           // Pre-fill contract value with budget total if available
                           const W2={gcPct:10,contingency:5,margin:15,...budgetOverrides};
@@ -9258,6 +9299,262 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
                 )}
 
               </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* ── BUDGET PRINT / PDF MODAL ── */}
+      {showBudgetPrint && budgetPrintOpp && (() => {
+        const opp  = budgetPrintOpp;
+        const co   = companies.find(c=>c.id===opp.companyId);
+        const W    = {gcPct:10,contingency:5,margin:15,...budgetOverrides};
+        const direct      = budgetItems.reduce((s,i)=>s+(i.qty||0)*(i.rate||0),0);
+        const gcAmt       = direct*(W.gcPct/100);
+        const contingency = (direct+gcAmt)*(W.contingency/100);
+        const subtotal    = direct+gcAmt+contingency;
+        const marginAmt   = subtotal*(W.margin/(100-Math.min(W.margin,99)));
+        const totalBid    = subtotal+marginAmt;
+        const gpm         = totalBid>0?marginAmt/totalBid:0;
+        const fmtC = n => "$"+Math.round(n).toLocaleString();
+        const today = new Date().toLocaleDateString("en-US",{year:"numeric",month:"long",day:"numeric"});
+
+        return (
+          <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.6)",zIndex:3000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+            <div style={{background:"#fff",borderRadius:12,width:"min(900px,100%)",maxHeight:"94vh",display:"flex",flexDirection:"column",boxShadow:"0 20px 80px rgba(0,0,0,0.3)",overflow:"hidden"}}>
+              {/* Controls — hidden on print */}
+              <div className="no-print" style={{background:"#F4F6FB",padding:"12px 20px",display:"flex",gap:10,alignItems:"center",borderBottom:"1px solid #D4D9EE",flexShrink:0}}>
+                <div style={{fontSize:13,fontWeight:700,color:"#1A2240",flex:1}}>🖨 Budget PDF Preview</div>
+                <div style={{display:"flex",alignItems:"center",gap:8}}>
+                  <span style={{fontSize:12,color:"#4A5278"}}>Attachment URL:</span>
+                  <input value={budgetAttachment} onChange={e=>setBudgetAttachment(e.target.value)}
+                    placeholder="Paste drawing/attachment URL…"
+                    style={{padding:"6px 10px",border:"1px solid #CBD1E8",borderRadius:6,fontSize:12,fontFamily:"inherit",width:280,outline:"none"}}/>
+                </div>
+                <button onClick={()=>window.print()} style={{padding:"7px 18px",background:"#3B6FE8",color:"#fff",border:"none",borderRadius:7,cursor:"pointer",fontFamily:"inherit",fontSize:13,fontWeight:700}}>🖨 Print / Save PDF</button>
+                <button onClick={()=>setShowBudgetPrint(false)} style={{padding:"7px 14px",background:"#F0F2F8",color:"#4A5278",border:"1px solid #CBD1E8",borderRadius:7,cursor:"pointer",fontFamily:"inherit",fontSize:13}}>✕ Close</button>
+              </div>
+
+              {/* Printable content */}
+              <div id="budget-print-area" style={{overflowY:"auto",flex:1,padding:"40px 48px",fontFamily:"'Helvetica Neue',Arial,sans-serif"}}>
+                <style>{`
+                  @media print {
+                    body > * { display: none !important; }
+                    #budget-print-area { display: block !important; position: fixed; inset: 0; overflow: visible; padding: 40px 48px; }
+                    .no-print { display: none !important; }
+                  }
+                `}</style>
+
+                {/* Letterhead */}
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:32,paddingBottom:20,borderBottom:"3px solid #1A2240"}}>
+                  <div>
+                    <div style={{fontSize:28,fontWeight:900,color:"#1A2240",letterSpacing:"-0.02em"}}>FARMER GROUP</div>
+                    <div style={{fontSize:11,color:"#4A5278",marginTop:2,letterSpacing:"0.05em"}}>DEVELOPMENT · CONSTRUCTION · MANAGEMENT</div>
+                    <div style={{fontSize:10,color:"#9BA3BF",marginTop:6}}>Farmer Development Inc. · (810) 844-1544 · farmerdevelopment.com</div>
+                  </div>
+                  <div style={{textAlign:"right"}}>
+                    <div style={{fontSize:11,color:"#9BA3BF",marginBottom:2}}>Budget Estimate</div>
+                    <div style={{fontSize:12,fontWeight:600,color:"#1A2240"}}>{today}</div>
+                    <div style={{fontSize:10,color:"#9BA3BF",marginTop:4}}>Confidential — For Discussion Only</div>
+                  </div>
+                </div>
+
+                {/* Project info */}
+                <div style={{marginBottom:28}}>
+                  <div style={{fontSize:20,fontWeight:800,color:"#1A2240",marginBottom:4}}>{opp.name}</div>
+                  {co && <div style={{fontSize:13,color:"#4A5278",marginBottom:2}}>{co.name}</div>}
+                  {opp.notes && <div style={{fontSize:12,color:"#9BA3BF",marginTop:4,fontStyle:"italic"}}>{opp.notes}</div>}
+                </div>
+
+                {/* Line items table */}
+                <table style={{width:"100%",borderCollapse:"collapse",marginBottom:24}}>
+                  <thead>
+                    <tr style={{background:"#1A2240"}}>
+                      {["Trade / Scope","Description","Unit","Qty","Unit Rate","Total"].map((h,i)=>(
+                        <th key={i} style={{padding:"8px 10px",fontSize:10,color:"#fff",textAlign:i>=3?"right":"left",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.06em"}}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {budgetItems.map((item,i)=>{
+                      const total=(item.qty||0)*(item.rate||0);
+                      return (
+                        <tr key={item.id} style={{borderBottom:"1px solid #E8EBF4",background:i%2===0?"#fff":"#F9FAFC"}}>
+                          <td style={{padding:"7px 10px",fontSize:11,fontWeight:600,color:"#1A2240"}}>{item.label}</td>
+                          <td style={{padding:"7px 10px",fontSize:11,color:"#4A5278"}}>{item.desc||"—"}</td>
+                          <td style={{padding:"7px 10px",fontSize:11,color:"#9BA3BF",textAlign:"center"}}>{item.unit}</td>
+                          <td style={{padding:"7px 10px",fontSize:11,textAlign:"right",color:"#1A2240"}}>{(item.qty||0).toLocaleString()}</td>
+                          <td style={{padding:"7px 10px",fontSize:11,textAlign:"right",color:"#1A2240"}}>{item.rate?fmtC(item.rate):"—"}</td>
+                          <td style={{padding:"7px 10px",fontSize:12,textAlign:"right",fontWeight:700,color:total>0?"#1A2240":"#CBD1E8"}}>{total>0?fmtC(total):"—"}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+
+                {/* Cost summary */}
+                <div style={{display:"flex",justifyContent:"flex-end",marginBottom:28}}>
+                  <div style={{width:320}}>
+                    {[
+                      {label:"Direct Costs",              value:direct,     light:false},
+                      {label:`General Conditions (${W.gcPct}%)`, value:gcAmt,      light:true},
+                      {label:`Contingency (${W.contingency}%)`,  value:contingency,light:true},
+                      {label:"Cost Subtotal",              value:subtotal,   bold:true},
+                    ].map((r,i)=>(
+                      <div key={i} style={{display:"flex",justifyContent:"space-between",padding:"5px 0",borderTop:r.bold?"2px solid #1A2240":"none",marginTop:r.bold?4:0}}>
+                        <span style={{fontSize:11,color:r.light?"#9BA3BF":"#1A2240",fontWeight:r.bold?700:400,paddingLeft:r.light?12:0}}>{r.label}</span>
+                        <span style={{fontSize:11,fontWeight:r.bold?800:500,color:"#1A2240"}}>{fmtC(r.value)}</span>
+                      </div>
+                    ))}
+                    {/* Total bid highlight */}
+                    <div style={{marginTop:8,background:"#1A2240",borderRadius:6,padding:"12px 14px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                      <div>
+                        <div style={{fontSize:10,color:"rgba(255,255,255,0.5)",textTransform:"uppercase",letterSpacing:"0.08em"}}>Total Bid Price</div>
+                        <div style={{fontSize:11,color:"rgba(255,255,255,0.5)",marginTop:1}}>GPM: {(gpm*100).toFixed(1)}% · GP: {fmtC(marginAmt)}</div>
+                      </div>
+                      <div style={{fontSize:22,fontWeight:900,color:"#fff"}}>{fmtC(totalBid)}</div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Attachment */}
+                {budgetAttachment && (
+                  <div style={{marginBottom:24,border:"1px solid #D4D9EE",borderRadius:8,overflow:"hidden"}}>
+                    <div style={{background:"#F4F6FB",padding:"8px 14px",fontSize:11,fontWeight:700,color:"#4A5278",borderBottom:"1px solid #D4D9EE"}}>
+                      ATTACHMENT — CONCEPTUAL DRAWING
+                    </div>
+                    <div style={{padding:16,textAlign:"center"}}>
+                      {/\.(jpg|jpeg|png|gif|webp)$/i.test(budgetAttachment) ? (
+                        <img src={budgetAttachment} alt="Attachment" style={{maxWidth:"100%",maxHeight:400,borderRadius:6}}/>
+                      ) : (
+                        <a href={budgetAttachment} style={{fontSize:12,color:"#3B6FE8"}}>{budgetAttachment}</a>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Footer */}
+                <div style={{borderTop:"2px solid #1A2240",paddingTop:14,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                  <div style={{fontSize:10,color:"#9BA3BF"}}>This estimate is based on conceptual information and is subject to change pending final design and site conditions.</div>
+                  <div style={{fontSize:10,color:"#9BA3BF"}}>Farmer Development Inc. · Confidential</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* ── PIPELINE OPP DETAIL PANEL (enhanced for MP) ── */}
+      {selectedOpp && !selectedCompany && (() => {
+        const o   = selectedOpp;
+        const co  = companies.find(c => c.id === o.companyId);
+        const ct  = contacts.find(p => p.id === o.contactId);
+        const isMp = o.bu === "major";
+        const MP_STAGE_COLORS = {lead:"#A78BFA",budgeting_lead:"#818CF8",proposal_bid:"#60A5FA",negotiation:"#FCD34D",won:"#4ADE80",lost:"#F87171"};
+        const MP_STAGE_LABELS = {lead:"Lead",budgeting_lead:"Budgeting Lead",proposal_bid:"Proposal / Bid",negotiation:"Negotiation",won:"Won",lost:"Lost"};
+        const stageColor = MP_STAGE_COLORS[o.stage] || "#818CF8";
+
+        return (
+          <div className="slide-panel fade-in" style={{position:"fixed",right:0,top:0,bottom:0,width:"min(520px,100vw)",background:"#fff",boxShadow:"-4px 0 32px rgba(0,0,0,0.12)",zIndex:1200,display:"flex",flexDirection:"column",overflow:"hidden"}}>
+            {/* Header */}
+            <div style={{background:"linear-gradient(135deg,#1A2240,#253260)",padding:"20px 22px",flexShrink:0}}>
+              <div style={{display:"flex",alignItems:"flex-start",gap:10,marginBottom:8}}>
+                <div style={{flex:1}}>
+                  <div style={{fontSize:16,fontWeight:800,color:"#fff",lineHeight:1.3,marginBottom:4}}>{o.name}</div>
+                  {co && <div style={{fontSize:11,color:"rgba(255,255,255,0.6)",cursor:"pointer"}} onClick={()=>{setSelectedOpp(null);setSelectedCompany(co);}}>🏢 {co.name} →</div>}
+                </div>
+                <button onClick={()=>setSelectedOpp(null)} style={{background:"rgba(255,255,255,0.12)",border:"none",color:"#fff",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontSize:12,fontFamily:"inherit",flexShrink:0}}>✕</button>
+              </div>
+              <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+                <span style={{fontSize:11,fontWeight:700,background:stageColor+"30",color:stageColor,border:"1px solid "+stageColor+"50",borderRadius:4,padding:"2px 8px"}}>
+                  {MP_STAGE_LABELS[o.stage]||o.stage}
+                </span>
+                {o.bu && <span style={{fontSize:10,color:"rgba(255,255,255,0.4)",textTransform:"uppercase"}}>{o.bu.toUpperCase()}</span>}
+                {(parseFloat(o.value)||0)>0 && <span style={{fontSize:13,fontWeight:800,color:"#fff",marginLeft:"auto"}}>{fmt(parseFloat(o.value))}</span>}
+              </div>
+            </div>
+
+            {/* Body */}
+            <div style={{overflowY:"auto",flex:1,padding:"18px 22px",display:"flex",flexDirection:"column",gap:14}}>
+              {/* Key info grid */}
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+                {[
+                  {label:"Company",    value:co?.name||"—"},
+                  {label:"Contact",    value:ct?ct.firstName+" "+ct.lastName:o.contactName||"—"},
+                  {label:"Close Date", value:o.closeDate||"—"},
+                  {label:"Stage",      value:MP_STAGE_LABELS[o.stage]||o.stage||"—"},
+                  ...(isMp?[
+                    {label:"Building Types", value:(o.buildingTypes||[]).map(bt=>({multistory:"Multistory",singlestory:"Single Story",canopy:"Canopy",mezzanine:"Mezzanine"}[bt]||bt)).join(", ")||"—"},
+                    {label:"Square Footage", value:[(o.buildingTypes||[]).map(bt=>{const sf=parseFloat(o["sf_"+bt]||0);return sf>0?({multistory:"Multi",singlestory:"Single",canopy:"Canopy",mezzanine:"Mezz"}[bt]||bt)+": "+sf.toLocaleString()+"SF":null;}).filter(Boolean).join(" · ")].filter(Boolean)[0]||"—"},
+                  ]:[]),
+                ].map((f,i)=>(
+                  <div key={i} style={{background:"#F9FAFC",borderRadius:7,padding:"8px 10px",border:"1px solid #E8EBF4"}}>
+                    <div style={{fontSize:9,color:"#9BA3BF",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:2}}>{f.label}</div>
+                    <div style={{fontSize:12,fontWeight:600,color:"#1A2240"}}>{f.value}</div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Notes */}
+              {o.notes && (
+                <div style={{background:"#FFFBEB",border:"1px solid #FCD34D40",borderRadius:8,padding:"10px 12px"}}>
+                  <div style={{fontSize:9,color:"#9BA3BF",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:4}}>Notes</div>
+                  <div style={{fontSize:12,color:"#1A2240",lineHeight:1.6}}>{o.notes}</div>
+                </div>
+              )}
+
+              {/* Stage pipeline */}
+              {isMp && (
+                <div style={{background:"#fff",border:"1px solid #D4D9EE",borderRadius:8,padding:"12px 14px"}}>
+                  <div style={{fontSize:10,color:"#9BA3BF",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:10}}>Move Stage</div>
+                  <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                    {[{id:"lead",label:"Lead",c:"#A78BFA"},{id:"budgeting_lead",label:"Budgeting",c:"#818CF8"},{id:"proposal_bid",label:"Proposal/Bid",c:"#60A5FA"},{id:"negotiation",label:"Negotiation",c:"#FCD34D"},{id:"won",label:"Won",c:"#4ADE80"},{id:"lost",label:"Lost",c:"#F87171"}].map(s=>(
+                      <button key={s.id} onClick={()=>{
+                        setPipeline(prev=>prev.map(p=>p.id===o.id?{...p,stage:s.id}:p));
+                        setSelectedOpp({...o,stage:s.id});
+                        try{fetch(`${SUPA_URL}/rest/v1/mp_pipeline?id=eq.${String(o.id)}`,{method:"PATCH",headers:{apikey:SUPA_KEY,Authorization:`Bearer ${SUPA_KEY}`,"Content-Type":"application/json",Prefer:"return=minimal"},body:JSON.stringify({stage:s.id})});}catch(e){}
+                      }}
+                        style={{padding:"4px 10px",borderRadius:5,border:"1.5px solid "+s.c+(o.stage===s.id?"":"50"),background:o.stage===s.id?s.c:s.c+"12",color:o.stage===s.id?"#fff":s.c,fontSize:11,fontWeight:o.stage===s.id?700:500,cursor:"pointer",fontFamily:"inherit"}}>
+                        {o.stage===s.id?"✓ ":""}{s.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Recent reports if MP */}
+              {isMp && (() => {
+                const reports = mpWeeklyReports.filter(r=>r.projectId===String(o.id)||r.project_id===String(o.id)).sort((a,b)=>(b.reportDate||"").localeCompare(a.reportDate||""));
+                if (!reports.length) return null;
+                return (
+                  <div>
+                    <div style={{fontSize:10,color:"#9BA3BF",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:8}}>Weekly Reports ({reports.length})</div>
+                    {reports.slice(0,3).map((r,i)=>(
+                      <div key={i} style={{background:"#F9FAFC",borderRadius:7,padding:"8px 10px",border:"1px solid #E8EBF4",marginBottom:6}}>
+                        <div style={{fontSize:11,fontWeight:700,color:"#1A2240",marginBottom:3}}>{r.reportDate}</div>
+                        <div style={{fontSize:11,color:"#4A5278",lineHeight:1.5}}>{(r.currentWeek||"").replace(/\\n/g,", ").slice(0,120)}</div>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
+            </div>
+
+            {/* Footer actions */}
+            <div style={{padding:"12px 22px",borderTop:"1px solid #D4D9EE",display:"flex",gap:8,background:"#F9FAFC",flexShrink:0}}>
+              <button className="btn-ghost" style={{flex:1}} onClick={()=>{openEdit(o);setSelectedOpp(null);}}>✎ Edit</button>
+              {isMp && (
+                <button style={{flex:1,padding:"8px",background:"#3B6FE8",border:"none",borderRadius:7,color:"#fff",fontWeight:700,cursor:"pointer",fontFamily:"inherit",fontSize:12}}
+                  onClick={()=>{ setActiveNav("budgeting"); setActiveBudgetOpp(o.id); setSelectedOpp(null); }}>
+                  📊 Open in Budgeting
+                </button>
+              )}
+              {isMp && !["won","lost"].includes(o.stage) && (
+                <button style={{flex:1,padding:"8px",background:"#059669",border:"none",borderRadius:7,color:"#fff",fontWeight:700,cursor:"pointer",fontFamily:"inherit",fontSize:12}}
+                  onClick={()=>{ setWonConvertOpp(o); setWonConvertForm({startDate:"",endDate:"",contractValue:o.value||"",pm:"",notes:o.notes||""}); setShowWonConvert(true); setSelectedOpp(null); }}>
+                  ✓ Won
+                </button>
+              )}
             </div>
           </div>
         );
