@@ -8904,8 +8904,10 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
             </div>
           )}
 
-        </div>{/* end content */}
-      </div>{/* end main */}
+        </div>
+        {/* end content */}
+      </div>
+      {/* end main */}
 
       {/* ── SITE SIDE PANEL ── */}
       {selectedSite && !selectedCompany && (
