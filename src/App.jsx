@@ -8383,31 +8383,59 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
                                   </thead>
                                   <tbody>
                                     {wbs.map(item=>{
+                                      const hasSubs=(item.subItems||[]).length>0;
                                       const to=takeoff[item.id]||{qty:"",notes:""};
                                       const actual=parseFloat(to.qty)||0;
                                       const est=parseFloat(item.qty)||0;
                                       const variance=actual-est;
                                       const fi={padding:"3px 6px",border:"1px solid #D4D9EE",borderRadius:4,fontSize:11,fontFamily:"inherit",outline:"none",width:"100%",boxSizing:"border-box"};
                                       return (
-                                        <tr key={item.id} style={{borderBottom:"1px solid #F4F6FB"}}>
-                                          <td style={{padding:"5px 8px",fontSize:10,color:"#9BA3BF",fontFamily:"monospace"}}>{item.code||"--"}</td>
-                                          <td style={{padding:"5px 8px",fontSize:12,fontWeight:600,color:"#1A2240"}}>{item.description||"--"}
-                                            {item.critical && <span style={{fontSize:8,background:"#FCD34D20",color:"#B45309",border:"1px solid #FCD34D50",borderRadius:3,padding:"1px 4px",marginLeft:4}}>CRIT</span>}
-                                          </td>
-                                          <td style={{padding:"5px 8px",fontSize:10,color:"#9BA3BF"}}>{item.unit}</td>
-                                          <td style={{padding:"5px 8px",textAlign:"right",fontSize:11,color:"#4A5278"}}>{est.toLocaleString()}</td>
-                                          <td style={{padding:"3px 6px",width:90}}>
-                                            <input type="number" value={to.qty} onChange={e=>setTakeoff(prev=>({...prev,[item.id]:{...(prev[item.id]||{}),qty:e.target.value}}))}
-                                              placeholder="0" style={{...fi,textAlign:"right",background:actual>0?"#F0FDF4":"#F9FAFC"}}/>
-                                          </td>
-                                          <td style={{padding:"5px 8px",textAlign:"right",fontSize:11,fontWeight:700,color:variance>0?"#F87171":variance<0?"#4ADE80":"#9BA3BF"}}>
-                                            {actual>0?(variance>=0?"+":"")+variance.toFixed(0):"--"}
-                                          </td>
-                                          <td style={{padding:"3px 6px"}}>
-                                            <input value={to.notes||""} onChange={e=>setTakeoff(prev=>({...prev,[item.id]:{...(prev[item.id]||{}),notes:e.target.value}}))}
-                                              placeholder="Notes..." style={{...fi,fontSize:10}}/>
-                                          </td>
-                                        </tr>
+                                        <>
+                                          <tr key={item.id} style={{borderBottom:"1px solid #F0F2F8",background:item.critical?"#FFFBEB":"#fff"}}>
+                                            <td style={{padding:"5px 8px",fontSize:10,color:"#9BA3BF",fontFamily:"monospace"}}>{item.code||"--"}</td>
+                                            <td style={{padding:"5px 8px",fontSize:12,fontWeight:600,color:"#1A2240"}}>
+                                              {item.description||"--"}
+                                              {item.critical&&<span style={{fontSize:8,background:"#FCD34D20",color:"#B45309",border:"1px solid #FCD34D50",borderRadius:3,padding:"1px 4px",marginLeft:4}}>CRIT</span>}
+                                              {hasSubs&&<span style={{fontSize:9,color:"#9BA3BF",marginLeft:4}}>({item.subItems.length} subs)</span>}
+                                            </td>
+                                            <td style={{padding:"5px 8px",fontSize:10,color:"#9BA3BF"}}>{item.unit}</td>
+                                            <td style={{padding:"5px 8px",textAlign:"right",fontSize:11,color:"#4A5278"}}>{hasSubs?"--":est.toLocaleString()}</td>
+                                            <td style={{padding:"3px 6px",width:90}}>
+                                              {!hasSubs&&<input type="number" value={to.qty} onChange={e=>setTakeoff(prev=>({...prev,[item.id]:{...(prev[item.id]||{}),qty:e.target.value}}))} placeholder="0" style={{...fi,textAlign:"right",background:actual>0?"#F0FDF4":"#F9FAFC"}}/>}
+                                            </td>
+                                            <td style={{padding:"5px 8px",textAlign:"right",fontSize:11,fontWeight:700,color:variance>0?"#F87171":variance<0?"#4ADE80":"#9BA3BF"}}>
+                                              {!hasSubs&&actual>0?(variance>=0?"+":"")+variance.toFixed(0):"--"}
+                                            </td>
+                                            <td style={{padding:"3px 6px"}}>
+                                              {!hasSubs&&<input value={to.notes||""} onChange={e=>setTakeoff(prev=>({...prev,[item.id]:{...(prev[item.id]||{}),notes:e.target.value}}))} placeholder="Notes..." style={{...fi,fontSize:10}}/>}
+                                            </td>
+                                          </tr>
+                                          {(item.subItems||[]).map((sub,si)=>{
+                                            const toS=takeoff[sub.id]||{qty:"",notes:""};
+                                            const actS=parseFloat(toS.qty)||0;
+                                            const estS=parseFloat(sub.qty)||0;
+                                            const varS=actS-estS;
+                                            return (
+                                              <tr key={sub.id} style={{borderBottom:"1px solid #F4F6FB",background:"#F9FBFF"}}>
+                                                <td style={{padding:"4px 8px 4px 20px",fontSize:9,color:"#9BA3BF",fontFamily:"monospace"}}>
+                                                  <span style={{color:"#D4D9EE",marginRight:4}}>└</span>{sub.code||item.code+"."+(si+1)}
+                                                </td>
+                                                <td style={{padding:"4px 8px 4px 20px",fontSize:11,color:"#4A5278"}}>{sub.description||"Sub-item "+(si+1)}</td>
+                                                <td style={{padding:"4px 8px",fontSize:10,color:"#9BA3BF"}}>{sub.unit||item.unit}</td>
+                                                <td style={{padding:"4px 8px",textAlign:"right",fontSize:11,color:"#4A5278"}}>{estS.toLocaleString()}</td>
+                                                <td style={{padding:"3px 6px",width:90}}>
+                                                  <input type="number" value={toS.qty} onChange={e=>setTakeoff(prev=>({...prev,[sub.id]:{...(prev[sub.id]||{}),qty:e.target.value}}))} placeholder="0" style={{...fi,textAlign:"right",background:actS>0?"#F0FDF4":"#F9FAFC"}}/>
+                                                </td>
+                                                <td style={{padding:"4px 8px",textAlign:"right",fontSize:11,fontWeight:700,color:varS>0?"#F87171":varS<0?"#4ADE80":"#9BA3BF"}}>
+                                                  {actS>0?(varS>=0?"+":"")+varS.toFixed(0):"--"}
+                                                </td>
+                                                <td style={{padding:"3px 6px"}}>
+                                                  <input value={toS.notes||""} onChange={e=>setTakeoff(prev=>({...prev,[sub.id]:{...(prev[sub.id]||{}),notes:e.target.value}}))} placeholder="Notes..." style={{...fi,fontSize:10}}/>
+                                                </td>
+                                              </tr>
+                                            );
+                                          })}
+                                        </>
                                       );
                                     })}
                                   </tbody>
@@ -8461,62 +8489,96 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
                                   <button onClick={()=>setPhase("wbs")} style={{marginTop:8,padding:"6px 14px",background:"#3B6FE8",border:"none",borderRadius:6,color:"#fff",fontWeight:700,cursor:"pointer",fontFamily:"inherit",fontSize:11}}>Go to WBS</button>
                                 </div>
                               ) : wbs.map(item=>{
-                                const codeVendors = pkg.vendors.filter(v=>(v.costCodes||v.trades||[]).includes(item.id)||(v.costCodes||v.trades||[]).includes(item.trade));
-                                const bidsIn = codeVendors.filter(v=>v.bidReceived).length;
-                                const isCrit = item.critical;
-                                const coverage = bidsIn>=2?"#4ADE80":bidsIn>=1?"#FCD34D":"#F87171";
-                                return (
-                                  <div key={item.id} style={{borderBottom:"2px solid #F0F2F8"}}>
-                                    {/* Code header */}
-                                    <div style={{display:"flex",alignItems:"center",gap:10,padding:"8px 16px",background:isCrit?"#FFFBEB":"#F9FAFC",borderBottom:"1px solid #E8EBF4"}}>
-                                      <div style={{width:8,height:8,borderRadius:"50%",background:codeVendors.length>0?coverage:"#CBD1E8",flexShrink:0}}/>
-                                      <span style={{fontSize:10,color:"#9BA3BF",fontFamily:"monospace",minWidth:60}}>{item.code||"--"}</span>
-                                      <span style={{fontSize:12,fontWeight:700,color:"#1A2240",flex:1}}>{item.description}</span>
-                                      <span style={{fontSize:10,color:"#9BA3BF"}}>{item.trade}</span>
-                                      {isCrit && <span style={{fontSize:9,fontWeight:700,background:"#FCD34D20",color:"#B45309",border:"1px solid #FCD34D50",borderRadius:3,padding:"1px 6px"}}>CRITICAL</span>}
-                                      <span style={{fontSize:11,fontWeight:700,color:bidsIn>0?coverage:"#9BA3BF"}}>{bidsIn} bid{bidsIn!==1?"s":""}</span>
-                                      <button onClick={()=>{
-                                        // Quick-add vendor to this code
-                                        setShowAddVendor(true);
-                                      }} style={{padding:"2px 8px",background:"#3B6FE815",border:"1px solid #3B6FE830",borderRadius:4,color:"#3B6FE8",fontSize:10,cursor:"pointer",fontFamily:"inherit",fontWeight:600}}>+ Vendor</button>
-                                    </div>
-                                    {/* Vendor rows for this code */}
-                                    {codeVendors.length>0 && (
-                                      <div>
-                                        <div style={{display:"grid",gridTemplateColumns:"1fr 100px 80px 80px 80px 80px 1fr 28px",background:"#fff",padding:"4px 16px",gap:8,borderBottom:"1px solid #F4F6FB"}}>
-                                          {["Company","Phone","Info","Bidding","Bid In","Amount","Notes",""].map((h,i)=>(
-                                            <div key={i} style={{fontSize:8,fontWeight:700,color:"#CBD1E8",textTransform:"uppercase",letterSpacing:"0.06em"}}>{h}</div>
-                                          ))}
-                                        </div>
-                                        {codeVendors.map(v=>(
-                                          <div key={v.id} style={{display:"grid",gridTemplateColumns:"1fr 100px 80px 80px 80px 80px 1fr 28px",padding:"5px 16px",gap:8,alignItems:"center",borderBottom:"1px solid #F9FAFC"}}
-                                            onMouseEnter={e=>e.currentTarget.style.background="#FAFBFF"}
-                                            onMouseLeave={e=>e.currentTarget.style.background=""}>
-                                            <div>
-                                              <div style={{fontSize:12,fontWeight:600,color:"#1A2240"}}>{v.company}</div>
-                                              {v.contact&&<div style={{fontSize:10,color:"#9BA3BF"}}>{v.contact}</div>}
-                                            </div>
-                                            <div style={{fontSize:10,color:"#4A5278"}}>{v.phone||"--"}</div>
-                                            {["infoSent","bidding","bidReceived"].map(key=>(
-                                              <div key={key} style={{display:"flex",justifyContent:"center"}}>
-                                                <div onClick={()=>{
-                                                  const updated={...pkg,vendors:pkg.vendors.map(x=>x.id===v.id?{...x,[key]:!v[key]}:x)};
-                                                  setBidPackages(prev=>({...prev,[activeOppId]:updated}));
-                                                }} style={{width:14,height:14,borderRadius:"50%",background:v[key]?"#4ADE80":"#E0E4F0",border:v[key]?"2px solid #4ADE8060":"2px solid #CBD1E8",cursor:"pointer"}}/>
-                                              </div>
-                                            ))}
-                                            <div style={{fontSize:11,fontWeight:700,color:v.bidAmount?"#059669":"#CBD1E8"}}>
-                                              {v.bidAmount?"$"+parseFloat(v.bidAmount).toLocaleString():"--"}
-                                            </div>
-                                            <div style={{fontSize:10,color:"#4A5278"}}>{v.notes||""}</div>
-                                            <div/>
-                                          </div>
+                                const hasSubs=(item.subItems||[]).length>0;
+                                const codeVendors=pkg.vendors.filter(v=>(v.costCodes||v.trades||[]).includes(item.id)||(v.costCodes||v.trades||[]).includes(item.trade));
+                                const bidsIn=codeVendors.filter(v=>v.bidReceived).length;
+                                const isCrit=item.critical;
+                                const coverage=bidsIn>=2?"#4ADE80":bidsIn>=1?"#FCD34D":"#F87171";
+
+                                const VendorTable = ({vendors, itemId}) => (
+                                  <div>
+                                    {vendors.length>0 && <>
+                                      <div style={{display:"grid",gridTemplateColumns:"1fr 110px 70px 70px 70px 90px 1fr",background:"#F9FAFC",padding:"3px 16px",gap:8,borderBottom:"1px solid #F0F2F8"}}>
+                                        {["Company / Contact","Phone","Info","Bidding","Bid In","Amount","Notes"].map((h,i)=>(
+                                          <div key={i} style={{fontSize:8,fontWeight:700,color:"#CBD1E8",textTransform:"uppercase",letterSpacing:"0.06em"}}>{h}</div>
                                         ))}
                                       </div>
-                                    )}
-                                    {codeVendors.length===0 && (
-                                      <div style={{padding:"6px 16px",fontSize:10,color:"#CBD1E8",fontStyle:"italic"}}>No vendors assigned to this code yet</div>
-                                    )}
+                                      {vendors.map(v=>(
+                                        <div key={v.id} style={{display:"grid",gridTemplateColumns:"1fr 110px 70px 70px 70px 90px 1fr",padding:"5px 16px",gap:8,alignItems:"center",borderBottom:"1px solid #F9FAFC"}}
+                                          onMouseEnter={e=>e.currentTarget.style.background="#FAFBFF"}
+                                          onMouseLeave={e=>e.currentTarget.style.background=""}>
+                                          <div>
+                                            <div style={{fontSize:12,fontWeight:600,color:"#1A2240"}}>{v.company}</div>
+                                            {v.contact&&<div style={{fontSize:10,color:"#9BA3BF"}}>{v.contact}</div>}
+                                          </div>
+                                          <div style={{fontSize:10,color:"#4A5278"}}>{v.phone||"--"}</div>
+                                          {["infoSent","bidding","bidReceived"].map(key=>(
+                                            <div key={key} style={{display:"flex",justifyContent:"center"}}>
+                                              <div onClick={()=>{
+                                                const updated={...pkg,vendors:pkg.vendors.map(x=>x.id===v.id?{...x,[key]:!v[key]}:x)};
+                                                setBidPackages(prev=>({...prev,[activeOppId]:updated}));
+                                              }} style={{width:14,height:14,borderRadius:"50%",background:v[key]?"#4ADE80":"#E0E4F0",border:v[key]?"2px solid #4ADE8060":"2px solid #CBD1E8",cursor:"pointer",margin:"0 auto"}}/>
+                                            </div>
+                                          ))}
+                                          <div>
+                                            <input type="text" defaultValue={v.bidAmount||""} onBlur={e=>{
+                                              const updated={...pkg,vendors:pkg.vendors.map(x=>x.id===v.id?{...x,bidAmount:e.target.value}:x)};
+                                              setBidPackages(prev=>({...prev,[activeOppId]:updated}));
+                                            }} placeholder="$0" style={{padding:"3px 6px",border:"1px solid #D4D9EE",borderRadius:4,fontSize:11,fontFamily:"inherit",outline:"none",width:"100%",boxSizing:"border-box",textAlign:"right",background:v.bidReceived?"#F0FDF4":"#F9FAFC"}}/>
+                                          </div>
+                                          <div>
+                                            <input type="text" defaultValue={v.notes||""} onBlur={e=>{
+                                              const updated={...pkg,vendors:pkg.vendors.map(x=>x.id===v.id?{...x,notes:e.target.value}:x)};
+                                              setBidPackages(prev=>({...prev,[activeOppId]:updated}));
+                                            }} placeholder="Notes..." style={{padding:"3px 6px",border:"1px solid #D4D9EE",borderRadius:4,fontSize:11,fontFamily:"inherit",outline:"none",width:"100%",boxSizing:"border-box"}}/>
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </>}
+                                    {vendors.length===0&&<div style={{padding:"5px 16px",fontSize:10,color:"#CBD1E8",fontStyle:"italic"}}>No vendors yet -- click + Vendor to add</div>}
+                                  </div>
+                                );
+
+                                return (
+                                  <div key={item.id} style={{borderBottom:"3px solid #E8EBF4"}}>
+                                    {/* Parent code header */}
+                                    <div style={{display:"flex",alignItems:"center",gap:10,padding:"8px 16px",background:isCrit?"#FFFBEB":"#F0F2F8",borderBottom:"1px solid #E0E4F0"}}>
+                                      <div style={{width:9,height:9,borderRadius:"50%",background:codeVendors.length>0?coverage:"#CBD1E8",flexShrink:0}}/>
+                                      <span style={{fontSize:10,color:"#9BA3BF",fontFamily:"monospace",minWidth:65}}>{item.code||"--"}</span>
+                                      <span style={{fontSize:13,fontWeight:800,color:"#1A2240",flex:1}}>{item.description}</span>
+                                      <span style={{fontSize:10,color:"#9BA3BF"}}>{item.trade}</span>
+                                      {isCrit&&<span style={{fontSize:9,fontWeight:700,background:"#FCD34D20",color:"#B45309",border:"1px solid #FCD34D50",borderRadius:3,padding:"1px 6px"}}>CRITICAL</span>}
+                                      {hasSubs
+                                        ? <span style={{fontSize:10,color:"#9BA3BF"}}>{item.subItems.length} sub-codes</span>
+                                        : <span style={{fontSize:11,fontWeight:700,color:bidsIn>0?coverage:"#9BA3BF"}}>{bidsIn} bid{bidsIn!==1?"s":""}</span>
+                                      }
+                                      {!hasSubs&&<button onClick={()=>setShowAddVendor(true)} style={{padding:"2px 8px",background:"#3B6FE815",border:"1px solid #3B6FE830",borderRadius:4,color:"#3B6FE8",fontSize:10,cursor:"pointer",fontFamily:"inherit",fontWeight:600}}>+ Vendor</button>}
+                                    </div>
+
+                                    {/* If no sub-items: show vendors directly under parent */}
+                                    {!hasSubs && <VendorTable vendors={codeVendors} itemId={item.id}/>}
+
+                                    {/* If has sub-items: show each sub as its own section */}
+                                    {hasSubs && (item.subItems||[]).map((sub,si)=>{
+                                      const subKey = sub.id || (item.id+"_sub"+si);
+                                      const subVendors = pkg.vendors.filter(v=>(v.costCodes||v.trades||[]).includes(subKey)||(v.costCodes||v.trades||[]).includes(item.id)||(v.costCodes||v.trades||[]).includes(item.trade));
+                                      const subBids = subVendors.filter(v=>v.bidReceived).length;
+                                      const subCov = subBids>=2?"#4ADE80":subBids>=1?"#FCD34D":"#F87171";
+                                      return (
+                                        <div key={subKey} style={{borderBottom:"1px solid #F0F2F8",marginLeft:16,borderLeft:"2px solid #E0E4F0"}}>
+                                          <div style={{display:"flex",alignItems:"center",gap:10,padding:"6px 16px",background:"#F9FAFC",borderBottom:"1px solid #F0F2F8"}}>
+                                            <span style={{color:"#CBD1E8",fontSize:12}}>└</span>
+                                            <div style={{width:7,height:7,borderRadius:"50%",background:subVendors.length>0?subCov:"#CBD1E8",flexShrink:0}}/>
+                                            <span style={{fontSize:9,color:"#9BA3BF",fontFamily:"monospace",minWidth:60}}>{sub.code||item.code+"."+(si+1)}</span>
+                                            <span style={{fontSize:12,fontWeight:600,color:"#1A2240",flex:1}}>{sub.description||"Sub-item "+(si+1)}</span>
+                                            <span style={{fontSize:10,color:"#9BA3BF"}}>{sub.unit||item.unit}</span>
+                                            <span style={{fontSize:10,fontWeight:700,color:subBids>0?subCov:"#9BA3BF"}}>{subBids} bid{subBids!==1?"s":""}</span>
+                                            <button onClick={()=>setShowAddVendor(true)} style={{padding:"2px 8px",background:"#3B6FE815",border:"1px solid #3B6FE830",borderRadius:4,color:"#3B6FE8",fontSize:10,cursor:"pointer",fontFamily:"inherit",fontWeight:600}}>+ Vendor</button>
+                                          </div>
+                                          <VendorTable vendors={subVendors} itemId={subKey}/>
+                                        </div>
+                                      );
+                                    })}
                                   </div>
                                 );
                               })}
