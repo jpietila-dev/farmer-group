@@ -2338,62 +2338,109 @@ function VendorRow({ v, BID_TRADES, onUpdate, onRemove }) {
 }
 
 // -- WBS Row component --
-function WbsRow({ item, BID_TRADES, onUpdate, onRemove, critical }) {
+// -- WBS Row component --
+function WbsRow({ item, BID_TRADES, onUpdate, onRemove, onAddSub, critical }) {
   const [code, setCode]   = useState(item.code||"");
   const [desc, setDesc]   = useState(item.description||"");
   const [qty,  setQty]    = useState(String(item.qty||""));
   const [rate, setRate]   = useState(String(item.rate||""));
   const [showTrade, setShowTrade] = useState(false);
-  const isCrit = critical.includes(item.trade);
+  const [showSubs, setShowSubs]   = useState(false);
   const total = (parseFloat(qty)||0)*(parseFloat(rate)||0);
-  const fi = {padding:"4px 7px",border:"1px solid #D4D9EE",borderRadius:5,fontSize:11,fontFamily:"inherit",outline:"none",width:"100%",boxSizing:"border-box"};
+  const subTotal = (item.subItems||[]).reduce((s,i)=>(s+(i.qty||0)*(i.rate||0)),0);
+  const fi = {padding:"3px 6px",border:"1px solid #D4D9EE",borderRadius:4,fontSize:11,fontFamily:"inherit",outline:"none",width:"100%",boxSizing:"border-box"};
+
   return (
-    <tr style={{borderBottom:"1px solid #F4F6FB"}} onMouseEnter={e=>e.currentTarget.style.background="#FAFBFF"} onMouseLeave={e=>e.currentTarget.style.background=""}>
-      <td style={{padding:"4px 6px",width:80}}>
-        <input value={code} onChange={e=>{setCode(e.target.value);onUpdate({code:e.target.value});}} placeholder="01-000" style={{...fi,fontFamily:"monospace"}}/>
-      </td>
-      <td style={{padding:"4px 6px",minWidth:150}}>
-        <input value={desc} onChange={e=>{setDesc(e.target.value);onUpdate({description:e.target.value});}} placeholder="Description..." style={fi}/>
-      </td>
-      <td style={{padding:"4px 6px",width:130,position:"relative"}}>
-        <button onClick={()=>setShowTrade(t=>!t)}
-          style={{...fi,textAlign:"left",cursor:"pointer",background:"#F9FAFC",color:item.trade?"#1A2240":"#9BA3BF",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
-          {item.trade||"Select..."}
-        </button>
-        {showTrade && (
-          <div style={{position:"absolute",top:"100%",left:0,zIndex:100,background:"#fff",border:"1px solid #D4D9EE",borderRadius:8,boxShadow:"0 4px 20px rgba(0,0,0,0.12)",padding:"6px",width:200,maxHeight:180,overflowY:"auto"}}>
-            {BID_TRADES.map(t=>(
-              <div key={t} onClick={()=>{onUpdate({trade:t});setShowTrade(false);}}
-                style={{padding:"4px 8px",cursor:"pointer",borderRadius:4,background:item.trade===t?"#EEF3FF":"transparent",color:item.trade===t?"#3B6FE8":"#1A2240",fontSize:11}}>
-                {t}
-              </div>
-            ))}
-          </div>
-        )}
-      </td>
-      <td style={{padding:"4px 6px",width:60}}>
+    <>
+      <div style={{display:"grid",gridTemplateColumns:"80px 1fr 130px 55px 80px 90px 90px 50px 28px",borderBottom:"1px solid #F4F6FB",padding:"4px 8px",gap:6,alignItems:"center",background:item.critical?"#FFFBEB":"#fff"}}
+        onMouseEnter={e=>e.currentTarget.style.background=item.critical?"#FFF3C4":"#FAFBFF"}
+        onMouseLeave={e=>e.currentTarget.style.background=item.critical?"#FFFBEB":"#fff"}>
+        <td style={{display:"contents"}}>
+          <input value={code} onChange={e=>{setCode(e.target.value);onUpdate({code:e.target.value});}} placeholder="03-100"
+            style={{...fi,fontFamily:"monospace",fontSize:10}}/>
+        </td>
+        <div style={{display:"flex",alignItems:"center",gap:4}}>
+          <input value={desc} onChange={e=>{setDesc(e.target.value);onUpdate({description:e.target.value});}} placeholder="Description..."
+            style={{...fi,flex:1}}/>
+          {(item.subItems||[]).length>0 && (
+            <button onClick={()=>setShowSubs(s=>!s)} style={{padding:"1px 5px",background:"#EEF3FF",border:"none",borderRadius:3,color:"#3B6FE8",fontSize:9,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>
+              {showSubs?"hide":"+"+item.subItems.length}
+            </button>
+          )}
+        </div>
+        <div style={{position:"relative"}}>
+          <button onClick={()=>setShowTrade(t=>!t)}
+            style={{...fi,textAlign:"left",cursor:"pointer",background:"#F9FAFC",color:item.trade?"#1A2240":"#9BA3BF",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",fontSize:10}}>
+            {item.trade||"Select trade..."}
+          </button>
+          {showTrade && (
+            <div style={{position:"absolute",top:"100%",left:0,zIndex:100,background:"#fff",border:"1px solid #D4D9EE",borderRadius:8,boxShadow:"0 4px 20px rgba(0,0,0,0.12)",padding:"4px",width:190,maxHeight:160,overflowY:"auto"}}>
+              {BID_TRADES.map(t=>(
+                <div key={t} onClick={()=>{onUpdate({trade:t});setShowTrade(false);}}
+                  style={{padding:"3px 8px",cursor:"pointer",borderRadius:3,background:item.trade===t?"#EEF3FF":"transparent",color:item.trade===t?"#3B6FE8":"#1A2240",fontSize:11}}>
+                  {t}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
         <select value={item.unit||"LS"} onChange={e=>onUpdate({unit:e.target.value})} style={{...fi,fontSize:10}}>
           {["LS","SF","LF","SY","CY","EA","TON","SQ","HD","MO","HR"].map(u=><option key={u}>{u}</option>)}
         </select>
-      </td>
-      <td style={{padding:"4px 6px",width:80}}>
         <input type="number" value={qty} onChange={e=>{setQty(e.target.value);onUpdate({qty:parseFloat(e.target.value)||0});}} placeholder="0" style={{...fi,textAlign:"right"}}/>
-      </td>
-      <td style={{padding:"4px 6px",width:90}}>
         <input type="number" value={rate} onChange={e=>{setRate(e.target.value);onUpdate({rate:parseFloat(e.target.value)||0});}} placeholder="0.00" style={{...fi,textAlign:"right"}}/>
-      </td>
-      <td style={{padding:"6px 8px",textAlign:"right",fontSize:12,fontWeight:700,color:total>0?"#1A2240":"#CBD1E8",width:90}}>
-        {total>0?"$"+Math.round(total).toLocaleString():"--"}
-      </td>
-      <td style={{padding:"4px 6px",textAlign:"center",width:40}}>
-        <div style={{width:14,height:14,borderRadius:"50%",background:isCrit?"#FCD34D":"#E0E4F0",border:isCrit?"2px solid #F59E0B":"2px solid #CBD1E8",margin:"auto"}} title={isCrit?"Critical trade":"Not critical"}/>
-      </td>
-      <td style={{padding:"4px 4px",textAlign:"center",width:28}}>
-        <button onClick={onRemove} style={{background:"none",border:"none",color:"#F87171",cursor:"pointer",fontSize:14,padding:0}}>x</button>
-      </td>
-    </tr>
+        <div style={{textAlign:"right",fontSize:11,fontWeight:700,color:(total+subTotal)>0?"#1A2240":"#CBD1E8"}}>
+          {(total+subTotal)>0?"$"+Math.round(total+subTotal).toLocaleString():"--"}
+        </div>
+        {/* Critical toggle */}
+        <div style={{display:"flex",justifyContent:"center"}}>
+          <div onClick={()=>onUpdate({critical:!item.critical})}
+            title={item.critical?"Critical - click to unmark":"Mark as critical"}
+            style={{width:14,height:14,borderRadius:"50%",background:item.critical?"#F59E0B":"#E0E4F0",border:item.critical?"2px solid #D97706":"2px solid #CBD1E8",cursor:"pointer",transition:"all 0.1s"}}/>
+        </div>
+        <button onClick={onRemove} style={{background:"none",border:"none",color:"#F87171",cursor:"pointer",fontSize:13,padding:0,lineHeight:1}}>x</button>
+      </div>
+      {/* Sub-items */}
+      {showSubs && (item.subItems||[]).map((sub,si)=>(
+        <div key={sub.id} style={{display:"grid",gridTemplateColumns:"80px 1fr 130px 55px 80px 90px 90px 50px 28px",borderBottom:"1px solid #F4F6FB",padding:"3px 8px 3px 24px",gap:6,alignItems:"center",background:"#F9FBFF"}}>
+          <input value={sub.code||""} onChange={e=>onUpdate({subItems:(item.subItems||[]).map((x,j)=>j===si?{...x,code:e.target.value}:x)})}
+            placeholder={item.code+"."+( si+1)} style={{...fi,fontFamily:"monospace",fontSize:10,background:"#F4F6FB"}}/>
+          <input value={sub.description||""} onChange={e=>onUpdate({subItems:(item.subItems||[]).map((x,j)=>j===si?{...x,description:e.target.value}:x)})}
+            placeholder="Sub-item..." style={{...fi,background:"#F4F6FB"}}/>
+          <div style={{fontSize:10,color:"#9BA3BF",paddingLeft:4}}>{item.trade}</div>
+          <select value={sub.unit||item.unit||"LS"} onChange={e=>onUpdate({subItems:(item.subItems||[]).map((x,j)=>j===si?{...x,unit:e.target.value}:x)})}
+            style={{...fi,fontSize:10,background:"#F4F6FB"}}>
+            {["LS","SF","LF","SY","CY","EA","TON","SQ","HD","MO","HR"].map(u=><option key={u}>{u}</option>)}
+          </select>
+          <input type="number" value={sub.qty||""} onChange={e=>onUpdate({subItems:(item.subItems||[]).map((x,j)=>j===si?{...x,qty:parseFloat(e.target.value)||0}:x)})}
+            placeholder="0" style={{...fi,textAlign:"right",background:"#F4F6FB"}}/>
+          <input type="number" value={sub.rate||""} onChange={e=>onUpdate({subItems:(item.subItems||[]).map((x,j)=>j===si?{...x,rate:parseFloat(e.target.value)||0}:x)})}
+            placeholder="0.00" style={{...fi,textAlign:"right",background:"#F4F6FB"}}/>
+          <div style={{textAlign:"right",fontSize:11,fontWeight:600,color:(sub.qty||0)*(sub.rate||0)>0?"#4A5278":"#CBD1E8"}}>
+            {(sub.qty||0)*(sub.rate||0)>0?"$"+Math.round((sub.qty||0)*(sub.rate||0)).toLocaleString():"--"}
+          </div>
+          <div/>
+          <button onClick={()=>onUpdate({subItems:(item.subItems||[]).filter((_,j)=>j!==si)})}
+            style={{background:"none",border:"none",color:"#F87171",cursor:"pointer",fontSize:12,padding:0}}>x</button>
+        </div>
+      ))}
+      {/* Add sub-item row */}
+      {showSubs && (
+        <div style={{padding:"4px 8px 4px 24px",borderBottom:"1px solid #F0F2F8"}}>
+          <button onClick={onAddSub} style={{padding:"2px 8px",background:"#EEF3FF",border:"1px dashed #3B6FE850",borderRadius:4,color:"#3B6FE8",fontSize:10,cursor:"pointer",fontFamily:"inherit"}}>+ Add Sub-item</button>
+          <button onClick={()=>setShowSubs(false)} style={{marginLeft:6,padding:"2px 8px",background:"none",border:"none",color:"#9BA3BF",fontSize:10,cursor:"pointer",fontFamily:"inherit"}}>hide</button>
+        </div>
+      )}
+      {!showSubs && (
+        <div style={{padding:"2px 8px 2px 24px",borderBottom:"1px solid #F4F6FB"}}>
+          <button onClick={()=>{setShowSubs(true);if((item.subItems||[]).length===0)onAddSub();}}
+            style={{padding:"1px 6px",background:"none",border:"none",color:"#CBD1E8",fontSize:9,cursor:"pointer",fontFamily:"inherit"}}>+ sub-item</button>
+        </div>
+      )}
+    </>
   );
 }
+
 
 export default function App() {
   // URL routing — sub-facing page
@@ -2518,6 +2565,8 @@ export default function App() {
   const [takeoffData,      setTakeoffData]       = useState({}); // {oppId: [{codeId,qty,notes,attachments}]}
   const [criticalTrades,   setCriticalTrades]    = useState({}); // {oppId: [tradeNames]}
   const [showMpVendorForm, setShowMpVendorForm]  = useState(false);
+  const [mpVendorSearch,   setMpVendorSearch]   = useState("");
+  const [mpVendorTrade,    setMpVendorTrade]    = useState("");
   const [mpVendorForm,     setMpVendorForm]      = useState({company:"",contact:"",phone:"",email:"",trades:[],notes:"",rating:5}); // {oppId: {vendors:[{id,company,contact,phone,email,trades:[],bidding,infoSent,bidReceived,bidAmount,notes}], trades:[str]}}
   const [activeBidOpp,     setActiveBidOpp]     = useState(null);
   const [showAddVendor,    setShowAddVendor]     = useState(false);
@@ -7596,8 +7645,10 @@ if(bounds.length)map.fitBounds(bounds,{padding:[30,30]});
               "Fire Suppression","Fire Alarm","Elevators","Material Lift","Canopies",
               "General Conditions","Other"
             ];
-            const [search, setSearch] = useState("");
-            const [tradeFilter, setTradeFilter] = useState("");
+            const search = mpVendorSearch;
+            const setSearch = setMpVendorSearch;
+            const tradeFilter = mpVendorTrade;
+            const setTradeFilter = setMpVendorTrade;
 
             const filtered = mpVendorDB.filter(v =>
               (!search || v.company.toLowerCase().includes(search.toLowerCase()) || (v.contact||"").toLowerCase().includes(search.toLowerCase())) &&
@@ -8052,14 +8103,71 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
 
           {/* -- MP ESTIMATING -- */}
           {activeNav === "estimating" && activeBU === "major" && (() => {
-            const BID_TRADES = [
-              "Concrete","Masonry","Demo","Rough Carpentry","Fluid Applied Flooring","Roofing",
-              "Metal Wall Panels / Siding","Doors & Frames","Roll-Up Doors","Security / Access Control",
-              "Plumbing","Earthwork & Utilities","Asphalt","Fencing & Gates","Landscaping / Irrigation",
-              "Metal Building (PEMB)","Electrical","Lighting","Automated Doors","HVAC",
-              "Fire Suppression","Fire Alarm","Elevators","Material Lift","Canopies",
-              "General Conditions","Dumpster / Porta John","Architect","Civil Engineer","Other"
+            // Master cost code library with CSI divisions
+            const COST_CODE_LIBRARY = [
+              // Division 01 - General Requirements
+              {div:"01",code:"01-100",desc:"General Conditions",unit:"MO",trade:"General Conditions"},
+              {div:"01",code:"01-200",desc:"Temporary Facilities",unit:"LS",trade:"General Conditions"},
+              {div:"01",code:"01-300",desc:"Project Management",unit:"LS",trade:"General Conditions"},
+              // Division 02 - Existing Conditions
+              {div:"02",code:"02-100",desc:"Demolition - Interior",unit:"SF",trade:"Demo"},
+              {div:"02",code:"02-200",desc:"Demolition - Exterior",unit:"SF",trade:"Demo"},
+              {div:"02",code:"02-300",desc:"Site Clearing",unit:"LS",trade:"Earthwork & Utilities"},
+              // Division 03 - Concrete
+              {div:"03",code:"03-100",desc:"Concrete Footings",unit:"CY",trade:"Concrete"},
+              {div:"03",code:"03-200",desc:"Concrete Slab on Grade",unit:"SF",trade:"Concrete"},
+              {div:"03",code:"03-300",desc:"Concrete Walls",unit:"CY",trade:"Concrete"},
+              {div:"03",code:"03-400",desc:"Concrete Topping Slab",unit:"SF",trade:"Concrete"},
+              // Division 04 - Masonry
+              {div:"04",code:"04-100",desc:"CMU Block",unit:"SF",trade:"Masonry"},
+              {div:"04",code:"04-200",desc:"Brick Veneer",unit:"SF",trade:"Masonry"},
+              // Division 05 - Metals
+              {div:"05",code:"05-100",desc:"Structural Steel",unit:"TON",trade:"Metal Building (PEMB)"},
+              {div:"05",code:"05-200",desc:"Metal Decking",unit:"SF",trade:"Metal Building (PEMB)"},
+              {div:"05",code:"05-300",desc:"Janus Hallway Systems",unit:"LF",trade:"Roll-Up Doors"},
+              {div:"05",code:"05-400",desc:"Material Lift",unit:"EA",trade:"Material Lift"},
+              // Division 06 - Rough Carpentry
+              {div:"06",code:"06-100",desc:"Rough Carpentry / Infill",unit:"SF",trade:"Rough Carpentry"},
+              // Division 07 - Thermal & Moisture
+              {div:"07",code:"07-100",desc:"Roofing System",unit:"SQ",trade:"Roofing"},
+              {div:"07",code:"07-200",desc:"Insulation",unit:"SF",trade:"Roofing"},
+              {div:"07",code:"07-300",desc:"Metal Wall Panels",unit:"SF",trade:"Metal Wall Panels / Siding"},
+              {div:"07",code:"07-400",desc:"Fiber Cement Siding",unit:"SF",trade:"Metal Wall Panels / Siding"},
+              {div:"07",code:"07-500",desc:"Sealants & Caulking",unit:"LS",trade:"Rough Carpentry"},
+              // Division 08 - Openings
+              {div:"08",code:"08-100",desc:"Hollow Metal Doors & Frames",unit:"EA",trade:"Doors & Frames"},
+              {div:"08",code:"08-200",desc:"Roll-Up Doors",unit:"EA",trade:"Roll-Up Doors"},
+              {div:"08",code:"08-300",desc:"Canopies",unit:"EA",trade:"Canopies"},
+              // Division 09 - Finishes
+              {div:"09",code:"09-100",desc:"Drywall & Framing",unit:"SF",trade:"Rough Carpentry"},
+              {div:"09",code:"09-200",desc:"Painting & Coating",unit:"SF",trade:"Rough Carpentry"},
+              {div:"09",code:"09-300",desc:"Fluid Applied Flooring",unit:"SF",trade:"Fluid Applied Flooring"},
+              {div:"09",code:"09-400",desc:"Concrete Polishing",unit:"SF",trade:"Fluid Applied Flooring"},
+              // Division 14 - Elevators
+              {div:"14",code:"14-100",desc:"Hydraulic Elevator",unit:"EA",trade:"Elevators"},
+              // Division 21 - Fire Suppression
+              {div:"21",code:"21-100",desc:"Fire Suppression System",unit:"HD",trade:"Fire Suppression"},
+              // Division 22 - Plumbing
+              {div:"22",code:"22-100",desc:"Plumbing - Rough In",unit:"LS",trade:"Plumbing"},
+              {div:"22",code:"22-200",desc:"Plumbing - Fixtures",unit:"LS",trade:"Plumbing"},
+              // Division 23 - HVAC
+              {div:"23",code:"23-100",desc:"HVAC Equipment",unit:"TON",trade:"HVAC"},
+              {div:"23",code:"23-200",desc:"Ductwork & Distribution",unit:"LS",trade:"HVAC"},
+              // Division 26 - Electrical
+              {div:"26",code:"26-100",desc:"Electrical Service",unit:"LS",trade:"Electrical"},
+              {div:"26",code:"26-200",desc:"Lighting",unit:"LS",trade:"Lighting"},
+              {div:"26",code:"26-300",desc:"Fire Alarm System",unit:"LS",trade:"Fire Alarm"},
+              {div:"26",code:"26-400",desc:"Access Control / Security",unit:"LS",trade:"Security / Access Control"},
+              // Division 31/32 - Sitework
+              {div:"31",code:"31-100",desc:"Earthwork & Grading",unit:"CY",trade:"Earthwork & Utilities"},
+              {div:"31",code:"31-200",desc:"Underground Utilities",unit:"LS",trade:"Earthwork & Utilities"},
+              {div:"32",code:"32-100",desc:"Asphalt Paving",unit:"SY",trade:"Asphalt"},
+              {div:"32",code:"32-200",desc:"Concrete Paving",unit:"SY",trade:"Concrete"},
+              {div:"32",code:"32-300",desc:"Fencing & Gates",unit:"LF",trade:"Fencing & Gates"},
+              {div:"32",code:"32-400",desc:"Landscaping",unit:"LS",trade:"Landscaping / Irrigation"},
+              {div:"32",code:"32-500",desc:"Site Signage",unit:"LS",trade:"Other"},
             ];
+            const DIVISIONS = [...new Set(COST_CODE_LIBRARY.map(c=>c.div))];
 
             const allMpOpps = pipeline.filter(o => o.bu === "major");
             const activeOppId = activeBidOpp || allMpOpps[0]?.id;
@@ -8067,38 +8175,44 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
             const phase       = estimatePhase[activeOppId] || "wbs";
             const setPhase    = (p) => setEstimatePhase(prev => ({...prev, [activeOppId]: p}));
             const pkg         = bidPackages[activeOppId] || {vendors:[]};
-            const critical    = criticalTrades[activeOppId] || [];
             const wbs         = wbsData[activeOppId] || [];
             const takeoff     = takeoffData[activeOppId] || {};
             const setWbs      = (items) => setWbsData(prev => ({...prev, [activeOppId]: typeof items==="function"?items(wbs):items}));
             const setTakeoff  = (data)  => setTakeoffData(prev => ({...prev, [activeOppId]: typeof data==="function"?data(takeoff):data}));
-            const setCritical = (arr)   => setCriticalTrades(prev => ({...prev, [activeOppId]: arr}));
 
-            // Quoting metrics
-            const bidsReceivedByTrade = {};
+            // Critical = wbs items marked critical individually
+            const criticalCodes = wbs.filter(i=>i.critical);
+
+            // Quoting: group vendors by cost code
+            const vendorsByCode = {};
             pkg.vendors.forEach(v => {
-              (v.trades||[]).forEach(t => {
-                if (!bidsReceivedByTrade[t]) bidsReceivedByTrade[t] = {total:0, received:0, bidding:0};
-                bidsReceivedByTrade[t].total++;
-                if (v.bidReceived) bidsReceivedByTrade[t].received++;
-                if (v.bidding) bidsReceivedByTrade[t].bidding++;
+              (v.costCodes||v.trades||[]).forEach(code => {
+                if (!vendorsByCode[code]) vendorsByCode[code] = [];
+                vendorsByCode[code].push(v);
               });
             });
-            const criticalCoverage = critical.map(t => ({
-              trade: t,
-              received: bidsReceivedByTrade[t]?.received || 0,
-              bidding:  bidsReceivedByTrade[t]?.bidding  || 0,
-              total:    bidsReceivedByTrade[t]?.total    || 0,
-            }));
-            const criticalComplete = criticalCoverage.filter(c => c.received >= 3).length;
-            const totalVendors = pkg.vendors.length;
-            const totalBids    = pkg.vendors.filter(v => v.bidReceived).length;
-            const totalBidding = pkg.vendors.filter(v => v.bidding).length;
+
+            // Coverage metrics
+            const criticalCoverage = criticalCodes.map(item => {
+              const key = item.id;
+              const vs = vendorsByCode[item.id] || vendorsByCode[item.trade] || [];
+              return {
+                code: item.code,
+                desc: item.description,
+                trade: item.trade,
+                received: vs.filter(v=>v.bidReceived).length,
+                bidding:  vs.filter(v=>v.bidding).length,
+                total:    vs.length,
+              };
+            });
+            const criticalComplete = criticalCoverage.filter(c=>c.received>=2).length;
+            const totalBids   = pkg.vendors.filter(v=>v.bidReceived).length;
+            const totalBidding= pkg.vendors.filter(v=>v.bidding).length;
 
             const PHASES = [
-              {id:"wbs",     label:"1. Work Breakdown", icon:"📋", desc:"Define cost codes"},
-              {id:"takeoff", label:"2. Takeoff",        icon:"📐", desc:"Quantities per code"},
-              {id:"quoting", label:"3. Quoting",        icon:"📧", desc:"Vendor bid tracking"},
+              {id:"wbs",     label:"1. WBS",      icon:"📋", desc:"Cost codes & scope"},
+              {id:"takeoff", label:"2. Takeoff",  icon:"📐", desc:"Field quantities"},
+              {id:"quoting", label:"3. Quoting",  icon:"📧", desc:"Vendor bids per code"},
             ];
 
             return (
@@ -8107,21 +8221,22 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14,flexShrink:0}}>
                   <div>
                     <div style={{fontSize:22,fontWeight:800,color:"#1A2240",letterSpacing:"-0.01em",textTransform:"uppercase"}}>Estimating</div>
-                    <div style={{fontSize:11,color:"#4A5278",marginTop:3}}>WBS - Takeoff - Quoting</div>
+                    <div style={{fontSize:11,color:"#4A5278",marginTop:3}}>Work Breakdown - Takeoff - Quoting</div>
                   </div>
                 </div>
 
-                <div style={{display:"grid",gridTemplateColumns:"220px 1fr",flex:1,gap:0,minHeight:0,background:"#fff",borderRadius:12,border:"1px solid #D4D9EE",overflow:"hidden"}}>
-                  {/* Left sidebar */}
+                <div style={{display:"grid",gridTemplateColumns:"200px 1fr",flex:1,gap:0,minHeight:0,background:"#fff",borderRadius:12,border:"1px solid #D4D9EE",overflow:"hidden"}}>
+                  {/* Sidebar */}
                   <div style={{borderRight:"1px solid #D4D9EE",overflowY:"auto",background:"#F9FAFC"}}>
                     <div style={{padding:"10px 14px",borderBottom:"1px solid #D4D9EE",fontSize:10,fontWeight:700,color:"#9BA3BF",textTransform:"uppercase",letterSpacing:"0.07em"}}>Projects</div>
                     {allMpOpps.length===0 && <div style={{padding:"20px 14px",fontSize:11,color:"#9BA3BF",textAlign:"center"}}>No MP projects yet.</div>}
-                    {allMpOpps.map(o => {
-                      const co = companies.find(c => c.id === o.companyId);
-                      const oPkg = bidPackages[o.id] || {vendors:[]};
-                      const isActive = o.id === activeOppId;
-                      const ph = estimatePhase[o.id] || "wbs";
-                      const phColor = {wbs:"#818CF8",takeoff:"#60A5FA",quoting:"#4ADE80"}[ph] || "#9BA3BF";
+                    {allMpOpps.map(o=>{
+                      const co=companies.find(c=>c.id===o.companyId);
+                      const oPkg=bidPackages[o.id]||{vendors:[]};
+                      const oWbs=wbsData[o.id]||[];
+                      const isActive=o.id===activeOppId;
+                      const ph=estimatePhase[o.id]||"wbs";
+                      const phColor={wbs:"#818CF8",takeoff:"#60A5FA",quoting:"#4ADE80"}[ph]||"#9BA3BF";
                       return (
                         <div key={o.id} onClick={()=>setActiveBidOpp(o.id)}
                           style={{padding:"10px 14px",cursor:"pointer",background:isActive?"#EEF3FF":"transparent",borderBottom:"1px solid #F0F2F8",borderLeft:isActive?"3px solid #3B6FE8":"3px solid transparent"}}
@@ -8131,14 +8246,13 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
                           <div style={{fontSize:10,color:"#9BA3BF",marginBottom:4}}>{co?.name||"--"}</div>
                           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                             <span style={{fontSize:9,fontWeight:700,background:phColor+"20",color:phColor,borderRadius:3,padding:"1px 6px"}}>{ph.toUpperCase()}</span>
-                            <span style={{fontSize:10,color:"#4ADE80",fontWeight:700}}>{oPkg.vendors.filter(v=>v.bidReceived).length}/{oPkg.vendors.length} bids</span>
+                            <span style={{fontSize:10,color:oWbs.length>0?"#1A2240":"#CBD1E8",fontWeight:700}}>{oWbs.length} codes</span>
                           </div>
                         </div>
                       );
                     })}
                   </div>
 
-                  {/* Right panel */}
                   {!activeOpp ? (
                     <div style={{display:"flex",alignItems:"center",justifyContent:"center",flex:1,flexDirection:"column",gap:10,color:"#9BA3BF"}}>
                       <div style={{fontSize:40}}>📐</div>
@@ -8152,16 +8266,16 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
                           <div style={{fontSize:13,fontWeight:800,color:"#fff"}}>{activeOpp.name}</div>
                           <div style={{fontSize:10,color:"rgba(255,255,255,0.5)"}}>{companies.find(c=>c.id===activeOpp.companyId)?.name||""}</div>
                         </div>
-                        {/* Stats */}
                         {phase==="quoting" && [
-                          {label:"Vendors",  value:totalVendors, color:"#60A5FA"},
-                          {label:"Bidding",  value:totalBidding, color:"#FCD34D"},
-                          {label:"Bids In",  value:totalBids,    color:"#4ADE80"},
-                          {label:"Critical", value:`${criticalComplete}/${critical.length}`, color:criticalComplete===critical.length&&critical.length>0?"#4ADE80":"#F87171"},
+                          {l:"Codes",     v:wbs.length,           c:"#60A5FA"},
+                          {l:"Vendors",   v:pkg.vendors.length,   c:"#A78BFA"},
+                          {l:"Bidding",   v:totalBidding,         c:"#FCD34D"},
+                          {l:"Bids In",   v:totalBids,            c:"#4ADE80"},
+                          {l:"Critical",  v:criticalComplete+"/"+criticalCodes.length, c:criticalComplete===criticalCodes.length&&criticalCodes.length>0?"#4ADE80":"#F87171"},
                         ].map(s=>(
-                          <div key={s.label} style={{textAlign:"center",padding:"0 10px",borderLeft:"1px solid rgba(255,255,255,0.1)"}}>
-                            <div style={{fontSize:16,fontWeight:800,color:s.color}}>{s.value}</div>
-                            <div style={{fontSize:8,color:"rgba(255,255,255,0.4)",textTransform:"uppercase",letterSpacing:"0.06em"}}>{s.label}</div>
+                          <div key={s.l} style={{textAlign:"center",padding:"0 8px",borderLeft:"1px solid rgba(255,255,255,0.1)"}}>
+                            <div style={{fontSize:15,fontWeight:800,color:s.c}}>{s.v}</div>
+                            <div style={{fontSize:8,color:"rgba(255,255,255,0.4)",textTransform:"uppercase"}}>{s.l}</div>
                           </div>
                         ))}
                       </div>
@@ -8170,129 +8284,126 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
                       <div style={{display:"flex",background:"#F9FAFC",borderBottom:"2px solid #E8EBF4",flexShrink:0}}>
                         {PHASES.map(ph=>(
                           <button key={ph.id} onClick={()=>setPhase(ph.id)}
-                            style={{flex:1,padding:"10px 8px",border:"none",background:"transparent",cursor:"pointer",fontFamily:"inherit",borderBottom:phase===ph.id?"3px solid #3B6FE8":"3px solid transparent",marginBottom:-2,textAlign:"center"}}>
-                            <div style={{fontSize:12,fontWeight:phase===ph.id?700:500,color:phase===ph.id?"#3B6FE8":"#4A5278"}}>{ph.icon} {ph.label}</div>
-                            <div style={{fontSize:9,color:"#9BA3BF",marginTop:1}}>{ph.desc}</div>
+                            style={{flex:1,padding:"8px 4px",border:"none",background:"transparent",cursor:"pointer",fontFamily:"inherit",borderBottom:phase===ph.id?"3px solid #3B6FE8":"3px solid transparent",marginBottom:-2}}>
+                            <div style={{fontSize:11,fontWeight:phase===ph.id?700:500,color:phase===ph.id?"#3B6FE8":"#4A5278"}}>{ph.icon} {ph.label}</div>
+                            <div style={{fontSize:9,color:"#9BA3BF"}}>{ph.desc}</div>
                           </button>
                         ))}
                       </div>
 
-                      {/* Phase content */}
                       <div style={{flex:1,overflowY:"auto"}}>
 
-                        {/* ---- WBS TAB ---- */}
+                        {/* ===== WBS TAB ===== */}
                         {phase==="wbs" && (
-                          <div style={{padding:"16px 18px",display:"flex",flexDirection:"column",gap:12}}>
+                          <div style={{padding:"14px 16px",display:"flex",flexDirection:"column",gap:12}}>
                             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                               <div style={{fontSize:12,fontWeight:700,color:"#1A2240"}}>Work Breakdown Structure</div>
-                              <div style={{display:"flex",gap:8}}>
+                              <div style={{display:"flex",gap:6}}>
                                 <button onClick={()=>{
-                                  const newItem = {id:"wbs"+Date.now(),code:"",description:"",unit:"LS",qty:0,rate:0,trade:"",critical:false};
-                                  setWbs(prev=>[...prev,newItem]);
-                                }} style={{padding:"5px 12px",background:"#3B6FE8",color:"#fff",border:"none",borderRadius:6,cursor:"pointer",fontFamily:"inherit",fontSize:12,fontWeight:700}}>+ Add Cost Code</button>
+                                  const id="wbs"+Date.now();
+                                  setWbs(prev=>[...prev,{id,code:"",description:"",unit:"LS",qty:0,rate:0,trade:"",critical:false,notes:"",subItems:[]}]);
+                                }} style={{padding:"5px 12px",background:"#3B6FE8",color:"#fff",border:"none",borderRadius:6,cursor:"pointer",fontFamily:"inherit",fontSize:11,fontWeight:700}}>+ Add Code</button>
+                                <button onClick={()=>{
+                                  // Show code library picker - add all relevant to wbs
+                                  const toAdd = COST_CODE_LIBRARY.filter(c=>!wbs.find(w=>w.code===c.code));
+                                  if(toAdd.length===0){alert("All standard codes already added");return;}
+                                  const sel = window.confirm("Add all "+toAdd.length+" standard cost codes? You can delete ones you don't need.");
+                                  if(sel) setWbs(prev=>[...prev,...toAdd.map(c=>({id:"wbs"+Date.now()+Math.random(),code:c.code,description:c.desc,unit:c.unit,qty:0,rate:0,trade:c.trade,critical:false,notes:"",subItems:[]}))]);
+                                }} style={{padding:"5px 12px",background:"#F0F2F8",color:"#4A5278",border:"1px solid #CBD1E8",borderRadius:6,cursor:"pointer",fontFamily:"inherit",fontSize:11,fontWeight:600}}>Import Library</button>
                               </div>
                             </div>
 
-                            {/* Critical trades selector */}
-                            <div style={{background:"#FFF9E6",border:"1px solid #FCD34D30",borderRadius:8,padding:"10px 12px"}}>
-                              <div style={{fontSize:11,fontWeight:700,color:"#B45309",marginBottom:6}}>Critical Trades (select trades that need 3+ bids)</div>
-                              <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
-                                {BID_TRADES.map(t=>{
-                                  const isCrit = critical.includes(t);
-                                  return (
-                                    <button key={t} type="button" onClick={()=>setCritical(isCrit?critical.filter(x=>x!==t):[...critical,t])}
-                                      style={{padding:"3px 9px",borderRadius:4,border:"1.5px solid "+(isCrit?"#F59E0B":"#D4D9EE"),background:isCrit?"#FCD34D":"#F9FAFC",color:isCrit?"#1A2240":"#4A5278",fontSize:10,cursor:"pointer",fontFamily:"inherit",fontWeight:isCrit?700:400}}>
-                                      {t}
-                                    </button>
-                                  );
-                                })}
-                              </div>
-                            </div>
-
-                            {/* WBS table */}
-                            {wbs.length > 0 && (
-                              <div style={{background:"#fff",borderRadius:10,border:"1px solid #D4D9EE",overflow:"hidden"}}>
-                                <table style={{width:"100%",borderCollapse:"collapse"}}>
-                                  <thead>
-                                    <tr style={{background:"#F9FAFC",borderBottom:"2px solid #D4D9EE"}}>
-                                      {["Code","Description","Trade","Unit","Est. Qty","Unit Rate ($)","Total","Crit.",""].map((h,i)=>(
-                                        <th key={i} style={{padding:"6px 8px",fontSize:9,color:"#9BA3BF",textTransform:"uppercase",letterSpacing:"0.07em",textAlign:i>=4&&i<=6?"right":"left",fontWeight:700}}>{h}</th>
-                                      ))}
-                                    </tr>
-                                  </thead>
-                                  <tbody>
-                                    {wbs.map((item,idx)=>(
-                                      <WbsRow key={item.id} item={item} BID_TRADES={BID_TRADES}
-                                        onUpdate={u=>setWbs(prev=>prev.map(i=>i.id===item.id?{...i,...u}:i))}
-                                        onRemove={()=>setWbs(prev=>prev.filter(i=>i.id!==item.id))}
-                                        critical={critical}/>
-                                    ))}
-                                  </tbody>
-                                  <tfoot>
-                                    <tr style={{background:"#F4F6FB",borderTop:"2px solid #D4D9EE"}}>
-                                      <td colSpan={6} style={{padding:"7px 8px",fontSize:11,fontWeight:700,color:"#4A5278"}}>Total Estimated Cost</td>
-                                      <td style={{padding:"7px 8px",textAlign:"right",fontSize:13,fontWeight:800,color:"#1A2240"}}>
-                                        ${wbs.reduce((s,i)=>(s+(i.qty||0)*(i.rate||0)),0).toLocaleString()}
-                                      </td>
-                                      <td colSpan={2}/>
-                                    </tr>
-                                  </tfoot>
-                                </table>
-                              </div>
-                            )}
-                            {wbs.length === 0 && (
+                            {wbs.length===0 ? (
                               <div style={{textAlign:"center",padding:"40px",color:"#9BA3BF",border:"2px dashed #E0E4F0",borderRadius:10}}>
                                 <div style={{fontSize:28,marginBottom:8}}>📋</div>
-                                <div style={{fontSize:14,fontWeight:600,color:"#1A2240",marginBottom:4}}>No cost codes yet</div>
-                                <div style={{fontSize:12}}>Add cost codes to define the scope of work</div>
+                                <div style={{fontSize:13,fontWeight:600,color:"#1A2240",marginBottom:4}}>No cost codes yet</div>
+                                <div style={{fontSize:11,marginBottom:14}}>Add individual codes or import the standard library</div>
+                                <div style={{display:"flex",gap:8,justifyContent:"center"}}>
+                                  <button onClick={()=>setWbs([{id:"wbs"+Date.now(),code:"",description:"",unit:"LS",qty:0,rate:0,trade:"",critical:false,notes:"",subItems:[]}])}
+                                    style={{padding:"7px 16px",background:"#3B6FE8",border:"none",borderRadius:7,color:"#fff",fontWeight:700,cursor:"pointer",fontFamily:"inherit",fontSize:12}}>+ Add Code</button>
+                                  <button onClick={()=>setWbs(COST_CODE_LIBRARY.map(c=>({id:"wbs"+Date.now()+Math.random(),code:c.code,description:c.desc,unit:c.unit,qty:0,rate:0,trade:c.trade,critical:false,notes:"",subItems:[]})))}
+                                    style={{padding:"7px 16px",background:"#F0F2F8",border:"1px solid #CBD1E8",borderRadius:7,color:"#4A5278",fontWeight:600,cursor:"pointer",fontFamily:"inherit",fontSize:12}}>Import All Standard Codes</button>
+                                </div>
+                              </div>
+                            ) : (
+                              <div style={{background:"#fff",borderRadius:10,border:"1px solid #D4D9EE",overflow:"hidden"}}>
+                                {/* Table header */}
+                                <div style={{display:"grid",gridTemplateColumns:"80px 1fr 130px 55px 80px 90px 90px 50px 28px",background:"#F9FAFC",borderBottom:"2px solid #D4D9EE",padding:"6px 8px",gap:6,alignItems:"center"}}>
+                                  {["Code","Description","Trade","Unit","Qty","Unit Rate","Total","Crit.",""].map((h,i)=>(
+                                    <div key={i} style={{fontSize:9,fontWeight:700,color:"#9BA3BF",textTransform:"uppercase",letterSpacing:"0.07em",textAlign:i>=4&&i<=6?"right":"left"}}>{h}</div>
+                                  ))}
+                                </div>
+                                {wbs.map((item,idx)=>(
+                                  <WbsRow key={item.id} item={item}
+                                    BID_TRADES={["Concrete","Masonry","Demo","Rough Carpentry","Fluid Applied Flooring","Roofing","Metal Wall Panels / Siding","Doors & Frames","Roll-Up Doors","Security / Access Control","Plumbing","Earthwork & Utilities","Asphalt","Fencing & Gates","Landscaping / Irrigation","Metal Building (PEMB)","Electrical","Lighting","Automated Doors","HVAC","Fire Suppression","Fire Alarm","Elevators","Material Lift","Canopies","General Conditions","Other"]}
+                                    onUpdate={u=>setWbs(prev=>prev.map(i=>i.id===item.id?{...i,...u}:i))}
+                                    onRemove={()=>setWbs(prev=>prev.filter(i=>i.id!==item.id))}
+                                    onAddSub={()=>{
+                                      const subId="sub"+Date.now();
+                                      setWbs(prev=>prev.map(i=>i.id===item.id?{...i,subItems:[...(i.subItems||[]),{id:subId,code:item.code+".1",description:"",unit:item.unit,qty:0,rate:0,notes:""}]}:i));
+                                    }}
+                                    critical={wbs.filter(i=>i.critical).map(i=>i.trade)}/>
+                                ))}
+                                <div style={{background:"#F4F6FB",borderTop:"2px solid #D4D9EE",padding:"7px 8px",display:"grid",gridTemplateColumns:"80px 1fr 130px 55px 80px 90px 90px 50px 28px",gap:6}}>
+                                  <div/>
+                                  <div style={{fontSize:11,fontWeight:700,color:"#4A5278",gridColumn:"2/7"}}>Total Estimated Cost</div>
+                                  <div style={{fontSize:13,fontWeight:800,color:"#1A2240",textAlign:"right"}}>${wbs.reduce((s,i)=>{
+                                    const base=(i.qty||0)*(i.rate||0);
+                                    const subs=(i.subItems||[]).reduce((ss,si)=>(ss+(si.qty||0)*(si.rate||0)),0);
+                                    return s+base+subs;
+                                  },0).toLocaleString()}</div>
+                                  <div/><div/>
+                                </div>
                               </div>
                             )}
-                            <button onClick={()=>setPhase("takeoff")} style={{alignSelf:"flex-end",padding:"8px 20px",background:"#3B6FE8",border:"none",borderRadius:7,color:"#fff",fontWeight:700,cursor:"pointer",fontFamily:"inherit",fontSize:12}}>
-                              Next: Takeoff --&gt;
+                            <button onClick={()=>setPhase("takeoff")} style={{alignSelf:"flex-end",padding:"7px 18px",background:"#3B6FE8",border:"none",borderRadius:7,color:"#fff",fontWeight:700,cursor:"pointer",fontFamily:"inherit",fontSize:12}}>
+                              Next: Takeoff
                             </button>
                           </div>
                         )}
 
-                        {/* ---- TAKEOFF TAB ---- */}
+                        {/* ===== TAKEOFF TAB ===== */}
                         {phase==="takeoff" && (
-                          <div style={{padding:"16px 18px",display:"flex",flexDirection:"column",gap:12}}>
-                            <div style={{fontSize:12,fontWeight:700,color:"#1A2240"}}>Takeoff -- Quantities &amp; Field Measurements</div>
-                            {wbs.length === 0 ? (
+                          <div style={{padding:"14px 16px",display:"flex",flexDirection:"column",gap:12}}>
+                            <div style={{fontSize:12,fontWeight:700,color:"#1A2240"}}>Takeoff - Field Measurements</div>
+                            {wbs.length===0 ? (
                               <div style={{textAlign:"center",padding:"30px",color:"#9BA3BF",border:"2px dashed #E0E4F0",borderRadius:10}}>
-                                <div style={{fontSize:13}}>Complete WBS first to define cost codes</div>
-                                <button onClick={()=>setPhase("wbs")} style={{marginTop:10,padding:"7px 16px",background:"#3B6FE8",border:"none",borderRadius:6,color:"#fff",fontWeight:700,cursor:"pointer",fontFamily:"inherit",fontSize:12}}>Go to WBS</button>
+                                <div style={{fontSize:12}}>Complete WBS first</div>
+                                <button onClick={()=>setPhase("wbs")} style={{marginTop:8,padding:"6px 14px",background:"#3B6FE8",border:"none",borderRadius:6,color:"#fff",fontWeight:700,cursor:"pointer",fontFamily:"inherit",fontSize:11}}>Go to WBS</button>
                               </div>
                             ) : (
                               <div style={{background:"#fff",borderRadius:10,border:"1px solid #D4D9EE",overflow:"hidden"}}>
                                 <table style={{width:"100%",borderCollapse:"collapse"}}>
                                   <thead>
                                     <tr style={{background:"#F9FAFC",borderBottom:"2px solid #D4D9EE"}}>
-                                      {["Code","Description","Unit","Est. Qty","Actual Qty","Variance","Notes"].map((h,i)=>(
+                                      {["Code","Description","Unit","Est.","Actual","Var.","Notes"].map((h,i)=>(
                                         <th key={i} style={{padding:"6px 8px",fontSize:9,color:"#9BA3BF",textTransform:"uppercase",letterSpacing:"0.07em",fontWeight:700,textAlign:i>=3&&i<=5?"right":"left"}}>{h}</th>
                                       ))}
                                     </tr>
                                   </thead>
                                   <tbody>
                                     {wbs.map(item=>{
-                                      const to = takeoff[item.id] || {qty:"",notes:""};
-                                      const actualQty = parseFloat(to.qty)||0;
-                                      const estQty    = parseFloat(item.qty)||0;
-                                      const variance  = actualQty - estQty;
-                                      const fi = {padding:"4px 7px",border:"1px solid #D4D9EE",borderRadius:5,fontSize:11,fontFamily:"inherit",outline:"none",width:"100%",boxSizing:"border-box"};
+                                      const to=takeoff[item.id]||{qty:"",notes:""};
+                                      const actual=parseFloat(to.qty)||0;
+                                      const est=parseFloat(item.qty)||0;
+                                      const variance=actual-est;
+                                      const fi={padding:"3px 6px",border:"1px solid #D4D9EE",borderRadius:4,fontSize:11,fontFamily:"inherit",outline:"none",width:"100%",boxSizing:"border-box"};
                                       return (
                                         <tr key={item.id} style={{borderBottom:"1px solid #F4F6FB"}}>
-                                          <td style={{padding:"6px 8px",fontSize:11,color:"#9BA3BF",fontFamily:"monospace"}}>{item.code||"--"}</td>
-                                          <td style={{padding:"6px 8px",fontSize:12,fontWeight:600,color:"#1A2240"}}>{item.description||"--"}</td>
-                                          <td style={{padding:"6px 8px",fontSize:11,color:"#9BA3BF"}}>{item.unit}</td>
-                                          <td style={{padding:"6px 8px",textAlign:"right",fontSize:11,color:"#4A5278"}}>{estQty.toLocaleString()}</td>
-                                          <td style={{padding:"4px 6px",width:100}}>
+                                          <td style={{padding:"5px 8px",fontSize:10,color:"#9BA3BF",fontFamily:"monospace"}}>{item.code||"--"}</td>
+                                          <td style={{padding:"5px 8px",fontSize:12,fontWeight:600,color:"#1A2240"}}>{item.description||"--"}
+                                            {item.critical && <span style={{fontSize:8,background:"#FCD34D20",color:"#B45309",border:"1px solid #FCD34D50",borderRadius:3,padding:"1px 4px",marginLeft:4}}>CRIT</span>}
+                                          </td>
+                                          <td style={{padding:"5px 8px",fontSize:10,color:"#9BA3BF"}}>{item.unit}</td>
+                                          <td style={{padding:"5px 8px",textAlign:"right",fontSize:11,color:"#4A5278"}}>{est.toLocaleString()}</td>
+                                          <td style={{padding:"3px 6px",width:90}}>
                                             <input type="number" value={to.qty} onChange={e=>setTakeoff(prev=>({...prev,[item.id]:{...(prev[item.id]||{}),qty:e.target.value}}))}
-                                              placeholder="0" style={{...fi,textAlign:"right",background:actualQty>0?"#F0FDF4":"#F9FAFC"}}/>
+                                              placeholder="0" style={{...fi,textAlign:"right",background:actual>0?"#F0FDF4":"#F9FAFC"}}/>
                                           </td>
-                                          <td style={{padding:"6px 8px",textAlign:"right",fontSize:11,fontWeight:700,color:variance>0?"#F87171":variance<0?"#4ADE80":"#9BA3BF"}}>
-                                            {actualQty>0?(variance>=0?"+":"")+variance.toFixed(1):"--"}
+                                          <td style={{padding:"5px 8px",textAlign:"right",fontSize:11,fontWeight:700,color:variance>0?"#F87171":variance<0?"#4ADE80":"#9BA3BF"}}>
+                                            {actual>0?(variance>=0?"+":"")+variance.toFixed(0):"--"}
                                           </td>
-                                          <td style={{padding:"4px 6px"}}>
+                                          <td style={{padding:"3px 6px"}}>
                                             <input value={to.notes||""} onChange={e=>setTakeoff(prev=>({...prev,[item.id]:{...(prev[item.id]||{}),notes:e.target.value}}))}
                                               placeholder="Notes..." style={{...fi,fontSize:10}}/>
                                           </td>
@@ -8304,28 +8415,28 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
                               </div>
                             )}
                             <div style={{display:"flex",justifyContent:"space-between"}}>
-                              <button onClick={()=>setPhase("wbs")} style={{padding:"8px 16px",background:"#F0F2F8",border:"1px solid #CBD1E8",borderRadius:7,color:"#4A5278",fontWeight:600,cursor:"pointer",fontFamily:"inherit",fontSize:12}}>&lt;-- WBS</button>
-                              <button onClick={()=>setPhase("quoting")} style={{padding:"8px 20px",background:"#3B6FE8",border:"none",borderRadius:7,color:"#fff",fontWeight:700,cursor:"pointer",fontFamily:"inherit",fontSize:12}}>Next: Quoting --&gt;</button>
+                              <button onClick={()=>setPhase("wbs")} style={{padding:"7px 14px",background:"#F0F2F8",border:"1px solid #CBD1E8",borderRadius:7,color:"#4A5278",fontWeight:600,cursor:"pointer",fontFamily:"inherit",fontSize:12}}>WBS</button>
+                              <button onClick={()=>setPhase("quoting")} style={{padding:"7px 18px",background:"#3B6FE8",border:"none",borderRadius:7,color:"#fff",fontWeight:700,cursor:"pointer",fontFamily:"inherit",fontSize:12}}>Next: Quoting</button>
                             </div>
                           </div>
                         )}
 
-                        {/* ---- QUOTING TAB ---- */}
+                        {/* ===== QUOTING TAB ===== */}
                         {phase==="quoting" && (
                           <div style={{display:"flex",flexDirection:"column",height:"100%"}}>
                             {/* Critical coverage strip */}
-                            {critical.length > 0 && (
-                              <div style={{padding:"10px 18px",background:"#F9FAFC",borderBottom:"1px solid #E8EBF4",flexShrink:0}}>
-                                <div style={{fontSize:10,fontWeight:700,color:"#4A5278",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:6}}>Critical Trades Coverage</div>
-                                <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                            {criticalCodes.length>0 && (
+                              <div style={{padding:"8px 16px",background:"#FFFBEB",borderBottom:"1px solid #FCD34D30",flexShrink:0}}>
+                                <div style={{fontSize:10,fontWeight:700,color:"#B45309",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:5}}>Critical Code Coverage ({criticalComplete}/{criticalCodes.length} with 2+ bids)</div>
+                                <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
                                   {criticalCoverage.map(c=>{
-                                    const status = c.received>=3?"#4ADE80":c.received>=1?"#FCD34D":"#F87171";
+                                    const status=c.received>=2?"#4ADE80":c.received>=1?"#FCD34D":"#F87171";
                                     return (
-                                      <div key={c.trade} style={{display:"flex",alignItems:"center",gap:6,padding:"4px 10px",background:status+"15",border:"1px solid "+status+"50",borderRadius:6}}>
-                                        <div style={{width:8,height:8,borderRadius:"50%",background:status,flexShrink:0}}/>
-                                        <span style={{fontSize:11,fontWeight:600,color:"#1A2240"}}>{c.trade}</span>
-                                        <span style={{fontSize:11,color:status,fontWeight:700}}>{c.received}/3</span>
-                                        {c.bidding>0&&<span style={{fontSize:9,color:"#FCD34D"}}>({c.bidding} bidding)</span>}
+                                      <div key={c.code} style={{display:"flex",alignItems:"center",gap:5,padding:"3px 8px",background:status+"15",border:"1px solid "+status+"50",borderRadius:5}}>
+                                        <div style={{width:7,height:7,borderRadius:"50%",background:status}}/>
+                                        <span style={{fontSize:10,fontWeight:600,color:"#1A2240"}}>{c.code}</span>
+                                        <span style={{fontSize:10,color:"#4A5278"}}>{c.desc}</span>
+                                        <span style={{fontSize:10,color:status,fontWeight:700}}>{c.received}/2</span>
                                       </div>
                                     );
                                   })}
@@ -8333,41 +8444,82 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
                               </div>
                             )}
 
-                            {/* Vendor table header */}
-                            <div style={{padding:"8px 18px",background:"#fff",borderBottom:"1px solid #E8EBF4",display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
-                              <span style={{fontSize:12,fontWeight:700,color:"#1A2240",flex:1}}>Vendor Bids</span>
-                              <button onClick={()=>{ setShowAddVendor(true); }} style={{padding:"5px 10px",background:"#3B6FE8",color:"#fff",border:"none",borderRadius:5,cursor:"pointer",fontFamily:"inherit",fontSize:11,fontWeight:700}}>+ Add Vendor</button>
+                            {/* Actions bar */}
+                            <div style={{padding:"8px 16px",background:"#fff",borderBottom:"1px solid #E8EBF4",display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
+                              <span style={{fontSize:12,fontWeight:700,color:"#1A2240",flex:1}}>
+                                {wbs.length} Cost Codes · {pkg.vendors.length} Vendors · {totalBids} Bids Received
+                              </span>
+                              <button onClick={()=>setShowAddVendor(true)} style={{padding:"5px 12px",background:"#3B6FE8",color:"#fff",border:"none",borderRadius:5,cursor:"pointer",fontFamily:"inherit",fontSize:11,fontWeight:700}}>+ Add Vendor</button>
                               <button onClick={()=>{setBidPrintOppId(activeOppId);setShowBidPrintModal(true);}} style={{padding:"5px 10px",background:"#F0F2F8",border:"1px solid #CBD1E8",borderRadius:5,cursor:"pointer",fontFamily:"inherit",fontSize:11,color:"#4A5278"}}>Print PDF</button>
                             </div>
 
-                            {/* Table */}
-                            <div style={{flex:1,overflowY:"auto"}}>
-                              {pkg.vendors.length === 0 ? (
+                            {/* Per cost-code vendor sections */}
+                            <div style={{flex:1,overflowY:"auto",padding:"0"}}>
+                              {wbs.length===0 ? (
                                 <div style={{textAlign:"center",padding:"40px",color:"#9BA3BF"}}>
-                                  <div style={{fontSize:24,marginBottom:8}}>📧</div>
-                                  <div style={{fontSize:13,fontWeight:600,color:"#1A2240",marginBottom:4}}>No vendors yet</div>
-                                  <button onClick={()=>setShowAddVendor(true)} style={{padding:"7px 16px",background:"#3B6FE8",border:"none",borderRadius:7,color:"#fff",fontWeight:700,cursor:"pointer",fontFamily:"inherit",fontSize:12}}>+ Add Vendor</button>
+                                  <div style={{fontSize:12}}>Add cost codes in WBS first</div>
+                                  <button onClick={()=>setPhase("wbs")} style={{marginTop:8,padding:"6px 14px",background:"#3B6FE8",border:"none",borderRadius:6,color:"#fff",fontWeight:700,cursor:"pointer",fontFamily:"inherit",fontSize:11}}>Go to WBS</button>
                                 </div>
-                              ) : (
-                                <>
-                                  <div style={{display:"grid",gridTemplateColumns:"220px 130px 140px 70px 70px 70px 90px 1fr 36px",background:"#F9FAFC",borderBottom:"2px solid #D4D9EE",padding:"6px 14px",gap:8,alignItems:"center",position:"sticky",top:0}}>
-                                    {["Company","Bid Packages","Phone / Email","Info","Bidding","Bid In","Amount","Notes",""].map((h,i)=>(
-                                      <div key={i} style={{fontSize:9,fontWeight:700,color:"#9BA3BF",textTransform:"uppercase",letterSpacing:"0.07em"}}>{h}</div>
-                                    ))}
+                              ) : wbs.map(item=>{
+                                const codeVendors = pkg.vendors.filter(v=>(v.costCodes||v.trades||[]).includes(item.id)||(v.costCodes||v.trades||[]).includes(item.trade));
+                                const bidsIn = codeVendors.filter(v=>v.bidReceived).length;
+                                const isCrit = item.critical;
+                                const coverage = bidsIn>=2?"#4ADE80":bidsIn>=1?"#FCD34D":"#F87171";
+                                return (
+                                  <div key={item.id} style={{borderBottom:"2px solid #F0F2F8"}}>
+                                    {/* Code header */}
+                                    <div style={{display:"flex",alignItems:"center",gap:10,padding:"8px 16px",background:isCrit?"#FFFBEB":"#F9FAFC",borderBottom:"1px solid #E8EBF4"}}>
+                                      <div style={{width:8,height:8,borderRadius:"50%",background:codeVendors.length>0?coverage:"#CBD1E8",flexShrink:0}}/>
+                                      <span style={{fontSize:10,color:"#9BA3BF",fontFamily:"monospace",minWidth:60}}>{item.code||"--"}</span>
+                                      <span style={{fontSize:12,fontWeight:700,color:"#1A2240",flex:1}}>{item.description}</span>
+                                      <span style={{fontSize:10,color:"#9BA3BF"}}>{item.trade}</span>
+                                      {isCrit && <span style={{fontSize:9,fontWeight:700,background:"#FCD34D20",color:"#B45309",border:"1px solid #FCD34D50",borderRadius:3,padding:"1px 6px"}}>CRITICAL</span>}
+                                      <span style={{fontSize:11,fontWeight:700,color:bidsIn>0?coverage:"#9BA3BF"}}>{bidsIn} bid{bidsIn!==1?"s":""}</span>
+                                      <button onClick={()=>{
+                                        // Quick-add vendor to this code
+                                        setShowAddVendor(true);
+                                      }} style={{padding:"2px 8px",background:"#3B6FE815",border:"1px solid #3B6FE830",borderRadius:4,color:"#3B6FE8",fontSize:10,cursor:"pointer",fontFamily:"inherit",fontWeight:600}}>+ Vendor</button>
+                                    </div>
+                                    {/* Vendor rows for this code */}
+                                    {codeVendors.length>0 && (
+                                      <div>
+                                        <div style={{display:"grid",gridTemplateColumns:"1fr 100px 80px 80px 80px 80px 1fr 28px",background:"#fff",padding:"4px 16px",gap:8,borderBottom:"1px solid #F4F6FB"}}>
+                                          {["Company","Phone","Info","Bidding","Bid In","Amount","Notes",""].map((h,i)=>(
+                                            <div key={i} style={{fontSize:8,fontWeight:700,color:"#CBD1E8",textTransform:"uppercase",letterSpacing:"0.06em"}}>{h}</div>
+                                          ))}
+                                        </div>
+                                        {codeVendors.map(v=>(
+                                          <div key={v.id} style={{display:"grid",gridTemplateColumns:"1fr 100px 80px 80px 80px 80px 1fr 28px",padding:"5px 16px",gap:8,alignItems:"center",borderBottom:"1px solid #F9FAFC"}}
+                                            onMouseEnter={e=>e.currentTarget.style.background="#FAFBFF"}
+                                            onMouseLeave={e=>e.currentTarget.style.background=""}>
+                                            <div>
+                                              <div style={{fontSize:12,fontWeight:600,color:"#1A2240"}}>{v.company}</div>
+                                              {v.contact&&<div style={{fontSize:10,color:"#9BA3BF"}}>{v.contact}</div>}
+                                            </div>
+                                            <div style={{fontSize:10,color:"#4A5278"}}>{v.phone||"--"}</div>
+                                            {["infoSent","bidding","bidReceived"].map(key=>(
+                                              <div key={key} style={{display:"flex",justifyContent:"center"}}>
+                                                <div onClick={()=>{
+                                                  const updated={...pkg,vendors:pkg.vendors.map(x=>x.id===v.id?{...x,[key]:!v[key]}:x)};
+                                                  setBidPackages(prev=>({...prev,[activeOppId]:updated}));
+                                                }} style={{width:14,height:14,borderRadius:"50%",background:v[key]?"#4ADE80":"#E0E4F0",border:v[key]?"2px solid #4ADE8060":"2px solid #CBD1E8",cursor:"pointer"}}/>
+                                              </div>
+                                            ))}
+                                            <div style={{fontSize:11,fontWeight:700,color:v.bidAmount?"#059669":"#CBD1E8"}}>
+                                              {v.bidAmount?"$"+parseFloat(v.bidAmount).toLocaleString():"--"}
+                                            </div>
+                                            <div style={{fontSize:10,color:"#4A5278"}}>{v.notes||""}</div>
+                                            <div/>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    )}
+                                    {codeVendors.length===0 && (
+                                      <div style={{padding:"6px 16px",fontSize:10,color:"#CBD1E8",fontStyle:"italic"}}>No vendors assigned to this code yet</div>
+                                    )}
                                   </div>
-                                  {pkg.vendors.map(v=>(
-                                    <VendorRow key={v.id} v={v} BID_TRADES={BID_TRADES}
-                                      onUpdate={(fields)=>{
-                                        const updated = {...pkg,vendors:pkg.vendors.map(x=>x.id===v.id?{...x,...fields}:x)};
-                                        setBidPackages(prev=>({...prev,[activeOppId]:updated}));
-                                      }}
-                                      onRemove={()=>{
-                                        const updated = {...pkg,vendors:pkg.vendors.filter(x=>x.id!==v.id)};
-                                        setBidPackages(prev=>({...prev,[activeOppId]:updated}));
-                                      }}/>
-                                  ))}
-                                </>
-                              )}
+                                );
+                              })}
                             </div>
                           </div>
                         )}
@@ -8378,6 +8530,7 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
               </div>
             );
           })()}
+
 
 
           {/* -- LAWN BUDGETING -- */}
