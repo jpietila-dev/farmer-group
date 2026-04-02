@@ -177,13 +177,14 @@ const NAV_ITEMS = {
     { id: "finance",   label: "Finance",   icon: "💰" },
   ],
   major: [
-    { id: "dashboard", label: "Dashboard", icon: "⊞" },
-    { id: "calendar", label: "Calendar", icon: "📅" },
-    { id: "jobs", label: "Active Jobs", icon: "🔨" },
-    { id: "pipeline", label: "Pipeline", icon: "◈" },
-    { id: "budgeting", label: "Budgeting", icon: "💲" },
-    { id: "team", label: "Team", icon: "👥" },
-    { id: "customers", label: "Customers", icon: "🤝" },
+    { id: "dashboard",   label: "Dashboard",   icon: "⊞" },
+    { id: "calendar",    label: "Calendar",    icon: "📅" },
+    { id: "jobs",        label: "Active Jobs", icon: "🔨" },
+    { id: "pipeline",    label: "Pipeline",    icon: "◈" },
+    { id: "budgeting",   label: "Budgeting",   icon: "💲" },
+    { id: "estimating",  label: "Estimating",  icon: "📐" },
+    { id: "team",        label: "Team",        icon: "👥" },
+    { id: "customers",   label: "Customers",   icon: "🤝" },
   ],
   capital: [
     { id: "dashboard", label: "Dashboard", icon: "⊞" },
@@ -4298,7 +4299,9 @@ Return ONLY valid JSON, no markdown, no extra text:
               const coSites = sites.filter(s => s.companyId === co.id);
               const coFmJobs = fmJobs.filter(j => j.companyId === co.id);
               const coCapex = capexJobs.filter(j => j.companyId === co.id);
+              const coMpJobs = mpJobs.filter(j => j.client === co.name || j.companyId === co.id);
               const coJobs = [...jobs.filter(j => j.companyId === co.id), ...coFmJobs, ...coCapex];
+              const coAllJobs = [...coJobs, ...coMpJobs];
               const coOpps = pipeline.filter(o => o.companyId === co.id);
               const totalValue = [...jobs, ...coFmJobs, ...coCapex].filter(j => j.companyId === co.id).reduce((s, j) => s + (j.contractValue || 0), 0);
               const lawnBidsForCo = lawnBids.filter(b => coSites.some(s => s.id === b.siteId));
@@ -4308,7 +4311,8 @@ Return ONLY valid JSON, no markdown, no extra text:
                 { id: "overview",  label: "Overview" },
                 { id: "sites",     label: "Sites (" + coSites.length + ")" },
                 { id: "contacts",  label: "Contacts (" + coContacts.length + ")" },
-                { id: "jobs",      label: "Jobs (" + coJobs.length + ")" },
+                { id: "jobs",      label: "Jobs (" + coAllJobs.length + ")" },
+                { id: "pipeline",  label: "Pipeline (" + coOpps.length + ")" },
                 { id: "bids",      label: "Lawn Bids (" + lawnBidsForCo.length + ")" },
               ];
               return (
@@ -4584,7 +4588,46 @@ Return ONLY valid JSON, no markdown, no extra text:
                   {/* Jobs tab */}
                   {crmTab === "jobs" && (
                     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                      {coJobs.length === 0 && <div style={{ fontSize: 13, color: "#4A5278", fontStyle: "italic" }}>No jobs yet.</div>}
+                      {coAllJobs.length === 0 && <div style={{ fontSize: 13, color: "#4A5278", fontStyle: "italic" }}>No jobs yet.</div>}
+                      {coMpJobs.length > 0 && (
+                        <div style={{ fontSize:10, fontWeight:700, color:"#818CF8", textTransform:"uppercase", letterSpacing:"0.07em", padding:"4px 0" }}>Major Projects ({coMpJobs.length})</div>
+                      )}
+                      {coMpJobs.map(j => {
+                        const reports = mpWeeklyReports.filter(r=>r.projectId===j.id).sort((a,b)=>b.reportDate.localeCompare(a.reportDate));
+                        const latest  = reports[0];
+                        const da      = latest?.daysAhead ?? j.daysAhead;
+                        const sc      = da===null?"#9BA3BF":da>7?"#4ADE80":da<-7?"#F87171":"#FCD34D";
+                        const billedPct = j.contractValue>0?Math.min(100,((j.amountBilled||0)/j.contractValue)*100):0;
+                        return (
+                          <div key={j.id}
+                            onClick={()=>{setActiveNav("jobs");setSelectedMpJob(j.id);setMpDetailTab("weekly");}}
+                            style={{ background:"#fff", border:"1px solid #D4D9EE", borderRadius:10, padding:"12px 16px", cursor:"pointer", borderLeft:"4px solid #818CF8" }}
+                            onMouseEnter={e=>e.currentTarget.style.background="#F5F8FF"}
+                            onMouseLeave={e=>e.currentTarget.style.background="#fff"}>
+                            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start" }}>
+                              <div>
+                                <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:3 }}>
+                                  <div style={{ fontSize:13, fontWeight:700, color:"#1A2240" }}>{j.name}</div>
+                                  <span style={{ fontSize:9, fontWeight:700, background:"#818CF815", color:"#818CF8", border:"1px solid #818CF840", borderRadius:4, padding:"1px 6px" }}>MP</span>
+                                </div>
+                                <div style={{ fontSize:11, color:"#4A5278" }}>{j.status}{j.pm?" · "+j.pm:""}</div>
+                              </div>
+                              <div style={{ textAlign:"right" }}>
+                                {j.contractValue>0 && <div style={{ fontSize:13, fontWeight:700, color:"#4ADE80" }}>{fmt(j.contractValue)}</div>}
+                                {da!==null && <div style={{ fontSize:11, fontWeight:700, color:sc }}>{Math.abs(da)}d {da>=0?"▲":"▼"}</div>}
+                              </div>
+                            </div>
+                            {j.contractValue>0 && (
+                              <div style={{ marginTop:8, background:"#F0F2F8", borderRadius:4, height:4, overflow:"hidden" }}>
+                                <div style={{ width:billedPct+"%", height:"100%", background:"linear-gradient(90deg,#3B6FE8,#60A5FA)", borderRadius:4 }}/>
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                      {coJobs.length > 0 && coMpJobs.length > 0 && (
+                        <div style={{ fontSize:10, fontWeight:700, color:"#3B6FE8", textTransform:"uppercase", letterSpacing:"0.07em", padding:"4px 0", marginTop:4 }}>FM / CapEx Jobs ({coJobs.length})</div>
+                      )}
                       {coJobs.map(j => {
                         const isFM = fmJobs.some(f => f.id === j.id);
                         const isCapex = capexJobs.some(f => f.id === j.id);
@@ -4603,6 +4646,58 @@ Return ONLY valid JSON, no markdown, no extra text:
                           </div>
                         );
                       })}
+                    </div>
+                  )}
+
+                  {/* Pipeline tab */}
+                  {crmTab === "pipeline" && (
+                    <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+                      {coOpps.length === 0 && <div style={{ fontSize:13, color:"#4A5278", fontStyle:"italic" }}>No pipeline opportunities for this customer yet.</div>}
+                      {coOpps.map(o => {
+                        const stgColors = {lead:"#A78BFA",budgeting_lead:"#818CF8",proposal_bid:"#60A5FA",negotiation:"#FCD34D",won:"#4ADE80",closed_won:"#059669",lost:"#F87171"};
+                        const stgLabels = {lead:"Lead",budgeting_lead:"Budgeting Lead",proposal_bid:"Proposal / Bid",negotiation:"Negotiation",won:"Won",closed_won:"Closed / Won",lost:"Lost"};
+                        const sc = stgColors[o.stage]||"#818CF8";
+                        const mpJob = mpJobs.find(j=>j.name===o.name||j.id===o.mpJobId);
+                        return (
+                          <div key={o.id}
+                            onClick={()=>{ setSelectedOpp(o); setSelectedOppTab("info"); }}
+                            style={{ background:"#fff", border:"1px solid #D4D9EE", borderRadius:10, padding:"14px 16px", cursor:"pointer", borderLeft:"4px solid "+sc }}
+                            onMouseEnter={e=>e.currentTarget.style.background="#F5F8FF"}
+                            onMouseLeave={e=>e.currentTarget.style.background="#fff"}>
+                            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:8 }}>
+                              <div style={{ flex:1 }}>
+                                <div style={{ fontSize:14, fontWeight:700, color:"#1A2240", marginBottom:4 }}>{o.name}</div>
+                                <div style={{ display:"flex", gap:8, alignItems:"center" }}>
+                                  <span style={{ fontSize:10, fontWeight:700, background:sc+"20", color:sc, border:"1px solid "+sc+"50", borderRadius:4, padding:"2px 7px" }}>{stgLabels[o.stage]||o.stage}</span>
+                                  {o.closeDate && <span style={{ fontSize:10, color:"#9BA3BF" }}>📅 {o.closeDate}</span>}
+                                </div>
+                              </div>
+                              <div style={{ textAlign:"right" }}>
+                                {(parseFloat(o.value)||0)>0 && <div style={{ fontSize:16, fontWeight:800, color:"#1A2240" }}>{fmt(parseFloat(o.value))}</div>}
+                                <div style={{ fontSize:10, color:"#9BA3BF", marginTop:2 }}>→ Open</div>
+                              </div>
+                            </div>
+                            {(o.buildingTypes||[]).length>0 && (
+                              <div style={{ fontSize:11, color:"#4A5278" }}>
+                                {(o.buildingTypes||[]).map(bt=>({multistory:"Multistory",singlestory:"Single Story",canopy:"Canopy",mezzanine:"Mezzanine"}[bt]||bt)).join(" · ")}
+                                {o.sf_multistory||o.sf_singlestory||o.sf_canopy ? " — "+([(o.sf_multistory||0),(o.sf_singlestory||0),(o.sf_canopy||0),(o.sf_mezzanine||0)].map(Number).reduce((a,b)=>a+b,0)).toLocaleString()+" SF total":""}
+                              </div>
+                            )}
+                            {o.notes && <div style={{ fontSize:11, color:"#9BA3BF", marginTop:4, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{o.notes}</div>}
+                            {mpJob && (
+                              <div style={{ marginTop:8, padding:"6px 10px", background:"#F0FDF4", border:"1px solid #4ADE8030", borderRadius:6, fontSize:11, color:"#059669" }}>
+                                🏗 Active Project: {mpJob.name} · {mpJob.status}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                      {coOpps.filter(o=>!["lost"].includes(o.stage)).length > 0 && (
+                        <div style={{ background:"#F4F6FB", borderRadius:8, padding:"10px 14px", display:"flex", justifyContent:"space-between" }}>
+                          <span style={{ fontSize:12, color:"#4A5278" }}>Active pipeline value</span>
+                          <span style={{ fontSize:13, fontWeight:700, color:"#1A2240" }}>{fmt(coOpps.filter(o=>!["won","closed_won","lost"].includes(o.stage)).reduce((s,o)=>s+(parseFloat(o.value)||0),0))}</span>
+                        </div>
+                      )}
                     </div>
                   )}
 
@@ -4878,7 +4973,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                 </div>
 
                 {/* Stage KPI strip */}
-                <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:10}}>
+                <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:8}}>
                   {MP_STAGES.map(s=>{
                     const grp = s.id==="won"?wonOpps:s.id==="lost"?lostOpps:activeOpps.filter(o=>getStage(o)===s.id);
                     const val = grp.reduce((t,o)=>t+(parseFloat(o.value)||0),0);
@@ -4936,7 +5031,11 @@ Return ONLY valid JSON, no markdown, no extra text:
                           const co=companies.find(c=>c.id===o.companyId);
                           const stageObj=MP_STAGES.find(s=>s.id===getStage(o))||stage;
                           return (
-                            <div key={o.id} style={{background:"#fff",borderRadius:10,border:"1px solid #D4D9EE",boxShadow:"0 1px 4px rgba(0,0,0,0.04)",overflow:"hidden"}}>
+                            <div key={o.id}
+                              onClick={()=>{ setSelectedOpp(o); setSelectedOppTab("info"); }}
+                              style={{background:"#fff",borderRadius:10,border:"1px solid #D4D9EE",boxShadow:"0 1px 4px rgba(0,0,0,0.04)",overflow:"hidden",cursor:"pointer"}}
+                              onMouseEnter={e=>e.currentTarget.style.boxShadow="0 4px 16px rgba(59,111,232,0.12)"}
+                              onMouseLeave={e=>e.currentTarget.style.boxShadow="0 1px 4px rgba(0,0,0,0.04)"}>
                               <div style={{height:3,background:stageObj.color}}/>
                               <div style={{padding:"12px 14px"}}>
                                 <div style={{fontSize:13,fontWeight:700,color:"#1A2240",marginBottom:4,lineHeight:1.3}}>{o.name}</div>
@@ -4946,7 +5045,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                                 {o.notes && <div style={{fontSize:11,color:"#4A5278",marginBottom:8,lineHeight:1.5,borderLeft:"2px solid #E0E4F0",paddingLeft:8}}>{o.notes}</div>}
                                 {o.closeDate && <div style={{fontSize:10,color:"#9BA3BF",marginBottom:8}}>📅 Close: {o.closeDate}</div>}
                                 {/* Stage move + actions */}
-                                <div style={{display:"flex",gap:5,flexWrap:"wrap",paddingTop:8,borderTop:"1px solid #F0F2F8"}}>
+                                <div style={{display:"flex",gap:5,flexWrap:"wrap",paddingTop:8,borderTop:"1px solid #F0F2F8"}} onClick={e=>e.stopPropagation()}>
                                   {ACTIVE_STAGES.filter(s=>s.id!==getStage(o)).map(s=>(
                                     <button key={s.id} onClick={()=>moveOpp(o.id,s.id)}
                                       style={{padding:"2px 8px",borderRadius:4,border:"1px solid "+s.color+"50",background:s.color+"12",color:s.color,fontSize:10,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>
@@ -7636,6 +7735,125 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
                     </div>
                   </div>
                 </div>
+              </div>
+            );
+          })()}
+
+          {/* ── MP ESTIMATING ── */}
+          {activeNav === "estimating" && activeBU === "major" && (() => {
+            // All MP opps that are in proposal_bid, negotiation, or beyond
+            const estimatingOpps = pipeline.filter(o =>
+              o.bu === "major" &&
+              ["proposal_bid","negotiation","won","closed_won"].includes(o.stage)
+            );
+            const activeOppId = activeBudgetOpp;
+            const activeOpp   = estimatingOpps.find(o=>o.id===activeOppId) || estimatingOpps[0] || null;
+
+            return (
+              <div className="fade-in" style={{display:"flex",flexDirection:"column",gap:0,height:"calc(100vh - 100px)"}}>
+                {/* Header */}
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14,flexShrink:0}}>
+                  <div>
+                    <div style={{fontSize:22,fontWeight:800,color:"#1A2240",letterSpacing:"-0.01em",textTransform:"uppercase"}}>MP Estimating</div>
+                    <div style={{fontSize:11,color:"#4A5278",marginTop:3}}>{estimatingOpps.length} projects in bidding · formal estimates for proposal submission</div>
+                  </div>
+                </div>
+
+                {estimatingOpps.length === 0 ? (
+                  <div style={{textAlign:"center",padding:"80px 24px",color:"#9BA3BF",border:"2px dashed #E0E4F0",borderRadius:12,flex:1}}>
+                    <div style={{fontSize:48,marginBottom:16}}>📐</div>
+                    <div style={{fontSize:18,fontWeight:700,color:"#1A2240",marginBottom:8}}>No projects in estimating yet</div>
+                    <div style={{fontSize:13,marginBottom:24}}>Move a pipeline opportunity to <strong>Proposal / Bid</strong> to start formal estimating</div>
+                    <button className="btn-primary" onClick={()=>setActiveNav("pipeline")}>→ Go to Pipeline</button>
+                  </div>
+                ) : (
+                  <div style={{display:"grid",gridTemplateColumns:"240px 1fr",flex:1,gap:0,minHeight:0,background:"#fff",borderRadius:12,border:"1px solid #D4D9EE",overflow:"hidden"}}>
+                    {/* Left sidebar — project list */}
+                    <div style={{borderRight:"1px solid #D4D9EE",overflowY:"auto",background:"#F9FAFC"}}>
+                      <div style={{padding:"10px 14px",borderBottom:"1px solid #D4D9EE",fontSize:10,fontWeight:700,color:"#9BA3BF",textTransform:"uppercase",letterSpacing:"0.07em"}}>
+                        Active Bids ({estimatingOpps.length})
+                      </div>
+                      {estimatingOpps.map(o=>{
+                        const co=companies.find(c=>c.id===o.companyId);
+                        const det=oppDetails[o.id]||{};
+                        const isActive=o.id===activeOppId||(activeOppId===null&&o.id===estimatingOpps[0]?.id);
+                        const stgColors={proposal_bid:"#60A5FA",negotiation:"#FCD34D",won:"#4ADE80",closed_won:"#059669"};
+                        const stgLabels={proposal_bid:"Bid",negotiation:"Neg.",won:"Won",closed_won:"Closed"};
+                        return (
+                          <div key={o.id} onClick={()=>setActiveBudgetOpp(o.id)}
+                            style={{padding:"10px 14px",cursor:"pointer",background:isActive?"#EEF3FF":"transparent",borderBottom:"1px solid #F0F2F8",borderLeft:isActive?"3px solid #3B6FE8":"3px solid transparent"}}
+                            onMouseEnter={e=>{if(!isActive)e.currentTarget.style.background="#F4F6FB";}}
+                            onMouseLeave={e=>{if(!isActive)e.currentTarget.style.background="transparent";}}>
+                            <div style={{fontSize:12,fontWeight:700,color:"#1A2240",lineHeight:1.3,marginBottom:2}}>{o.name}</div>
+                            <div style={{fontSize:10,color:"#9BA3BF",marginBottom:4}}>{co?.name||"—"}</div>
+                            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                              <span style={{fontSize:9,fontWeight:700,background:(stgColors[o.stage]||"#9BA3BF")+"20",color:stgColors[o.stage]||"#9BA3BF",borderRadius:3,padding:"1px 5px"}}>
+                                {stgLabels[o.stage]||o.stage}
+                              </span>
+                              <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:2}}>
+                                {det.bidDueDate && <span style={{fontSize:9,color:"#F87171",fontWeight:700}}>Due: {det.bidDueDate}</span>}
+                                {(parseFloat(o.value)||0)>0 && <span style={{fontSize:10,fontWeight:700,color:"#1A2240"}}>${(parseFloat(o.value)/1000).toFixed(0)}k</span>}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {/* Right — estimate tool */}
+                    <div style={{display:"flex",flexDirection:"column",overflow:"hidden"}}>
+                      {activeOpp ? (
+                        <>
+                          {/* Project header */}
+                          <div style={{background:"linear-gradient(135deg,#1A2240,#253260)",padding:"12px 18px",flexShrink:0,display:"flex",alignItems:"center",gap:12}}>
+                            <div style={{flex:1}}>
+                              <div style={{fontSize:14,fontWeight:800,color:"#fff"}}>{activeOpp.name}</div>
+                              <div style={{fontSize:10,color:"rgba(255,255,255,0.5)",marginTop:1}}>
+                                {companies.find(c=>c.id===activeOpp.companyId)?.name||""}
+                                {(oppDetails[activeOpp.id]?.bidDueDate)?` · Bid Due: ${oppDetails[activeOpp.id].bidDueDate}`:""}
+                              </div>
+                            </div>
+                            {/* Copy from budget if no estimate yet */}
+                            {!(oppDetails[activeOpp.id]?.estimateItems||[]).length && (oppDetails[activeOpp.id]?.budgetItems||[]).length>0 && (
+                              <button onClick={()=>saveOppDetail(activeOpp.id,{estimateItems:[...(oppDetails[activeOpp.id].budgetItems)],estimateOverrides:{...(oppDetails[activeOpp.id].budgetOverrides||{})}})}
+                                style={{padding:"6px 12px",background:"#FCD34D",border:"none",borderRadius:6,color:"#1A2240",fontWeight:700,fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>
+                                📋 Copy from Budget
+                              </button>
+                            )}
+                            <button onClick={()=>{ setSelectedOpp(activeOpp); setSelectedOppTab("estimating"); }}
+                              style={{padding:"6px 12px",background:"rgba(255,255,255,0.15)",border:"1px solid rgba(255,255,255,0.3)",borderRadius:6,color:"#fff",fontWeight:600,fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>
+                              📋 Full Detail →
+                            </button>
+                          </div>
+                          {/* Bid due countdown */}
+                          {oppDetails[activeOpp.id]?.bidDueDate && (() => {
+                            const days = Math.ceil((new Date(oppDetails[activeOpp.id].bidDueDate)-new Date())/(1000*60*60*24));
+                            const bg = days<=3?"#F87171":days<=7?"#FCD34D":"#4ADE80";
+                            return <div style={{background:bg,padding:"6px 18px",fontSize:11,fontWeight:700,color:days<=7?"#1A2240":"#1A2240",display:"flex",gap:8,alignItems:"center",flexShrink:0}}>
+                              ⏰ Bid due {oppDetails[activeOpp.id].bidDueDate} — {days>0?days+" days remaining":"OVERDUE"}
+                            </div>;
+                          })()}
+                          {/* Budget tool */}
+                          <div style={{flex:1,overflow:"hidden",display:"flex"}}>
+                            <MpBudgetTool
+                              opp={{...activeOpp,name:activeOpp.name+" — Estimate"}}
+                              company={companies.find(c=>c.id===activeOpp.companyId)}
+                              items={oppDetails[activeOpp.id]?.estimateItems||[]}
+                              setItems={items=>saveOppDetail(activeOpp.id,{estimateItems:typeof items==="function"?items(oppDetails[activeOpp.id]?.estimateItems||[]):items})}
+                              overrides={oppDetails[activeOpp.id]?.estimateOverrides||{gcPct:10,contingency:5,margin:15}}
+                              setOverrides={ov=>saveOppDetail(activeOpp.id,{estimateOverrides:typeof ov==="function"?ov(oppDetails[activeOpp.id]?.estimateOverrides||{}):ov})}
+                            />
+                          </div>
+                        </>
+                      ) : (
+                        <div style={{display:"flex",alignItems:"center",justifyContent:"center",flex:1,color:"#9BA3BF",flexDirection:"column",gap:10}}>
+                          <div style={{fontSize:32}}>📐</div>
+                          <div style={{fontSize:14,fontWeight:600,color:"#1A2240"}}>Select a project</div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
             );
           })()}
