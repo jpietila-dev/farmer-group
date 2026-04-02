@@ -2328,6 +2328,8 @@ export default function App() {
   const [showBudgetPrint,  setShowBudgetPrint]  = useState(false);
   const [budgetPrintOpp,   setBudgetPrintOpp]   = useState(null);
   const [budgetAttachment, setBudgetAttachment] = useState("");
+  const [oppDetails,       setOppDetails]       = useState({});
+  const [selectedOppTab,   setSelectedOppTab]   = useState("info"); // {oppId: {propertyOwned, ownerName, ownerPhone, ownerEmail, contractDate, budgetReception, budgetNextSteps, bidDueDate, estimateItems, estimateOverrides, attachmentUrl, closedDate, closedNotes}}
   const [editingContact,   setEditingContact]   = useState(null);  // contact being edited inline
   const [editContactForm,  setEditContactForm]  = useState({});
   const [budgetItems,      setBudgetItems]      = useState([]);
@@ -2976,6 +2978,20 @@ Return ONLY valid JSON, no markdown, no extra text:
     setShowForm(false);
   };
   const deleteOpp  = (id) => { setPipeline(pipeline.filter(o => o.id !== id)); setSelectedOpp(null); };
+  const saveOppDetail = (oppId, fields) => {
+    setOppDetails(prev => {
+      const updated = {...prev, [oppId]: {...(prev[oppId]||{}), ...fields}};
+      // Persist to Supabase notes field as JSON
+      try {
+        const row = pipeline.find(o=>o.id===oppId);
+        if (row?.dbId || String(oppId).length > 8) {
+          const id = row?.dbId || String(oppId);
+          supa.from("mp_pipeline").update({notes: JSON.stringify(updated[oppId])}).eq("id", id);
+        }
+      } catch(e) {}
+      return updated;
+    });
+  };
   const moveStage  = (id, dir) => setPipeline(pipeline.map(o => {
     if (o.id !== id) return o;
     const stgs = PIPELINE_STAGES[o.bu] || PIPELINE_STAGES.all;
@@ -4756,20 +4772,22 @@ Return ONLY valid JSON, no markdown, no extra text:
               { id:"proposal_bid",   label:"Proposal / Bid",  color:"#60A5FA", short:"Bid" },
               { id:"negotiation",    label:"Negotiation",     color:"#FCD34D", short:"Neg." },
               { id:"won",            label:"Won",             color:"#4ADE80", short:"Won" },
+              { id:"closed_won",     label:"Closed / Won",    color:"#059669", short:"Closed" },
               { id:"lost",           label:"Lost",            color:"#F87171", short:"Lost" },
             ];
-            const ACTIVE_STAGES = MP_STAGES.filter(s=>!["won","lost"].includes(s.id));
+            const ACTIVE_STAGES = MP_STAGES.filter(s=>s.id!=="lost"); // keep won + closed_won in board
 
             // All MP opps (from pipeline state, filtered to major)
             const mpOpps = pipeline.filter(o => o.bu === "major");
-            const activeOpps = mpOpps.filter(o => !["won","lost"].includes(o.stage||o.pipelineType));
-            const wonOpps  = mpOpps.filter(o => o.stage==="won"  || o.stage==="Won");
+            const activeOpps = mpOpps.filter(o => !["won","closed_won","lost"].includes(o.stage||o.pipelineType));
+            const wonOpps      = mpOpps.filter(o => o.stage==="won" || o.stage==="Won");
+            const closedWonOpps= mpOpps.filter(o => o.stage==="closed_won");
             const lostOpps = mpOpps.filter(o => o.stage==="lost" || o.stage==="Lost");
 
             // Normalize stage key
             const getStage = (o) => {
               const s = o.stage||"budgeting_lead";
-              if (s==="Won") return "won"; if (s==="Lost") return "lost";
+              if (s==="Won"||s==="won") return "won"; if (s==="Lost"||s==="lost") return "lost"; if (s==="closed_won") return "closed_won";
               if (s==="Budgeting" || s==="budgeting_lead") return "budgeting_lead";
               if (s==="Lead" || s==="lead") return "lead";
               if (s==="Proposal / Bid" || s==="hard_bid" || s==="proposal_bid") return "proposal_bid";
@@ -4899,12 +4917,12 @@ Return ONLY valid JSON, no markdown, no extra text:
                   </button>
                 </div>
 
-                {/* Kanban columns */}
-                <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:14}}>
+                {/* Kanban columns — all stages in one scrollable row */}
+                <div style={{display:"flex",gap:14,overflowX:"auto",paddingBottom:8,alignItems:"flex-start"}}>
                   {ACTIVE_STAGES.map(stage=>{
                     const opps=filtered(stage.id);
                     return (
-                      <div key={stage.id} style={{display:"flex",flexDirection:"column",gap:8}}>
+                      <div key={stage.id} style={{display:"flex",flexDirection:"column",gap:8,minWidth:260,flex:"0 0 260px"}}>
                         {/* Column header */}
                         <div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 0",borderBottom:"2px solid "+stage.color}}>
                           <div style={{fontSize:12,fontWeight:700,color:"#1A2240",flex:1}}>{stage.label}</div>
@@ -4949,10 +4967,10 @@ Return ONLY valid JSON, no markdown, no extra text:
                   })}
                 </div>
 
-                {/* Won / Lost summary */}
-                {(wonOpps.length>0||lostOpps.length>0) && (
-                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
-                    {[{label:"Won",opps:wonOpps,color:"#4ADE80"},{label:"Lost",opps:lostOpps,color:"#F87171"}].map(({label,opps,color})=>(
+                {/* Won / Closed / Lost summary */}
+                {(wonOpps.length>0||closedWonOpps.length>0||lostOpps.length>0) && (
+                  <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:14}}>
+                    {[{label:"Won",opps:wonOpps,color:"#4ADE80"},{label:"Closed / Won",opps:closedWonOpps,color:"#059669"},{label:"Lost",opps:lostOpps,color:"#F87171"}].filter(g=>g.opps.length>0).map(({label,opps,color})=>(
                       <div key={label} style={{background:"#fff",borderRadius:10,border:"1px solid #D4D9EE",overflow:"hidden"}}>
                         <div style={{padding:"10px 14px",borderBottom:"1px solid #D4D9EE",display:"flex",alignItems:"center",gap:8,background:"#F9FAFC"}}>
                           <div style={{fontSize:11,fontWeight:700,color,textTransform:"uppercase",letterSpacing:"0.07em",flex:1}}>{label} ({opps.length})</div>
@@ -8767,77 +8785,6 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
         </div>
       )}
 
-      {/* ── OPP SIDE PANEL ── */}
-      {selectedOpp && !selectedCompany && (
-        <div className="side-panel slide-in">
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-            <div style={{ fontSize: 13, fontWeight: 600, color: "#1A2240", textTransform: "uppercase", letterSpacing: "0.06em" }}>
-              {selectedOpp.stage === "Budgeting" ? "Budget Detail" : selectedOpp.stage === "Lead" ? "Lead Detail" : "Opportunity Detail"}
-            </div>
-            <button className="btn-ghost" onClick={() => setSelectedOpp(null)}>✕</button>
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-            <div>
-              <div style={{ fontSize: 15, color: "#1A2240", fontWeight: 600, marginBottom: 6 }}>{selectedOpp.name}</div>
-              {(() => {
-                const co = companies.find(c => c.id === selectedOpp.companyId);
-                const ct = contacts.find(p => p.id === selectedOpp.contactId);
-                return co ? (
-                  <div style={{ marginBottom: 10 }}>
-                    <div style={{ fontSize: 12, color: "#3B6FE8", cursor: "pointer", marginBottom: 2 }} onClick={() => { setSelectedOpp(null); setSelectedCompany(co); }}>🏢 {co.name}</div>
-                    {ct && <div style={{ fontSize: 11, color: "#4A5278" }}>👤 {ct.firstName} {ct.lastName} · {ct.title}</div>}
-                  </div>
-                ) : null;
-              })()}
-              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                <span className="pill" style={{ background: (STAGE_COLORS[selectedOpp.stage] || { bg: "#60A5FA15" }).bg, color: (STAGE_COLORS[selectedOpp.stage] || { color: "#60A5FA" }).color }}>{selectedOpp.stage}</span>
-                <span style={{ fontSize: 20, fontWeight: 700, color: "#1A2240" }}>{fmt(selectedOpp.value)}</span>
-              </div>
-            </div>
-
-            {selectedOpp.stage === "Budgeting" && (
-              <div style={{ background: "#F0F2F8", borderRadius: 8, padding: "12px", border: "1px solid #CBD1E8" }}>
-                <div style={{ fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "#4A5278", marginBottom: 6 }}>Budget Due Date</div>
-                <div style={{ fontSize: 14, color: selectedOpp.budgetDueDate ? "#FCD34D" : "#4A5278", fontWeight: 500 }}>{selectedOpp.budgetDueDate || "Not set"}</div>
-              </div>
-            )}
-
-            {["Proposal / Bid", "Bid Submitted"].includes(selectedOpp.stage) && (
-              <div style={{ background: "#F0F2F8", borderRadius: 8, padding: "12px", border: "1px solid #FCD34D30" }}>
-                <div style={{ fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "#4A5278", marginBottom: 6 }}>Bid Due Date</div>
-                <div style={{ fontSize: 14, color: selectedOpp.bidDueDate ? "#FCD34D" : "#4A5278", fontWeight: 500 }}>{selectedOpp.bidDueDate || "Not set"}</div>
-              </div>
-            )}
-
-            {selectedOpp.stage === "Lead" && (selectedOpp.nextSteps || []).length > 0 && (
-              <div>
-                <div style={{ fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "#4A5278", marginBottom: 8, fontWeight: 600 }}>Next Steps</div>
-                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                  {(selectedOpp.nextSteps || []).map((ns, i) => {
-                    const nsOverdue = ns.dueDate && new Date(ns.dueDate) < new Date();
-                    return (
-                      <div key={i} className="ns-row">
-                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                          <div style={{ width: 6, height: 6, borderRadius: "50%", background: nsOverdue ? "#F87171" : "#3B6FE8", flexShrink: 0 }} />
-                          <span style={{ fontSize: 12, color: "#1A2240", fontWeight: 500 }}>{ns.step}</span>
-                        </div>
-                        <span style={{ fontSize: 11, color: nsOverdue ? "#F87171" : "#4A5278" }}>{ns.dueDate || "No date"}</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {selectedOpp.closeDate && <div style={{ fontSize: 11, color: "#4A5278" }}><span style={{ color: "#353C62" }}>Expected Close: </span>{selectedOpp.closeDate}</div>}
-            {selectedOpp.notes     && <div style={{ fontSize: 12, color: "#6B7694", lineHeight: 1.6, background: "#F0F2F8", padding: "10px 12px", borderRadius: 6, border: "1px solid #CBD1E8" }}>{selectedOpp.notes}</div>}
-            <div style={{ display: "flex", gap: 8 }}>
-              <button className="btn-ghost" style={{ flex: 1 }} onClick={() => { openEdit(selectedOpp); setSelectedOpp(null); }}>✎ Edit</button>
-              <button className="btn-ghost" style={{ color: "#F87171", borderColor: "#F8717120" }} onClick={() => deleteOpp(selectedOpp.id)}>✕</button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* ── JOB FORM ── */}
       {showJobForm && (
@@ -9444,121 +9391,313 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
         );
       })()}
 
-      {/* ── PIPELINE OPP DETAIL PANEL (enhanced for MP) ── */}
+      {/* ── PIPELINE OPP DETAIL PANEL ── */}
       {selectedOpp && !selectedCompany && (() => {
-        const o   = selectedOpp;
-        const co  = companies.find(c => c.id === o.companyId);
-        const ct  = contacts.find(p => p.id === o.contactId);
+        const o    = selectedOpp;
+        const co   = companies.find(c => c.id === o.companyId);
+        const ct   = contacts.find(p => p.id === o.contactId);
+        const det  = oppDetails[o.id] || {};
+        const setDet = (fields) => saveOppDetail(o.id, fields);
         const isMp = o.bu === "major";
-        const MP_STAGE_COLORS = {lead:"#A78BFA",budgeting_lead:"#818CF8",proposal_bid:"#60A5FA",negotiation:"#FCD34D",won:"#4ADE80",lost:"#F87171"};
-        const MP_STAGE_LABELS = {lead:"Lead",budgeting_lead:"Budgeting Lead",proposal_bid:"Proposal / Bid",negotiation:"Negotiation",won:"Won",lost:"Lost"};
-        const stageColor = MP_STAGE_COLORS[o.stage] || "#818CF8";
+
+        const STAGE_COLORS = {lead:"#A78BFA",budgeting_lead:"#818CF8",proposal_bid:"#60A5FA",negotiation:"#FCD34D",won:"#4ADE80",lost:"#F87171",closed_won:"#059669"};
+        const STAGE_LABELS = {lead:"Lead",budgeting_lead:"Budgeting Lead",proposal_bid:"Proposal / Bid",negotiation:"Negotiation",won:"Won",lost:"Lost",closed_won:"Closed / Won"};
+        const sc = STAGE_COLORS[o.stage]||"#818CF8";
+
+        // Tabs depend on stage
+        const TABS_BY_STAGE = {
+          lead:           [{id:"info",label:"📋 Lead Info"},{id:"budget",label:"💰 Budget"},{id:"notes",label:"📝 Notes"}],
+          budgeting_lead: [{id:"info",label:"📋 Property"},{id:"budget",label:"💰 Budget"},{id:"notes",label:"📝 Notes"}],
+          proposal_bid:   [{id:"info",label:"📋 Property"},{id:"budget",label:"💰 Budget"},{id:"estimating",label:"📐 Estimating"},{id:"notes",label:"📝 Notes"}],
+          negotiation:    [{id:"info",label:"📋 Property"},{id:"budget",label:"💰 Budget"},{id:"estimating",label:"📐 Estimating"},{id:"notes",label:"📝 Notes"}],
+          won:            [{id:"info",label:"📋 Property"},{id:"budget",label:"💰 Budget"},{id:"estimating",label:"📐 Estimating"},{id:"notes",label:"📝 Notes"}],
+          closed_won:     [{id:"info",label:"📋 Property"},{id:"budget",label:"💰 Budget"},{id:"closed",label:"✅ Closed"},{id:"notes",label:"📝 Notes"}],
+          lost:           [{id:"info",label:"📋 Property"},{id:"notes",label:"📝 Notes"}],
+        };
+        const tabs = TABS_BY_STAGE[o.stage] || TABS_BY_STAGE.lead;
+        const activeTab = selectedOppTab; const setActiveTab = setSelectedOppTab;
+
+        const fi = {width:"100%",padding:"7px 10px",border:"1px solid #D4D9EE",borderRadius:6,fontSize:12,fontFamily:"inherit",outline:"none",boxSizing:"border-box",background:"#fff"};
+        const lbl = (text) => <div style={{fontSize:10,color:"#9BA3BF",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:3}}>{text}</div>;
+
+        // Budget items for this opp (stored in det.budgetItems)
+        const oppBudgetItems = det.budgetItems || [];
+        const oppOverrides   = det.budgetOverrides || {gcPct:10,contingency:5,margin:15};
+        const setOppBudget   = (items) => setDet({budgetItems:items});
+        const setOppOverrides= (ov)    => setDet({budgetOverrides:typeof ov==="function"?ov(oppOverrides):ov});
 
         return (
-          <div className="slide-panel fade-in" style={{position:"fixed",right:0,top:0,bottom:0,width:"min(520px,100vw)",background:"#fff",boxShadow:"-4px 0 32px rgba(0,0,0,0.12)",zIndex:1200,display:"flex",flexDirection:"column",overflow:"hidden"}}>
+          <div style={{position:"fixed",right:0,top:0,bottom:0,width:"min(580px,100vw)",background:"#fff",boxShadow:"-4px 0 40px rgba(0,0,0,0.15)",zIndex:1200,display:"flex",flexDirection:"column",overflow:"hidden"}}>
             {/* Header */}
-            <div style={{background:"linear-gradient(135deg,#1A2240,#253260)",padding:"20px 22px",flexShrink:0}}>
-              <div style={{display:"flex",alignItems:"flex-start",gap:10,marginBottom:8}}>
+            <div style={{background:"linear-gradient(135deg,#1A2240,#253260)",padding:"18px 22px",flexShrink:0}}>
+              <div style={{display:"flex",alignItems:"flex-start",gap:10,marginBottom:10}}>
                 <div style={{flex:1}}>
-                  <div style={{fontSize:16,fontWeight:800,color:"#fff",lineHeight:1.3,marginBottom:4}}>{o.name}</div>
-                  {co && <div style={{fontSize:11,color:"rgba(255,255,255,0.6)",cursor:"pointer"}} onClick={()=>{setSelectedOpp(null);setSelectedCompany(co);}}>🏢 {co.name} →</div>}
+                  <div style={{fontSize:17,fontWeight:800,color:"#fff",lineHeight:1.3,marginBottom:4}}>{o.name}</div>
+                  {co && <div style={{fontSize:11,color:"rgba(255,255,255,0.55)",cursor:"pointer"}} onClick={()=>{setSelectedOpp(null);setSelectedCompany(co);}}>🏢 {co.name} →</div>}
                 </div>
                 <button onClick={()=>setSelectedOpp(null)} style={{background:"rgba(255,255,255,0.12)",border:"none",color:"#fff",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontSize:12,fontFamily:"inherit",flexShrink:0}}>✕</button>
               </div>
               <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
-                <span style={{fontSize:11,fontWeight:700,background:stageColor+"30",color:stageColor,border:"1px solid "+stageColor+"50",borderRadius:4,padding:"2px 8px"}}>
-                  {MP_STAGE_LABELS[o.stage]||o.stage}
-                </span>
-                {o.bu && <span style={{fontSize:10,color:"rgba(255,255,255,0.4)",textTransform:"uppercase"}}>{o.bu.toUpperCase()}</span>}
-                {(parseFloat(o.value)||0)>0 && <span style={{fontSize:13,fontWeight:800,color:"#fff",marginLeft:"auto"}}>{fmt(parseFloat(o.value))}</span>}
+                <span style={{fontSize:11,fontWeight:700,background:sc+"35",color:sc,border:"1px solid "+sc+"50",borderRadius:4,padding:"2px 8px"}}>{STAGE_LABELS[o.stage]||o.stage}</span>
+                {o.closeDate && <span style={{fontSize:10,color:"rgba(255,255,255,0.45)"}}>📅 Close: {o.closeDate}</span>}
+                {(parseFloat(o.value)||0)>0 && <span style={{fontSize:14,fontWeight:800,color:"#fff",marginLeft:"auto"}}>{fmt(parseFloat(o.value))}</span>}
               </div>
-            </div>
-
-            {/* Body */}
-            <div style={{overflowY:"auto",flex:1,padding:"18px 22px",display:"flex",flexDirection:"column",gap:14}}>
-              {/* Key info grid */}
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-                {[
-                  {label:"Company",    value:co?.name||"—"},
-                  {label:"Contact",    value:ct?ct.firstName+" "+ct.lastName:o.contactName||"—"},
-                  {label:"Close Date", value:o.closeDate||"—"},
-                  {label:"Stage",      value:MP_STAGE_LABELS[o.stage]||o.stage||"—"},
-                  ...(isMp?[
-                    {label:"Building Types", value:(o.buildingTypes||[]).map(bt=>({multistory:"Multistory",singlestory:"Single Story",canopy:"Canopy",mezzanine:"Mezzanine"}[bt]||bt)).join(", ")||"—"},
-                    {label:"Square Footage", value:[(o.buildingTypes||[]).map(bt=>{const sf=parseFloat(o["sf_"+bt]||0);return sf>0?({multistory:"Multi",singlestory:"Single",canopy:"Canopy",mezzanine:"Mezz"}[bt]||bt)+": "+sf.toLocaleString()+"SF":null;}).filter(Boolean).join(" · ")].filter(Boolean)[0]||"—"},
-                  ]:[]),
-                ].map((f,i)=>(
-                  <div key={i} style={{background:"#F9FAFC",borderRadius:7,padding:"8px 10px",border:"1px solid #E8EBF4"}}>
-                    <div style={{fontSize:9,color:"#9BA3BF",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:2}}>{f.label}</div>
-                    <div style={{fontSize:12,fontWeight:600,color:"#1A2240"}}>{f.value}</div>
-                  </div>
+              {/* Stage mover */}
+              <div style={{display:"flex",gap:4,marginTop:10,flexWrap:"wrap"}}>
+                {[{id:"lead",label:"Lead",c:"#A78BFA"},{id:"budgeting_lead",label:"Budget",c:"#818CF8"},{id:"proposal_bid",label:"Bid",c:"#60A5FA"},{id:"negotiation",label:"Neg.",c:"#FCD34D"},{id:"won",label:"Won",c:"#4ADE80"},{id:"closed_won",label:"Closed",c:"#059669"},{id:"lost",label:"Lost",c:"#F87171"}].map(s=>(
+                  <button key={s.id} onClick={()=>{
+                    setPipeline(prev=>prev.map(p=>p.id===o.id?{...p,stage:s.id}:p));
+                    setSelectedOpp({...o,stage:s.id}); setSelectedOppTab("info");
+                    try{fetch(`${SUPA_URL}/rest/v1/mp_pipeline?id=eq.${String(o.id)}`,{method:"PATCH",headers:{apikey:SUPA_KEY,Authorization:`Bearer ${SUPA_KEY}`,"Content-Type":"application/json",Prefer:"return=minimal"},body:JSON.stringify({stage:s.id})});}catch(e){}
+                  }}
+                    style={{padding:"3px 8px",borderRadius:4,border:"1.5px solid "+s.c+(o.stage===s.id?"":"55"),background:o.stage===s.id?s.c:s.c+"15",color:o.stage===s.id?"#fff":s.c,fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"inherit",transition:"all 0.1s"}}>
+                    {o.stage===s.id?"✓ ":""}{s.label}
+                  </button>
                 ))}
               </div>
-
-              {/* Notes */}
-              {o.notes && (
-                <div style={{background:"#FFFBEB",border:"1px solid #FCD34D40",borderRadius:8,padding:"10px 12px"}}>
-                  <div style={{fontSize:9,color:"#9BA3BF",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:4}}>Notes</div>
-                  <div style={{fontSize:12,color:"#1A2240",lineHeight:1.6}}>{o.notes}</div>
-                </div>
-              )}
-
-              {/* Stage pipeline */}
-              {isMp && (
-                <div style={{background:"#fff",border:"1px solid #D4D9EE",borderRadius:8,padding:"12px 14px"}}>
-                  <div style={{fontSize:10,color:"#9BA3BF",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:10}}>Move Stage</div>
-                  <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-                    {[{id:"lead",label:"Lead",c:"#A78BFA"},{id:"budgeting_lead",label:"Budgeting",c:"#818CF8"},{id:"proposal_bid",label:"Proposal/Bid",c:"#60A5FA"},{id:"negotiation",label:"Negotiation",c:"#FCD34D"},{id:"won",label:"Won",c:"#4ADE80"},{id:"lost",label:"Lost",c:"#F87171"}].map(s=>(
-                      <button key={s.id} onClick={()=>{
-                        setPipeline(prev=>prev.map(p=>p.id===o.id?{...p,stage:s.id}:p));
-                        setSelectedOpp({...o,stage:s.id});
-                        try{fetch(`${SUPA_URL}/rest/v1/mp_pipeline?id=eq.${String(o.id)}`,{method:"PATCH",headers:{apikey:SUPA_KEY,Authorization:`Bearer ${SUPA_KEY}`,"Content-Type":"application/json",Prefer:"return=minimal"},body:JSON.stringify({stage:s.id})});}catch(e){}
-                      }}
-                        style={{padding:"4px 10px",borderRadius:5,border:"1.5px solid "+s.c+(o.stage===s.id?"":"50"),background:o.stage===s.id?s.c:s.c+"12",color:o.stage===s.id?"#fff":s.c,fontSize:11,fontWeight:o.stage===s.id?700:500,cursor:"pointer",fontFamily:"inherit"}}>
-                        {o.stage===s.id?"✓ ":""}{s.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {/* Recent reports if MP */}
-              {isMp && (() => {
-                const reports = mpWeeklyReports.filter(r=>r.projectId===String(o.id)||r.project_id===String(o.id)).sort((a,b)=>(b.reportDate||"").localeCompare(a.reportDate||""));
-                if (!reports.length) return null;
-                return (
-                  <div>
-                    <div style={{fontSize:10,color:"#9BA3BF",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:8}}>Weekly Reports ({reports.length})</div>
-                    {reports.slice(0,3).map((r,i)=>(
-                      <div key={i} style={{background:"#F9FAFC",borderRadius:7,padding:"8px 10px",border:"1px solid #E8EBF4",marginBottom:6}}>
-                        <div style={{fontSize:11,fontWeight:700,color:"#1A2240",marginBottom:3}}>{r.reportDate}</div>
-                        <div style={{fontSize:11,color:"#4A5278",lineHeight:1.5}}>{(r.currentWeek||"").replace(/\\n/g,", ").slice(0,120)}</div>
-                      </div>
-                    ))}
-                  </div>
-                );
-              })()}
             </div>
 
-            {/* Footer actions */}
-            <div style={{padding:"12px 22px",borderTop:"1px solid #D4D9EE",display:"flex",gap:8,background:"#F9FAFC",flexShrink:0}}>
-              <button className="btn-ghost" style={{flex:1}} onClick={()=>{openEdit(o);setSelectedOpp(null);}}>✎ Edit</button>
-              {isMp && (
-                <button style={{flex:1,padding:"8px",background:"#3B6FE8",border:"none",borderRadius:7,color:"#fff",fontWeight:700,cursor:"pointer",fontFamily:"inherit",fontSize:12}}
-                  onClick={()=>{ setActiveNav("budgeting"); setActiveBudgetOpp(o.id); setSelectedOpp(null); }}>
-                  📊 Open in Budgeting
+            {/* Tab bar */}
+            <div style={{display:"flex",borderBottom:"2px solid #EEF0F8",background:"#F9FAFC",flexShrink:0,overflowX:"auto"}}>
+              {tabs.map(t=>(
+                <button key={t.id} onClick={()=>setActiveTab(t.id)}
+                  style={{padding:"9px 14px",border:"none",background:"transparent",cursor:"pointer",fontFamily:"inherit",fontSize:11,fontWeight:activeTab===t.id?700:500,color:activeTab===t.id?"#3B6FE8":"#4A5278",borderBottom:activeTab===t.id?"2px solid #3B6FE8":"2px solid transparent",marginBottom:-2,whiteSpace:"nowrap"}}>
+                  {t.label}
                 </button>
+              ))}
+            </div>
+
+            {/* Tab content */}
+            <div style={{overflowY:"auto",flex:1,padding:"16px 20px",display:"flex",flexDirection:"column",gap:12}}>
+
+              {/* ── INFO / PROPERTY TAB ── */}
+              {activeTab==="info" && (
+                <div style={{display:"flex",flexDirection:"column",gap:12}}>
+                  {/* Company + Contact */}
+                  <div style={{background:"#F9FAFC",borderRadius:8,border:"1px solid #E8EBF4",padding:"12px 14px"}}>
+                    <div style={{fontSize:10,fontWeight:700,color:"#4A5278",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:10}}>Owner / Contact Info</div>
+                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                      <div style={{gridColumn:"span 2"}}>
+                        {lbl("Company")}
+                        <div style={{fontSize:13,fontWeight:700,color:"#1A2240"}}>{co?.name||"—"}</div>
+                      </div>
+                      {ct && <>
+                        <div>{lbl("Contact")}<div style={{fontSize:12,fontWeight:600,color:"#1A2240"}}>{ct.firstName} {ct.lastName}</div></div>
+                        <div>{lbl("Title")}<div style={{fontSize:12,color:"#4A5278"}}>{ct.title||"—"}</div></div>
+                        {ct.email && <div style={{gridColumn:"span 2"}}>{lbl("Email")}<a href={"mailto:"+ct.email} style={{fontSize:12,color:"#3B6FE8",textDecoration:"none"}}>{ct.email}</a></div>}
+                        {ct.phone && <div>{lbl("Phone")}<a href={"tel:"+ct.phone} style={{fontSize:12,color:"#3B6FE8",textDecoration:"none"}}>{ct.phone}</a></div>}
+                      </>}
+                      <div>{lbl("Estimated Value")}<input style={fi} type="number" value={o.value||""} onChange={e=>{setPipeline(prev=>prev.map(p=>p.id===o.id?{...p,value:parseFloat(e.target.value)||0}:p));setSelectedOpp({...o,value:parseFloat(e.target.value)||0});}}/></div>
+                      <div>{lbl("Expected Close Date")}<input style={fi} type="date" value={o.closeDate||""} onChange={e=>{setPipeline(prev=>prev.map(p=>p.id===o.id?{...p,closeDate:e.target.value}:p));setSelectedOpp({...o,closeDate:e.target.value});}}/></div>
+                    </div>
+                  </div>
+
+                  {/* Property Details */}
+                  <div style={{background:"#F9FAFC",borderRadius:8,border:"1px solid #E8EBF4",padding:"12px 14px"}}>
+                    <div style={{fontSize:10,fontWeight:700,color:"#4A5278",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:10}}>Property Details</div>
+                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                      <div>{lbl("Property Address")}<input style={fi} value={det.propertyAddress||""} onChange={e=>setDet({propertyAddress:e.target.value})} placeholder="123 Main St…"/></div>
+                      <div>
+                        {lbl("Ownership Status")}
+                        <select style={fi} value={det.ownershipStatus||""} onChange={e=>setDet({ownershipStatus:e.target.value})}>
+                          <option value="">Select…</option>
+                          <option>Owned — Free & Clear</option>
+                          <option>Owned — Mortgage</option>
+                          <option>Under Contract</option>
+                          <option>Leased</option>
+                          <option>Site Control</option>
+                          <option>Unknown</option>
+                        </select>
+                      </div>
+                      <div>{lbl("Owner Name")}<input style={fi} value={det.ownerName||""} onChange={e=>setDet({ownerName:e.target.value})} placeholder="Property owner…"/></div>
+                      <div>{lbl("Owner Phone")}<input style={fi} value={det.ownerPhone||""} onChange={e=>setDet({ownerPhone:e.target.value})} placeholder="(555) 000-0000"/></div>
+                      <div style={{gridColumn:"span 2"}}>{lbl("Owner Email")}<input style={fi} value={det.ownerEmail||""} onChange={e=>setDet({ownerEmail:e.target.value})} placeholder="owner@example.com"/></div>
+                      <div style={{gridColumn:"span 2"}}>{lbl("Property Notes")}<textarea style={{...fi,resize:"vertical"}} rows={2} value={det.propertyNotes||""} onChange={e=>setDet({propertyNotes:e.target.value})} placeholder="Zoning, site conditions, access…"/></div>
+                    </div>
+                  </div>
+
+                  {/* Building types if set */}
+                  {(o.buildingTypes||[]).length>0 && (
+                    <div style={{background:"#F9FAFC",borderRadius:8,border:"1px solid #E8EBF4",padding:"12px 14px"}}>
+                      <div style={{fontSize:10,fontWeight:700,color:"#4A5278",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:8}}>Building Scope</div>
+                      <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                        {(o.buildingTypes||[]).map(bt=>{
+                          const labels={multistory:"Multistory",singlestory:"Single Story",canopy:"Canopy",mezzanine:"Mezzanine"};
+                          const sf=parseFloat(o["sf_"+bt]||0);
+                          return (
+                            <div key={bt} style={{background:"#3B6FE812",border:"1px solid #3B6FE830",borderRadius:6,padding:"5px 10px"}}>
+                              <div style={{fontSize:11,fontWeight:700,color:"#3B6FE8"}}>{labels[bt]||bt}</div>
+                              {sf>0 && <div style={{fontSize:10,color:"#4A5278"}}>{sf.toLocaleString()} SF</div>}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Stage-specific fields */}
+                  {o.stage==="budgeting_lead" && (
+                    <div style={{background:"#EEF3FF",borderRadius:8,border:"1px solid #3B6FE820",padding:"12px 14px"}}>
+                      <div style={{fontSize:10,fontWeight:700,color:"#3B6FE8",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:10}}>Budgeting Stage</div>
+                      <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                        <div>{lbl("Budget Reception")}<select style={fi} value={det.budgetReception||""} onChange={e=>setDet({budgetReception:e.target.value})}><option value="">Select…</option><option>Accepted — Moving to Bid</option><option>Under Review</option><option>Too High — Revising</option><option>Rejected</option><option>Pending Submission</option></select></div>
+                        <div>{lbl("Next Steps")}<textarea style={{...fi,resize:"vertical"}} rows={2} value={det.budgetNextSteps||""} onChange={e=>setDet({budgetNextSteps:e.target.value})} placeholder="What happens next…"/></div>
+                      </div>
+                    </div>
+                  )}
+
+                  {(o.stage==="proposal_bid"||o.stage==="negotiation") && (
+                    <div style={{background:"#FFF9E6",borderRadius:8,border:"1px solid #FCD34D30",padding:"12px 14px"}}>
+                      <div style={{fontSize:10,fontWeight:700,color:"#B45309",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:10}}>Bid Stage</div>
+                      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                        <div>{lbl("Bid Due Date")}<input style={fi} type="date" value={det.bidDueDate||""} onChange={e=>setDet({bidDueDate:e.target.value})}/></div>
+                        <div>{lbl("Bid Status")}<select style={fi} value={det.bidStatus||""} onChange={e=>setDet({bidStatus:e.target.value})}><option value="">Select…</option><option>Preparing</option><option>Submitted</option><option>Under Review</option><option>Shortlisted</option><option>Verbal Award</option></select></div>
+                        <div style={{gridColumn:"span 2"}}>{lbl("Bid Notes")}<textarea style={{...fi,resize:"vertical"}} rows={2} value={det.bidNotes||""} onChange={e=>setDet({bidNotes:e.target.value})} placeholder="Scope clarifications, bid strategy…"/></div>
+                      </div>
+                    </div>
+                  )}
+                </div>
               )}
-              {isMp && !["won","lost"].includes(o.stage) && (
-                <button style={{flex:1,padding:"8px",background:"#059669",border:"none",borderRadius:7,color:"#fff",fontWeight:700,cursor:"pointer",fontFamily:"inherit",fontSize:12}}
-                  onClick={()=>{ setWonConvertOpp(o); setWonConvertForm({startDate:"",endDate:"",contractValue:o.value||"",pm:"",notes:o.notes||""}); setShowWonConvert(true); setSelectedOpp(null); }}>
-                  ✓ Won
-                </button>
+
+              {/* ── BUDGET TAB ── */}
+              {activeTab==="budget" && (
+                <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                    <div style={{fontSize:12,fontWeight:700,color:"#1A2240"}}>Budget Estimate</div>
+                    <div style={{display:"flex",gap:8}}>
+                      {oppBudgetItems.length>0 && (
+                        <button onClick={()=>{ setBudgetPrintOpp(o); setBudgetAttachment(det.attachmentUrl||""); setShowBudgetPrint(true); }}
+                          style={{padding:"5px 10px",background:"#F0F2F8",border:"1px solid #CBD1E8",borderRadius:5,cursor:"pointer",fontFamily:"inherit",fontSize:11,color:"#4A5278"}}>
+                          🖨 Print PDF
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  <div style={{border:"1px solid #D4D9EE",borderRadius:10,overflow:"hidden",flex:1,display:"flex",flexDirection:"column"}}>
+                    <MpBudgetTool
+                      opp={o} company={co}
+                      items={oppBudgetItems}
+                      setItems={items=>setOppBudget(typeof items==="function"?items(oppBudgetItems):items)}
+                      overrides={oppOverrides}
+                      setOverrides={setOppOverrides}
+                    />
+                  </div>
+                  {/* Save budget value to opp */}
+                  {oppBudgetItems.length>0 && (() => {
+                    const W=oppOverrides;
+                    const d=oppBudgetItems.reduce((s,i)=>s+(i.qty||0)*(i.rate||0),0);
+                    const g=d*(W.gcPct/100); const c2=(d+g)*(W.contingency/100);
+                    const sub=d+g+c2; const m=sub*(W.margin/(100-Math.min(W.margin,99)));
+                    const total=Math.round(sub+m);
+                    return (
+                      <button onClick={async()=>{
+                        setPipeline(prev=>prev.map(p=>p.id===o.id?{...p,value:total}:p));
+                        setSelectedOpp({...o,value:total});
+                        try{await fetch(`${SUPA_URL}/rest/v1/mp_pipeline?id=eq.${String(o.id)}`,{method:"PATCH",headers:{apikey:SUPA_KEY,Authorization:`Bearer ${SUPA_KEY}`,"Content-Type":"application/json",Prefer:"return=minimal"},body:JSON.stringify({value:total})});}catch(e){}
+                      }}
+                        style={{padding:"9px",background:"#3B6FE8",border:"none",borderRadius:7,color:"#fff",fontWeight:700,cursor:"pointer",fontFamily:"inherit",fontSize:13}}>
+                        💾 Save Budget — Update Est. Value to {fmt(total)}
+                      </button>
+                    );
+                  })()}
+                </div>
+              )}
+
+              {/* ── ESTIMATING TAB ── */}
+              {activeTab==="estimating" && (
+                <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                  <div style={{background:"#FFF9E6",border:"1px solid #FCD34D30",borderRadius:8,padding:"10px 12px",fontSize:11,color:"#B45309"}}>
+                    📐 This is your formal estimating file for the bid. It starts as a copy of your budget — refine it for the bid submission.
+                  </div>
+                  {/* Copy budget button if no estimate yet */}
+                  {!(det.estimateItems||[]).length && oppBudgetItems.length>0 && (
+                    <button onClick={()=>setDet({estimateItems:[...oppBudgetItems],estimateOverrides:{...oppOverrides}})}
+                      style={{padding:"9px",background:"#FCD34D",border:"none",borderRadius:7,color:"#1A2240",fontWeight:700,cursor:"pointer",fontFamily:"inherit",fontSize:12}}>
+                      📋 Copy Budget to Estimate
+                    </button>
+                  )}
+                  <div style={{border:"1px solid #D4D9EE",borderRadius:10,overflow:"hidden",flex:1,display:"flex",flexDirection:"column"}}>
+                    <MpBudgetTool
+                      opp={{...o,name:o.name+" — Bid Estimate"}} company={co}
+                      items={det.estimateItems||[]}
+                      setItems={items=>setDet({estimateItems:typeof items==="function"?items(det.estimateItems||[]):items})}
+                      overrides={det.estimateOverrides||{gcPct:10,contingency:5,margin:15}}
+                      setOverrides={ov=>setDet({estimateOverrides:typeof ov==="function"?ov(det.estimateOverrides||{}):ov})}
+                    />
+                  </div>
+                  {/* Bid due date reminder */}
+                  {det.bidDueDate && (
+                    <div style={{background:"#F87171",borderRadius:7,padding:"8px 12px",display:"flex",alignItems:"center",gap:8}}>
+                      <span style={{fontSize:16}}>⏰</span>
+                      <div>
+                        <div style={{fontSize:11,fontWeight:700,color:"#fff"}}>Bid Due: {det.bidDueDate}</div>
+                        <div style={{fontSize:10,color:"rgba(255,255,255,0.7)"}}>{Math.ceil((new Date(det.bidDueDate)-new Date())/(1000*60*60*24))} days remaining</div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* ── CLOSED TAB ── */}
+              {activeTab==="closed" && (
+                <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                  <div style={{background:"#F0FDF4",border:"1px solid #4ADE8030",borderRadius:8,padding:"12px 14px"}}>
+                    <div style={{fontSize:10,fontWeight:700,color:"#059669",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:10}}>✅ Closed Won Details</div>
+                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                      <div>{lbl("Closed Date")}<input style={fi} type="date" value={det.closedDate||""} onChange={e=>setDet({closedDate:e.target.value})}/></div>
+                      <div>{lbl("Final Contract Value")}<input style={fi} type="number" value={det.finalValue||o.value||""} onChange={e=>setDet({finalValue:parseFloat(e.target.value)||0})}/></div>
+                      <div style={{gridColumn:"span 2"}}>{lbl("Closing Notes")}<textarea style={{...fi,resize:"vertical"}} rows={3} value={det.closedNotes||""} onChange={e=>setDet({closedNotes:e.target.value})} placeholder="How the deal closed, key decisions…"/></div>
+                    </div>
+                  </div>
+                  {/* Convert to Active Project */}
+                  <button onClick={()=>{ setWonConvertOpp(o); setWonConvertForm({startDate:"",endDate:"",contractValue:det.finalValue||o.value||"",pm:"",notes:det.closedNotes||o.notes||""}); setShowWonConvert(true); setSelectedOpp(null); }}
+                    style={{padding:"10px",background:"#059669",border:"none",borderRadius:8,color:"#fff",fontWeight:700,cursor:"pointer",fontFamily:"inherit",fontSize:13}}>
+                    🏗 Create Active Project →
+                  </button>
+                </div>
+              )}
+
+              {/* ── NOTES TAB ── */}
+              {activeTab==="notes" && (
+                <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                  <div>
+                    {lbl("General Notes")}
+                    <textarea style={{...fi,resize:"vertical",minHeight:120}} value={o.notes||""} rows={5}
+                      onChange={e=>{
+                        setPipeline(prev=>prev.map(p=>p.id===o.id?{...p,notes:e.target.value}:p));
+                        setSelectedOpp({...o,notes:e.target.value});
+                      }} placeholder="Project notes, context, history…"/>
+                  </div>
+                  <div>
+                    {lbl("Attachment / Drawing URL")}
+                    <input style={fi} value={det.attachmentUrl||""} onChange={e=>setDet({attachmentUrl:e.target.value})} placeholder="Paste URL to conceptual drawing or document…"/>
+                    {det.attachmentUrl && /\\.(jpg|jpeg|png|gif|webp)$/i.test(det.attachmentUrl) && (
+                      <img src={det.attachmentUrl} alt="Attachment" style={{maxWidth:"100%",borderRadius:6,marginTop:8,border:"1px solid #D4D9EE"}}/>
+                    )}
+                  </div>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                    <div>{lbl("Budget Reception")}<select style={fi} value={det.budgetReception||""} onChange={e=>setDet({budgetReception:e.target.value})}><option value="">Select…</option><option>Accepted — Moving to Bid</option><option>Under Review</option><option>Too High — Revising</option><option>Rejected</option><option>Pending Submission</option></select></div>
+                    <div>{lbl("Next Steps")}<input style={fi} value={det.budgetNextSteps||""} onChange={e=>setDet({budgetNextSteps:e.target.value})} placeholder="Action items…"/></div>
+                  </div>
+                </div>
+              )}
+
+            </div>
+
+            {/* Footer */}
+            <div style={{padding:"10px 20px",borderTop:"1px solid #D4D9EE",display:"flex",gap:8,background:"#F9FAFC",flexShrink:0}}>
+              <button className="btn-ghost" style={{flex:1,fontSize:11}} onClick={()=>{openEdit(o);setSelectedOpp(null);}}>✎ Edit Opp</button>
+              {isMp && <button style={{flex:1,padding:"7px",background:"#3B6FE8",border:"none",borderRadius:6,color:"#fff",fontWeight:700,cursor:"pointer",fontFamily:"inherit",fontSize:11}}
+                onClick={()=>{ setActiveNav("budgeting"); setActiveBudgetOpp(o.id); setSelectedOpp(null); }}>📊 Budgeting Tab</button>}
+              {o.stage!=="closed_won"&&o.stage!=="won"&&o.stage!=="lost" && isMp && (
+                <button style={{flex:1,padding:"7px",background:"#059669",border:"none",borderRadius:6,color:"#fff",fontWeight:700,cursor:"pointer",fontFamily:"inherit",fontSize:11}}
+                  onClick={()=>{ setWonConvertOpp(o); setWonConvertForm({startDate:"",endDate:"",contractValue:o.value||"",pm:"",notes:o.notes||""}); setShowWonConvert(true); setSelectedOpp(null); }}>✓ Won</button>
               )}
             </div>
           </div>
         );
       })()}
+
 
       {/* ── WON → CONVERT TO ACTIVE PROJECT ── */}
       {showWonConvert && wonConvertOpp && (() => {
