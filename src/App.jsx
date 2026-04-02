@@ -183,6 +183,7 @@ const NAV_ITEMS = {
     { id: "pipeline",    label: "Pipeline",    icon: "◈" },
     { id: "budgeting",   label: "Budgeting",   icon: "💲" },
     { id: "estimating",  label: "Estimating",  icon: "📐" },
+    { id: "mpvendors",   label: "Vendors",     icon: "🏗" },
     { id: "team",        label: "Team",        icon: "👥" },
     { id: "customers",   label: "Customers",   icon: "🤝" },
   ],
@@ -2336,6 +2337,64 @@ function VendorRow({ v, BID_TRADES, onUpdate, onRemove }) {
   );
 }
 
+// -- WBS Row component --
+function WbsRow({ item, BID_TRADES, onUpdate, onRemove, critical }) {
+  const [code, setCode]   = useState(item.code||"");
+  const [desc, setDesc]   = useState(item.description||"");
+  const [qty,  setQty]    = useState(String(item.qty||""));
+  const [rate, setRate]   = useState(String(item.rate||""));
+  const [showTrade, setShowTrade] = useState(false);
+  const isCrit = critical.includes(item.trade);
+  const total = (parseFloat(qty)||0)*(parseFloat(rate)||0);
+  const fi = {padding:"4px 7px",border:"1px solid #D4D9EE",borderRadius:5,fontSize:11,fontFamily:"inherit",outline:"none",width:"100%",boxSizing:"border-box"};
+  return (
+    <tr style={{borderBottom:"1px solid #F4F6FB"}} onMouseEnter={e=>e.currentTarget.style.background="#FAFBFF"} onMouseLeave={e=>e.currentTarget.style.background=""}>
+      <td style={{padding:"4px 6px",width:80}}>
+        <input value={code} onChange={e=>{setCode(e.target.value);onUpdate({code:e.target.value});}} placeholder="01-000" style={{...fi,fontFamily:"monospace"}}/>
+      </td>
+      <td style={{padding:"4px 6px",minWidth:150}}>
+        <input value={desc} onChange={e=>{setDesc(e.target.value);onUpdate({description:e.target.value});}} placeholder="Description..." style={fi}/>
+      </td>
+      <td style={{padding:"4px 6px",width:130,position:"relative"}}>
+        <button onClick={()=>setShowTrade(t=>!t)}
+          style={{...fi,textAlign:"left",cursor:"pointer",background:"#F9FAFC",color:item.trade?"#1A2240":"#9BA3BF",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
+          {item.trade||"Select..."}
+        </button>
+        {showTrade && (
+          <div style={{position:"absolute",top:"100%",left:0,zIndex:100,background:"#fff",border:"1px solid #D4D9EE",borderRadius:8,boxShadow:"0 4px 20px rgba(0,0,0,0.12)",padding:"6px",width:200,maxHeight:180,overflowY:"auto"}}>
+            {BID_TRADES.map(t=>(
+              <div key={t} onClick={()=>{onUpdate({trade:t});setShowTrade(false);}}
+                style={{padding:"4px 8px",cursor:"pointer",borderRadius:4,background:item.trade===t?"#EEF3FF":"transparent",color:item.trade===t?"#3B6FE8":"#1A2240",fontSize:11}}>
+                {t}
+              </div>
+            ))}
+          </div>
+        )}
+      </td>
+      <td style={{padding:"4px 6px",width:60}}>
+        <select value={item.unit||"LS"} onChange={e=>onUpdate({unit:e.target.value})} style={{...fi,fontSize:10}}>
+          {["LS","SF","LF","SY","CY","EA","TON","SQ","HD","MO","HR"].map(u=><option key={u}>{u}</option>)}
+        </select>
+      </td>
+      <td style={{padding:"4px 6px",width:80}}>
+        <input type="number" value={qty} onChange={e=>{setQty(e.target.value);onUpdate({qty:parseFloat(e.target.value)||0});}} placeholder="0" style={{...fi,textAlign:"right"}}/>
+      </td>
+      <td style={{padding:"4px 6px",width:90}}>
+        <input type="number" value={rate} onChange={e=>{setRate(e.target.value);onUpdate({rate:parseFloat(e.target.value)||0});}} placeholder="0.00" style={{...fi,textAlign:"right"}}/>
+      </td>
+      <td style={{padding:"6px 8px",textAlign:"right",fontSize:12,fontWeight:700,color:total>0?"#1A2240":"#CBD1E8",width:90}}>
+        {total>0?"$"+Math.round(total).toLocaleString():"--"}
+      </td>
+      <td style={{padding:"4px 6px",textAlign:"center",width:40}}>
+        <div style={{width:14,height:14,borderRadius:"50%",background:isCrit?"#FCD34D":"#E0E4F0",border:isCrit?"2px solid #F59E0B":"2px solid #CBD1E8",margin:"auto"}} title={isCrit?"Critical trade":"Not critical"}/>
+      </td>
+      <td style={{padding:"4px 4px",textAlign:"center",width:28}}>
+        <button onClick={onRemove} style={{background:"none",border:"none",color:"#F87171",cursor:"pointer",fontSize:14,padding:0}}>x</button>
+      </td>
+    </tr>
+  );
+}
+
 export default function App() {
   // URL routing — sub-facing page
   const urlToken  = useMemo(() => new URLSearchParams(window.location.search).get("subtoken"), []);
@@ -2452,7 +2511,14 @@ export default function App() {
   const [budgetPrintOpp,   setBudgetPrintOpp]   = useState(null);
   const [budgetAttachment, setBudgetAttachment] = useState("");
   const [oppDetails,       setOppDetails]       = useState({});
-  const [bidPackages,      setBidPackages]      = useState({}); // {oppId: {vendors:[{id,company,contact,phone,email,trades:[],bidding,infoSent,bidReceived,bidAmount,notes}], trades:[str]}}
+  const [bidPackages,      setBidPackages]      = useState({});
+  const [mpVendorDB,       setMpVendorDB]       = useState([]); // [{id,company,contact,phone,email,trades:[],notes,rating}]
+  const [estimatePhase,    setEstimatePhase]     = useState({}); // {oppId: "wbs"|"takeoff"|"quoting"}
+  const [wbsData,          setWbsData]           = useState({}); // {oppId: [{codeId,code,description,unit,qty,rate,trade,critical}]}
+  const [takeoffData,      setTakeoffData]       = useState({}); // {oppId: [{codeId,qty,notes,attachments}]}
+  const [criticalTrades,   setCriticalTrades]    = useState({}); // {oppId: [tradeNames]}
+  const [showMpVendorForm, setShowMpVendorForm]  = useState(false);
+  const [mpVendorForm,     setMpVendorForm]      = useState({company:"",contact:"",phone:"",email:"",trades:[],notes:"",rating:5}); // {oppId: {vendors:[{id,company,contact,phone,email,trades:[],bidding,infoSent,bidReceived,bidAmount,notes}], trades:[str]}}
   const [activeBidOpp,     setActiveBidOpp]     = useState(null);
   const [showAddVendor,    setShowAddVendor]     = useState(false);
   const [vendorForm,       setVendorForm]        = useState({company:"",contact:"",phone:"",email:"",trades:[],bidding:false,infoSent:false,bidReceived:false,bidAmount:"",notes:""});
@@ -7520,6 +7586,123 @@ if(bounds.length)map.fitBounds(bounds,{padding:[30,30]});
           })()}
 
           {/* -- VENDORS PAGE -- */}
+          {/* -- MP VENDORS -- */}
+          {activeNav === "mpvendors" && activeBU === "major" && (() => {
+            const BID_TRADES = [
+              "Concrete","Masonry","Demo","Rough Carpentry","Fluid Applied Flooring","Roofing",
+              "Metal Wall Panels / Siding","Doors & Frames","Roll-Up Doors","Security / Access Control",
+              "Plumbing","Earthwork & Utilities","Asphalt","Fencing & Gates","Landscaping / Irrigation",
+              "Metal Building (PEMB)","Electrical","Lighting","Automated Doors","HVAC",
+              "Fire Suppression","Fire Alarm","Elevators","Material Lift","Canopies",
+              "General Conditions","Other"
+            ];
+            const [search, setSearch] = useState("");
+            const [tradeFilter, setTradeFilter] = useState("");
+
+            const filtered = mpVendorDB.filter(v =>
+              (!search || v.company.toLowerCase().includes(search.toLowerCase()) || (v.contact||"").toLowerCase().includes(search.toLowerCase())) &&
+              (!tradeFilter || (v.trades||[]).includes(tradeFilter))
+            );
+
+            // Group by primary trade
+            const tradeGroups = {};
+            filtered.forEach(v => {
+              const t = (v.trades||[])[0] || "Other";
+              if (!tradeGroups[t]) tradeGroups[t] = [];
+              tradeGroups[t].push(v);
+            });
+
+            const fi = {padding:"7px 10px",border:"1.5px solid #CBD1E8",borderRadius:7,fontSize:13,fontFamily:"inherit",outline:"none",width:"100%",boxSizing:"border-box"};
+
+            return (
+              <div className="fade-in" style={{display:"flex",flexDirection:"column",gap:16}}>
+                {/* Header */}
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                  <div>
+                    <div style={{fontSize:22,fontWeight:800,color:"#1A2240",letterSpacing:"-0.01em",textTransform:"uppercase"}}>MP Vendors</div>
+                    <div style={{fontSize:11,color:"#4A5278",marginTop:3}}>{mpVendorDB.length} vendors · click a vendor to add to active estimate</div>
+                  </div>
+                  <button onClick={()=>{setMpVendorForm({company:"",contact:"",phone:"",email:"",trades:[],notes:"",rating:5});setShowMpVendorForm(true);}}
+                    style={{padding:"8px 18px",background:"#3B6FE8",color:"#fff",border:"none",borderRadius:8,cursor:"pointer",fontFamily:"inherit",fontSize:13,fontWeight:700}}>
+                    + Add Vendor
+                  </button>
+                </div>
+
+                {/* Search + filter */}
+                <div style={{display:"flex",gap:10}}>
+                  <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search vendors..."
+                    style={{flex:1,padding:"8px 12px",border:"1px solid #D4D9EE",borderRadius:8,fontSize:13,fontFamily:"inherit",outline:"none"}}/>
+                  <select value={tradeFilter} onChange={e=>setTradeFilter(e.target.value)}
+                    style={{padding:"8px 12px",border:"1px solid #D4D9EE",borderRadius:8,fontSize:13,fontFamily:"inherit",outline:"none",minWidth:180}}>
+                    <option value="">All Trades</option>
+                    {BID_TRADES.map(t=><option key={t}>{t}</option>)}
+                  </select>
+                </div>
+
+                {mpVendorDB.length === 0 ? (
+                  <div style={{textAlign:"center",padding:"60px 24px",color:"#9BA3BF",border:"2px dashed #E0E4F0",borderRadius:12}}>
+                    <div style={{fontSize:40,marginBottom:12}}>🏗</div>
+                    <div style={{fontSize:16,fontWeight:700,color:"#1A2240",marginBottom:6}}>No vendors yet</div>
+                    <div style={{fontSize:12,marginBottom:20}}>Build your vendor database to speed up bid collection</div>
+                    <button onClick={()=>{setMpVendorForm({company:"",contact:"",phone:"",email:"",trades:[],notes:"",rating:5});setShowMpVendorForm(true);}}
+                      style={{padding:"9px 20px",background:"#3B6FE8",border:"none",borderRadius:8,color:"#fff",fontWeight:700,cursor:"pointer",fontFamily:"inherit",fontSize:13}}>
+                      + Add First Vendor
+                    </button>
+                  </div>
+                ) : (
+                  <div style={{display:"flex",flexDirection:"column",gap:16}}>
+                    {Object.entries(tradeGroups).sort((a,b)=>a[0].localeCompare(b[0])).map(([trade, vendors]) => (
+                      <div key={trade}>
+                        <div style={{fontSize:11,fontWeight:700,color:"#4A5278",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:8,paddingBottom:4,borderBottom:"2px solid #E8EBF4"}}>
+                          {trade} ({vendors.length})
+                        </div>
+                        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:10}}>
+                          {vendors.map(v => (
+                            <div key={v.id} style={{background:"#fff",border:"1px solid #D4D9EE",borderRadius:10,padding:"12px 14px",cursor:"pointer",position:"relative"}}
+                              onMouseEnter={e=>e.currentTarget.style.boxShadow="0 4px 16px rgba(59,111,232,0.1)"}
+                              onMouseLeave={e=>e.currentTarget.style.boxShadow="none"}>
+                              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:6}}>
+                                <div style={{fontSize:13,fontWeight:700,color:"#1A2240"}}>{v.company}</div>
+                                <div style={{display:"flex",gap:4"}}>
+                                  <button onClick={()=>{
+                                    setMpVendorForm({...v});setShowMpVendorForm(true);
+                                  }} style={{background:"none",border:"none",color:"#9BA3BF",cursor:"pointer",fontSize:12,padding:"0 4px"}}>edit</button>
+                                </div>
+                              </div>
+                              {v.contact && <div style={{fontSize:11,color:"#4A5278",marginBottom:2}}>👤 {v.contact}</div>}
+                              {v.phone   && <div style={{fontSize:11,color:"#4A5278",marginBottom:2}}>📞 {v.phone}</div>}
+                              {v.email   && <div style={{fontSize:11,color:"#3B6FE8",marginBottom:6,wordBreak:"break-all"}}>✉ {v.email}</div>}
+                              <div style={{display:"flex",flexWrap:"wrap",gap:4,marginTop:6}}>
+                                {(v.trades||[]).map(t=>(
+                                  <span key={t} style={{fontSize:9,fontWeight:700,background:"#EEF3FF",color:"#3B6FE8",borderRadius:3,padding:"1px 6px"}}>{t}</span>
+                                ))}
+                              </div>
+                              {v.notes && <div style={{fontSize:10,color:"#9BA3BF",marginTop:6,borderTop:"1px solid #F0F2F8",paddingTop:4}}>{v.notes}</div>}
+                              {/* Quick-add to active estimate */}
+                              {activeBidOpp && (
+                                <button onClick={()=>{
+                                  const pkg = bidPackages[activeBidOpp] || {vendors:[]};
+                                  if (pkg.vendors.find(x=>x.company===v.company)) return;
+                                  const newV = {...v, id:"v"+Date.now(), bidding:false, infoSent:false, bidReceived:false, bidAmount:"" };
+                                  setBidPackages(prev=>({...prev,[activeBidOpp]:{...pkg,vendors:[...pkg.vendors,newV]}}));
+                                  // Show feedback
+                                  alert(`${v.company} added to estimate!`);
+                                }}
+                                  style={{marginTop:8,width:"100%",padding:"5px",background:"#F0F2F8",border:"1px solid #CBD1E8",borderRadius:5,cursor:"pointer",fontFamily:"inherit",fontSize:11,color:"#3B6FE8",fontWeight:600}}>
+                                  + Add to Estimate
+                                </button>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+
           {activeNav === "vendors" && activeBU === "facility" && (() => {
             const subs = subcontractors;
             const TRADE_COLORS = {
@@ -7867,7 +8050,7 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
             );
           })()}
 
-          {/* -- MP ESTIMATING / BID TRACKER -- */}
+          {/* -- MP ESTIMATING -- */}
           {activeNav === "estimating" && activeBU === "major" && (() => {
             const BID_TRADES = [
               "Concrete","Masonry","Demo","Rough Carpentry","Fluid Applied Flooring","Roofing",
@@ -7878,41 +8061,45 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
               "General Conditions","Dumpster / Porta John","Architect","Civil Engineer","Other"
             ];
 
-            // All MP opps eligible for estimating (any stage)
             const allMpOpps = pipeline.filter(o => o.bu === "major");
             const activeOppId = activeBidOpp || allMpOpps[0]?.id;
             const activeOpp   = allMpOpps.find(o => o.id === activeOppId) || null;
-            const pkg = bidPackages[activeOppId] || { vendors:[], trades:[] };
+            const phase       = estimatePhase[activeOppId] || "wbs";
+            const setPhase    = (p) => setEstimatePhase(prev => ({...prev, [activeOppId]: p}));
+            const pkg         = bidPackages[activeOppId] || {vendors:[]};
+            const critical    = criticalTrades[activeOppId] || [];
+            const wbs         = wbsData[activeOppId] || [];
+            const takeoff     = takeoffData[activeOppId] || {};
+            const setWbs      = (items) => setWbsData(prev => ({...prev, [activeOppId]: typeof items==="function"?items(wbs):items}));
+            const setTakeoff  = (data)  => setTakeoffData(prev => ({...prev, [activeOppId]: typeof data==="function"?data(takeoff):data}));
+            const setCritical = (arr)   => setCriticalTrades(prev => ({...prev, [activeOppId]: arr}));
 
-            const savePkg = (newPkg) => setBidPackages(prev => ({...prev, [activeOppId]: newPkg}));
-
-            const addVendor = () => {
-              if (!vendorForm.company.trim()) return;
-              const newVendor = { ...vendorForm, id: "v"+Date.now() };
-              savePkg({ ...pkg, vendors: [...pkg.vendors, newVendor] });
-              setVendorForm({company:"",contact:"",phone:"",email:"",trades:[],bidding:false,infoSent:false,bidReceived:false,bidAmount:"",notes:""});
-              setShowAddVendor(false);
-            };
-
-            const updateVendor = (id, fields) => {
-              savePkg({ ...pkg, vendors: pkg.vendors.map(v => v.id===id ? {...v,...fields} : v) });
-            };
-            const removeVendor = (id) => savePkg({ ...pkg, vendors: pkg.vendors.filter(v => v.id !== id) });
-
-            // Group vendors by trade
-            const biddingCount  = pkg.vendors.filter(v=>v.bidding).length;
-            const infoSentCount = pkg.vendors.filter(v=>v.infoSent).length;
-            const bidsBack      = pkg.vendors.filter(v=>v.bidReceived).length;
-
-            // Group by first trade (for display)
-            const tradeGroups = {};
-            BID_TRADES.forEach(t => {
-              const tradeVendors = pkg.vendors.filter(v => (v.trades||[]).includes(t));
-              if (tradeVendors.length > 0) tradeGroups[t] = tradeVendors;
+            // Quoting metrics
+            const bidsReceivedByTrade = {};
+            pkg.vendors.forEach(v => {
+              (v.trades||[]).forEach(t => {
+                if (!bidsReceivedByTrade[t]) bidsReceivedByTrade[t] = {total:0, received:0, bidding:0};
+                bidsReceivedByTrade[t].total++;
+                if (v.bidReceived) bidsReceivedByTrade[t].received++;
+                if (v.bidding) bidsReceivedByTrade[t].bidding++;
+              });
             });
-            const noTradeVendors = pkg.vendors.filter(v => (v.trades||[]).length === 0);
+            const criticalCoverage = critical.map(t => ({
+              trade: t,
+              received: bidsReceivedByTrade[t]?.received || 0,
+              bidding:  bidsReceivedByTrade[t]?.bidding  || 0,
+              total:    bidsReceivedByTrade[t]?.total    || 0,
+            }));
+            const criticalComplete = criticalCoverage.filter(c => c.received >= 3).length;
+            const totalVendors = pkg.vendors.length;
+            const totalBids    = pkg.vendors.filter(v => v.bidReceived).length;
+            const totalBidding = pkg.vendors.filter(v => v.bidding).length;
 
-            const STATUS_COLORS = { true:"#4ADE80", false:"#E0E4F0" };
+            const PHASES = [
+              {id:"wbs",     label:"1. Work Breakdown", icon:"📋", desc:"Define cost codes"},
+              {id:"takeoff", label:"2. Takeoff",        icon:"📐", desc:"Quantities per code"},
+              {id:"quoting", label:"3. Quoting",        icon:"📧", desc:"Vendor bid tracking"},
+            ];
 
             return (
               <div className="fade-in" style={{display:"flex",flexDirection:"column",gap:0,height:"calc(100vh - 100px)"}}>
@@ -7920,40 +8107,38 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14,flexShrink:0}}>
                   <div>
                     <div style={{fontSize:22,fontWeight:800,color:"#1A2240",letterSpacing:"-0.01em",textTransform:"uppercase"}}>Estimating</div>
-                    <div style={{fontSize:11,color:"#4A5278",marginTop:3}}>Bid package tracking · vendor outreach · quote collection</div>
+                    <div style={{fontSize:11,color:"#4A5278",marginTop:3}}>WBS - Takeoff - Quoting</div>
                   </div>
                 </div>
 
                 <div style={{display:"grid",gridTemplateColumns:"220px 1fr",flex:1,gap:0,minHeight:0,background:"#fff",borderRadius:12,border:"1px solid #D4D9EE",overflow:"hidden"}}>
-                  {/* Left - project list */}
+                  {/* Left sidebar */}
                   <div style={{borderRight:"1px solid #D4D9EE",overflowY:"auto",background:"#F9FAFC"}}>
                     <div style={{padding:"10px 14px",borderBottom:"1px solid #D4D9EE",fontSize:10,fontWeight:700,color:"#9BA3BF",textTransform:"uppercase",letterSpacing:"0.07em"}}>Projects</div>
-                    {allMpOpps.length === 0 && <div style={{padding:"20px 14px",fontSize:11,color:"#9BA3BF",textAlign:"center"}}>No MP projects yet.<br/>Add from Pipeline.</div>}
+                    {allMpOpps.length===0 && <div style={{padding:"20px 14px",fontSize:11,color:"#9BA3BF",textAlign:"center"}}>No MP projects yet.</div>}
                     {allMpOpps.map(o => {
                       const co = companies.find(c => c.id === o.companyId);
                       const oPkg = bidPackages[o.id] || {vendors:[]};
                       const isActive = o.id === activeOppId;
-                      const stgColors = {lead:"#A78BFA",budgeting_lead:"#818CF8",proposal_bid:"#60A5FA",negotiation:"#FCD34D",won:"#4ADE80",closed_won:"#059669",lost:"#F87171"};
-                      const stgLabels = {lead:"Lead",budgeting_lead:"Budget",proposal_bid:"Bid",negotiation:"Neg.",won:"Won",closed_won:"Closed",lost:"Lost"};
-                      const vendorCt = oPkg.vendors.length;
-                      const bids = oPkg.vendors.filter(v=>v.bidReceived).length;
+                      const ph = estimatePhase[o.id] || "wbs";
+                      const phColor = {wbs:"#818CF8",takeoff:"#60A5FA",quoting:"#4ADE80"}[ph] || "#9BA3BF";
                       return (
                         <div key={o.id} onClick={()=>setActiveBidOpp(o.id)}
                           style={{padding:"10px 14px",cursor:"pointer",background:isActive?"#EEF3FF":"transparent",borderBottom:"1px solid #F0F2F8",borderLeft:isActive?"3px solid #3B6FE8":"3px solid transparent"}}
                           onMouseEnter={e=>{if(!isActive)e.currentTarget.style.background="#F4F6FB";}}
                           onMouseLeave={e=>{if(!isActive)e.currentTarget.style.background="transparent";}}>
                           <div style={{fontSize:12,fontWeight:700,color:"#1A2240",lineHeight:1.3,marginBottom:2}}>{o.name}</div>
-                          <div style={{fontSize:10,color:"#9BA3BF",marginBottom:4}}>{co?.name||"—"}</div>
+                          <div style={{fontSize:10,color:"#9BA3BF",marginBottom:4}}>{co?.name||"--"}</div>
                           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                            <span style={{fontSize:9,fontWeight:700,background:(stgColors[o.stage]||"#9BA3BF")+"20",color:stgColors[o.stage]||"#9BA3BF",borderRadius:3,padding:"1px 5px"}}>{stgLabels[o.stage]||o.stage}</span>
-                            <span style={{fontSize:10,color:bids>0?"#4ADE80":"#9BA3BF",fontWeight:700}}>{vendorCt>0?`${bids}/${vendorCt} bids`:"No vendors"}</span>
+                            <span style={{fontSize:9,fontWeight:700,background:phColor+"20",color:phColor,borderRadius:3,padding:"1px 6px"}}>{ph.toUpperCase()}</span>
+                            <span style={{fontSize:10,color:"#4ADE80",fontWeight:700}}>{oPkg.vendors.filter(v=>v.bidReceived).length}/{oPkg.vendors.length} bids</span>
                           </div>
                         </div>
                       );
                     })}
                   </div>
 
-                  {/* Right - bid tracker */}
+                  {/* Right panel */}
                   {!activeOpp ? (
                     <div style={{display:"flex",alignItems:"center",justifyContent:"center",flex:1,flexDirection:"column",gap:10,color:"#9BA3BF"}}>
                       <div style={{fontSize:40}}>📐</div>
@@ -7962,72 +8147,229 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
                   ) : (
                     <div style={{display:"flex",flexDirection:"column",overflow:"hidden"}}>
                       {/* Project header */}
-                      <div style={{background:"linear-gradient(135deg,#1A2240,#253260)",padding:"12px 18px",flexShrink:0,display:"flex",alignItems:"center",gap:10}}>
+                      <div style={{background:"linear-gradient(135deg,#1A2240,#253260)",padding:"10px 18px",flexShrink:0,display:"flex",alignItems:"center",gap:10}}>
                         <div style={{flex:1}}>
-                          <div style={{fontSize:14,fontWeight:800,color:"#fff"}}>{activeOpp.name}</div>
-                          <div style={{fontSize:10,color:"rgba(255,255,255,0.5)",marginTop:1}}>{companies.find(c=>c.id===activeOpp.companyId)?.name||""}</div>
+                          <div style={{fontSize:13,fontWeight:800,color:"#fff"}}>{activeOpp.name}</div>
+                          <div style={{fontSize:10,color:"rgba(255,255,255,0.5)"}}>{companies.find(c=>c.id===activeOpp.companyId)?.name||""}</div>
                         </div>
                         {/* Stats */}
-                        {[
-                          {label:"Vendors",    value:pkg.vendors.length, color:"#60A5FA"},
-                          {label:"Info Sent",  value:infoSentCount,       color:"#FCD34D"},
-                          {label:"Bidding",    value:biddingCount,        color:"#818CF8"},
-                          {label:"Bids Back",  value:bidsBack,            color:"#4ADE80"},
+                        {phase==="quoting" && [
+                          {label:"Vendors",  value:totalVendors, color:"#60A5FA"},
+                          {label:"Bidding",  value:totalBidding, color:"#FCD34D"},
+                          {label:"Bids In",  value:totalBids,    color:"#4ADE80"},
+                          {label:"Critical", value:`${criticalComplete}/${critical.length}`, color:criticalComplete===critical.length&&critical.length>0?"#4ADE80":"#F87171"},
                         ].map(s=>(
                           <div key={s.label} style={{textAlign:"center",padding:"0 10px",borderLeft:"1px solid rgba(255,255,255,0.1)"}}>
                             <div style={{fontSize:16,fontWeight:800,color:s.color}}>{s.value}</div>
                             <div style={{fontSize:8,color:"rgba(255,255,255,0.4)",textTransform:"uppercase",letterSpacing:"0.06em"}}>{s.label}</div>
                           </div>
                         ))}
-                        <button onClick={()=>{setBidPrintOppId(activeOppId);setShowBidPrintModal(true);}}
-                          style={{padding:"6px 12px",background:"rgba(255,255,255,0.15)",border:"1px solid rgba(255,255,255,0.3)",borderRadius:6,color:"#fff",fontWeight:600,fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>
-                          🖨 Print Bid Package
-                        </button>
-                        <button onClick={()=>setShowAddVendor(true)}
-                          style={{padding:"6px 12px",background:"#3B6FE8",border:"none",borderRadius:6,color:"#fff",fontWeight:700,fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>
-                          + Add Vendor
-                        </button>
                       </div>
 
-                      {/* Vendor table */}
-                      <div style={{overflowY:"auto",flex:1,padding:"0"}}>
-                        {pkg.vendors.length === 0 ? (
-                          <div style={{textAlign:"center",padding:"60px 24px",color:"#9BA3BF"}}>
-                            <div style={{fontSize:32,marginBottom:10}}>📋</div>
-                            <div style={{fontSize:14,fontWeight:600,color:"#1A2240",marginBottom:6}}>No vendors yet</div>
-                            <div style={{fontSize:12,marginBottom:20}}>Add vendors to start tracking your bid packages</div>
-                            <button onClick={()=>setShowAddVendor(true)} style={{padding:"9px 20px",background:"#3B6FE8",border:"none",borderRadius:8,color:"#fff",fontWeight:700,cursor:"pointer",fontFamily:"inherit",fontSize:13}}>+ Add First Vendor</button>
-                          </div>
-                        ) : (
-                          <>
-                            {/* Table header */}
-                            <div style={{display:"grid",gridTemplateColumns:"240px 120px 140px 80px 80px 80px 100px 1fr 36px",background:"#F9FAFC",borderBottom:"2px solid #D4D9EE",padding:"7px 14px",gap:8,alignItems:"center",position:"sticky",top:0}}>
-                              {["Company / Contact","Bid Packages","Phone / Email","Info Sent","Bidding","Bid Rec'd","Bid Amount","Notes",""].map((h,i)=>(
-                                <div key={i} style={{fontSize:9,fontWeight:700,color:"#9BA3BF",textTransform:"uppercase",letterSpacing:"0.07em"}}>{h}</div>
-                              ))}
-                            </div>
-                            {/* Trade group sections */}
-                            {Object.entries(tradeGroups).map(([trade, vendors]) => (
-                              <div key={trade}>
-                                <div style={{background:"#F4F6FB",padding:"5px 14px",fontSize:10,fontWeight:700,color:"#4A5278",textTransform:"uppercase",letterSpacing:"0.07em",borderBottom:"1px solid #E8EBF4"}}>
-                                  📦 {trade} ({vendors.length})
-                                </div>
-                                {vendors.map(v => (
-                                  <VendorRow key={v.id} v={v} BID_TRADES={BID_TRADES} onUpdate={(fields)=>updateVendor(v.id,fields)} onRemove={()=>removeVendor(v.id)} />
-                                ))}
+                      {/* Phase tabs */}
+                      <div style={{display:"flex",background:"#F9FAFC",borderBottom:"2px solid #E8EBF4",flexShrink:0}}>
+                        {PHASES.map(ph=>(
+                          <button key={ph.id} onClick={()=>setPhase(ph.id)}
+                            style={{flex:1,padding:"10px 8px",border:"none",background:"transparent",cursor:"pointer",fontFamily:"inherit",borderBottom:phase===ph.id?"3px solid #3B6FE8":"3px solid transparent",marginBottom:-2,textAlign:"center"}}>
+                            <div style={{fontSize:12,fontWeight:phase===ph.id?700:500,color:phase===ph.id?"#3B6FE8":"#4A5278"}}>{ph.icon} {ph.label}</div>
+                            <div style={{fontSize:9,color:"#9BA3BF",marginTop:1}}>{ph.desc}</div>
+                          </button>
+                        ))}
+                      </div>
+
+                      {/* Phase content */}
+                      <div style={{flex:1,overflowY:"auto"}}>
+
+                        {/* ---- WBS TAB ---- */}
+                        {phase==="wbs" && (
+                          <div style={{padding:"16px 18px",display:"flex",flexDirection:"column",gap:12}}>
+                            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                              <div style={{fontSize:12,fontWeight:700,color:"#1A2240"}}>Work Breakdown Structure</div>
+                              <div style={{display:"flex",gap:8}}>
+                                <button onClick={()=>{
+                                  const newItem = {id:"wbs"+Date.now(),code:"",description:"",unit:"LS",qty:0,rate:0,trade:"",critical:false};
+                                  setWbs(prev=>[...prev,newItem]);
+                                }} style={{padding:"5px 12px",background:"#3B6FE8",color:"#fff",border:"none",borderRadius:6,cursor:"pointer",fontFamily:"inherit",fontSize:12,fontWeight:700}}>+ Add Cost Code</button>
                               </div>
-                            ))}
-                            {noTradeVendors.length > 0 && (
-                              <div>
-                                <div style={{background:"#F4F6FB",padding:"5px 14px",fontSize:10,fontWeight:700,color:"#9BA3BF",textTransform:"uppercase",letterSpacing:"0.07em",borderBottom:"1px solid #E8EBF4"}}>
-                                  Unassigned ({noTradeVendors.length})
-                                </div>
-                                {noTradeVendors.map(v => (
-                                  <VendorRow key={v.id} v={v} BID_TRADES={BID_TRADES} onUpdate={(fields)=>updateVendor(v.id,fields)} onRemove={()=>removeVendor(v.id)} />
-                                ))}
+                            </div>
+
+                            {/* Critical trades selector */}
+                            <div style={{background:"#FFF9E6",border:"1px solid #FCD34D30",borderRadius:8,padding:"10px 12px"}}>
+                              <div style={{fontSize:11,fontWeight:700,color:"#B45309",marginBottom:6}}>Critical Trades (select trades that need 3+ bids)</div>
+                              <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
+                                {BID_TRADES.map(t=>{
+                                  const isCrit = critical.includes(t);
+                                  return (
+                                    <button key={t} type="button" onClick={()=>setCritical(isCrit?critical.filter(x=>x!==t):[...critical,t])}
+                                      style={{padding:"3px 9px",borderRadius:4,border:"1.5px solid "+(isCrit?"#F59E0B":"#D4D9EE"),background:isCrit?"#FCD34D":"#F9FAFC",color:isCrit?"#1A2240":"#4A5278",fontSize:10,cursor:"pointer",fontFamily:"inherit",fontWeight:isCrit?700:400}}>
+                                      {t}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+
+                            {/* WBS table */}
+                            {wbs.length > 0 && (
+                              <div style={{background:"#fff",borderRadius:10,border:"1px solid #D4D9EE",overflow:"hidden"}}>
+                                <table style={{width:"100%",borderCollapse:"collapse"}}>
+                                  <thead>
+                                    <tr style={{background:"#F9FAFC",borderBottom:"2px solid #D4D9EE"}}>
+                                      {["Code","Description","Trade","Unit","Est. Qty","Unit Rate ($)","Total","Crit.",""].map((h,i)=>(
+                                        <th key={i} style={{padding:"6px 8px",fontSize:9,color:"#9BA3BF",textTransform:"uppercase",letterSpacing:"0.07em",textAlign:i>=4&&i<=6?"right":"left",fontWeight:700}}>{h}</th>
+                                      ))}
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {wbs.map((item,idx)=>(
+                                      <WbsRow key={item.id} item={item} BID_TRADES={BID_TRADES}
+                                        onUpdate={u=>setWbs(prev=>prev.map(i=>i.id===item.id?{...i,...u}:i))}
+                                        onRemove={()=>setWbs(prev=>prev.filter(i=>i.id!==item.id))}
+                                        critical={critical}/>
+                                    ))}
+                                  </tbody>
+                                  <tfoot>
+                                    <tr style={{background:"#F4F6FB",borderTop:"2px solid #D4D9EE"}}>
+                                      <td colSpan={6} style={{padding:"7px 8px",fontSize:11,fontWeight:700,color:"#4A5278"}}>Total Estimated Cost</td>
+                                      <td style={{padding:"7px 8px",textAlign:"right",fontSize:13,fontWeight:800,color:"#1A2240"}}>
+                                        ${wbs.reduce((s,i)=>(s+(i.qty||0)*(i.rate||0)),0).toLocaleString()}
+                                      </td>
+                                      <td colSpan={2}/>
+                                    </tr>
+                                  </tfoot>
+                                </table>
                               </div>
                             )}
-                          </>
+                            {wbs.length === 0 && (
+                              <div style={{textAlign:"center",padding:"40px",color:"#9BA3BF",border:"2px dashed #E0E4F0",borderRadius:10}}>
+                                <div style={{fontSize:28,marginBottom:8}}>📋</div>
+                                <div style={{fontSize:14,fontWeight:600,color:"#1A2240",marginBottom:4}}>No cost codes yet</div>
+                                <div style={{fontSize:12}}>Add cost codes to define the scope of work</div>
+                              </div>
+                            )}
+                            <button onClick={()=>setPhase("takeoff")} style={{alignSelf:"flex-end",padding:"8px 20px",background:"#3B6FE8",border:"none",borderRadius:7,color:"#fff",fontWeight:700,cursor:"pointer",fontFamily:"inherit",fontSize:12}}>
+                              Next: Takeoff --&gt;
+                            </button>
+                          </div>
+                        )}
+
+                        {/* ---- TAKEOFF TAB ---- */}
+                        {phase==="takeoff" && (
+                          <div style={{padding:"16px 18px",display:"flex",flexDirection:"column",gap:12}}>
+                            <div style={{fontSize:12,fontWeight:700,color:"#1A2240"}}>Takeoff -- Quantities &amp; Field Measurements</div>
+                            {wbs.length === 0 ? (
+                              <div style={{textAlign:"center",padding:"30px",color:"#9BA3BF",border:"2px dashed #E0E4F0",borderRadius:10}}>
+                                <div style={{fontSize:13}}>Complete WBS first to define cost codes</div>
+                                <button onClick={()=>setPhase("wbs")} style={{marginTop:10,padding:"7px 16px",background:"#3B6FE8",border:"none",borderRadius:6,color:"#fff",fontWeight:700,cursor:"pointer",fontFamily:"inherit",fontSize:12}}>Go to WBS</button>
+                              </div>
+                            ) : (
+                              <div style={{background:"#fff",borderRadius:10,border:"1px solid #D4D9EE",overflow:"hidden"}}>
+                                <table style={{width:"100%",borderCollapse:"collapse"}}>
+                                  <thead>
+                                    <tr style={{background:"#F9FAFC",borderBottom:"2px solid #D4D9EE"}}>
+                                      {["Code","Description","Unit","Est. Qty","Actual Qty","Variance","Notes"].map((h,i)=>(
+                                        <th key={i} style={{padding:"6px 8px",fontSize:9,color:"#9BA3BF",textTransform:"uppercase",letterSpacing:"0.07em",fontWeight:700,textAlign:i>=3&&i<=5?"right":"left"}}>{h}</th>
+                                      ))}
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {wbs.map(item=>{
+                                      const to = takeoff[item.id] || {qty:"",notes:""};
+                                      const actualQty = parseFloat(to.qty)||0;
+                                      const estQty    = parseFloat(item.qty)||0;
+                                      const variance  = actualQty - estQty;
+                                      const fi = {padding:"4px 7px",border:"1px solid #D4D9EE",borderRadius:5,fontSize:11,fontFamily:"inherit",outline:"none",width:"100%",boxSizing:"border-box"};
+                                      return (
+                                        <tr key={item.id} style={{borderBottom:"1px solid #F4F6FB"}}>
+                                          <td style={{padding:"6px 8px",fontSize:11,color:"#9BA3BF",fontFamily:"monospace"}}>{item.code||"--"}</td>
+                                          <td style={{padding:"6px 8px",fontSize:12,fontWeight:600,color:"#1A2240"}}>{item.description||"--"}</td>
+                                          <td style={{padding:"6px 8px",fontSize:11,color:"#9BA3BF"}}>{item.unit}</td>
+                                          <td style={{padding:"6px 8px",textAlign:"right",fontSize:11,color:"#4A5278"}}>{estQty.toLocaleString()}</td>
+                                          <td style={{padding:"4px 6px",width:100}}>
+                                            <input type="number" value={to.qty} onChange={e=>setTakeoff(prev=>({...prev,[item.id]:{...(prev[item.id]||{}),qty:e.target.value}}))}
+                                              placeholder="0" style={{...fi,textAlign:"right",background:actualQty>0?"#F0FDF4":"#F9FAFC"}}/>
+                                          </td>
+                                          <td style={{padding:"6px 8px",textAlign:"right",fontSize:11,fontWeight:700,color:variance>0?"#F87171":variance<0?"#4ADE80":"#9BA3BF"}}>
+                                            {actualQty>0?(variance>=0?"+":"")+variance.toFixed(1):"--"}
+                                          </td>
+                                          <td style={{padding:"4px 6px"}}>
+                                            <input value={to.notes||""} onChange={e=>setTakeoff(prev=>({...prev,[item.id]:{...(prev[item.id]||{}),notes:e.target.value}}))}
+                                              placeholder="Notes..." style={{...fi,fontSize:10}}/>
+                                          </td>
+                                        </tr>
+                                      );
+                                    })}
+                                  </tbody>
+                                </table>
+                              </div>
+                            )}
+                            <div style={{display:"flex",justifyContent:"space-between"}}>
+                              <button onClick={()=>setPhase("wbs")} style={{padding:"8px 16px",background:"#F0F2F8",border:"1px solid #CBD1E8",borderRadius:7,color:"#4A5278",fontWeight:600,cursor:"pointer",fontFamily:"inherit",fontSize:12}}>&lt;-- WBS</button>
+                              <button onClick={()=>setPhase("quoting")} style={{padding:"8px 20px",background:"#3B6FE8",border:"none",borderRadius:7,color:"#fff",fontWeight:700,cursor:"pointer",fontFamily:"inherit",fontSize:12}}>Next: Quoting --&gt;</button>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* ---- QUOTING TAB ---- */}
+                        {phase==="quoting" && (
+                          <div style={{display:"flex",flexDirection:"column",height:"100%"}}>
+                            {/* Critical coverage strip */}
+                            {critical.length > 0 && (
+                              <div style={{padding:"10px 18px",background:"#F9FAFC",borderBottom:"1px solid #E8EBF4",flexShrink:0}}>
+                                <div style={{fontSize:10,fontWeight:700,color:"#4A5278",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:6}}>Critical Trades Coverage</div>
+                                <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                                  {criticalCoverage.map(c=>{
+                                    const status = c.received>=3?"#4ADE80":c.received>=1?"#FCD34D":"#F87171";
+                                    return (
+                                      <div key={c.trade} style={{display:"flex",alignItems:"center",gap:6,padding:"4px 10px",background:status+"15",border:"1px solid "+status+"50",borderRadius:6}}>
+                                        <div style={{width:8,height:8,borderRadius:"50%",background:status,flexShrink:0}}/>
+                                        <span style={{fontSize:11,fontWeight:600,color:"#1A2240"}}>{c.trade}</span>
+                                        <span style={{fontSize:11,color:status,fontWeight:700}}>{c.received}/3</span>
+                                        {c.bidding>0&&<span style={{fontSize:9,color:"#FCD34D"}}>({c.bidding} bidding)</span>}
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Vendor table header */}
+                            <div style={{padding:"8px 18px",background:"#fff",borderBottom:"1px solid #E8EBF4",display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
+                              <span style={{fontSize:12,fontWeight:700,color:"#1A2240",flex:1}}>Vendor Bids</span>
+                              <button onClick={()=>{ setShowAddVendor(true); }} style={{padding:"5px 10px",background:"#3B6FE8",color:"#fff",border:"none",borderRadius:5,cursor:"pointer",fontFamily:"inherit",fontSize:11,fontWeight:700}}>+ Add Vendor</button>
+                              <button onClick={()=>{setBidPrintOppId(activeOppId);setShowBidPrintModal(true);}} style={{padding:"5px 10px",background:"#F0F2F8",border:"1px solid #CBD1E8",borderRadius:5,cursor:"pointer",fontFamily:"inherit",fontSize:11,color:"#4A5278"}}>Print PDF</button>
+                            </div>
+
+                            {/* Table */}
+                            <div style={{flex:1,overflowY:"auto"}}>
+                              {pkg.vendors.length === 0 ? (
+                                <div style={{textAlign:"center",padding:"40px",color:"#9BA3BF"}}>
+                                  <div style={{fontSize:24,marginBottom:8}}>📧</div>
+                                  <div style={{fontSize:13,fontWeight:600,color:"#1A2240",marginBottom:4}}>No vendors yet</div>
+                                  <button onClick={()=>setShowAddVendor(true)} style={{padding:"7px 16px",background:"#3B6FE8",border:"none",borderRadius:7,color:"#fff",fontWeight:700,cursor:"pointer",fontFamily:"inherit",fontSize:12}}>+ Add Vendor</button>
+                                </div>
+                              ) : (
+                                <>
+                                  <div style={{display:"grid",gridTemplateColumns:"220px 130px 140px 70px 70px 70px 90px 1fr 36px",background:"#F9FAFC",borderBottom:"2px solid #D4D9EE",padding:"6px 14px",gap:8,alignItems:"center",position:"sticky",top:0}}>
+                                    {["Company","Bid Packages","Phone / Email","Info","Bidding","Bid In","Amount","Notes",""].map((h,i)=>(
+                                      <div key={i} style={{fontSize:9,fontWeight:700,color:"#9BA3BF",textTransform:"uppercase",letterSpacing:"0.07em"}}>{h}</div>
+                                    ))}
+                                  </div>
+                                  {pkg.vendors.map(v=>(
+                                    <VendorRow key={v.id} v={v} BID_TRADES={BID_TRADES}
+                                      onUpdate={(fields)=>{
+                                        const updated = {...pkg,vendors:pkg.vendors.map(x=>x.id===v.id?{...x,...fields}:x)};
+                                        setBidPackages(prev=>({...prev,[activeOppId]:updated}));
+                                      }}
+                                      onRemove={()=>{
+                                        const updated = {...pkg,vendors:pkg.vendors.filter(x=>x.id!==v.id)};
+                                        setBidPackages(prev=>({...prev,[activeOppId]:updated}));
+                                      }}/>
+                                  ))}
+                                </>
+                              )}
+                            </div>
+                          </div>
                         )}
                       </div>
                     </div>
@@ -8036,6 +8378,7 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
               </div>
             );
           })()}
+
 
           {/* -- LAWN BUDGETING -- */}
           {activeNav === "bids" && activeBU === "lawn" && (() => {
@@ -8896,7 +9239,7 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
           })()}
 
           {/* -- COMING SOON (other nav items) -- */}
-          {!["dashboard", "customers", "jobs", "pipeline", "budgeting", "estimating", "finance", "sites", "projects", "team", "subcontractors", "bids", "active-sites", "pricing"].includes(activeNav) && (
+          {!["dashboard", "customers", "jobs", "pipeline", "budgeting", "estimating", "mpvendors", "finance", "sites", "projects", "team", "subcontractors", "bids", "active-sites", "pricing"].includes(activeNav) && (
             <div className="fade-in">
               <div style={{ marginBottom: 28 }}>
                 <div style={{ fontSize: 22, fontWeight: 700, color: "#1A2240", textTransform: "uppercase" }}>{navItems.find(n => n.id === activeNav)?.label}</div>
@@ -10097,6 +10440,66 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
         );
       })()}
 
+
+      {/* -- MP VENDOR FORM (database) -- */}
+      {showMpVendorForm && (() => {
+        const W = mpVendorForm;
+        const setW = (k,v) => setMpVendorForm(f=>({...f,[k]:v}));
+        const BID_TRADES = ["Concrete","Masonry","Demo","Rough Carpentry","Fluid Applied Flooring","Roofing","Metal Wall Panels / Siding","Doors & Frames","Roll-Up Doors","Security / Access Control","Plumbing","Earthwork & Utilities","Asphalt","Fencing & Gates","Landscaping / Irrigation","Metal Building (PEMB)","Electrical","Lighting","Automated Doors","HVAC","Fire Suppression","Fire Alarm","Elevators","Material Lift","Canopies","General Conditions","Other"];
+        const fi = {width:"100%",padding:"8px 10px",border:"1.5px solid #CBD1E8",borderRadius:7,fontSize:13,fontFamily:"inherit",outline:"none",boxSizing:"border-box"};
+        const isEdit = !!W.id;
+
+        const save = () => {
+          if (!W.company.trim()) return;
+          if (isEdit) {
+            setMpVendorDB(prev=>prev.map(v=>v.id===W.id?{...W}:v));
+          } else {
+            setMpVendorDB(prev=>[...prev,{...W,id:"mpv"+Date.now()}]);
+          }
+          setShowMpVendorForm(false);
+        };
+
+        return (
+          <div style={{position:"fixed",inset:0,background:"rgba(10,16,36,0.7)",zIndex:2500,display:"flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(3px)",padding:16}}>
+            <div style={{background:"#fff",borderRadius:14,width:"min(520px,100%)",maxHeight:"88vh",display:"flex",flexDirection:"column",boxShadow:"0 12px 60px rgba(0,0,0,0.25)",overflow:"hidden"}}>
+              <div style={{background:"linear-gradient(135deg,#1A2240,#253260)",padding:"16px 22px",display:"flex",alignItems:"center",gap:10}}>
+                <div style={{fontSize:15,fontWeight:800,color:"#fff",flex:1}}>{isEdit?"Edit Vendor":"+ Add MP Vendor"}</div>
+                <button onClick={()=>setShowMpVendorForm(false)} style={{background:"rgba(255,255,255,0.12)",border:"none",color:"#fff",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontSize:12,fontFamily:"inherit"}}>x</button>
+              </div>
+              <div style={{padding:"18px 22px",overflowY:"auto",display:"flex",flexDirection:"column",gap:12}}>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+                  <div><div style={{fontSize:10,color:"#9BA3BF",textTransform:"uppercase",marginBottom:3}}>Company Name *</div><input value={W.company} onChange={e=>setW("company",e.target.value)} placeholder="Vendor company" style={fi}/></div>
+                  <div><div style={{fontSize:10,color:"#9BA3BF",textTransform:"uppercase",marginBottom:3}}>Contact Name</div><input value={W.contact||""} onChange={e=>setW("contact",e.target.value)} placeholder="Contact" style={fi}/></div>
+                  <div><div style={{fontSize:10,color:"#9BA3BF",textTransform:"uppercase",marginBottom:3}}>Phone</div><input value={W.phone||""} onChange={e=>setW("phone",e.target.value)} placeholder="(555) 000-0000" style={fi}/></div>
+                  <div><div style={{fontSize:10,color:"#9BA3BF",textTransform:"uppercase",marginBottom:3}}>Email</div><input value={W.email||""} onChange={e=>setW("email",e.target.value)} placeholder="email@vendor.com" style={fi}/></div>
+                </div>
+                <div>
+                  <div style={{fontSize:10,color:"#9BA3BF",textTransform:"uppercase",marginBottom:6}}>Trades -- Select All That Apply</div>
+                  <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
+                    {BID_TRADES.map(t=>{
+                      const sel=(W.trades||[]).includes(t);
+                      return (
+                        <button key={t} type="button" onClick={()=>{const cur=W.trades||[];setW("trades",sel?cur.filter(x=>x!==t):[...cur,t]);}}
+                          style={{padding:"3px 9px",borderRadius:5,border:"1.5px solid "+(sel?"#3B6FE8":"#CBD1E8"),background:sel?"#3B6FE8":"#F9FAFC",color:sel?"#fff":"#4A5278",fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>
+                          {t}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+                <div><div style={{fontSize:10,color:"#9BA3BF",textTransform:"uppercase",marginBottom:3}}>Notes</div>
+                  <textarea value={W.notes||""} onChange={e=>setW("notes",e.target.value)} rows={2} placeholder="Past experience, specialty, etc."
+                    style={{...fi,resize:"vertical"}}/></div>
+              </div>
+              <div style={{padding:"12px 22px",borderTop:"1px solid #D4D9EE",display:"flex",gap:8,background:"#F9FAFC"}}>
+                {isEdit && <button onClick={()=>{setMpVendorDB(prev=>prev.filter(v=>v.id!==W.id));setShowMpVendorForm(false);}} style={{padding:"9px 14px",background:"#FEE2E2",border:"1px solid #FECACA",borderRadius:7,cursor:"pointer",fontFamily:"inherit",fontSize:12,color:"#DC2626",fontWeight:600}}>Delete</button>}
+                <button onClick={()=>setShowMpVendorForm(false)} style={{flex:1,padding:"9px",background:"#F0F2F8",border:"1px solid #CBD1E8",borderRadius:7,cursor:"pointer",fontFamily:"inherit",fontSize:13,color:"#4A5278"}}>Cancel</button>
+                <button onClick={save} style={{flex:2,padding:"9px",background:"#3B6FE8",border:"none",borderRadius:7,cursor:"pointer",fontFamily:"inherit",fontSize:13,color:"#fff",fontWeight:700}}>{isEdit?"Save Changes":"Add Vendor"}</button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* -- ADD VENDOR MODAL -- */}
       {showAddVendor && activeBidOpp && (() => {
