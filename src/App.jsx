@@ -2214,6 +2214,128 @@ function MpBudgetTool({ opp, company, items, setItems, overrides, setOverrides }
   );
 }
 
+// ── Vendor Row for bid tracker ───────────────────────────────────────────────
+function VendorRow({ v, BID_TRADES, onUpdate, onRemove }) {
+  const [editing, setEditing]       = useState(false);
+  const [showTrades, setShowTrades] = useState(false);
+  const [notes, setNotes]           = useState(v.notes||"");
+  const [bidAmt, setBidAmt]         = useState(v.bidAmount||"");
+
+  const STATUS = [
+    { key:"infoSent",    label:"Info Sent",  icon:"📧" },
+    { key:"bidding",     label:"Bidding",    icon:"✏️" },
+    { key:"bidReceived", label:"Bid Rec'd",  icon:"✅" },
+  ];
+
+  const toggleStatus = (key) => {
+    const newVal = !v[key];
+    onUpdate({ [key]: newVal });
+  };
+
+  const dot = (on) => ({
+    width:14, height:14, borderRadius:"50%",
+    background: on ? "#4ADE80" : "#E0E4F0",
+    border: on ? "2px solid #4ADE8060" : "2px solid #CBD1E8",
+    cursor:"pointer", flexShrink:0,
+    display:"inline-block", transition:"all 0.1s"
+  });
+
+  const fi = {padding:"4px 7px",border:"1px solid #CBD1E8",borderRadius:5,fontSize:11,fontFamily:"inherit",outline:"none",width:"100%",boxSizing:"border-box"};
+
+  return (
+    <div style={{display:"grid",gridTemplateColumns:"240px 120px 140px 80px 80px 80px 100px 1fr 36px",borderBottom:"1px solid #F4F6FB",padding:"7px 14px",gap:8,alignItems:"center"}}
+      onMouseEnter={e=>e.currentTarget.style.background="#FAFBFF"}
+      onMouseLeave={e=>e.currentTarget.style.background=""}>
+
+      {/* Company / Contact */}
+      <div>
+        {editing ? (
+          <div style={{display:"flex",flexDirection:"column",gap:4}}>
+            <input value={v.company} onChange={e=>onUpdate({company:e.target.value})} placeholder="Company" style={fi}/>
+            <input value={v.contact||""} onChange={e=>onUpdate({contact:e.target.value})} placeholder="Contact" style={fi}/>
+          </div>
+        ) : (
+          <div>
+            <div style={{fontSize:12,fontWeight:700,color:"#1A2240",lineHeight:1.3}}>{v.company||"—"}</div>
+            {v.contact && <div style={{fontSize:10,color:"#9BA3BF"}}>{v.contact}</div>}
+          </div>
+        )}
+      </div>
+
+      {/* Bid packages / trades */}
+      <div style={{position:"relative"}}>
+        <button onClick={()=>setShowTrades(t=>!t)}
+          style={{padding:"3px 8px",borderRadius:5,border:"1px solid #CBD1E8",background:"#F9FAFC",fontSize:10,cursor:"pointer",fontFamily:"inherit",width:"100%",textAlign:"left",color:(v.trades||[]).length>0?"#3B6FE8":"#9BA3BF"}}>
+          {(v.trades||[]).length>0 ? (v.trades||[]).slice(0,2).join(", ")+(v.trades.length>2?` +${v.trades.length-2}`:"") : "Select…"}
+        </button>
+        {showTrades && (
+          <div style={{position:"absolute",top:"100%",left:0,zIndex:100,background:"#fff",border:"1px solid #D4D9EE",borderRadius:8,boxShadow:"0 4px 20px rgba(0,0,0,0.12)",padding:"8px",width:220,maxHeight:200,overflowY:"auto"}}>
+            {BID_TRADES.map(t => {
+              const sel = (v.trades||[]).includes(t);
+              return (
+                <div key={t} onClick={()=>{
+                  const cur=v.trades||[];
+                  onUpdate({trades:sel?cur.filter(x=>x!==t):[...cur,t]});
+                }}
+                  style={{padding:"4px 8px",cursor:"pointer",borderRadius:4,background:sel?"#EEF3FF":"transparent",color:sel?"#3B6FE8":"#1A2240",fontSize:11,display:"flex",alignItems:"center",gap:6}}>
+                  <span style={{fontSize:12}}>{sel?"☑":"☐"}</span>{t}
+                </div>
+              );
+            })}
+            <button onClick={()=>setShowTrades(false)} style={{marginTop:6,width:"100%",padding:"4px",background:"#F0F2F8",border:"none",borderRadius:5,cursor:"pointer",fontSize:11,fontFamily:"inherit",color:"#4A5278"}}>Done</button>
+          </div>
+        )}
+      </div>
+
+      {/* Phone / Email */}
+      <div>
+        {editing ? (
+          <div style={{display:"flex",flexDirection:"column",gap:4}}>
+            <input value={v.phone||""} onChange={e=>onUpdate({phone:e.target.value})} placeholder="Phone" style={fi}/>
+            <input value={v.email||""} onChange={e=>onUpdate({email:e.target.value})} placeholder="Email" style={fi}/>
+          </div>
+        ) : (
+          <div>
+            {v.phone && <div style={{fontSize:10,color:"#4A5278"}}>{v.phone}</div>}
+            {v.email && <div style={{fontSize:9,color:"#3B6FE8",wordBreak:"break-all"}}>{v.email}</div>}
+          </div>
+        )}
+      </div>
+
+      {/* Status toggles */}
+      {["infoSent","bidding","bidReceived"].map(key=>(
+        <div key={key} style={{display:"flex",justifyContent:"center"}}>
+          <div onClick={()=>toggleStatus(key)} style={dot(!!v[key])} title={key}/>
+        </div>
+      ))}
+
+      {/* Bid Amount */}
+      <div>
+        <input type="number" value={bidAmt}
+          onChange={e=>{setBidAmt(e.target.value);onUpdate({bidAmount:e.target.value});}}
+          placeholder="$0"
+          style={{...fi,textAlign:"right",background:v.bidReceived?"#F0FDF4":"#F9FAFC",border:"1px solid "+(v.bidReceived?"#4ADE8050":"#D4D9EE")}}/>
+      </div>
+
+      {/* Notes */}
+      <div>
+        <input value={notes}
+          onChange={e=>{setNotes(e.target.value);onUpdate({notes:e.target.value});}}
+          placeholder="Notes…"
+          style={{...fi,fontSize:10}}/>
+      </div>
+
+      {/* Remove */}
+      <div style={{display:"flex",gap:4}}>
+        <button onClick={()=>setEditing(e=>!e)}
+          style={{background:"none",border:"none",color:editing?"#3B6FE8":"#CBD1E8",cursor:"pointer",fontSize:12,padding:"2px"}}>✎</button>
+        <button onClick={onRemove}
+          style={{background:"none",border:"none",color:"#F87171",cursor:"pointer",fontSize:12,padding:"2px"}}>✕</button>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   // URL routing — sub-facing page
   const urlToken  = useMemo(() => new URLSearchParams(window.location.search).get("subtoken"), []);
@@ -2330,6 +2452,12 @@ export default function App() {
   const [budgetPrintOpp,   setBudgetPrintOpp]   = useState(null);
   const [budgetAttachment, setBudgetAttachment] = useState("");
   const [oppDetails,       setOppDetails]       = useState({});
+  const [bidPackages,      setBidPackages]      = useState({}); // {oppId: {vendors:[{id,company,contact,phone,email,trades:[],bidding,infoSent,bidReceived,bidAmount,notes}], trades:[str]}}
+  const [activeBidOpp,     setActiveBidOpp]     = useState(null);
+  const [showAddVendor,    setShowAddVendor]     = useState(false);
+  const [vendorForm,       setVendorForm]        = useState({company:"",contact:"",phone:"",email:"",trades:[],bidding:false,infoSent:false,bidReceived:false,bidAmount:"",notes:""});
+  const [showBidPrintModal,setShowBidPrintModal] = useState(false);
+  const [bidPrintOppId,    setBidPrintOppId]     = useState(null);
   const [selectedOppTab,   setSelectedOppTab]   = useState("info"); // {oppId: {propertyOwned, ownerName, ownerPhone, ownerEmail, contractDate, budgetReception, budgetNextSteps, bidDueDate, estimateItems, estimateOverrides, attachmentUrl, closedDate, closedNotes}}
   const [editingContact,   setEditingContact]   = useState(null);  // contact being edited inline
   const [editContactForm,  setEditContactForm]  = useState({});
@@ -7734,126 +7862,172 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
                       />
                     </div>
                   </div>
-                </div>
-              </div>
-            );
-          })()}
-
-          {/* ── MP ESTIMATING ── */}
+          {/* ── MP ESTIMATING / BID TRACKER ── */}
           {activeNav === "estimating" && activeBU === "major" && (() => {
-            // All MP opps that are in proposal_bid, negotiation, or beyond
-            const estimatingOpps = pipeline.filter(o =>
-              o.bu === "major" &&
-              ["proposal_bid","negotiation","won","closed_won"].includes(o.stage)
-            );
-            const activeOppId = activeBudgetOpp;
-            const activeOpp   = estimatingOpps.find(o=>o.id===activeOppId) || estimatingOpps[0] || null;
+            const BID_TRADES = [
+              "Concrete","Masonry","Demo","Rough Carpentry","Fluid Applied Flooring","Roofing",
+              "Metal Wall Panels / Siding","Doors & Frames","Roll-Up Doors","Security / Access Control",
+              "Plumbing","Earthwork & Utilities","Asphalt","Fencing & Gates","Landscaping / Irrigation",
+              "Metal Building (PEMB)","Electrical","Lighting","Automated Doors","HVAC",
+              "Fire Suppression","Fire Alarm","Elevators","Material Lift","Canopies",
+              "General Conditions","Dumpster / Porta John","Architect","Civil Engineer","Other"
+            ];
+
+            // All MP opps eligible for estimating (any stage)
+            const allMpOpps = pipeline.filter(o => o.bu === "major");
+            const activeOppId = activeBidOpp || allMpOpps[0]?.id;
+            const activeOpp   = allMpOpps.find(o => o.id === activeOppId) || null;
+            const pkg = bidPackages[activeOppId] || { vendors:[], trades:[] };
+
+            const savePkg = (newPkg) => setBidPackages(prev => ({...prev, [activeOppId]: newPkg}));
+
+            const addVendor = () => {
+              if (!vendorForm.company.trim()) return;
+              const newVendor = { ...vendorForm, id: "v"+Date.now() };
+              savePkg({ ...pkg, vendors: [...pkg.vendors, newVendor] });
+              setVendorForm({company:"",contact:"",phone:"",email:"",trades:[],bidding:false,infoSent:false,bidReceived:false,bidAmount:"",notes:""});
+              setShowAddVendor(false);
+            };
+
+            const updateVendor = (id, fields) => {
+              savePkg({ ...pkg, vendors: pkg.vendors.map(v => v.id===id ? {...v,...fields} : v) });
+            };
+            const removeVendor = (id) => savePkg({ ...pkg, vendors: pkg.vendors.filter(v => v.id !== id) });
+
+            // Group vendors by trade
+            const biddingCount  = pkg.vendors.filter(v=>v.bidding).length;
+            const infoSentCount = pkg.vendors.filter(v=>v.infoSent).length;
+            const bidsBack      = pkg.vendors.filter(v=>v.bidReceived).length;
+
+            // Group by first trade (for display)
+            const tradeGroups = {};
+            BID_TRADES.forEach(t => {
+              const tradeVendors = pkg.vendors.filter(v => (v.trades||[]).includes(t));
+              if (tradeVendors.length > 0) tradeGroups[t] = tradeVendors;
+            });
+            const noTradeVendors = pkg.vendors.filter(v => (v.trades||[]).length === 0);
+
+            const STATUS_COLORS = { true:"#4ADE80", false:"#E0E4F0" };
 
             return (
               <div className="fade-in" style={{display:"flex",flexDirection:"column",gap:0,height:"calc(100vh - 100px)"}}>
                 {/* Header */}
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14,flexShrink:0}}>
                   <div>
-                    <div style={{fontSize:22,fontWeight:800,color:"#1A2240",letterSpacing:"-0.01em",textTransform:"uppercase"}}>MP Estimating</div>
-                    <div style={{fontSize:11,color:"#4A5278",marginTop:3}}>{estimatingOpps.length} projects in bidding · formal estimates for proposal submission</div>
+                    <div style={{fontSize:22,fontWeight:800,color:"#1A2240",letterSpacing:"-0.01em",textTransform:"uppercase"}}>Estimating</div>
+                    <div style={{fontSize:11,color:"#4A5278",marginTop:3}}>Bid package tracking · vendor outreach · quote collection</div>
                   </div>
                 </div>
 
-                {estimatingOpps.length === 0 ? (
-                  <div style={{textAlign:"center",padding:"80px 24px",color:"#9BA3BF",border:"2px dashed #E0E4F0",borderRadius:12,flex:1}}>
-                    <div style={{fontSize:48,marginBottom:16}}>📐</div>
-                    <div style={{fontSize:18,fontWeight:700,color:"#1A2240",marginBottom:8}}>No projects in estimating yet</div>
-                    <div style={{fontSize:13,marginBottom:24}}>Move a pipeline opportunity to <strong>Proposal / Bid</strong> to start formal estimating</div>
-                    <button className="btn-primary" onClick={()=>setActiveNav("pipeline")}>→ Go to Pipeline</button>
-                  </div>
-                ) : (
-                  <div style={{display:"grid",gridTemplateColumns:"240px 1fr",flex:1,gap:0,minHeight:0,background:"#fff",borderRadius:12,border:"1px solid #D4D9EE",overflow:"hidden"}}>
-                    {/* Left sidebar — project list */}
-                    <div style={{borderRight:"1px solid #D4D9EE",overflowY:"auto",background:"#F9FAFC"}}>
-                      <div style={{padding:"10px 14px",borderBottom:"1px solid #D4D9EE",fontSize:10,fontWeight:700,color:"#9BA3BF",textTransform:"uppercase",letterSpacing:"0.07em"}}>
-                        Active Bids ({estimatingOpps.length})
-                      </div>
-                      {estimatingOpps.map(o=>{
-                        const co=companies.find(c=>c.id===o.companyId);
-                        const det=oppDetails[o.id]||{};
-                        const isActive=o.id===activeOppId||(activeOppId===null&&o.id===estimatingOpps[0]?.id);
-                        const stgColors={proposal_bid:"#60A5FA",negotiation:"#FCD34D",won:"#4ADE80",closed_won:"#059669"};
-                        const stgLabels={proposal_bid:"Bid",negotiation:"Neg.",won:"Won",closed_won:"Closed"};
-                        return (
-                          <div key={o.id} onClick={()=>setActiveBudgetOpp(o.id)}
-                            style={{padding:"10px 14px",cursor:"pointer",background:isActive?"#EEF3FF":"transparent",borderBottom:"1px solid #F0F2F8",borderLeft:isActive?"3px solid #3B6FE8":"3px solid transparent"}}
-                            onMouseEnter={e=>{if(!isActive)e.currentTarget.style.background="#F4F6FB";}}
-                            onMouseLeave={e=>{if(!isActive)e.currentTarget.style.background="transparent";}}>
-                            <div style={{fontSize:12,fontWeight:700,color:"#1A2240",lineHeight:1.3,marginBottom:2}}>{o.name}</div>
-                            <div style={{fontSize:10,color:"#9BA3BF",marginBottom:4}}>{co?.name||"—"}</div>
-                            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                              <span style={{fontSize:9,fontWeight:700,background:(stgColors[o.stage]||"#9BA3BF")+"20",color:stgColors[o.stage]||"#9BA3BF",borderRadius:3,padding:"1px 5px"}}>
-                                {stgLabels[o.stage]||o.stage}
-                              </span>
-                              <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:2}}>
-                                {det.bidDueDate && <span style={{fontSize:9,color:"#F87171",fontWeight:700}}>Due: {det.bidDueDate}</span>}
-                                {(parseFloat(o.value)||0)>0 && <span style={{fontSize:10,fontWeight:700,color:"#1A2240"}}>${(parseFloat(o.value)/1000).toFixed(0)}k</span>}
-                              </div>
-                            </div>
+                <div style={{display:"grid",gridTemplateColumns:"220px 1fr",flex:1,gap:0,minHeight:0,background:"#fff",borderRadius:12,border:"1px solid #D4D9EE",overflow:"hidden"}}>
+                  {/* Left — project list */}
+                  <div style={{borderRight:"1px solid #D4D9EE",overflowY:"auto",background:"#F9FAFC"}}>
+                    <div style={{padding:"10px 14px",borderBottom:"1px solid #D4D9EE",fontSize:10,fontWeight:700,color:"#9BA3BF",textTransform:"uppercase",letterSpacing:"0.07em"}}>Projects</div>
+                    {allMpOpps.length === 0 && <div style={{padding:"20px 14px",fontSize:11,color:"#9BA3BF",textAlign:"center"}}>No MP projects yet.<br/>Add from Pipeline.</div>}
+                    {allMpOpps.map(o => {
+                      const co = companies.find(c => c.id === o.companyId);
+                      const oPkg = bidPackages[o.id] || {vendors:[]};
+                      const isActive = o.id === activeOppId;
+                      const stgColors = {lead:"#A78BFA",budgeting_lead:"#818CF8",proposal_bid:"#60A5FA",negotiation:"#FCD34D",won:"#4ADE80",closed_won:"#059669",lost:"#F87171"};
+                      const stgLabels = {lead:"Lead",budgeting_lead:"Budget",proposal_bid:"Bid",negotiation:"Neg.",won:"Won",closed_won:"Closed",lost:"Lost"};
+                      const vendorCt = oPkg.vendors.length;
+                      const bids = oPkg.vendors.filter(v=>v.bidReceived).length;
+                      return (
+                        <div key={o.id} onClick={()=>setActiveBidOpp(o.id)}
+                          style={{padding:"10px 14px",cursor:"pointer",background:isActive?"#EEF3FF":"transparent",borderBottom:"1px solid #F0F2F8",borderLeft:isActive?"3px solid #3B6FE8":"3px solid transparent"}}
+                          onMouseEnter={e=>{if(!isActive)e.currentTarget.style.background="#F4F6FB";}}
+                          onMouseLeave={e=>{if(!isActive)e.currentTarget.style.background="transparent";}}>
+                          <div style={{fontSize:12,fontWeight:700,color:"#1A2240",lineHeight:1.3,marginBottom:2}}>{o.name}</div>
+                          <div style={{fontSize:10,color:"#9BA3BF",marginBottom:4}}>{co?.name||"—"}</div>
+                          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                            <span style={{fontSize:9,fontWeight:700,background:(stgColors[o.stage]||"#9BA3BF")+"20",color:stgColors[o.stage]||"#9BA3BF",borderRadius:3,padding:"1px 5px"}}>{stgLabels[o.stage]||o.stage}</span>
+                            <span style={{fontSize:10,color:bids>0?"#4ADE80":"#9BA3BF",fontWeight:700}}>{vendorCt>0?`${bids}/${vendorCt} bids`:"No vendors"}</span>
                           </div>
-                        );
-                      })}
-                    </div>
-
-                    {/* Right — estimate tool */}
-                    <div style={{display:"flex",flexDirection:"column",overflow:"hidden"}}>
-                      {activeOpp ? (
-                        <>
-                          {/* Project header */}
-                          <div style={{background:"linear-gradient(135deg,#1A2240,#253260)",padding:"12px 18px",flexShrink:0,display:"flex",alignItems:"center",gap:12}}>
-                            <div style={{flex:1}}>
-                              <div style={{fontSize:14,fontWeight:800,color:"#fff"}}>{activeOpp.name}</div>
-                              <div style={{fontSize:10,color:"rgba(255,255,255,0.5)",marginTop:1}}>
-                                {companies.find(c=>c.id===activeOpp.companyId)?.name||""}
-                                {(oppDetails[activeOpp.id]?.bidDueDate)?` · Bid Due: ${oppDetails[activeOpp.id].bidDueDate}`:""}
-                              </div>
-                            </div>
-                            {/* Copy from budget if no estimate yet */}
-                            {!(oppDetails[activeOpp.id]?.estimateItems||[]).length && (oppDetails[activeOpp.id]?.budgetItems||[]).length>0 && (
-                              <button onClick={()=>saveOppDetail(activeOpp.id,{estimateItems:[...(oppDetails[activeOpp.id].budgetItems)],estimateOverrides:{...(oppDetails[activeOpp.id].budgetOverrides||{})}})}
-                                style={{padding:"6px 12px",background:"#FCD34D",border:"none",borderRadius:6,color:"#1A2240",fontWeight:700,fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>
-                                📋 Copy from Budget
-                              </button>
-                            )}
-                            <button onClick={()=>{ setSelectedOpp(activeOpp); setSelectedOppTab("estimating"); }}
-                              style={{padding:"6px 12px",background:"rgba(255,255,255,0.15)",border:"1px solid rgba(255,255,255,0.3)",borderRadius:6,color:"#fff",fontWeight:600,fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>
-                              📋 Full Detail →
-                            </button>
-                          </div>
-                          {/* Bid due countdown */}
-                          {oppDetails[activeOpp.id]?.bidDueDate && (() => {
-                            const days = Math.ceil((new Date(oppDetails[activeOpp.id].bidDueDate)-new Date())/(1000*60*60*24));
-                            const bg = days<=3?"#F87171":days<=7?"#FCD34D":"#4ADE80";
-                            return <div style={{background:bg,padding:"6px 18px",fontSize:11,fontWeight:700,color:days<=7?"#1A2240":"#1A2240",display:"flex",gap:8,alignItems:"center",flexShrink:0}}>
-                              ⏰ Bid due {oppDetails[activeOpp.id].bidDueDate} — {days>0?days+" days remaining":"OVERDUE"}
-                            </div>;
-                          })()}
-                          {/* Budget tool */}
-                          <div style={{flex:1,overflow:"hidden",display:"flex"}}>
-                            <MpBudgetTool
-                              opp={{...activeOpp,name:activeOpp.name+" — Estimate"}}
-                              company={companies.find(c=>c.id===activeOpp.companyId)}
-                              items={oppDetails[activeOpp.id]?.estimateItems||[]}
-                              setItems={items=>saveOppDetail(activeOpp.id,{estimateItems:typeof items==="function"?items(oppDetails[activeOpp.id]?.estimateItems||[]):items})}
-                              overrides={oppDetails[activeOpp.id]?.estimateOverrides||{gcPct:10,contingency:5,margin:15}}
-                              setOverrides={ov=>saveOppDetail(activeOpp.id,{estimateOverrides:typeof ov==="function"?ov(oppDetails[activeOpp.id]?.estimateOverrides||{}):ov})}
-                            />
-                          </div>
-                        </>
-                      ) : (
-                        <div style={{display:"flex",alignItems:"center",justifyContent:"center",flex:1,color:"#9BA3BF",flexDirection:"column",gap:10}}>
-                          <div style={{fontSize:32}}>📐</div>
-                          <div style={{fontSize:14,fontWeight:600,color:"#1A2240"}}>Select a project</div>
                         </div>
-                      )}
-                    </div>
+                      );
+                    })}
                   </div>
-                )}
+
+                  {/* Right — bid tracker */}
+                  {!activeOpp ? (
+                    <div style={{display:"flex",alignItems:"center",justifyContent:"center",flex:1,flexDirection:"column",gap:10,color:"#9BA3BF"}}>
+                      <div style={{fontSize:40}}>📐</div>
+                      <div style={{fontSize:14,fontWeight:600,color:"#1A2240"}}>Select a project</div>
+                    </div>
+                  ) : (
+                    <div style={{display:"flex",flexDirection:"column",overflow:"hidden"}}>
+                      {/* Project header */}
+                      <div style={{background:"linear-gradient(135deg,#1A2240,#253260)",padding:"12px 18px",flexShrink:0,display:"flex",alignItems:"center",gap:10}}>
+                        <div style={{flex:1}}>
+                          <div style={{fontSize:14,fontWeight:800,color:"#fff"}}>{activeOpp.name}</div>
+                          <div style={{fontSize:10,color:"rgba(255,255,255,0.5)",marginTop:1}}>{companies.find(c=>c.id===activeOpp.companyId)?.name||""}</div>
+                        </div>
+                        {/* Stats */}
+                        {[
+                          {label:"Vendors",    value:pkg.vendors.length, color:"#60A5FA"},
+                          {label:"Info Sent",  value:infoSentCount,       color:"#FCD34D"},
+                          {label:"Bidding",    value:biddingCount,        color:"#818CF8"},
+                          {label:"Bids Back",  value:bidsBack,            color:"#4ADE80"},
+                        ].map(s=>(
+                          <div key={s.label} style={{textAlign:"center",padding:"0 10px",borderLeft:"1px solid rgba(255,255,255,0.1)"}}>
+                            <div style={{fontSize:16,fontWeight:800,color:s.color}}>{s.value}</div>
+                            <div style={{fontSize:8,color:"rgba(255,255,255,0.4)",textTransform:"uppercase",letterSpacing:"0.06em"}}>{s.label}</div>
+                          </div>
+                        ))}
+                        <button onClick={()=>{setBidPrintOppId(activeOppId);setShowBidPrintModal(true);}}
+                          style={{padding:"6px 12px",background:"rgba(255,255,255,0.15)",border:"1px solid rgba(255,255,255,0.3)",borderRadius:6,color:"#fff",fontWeight:600,fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>
+                          🖨 Print Bid Package
+                        </button>
+                        <button onClick={()=>setShowAddVendor(true)}
+                          style={{padding:"6px 12px",background:"#3B6FE8",border:"none",borderRadius:6,color:"#fff",fontWeight:700,fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>
+                          + Add Vendor
+                        </button>
+                      </div>
+
+                      {/* Vendor table */}
+                      <div style={{overflowY:"auto",flex:1,padding:"0"}}>
+                        {pkg.vendors.length === 0 ? (
+                          <div style={{textAlign:"center",padding:"60px 24px",color:"#9BA3BF"}}>
+                            <div style={{fontSize:32,marginBottom:10}}>📋</div>
+                            <div style={{fontSize:14,fontWeight:600,color:"#1A2240",marginBottom:6}}>No vendors yet</div>
+                            <div style={{fontSize:12,marginBottom:20}}>Add vendors to start tracking your bid packages</div>
+                            <button onClick={()=>setShowAddVendor(true)} style={{padding:"9px 20px",background:"#3B6FE8",border:"none",borderRadius:8,color:"#fff",fontWeight:700,cursor:"pointer",fontFamily:"inherit",fontSize:13}}>+ Add First Vendor</button>
+                          </div>
+                        ) : (
+                          <>
+                            {/* Table header */}
+                            <div style={{display:"grid",gridTemplateColumns:"240px 120px 140px 80px 80px 80px 100px 1fr 36px",background:"#F9FAFC",borderBottom:"2px solid #D4D9EE",padding:"7px 14px",gap:8,alignItems:"center",position:"sticky",top:0}}>
+                              {["Company / Contact","Bid Packages","Phone / Email","Info Sent","Bidding","Bid Rec'd","Bid Amount","Notes",""].map((h,i)=>(
+                                <div key={i} style={{fontSize:9,fontWeight:700,color:"#9BA3BF",textTransform:"uppercase",letterSpacing:"0.07em"}}>{h}</div>
+                              ))}
+                            </div>
+                            {/* Trade group sections */}
+                            {Object.entries(tradeGroups).map(([trade, vendors]) => (
+                              <div key={trade}>
+                                <div style={{background:"#F4F6FB",padding:"5px 14px",fontSize:10,fontWeight:700,color:"#4A5278",textTransform:"uppercase",letterSpacing:"0.07em",borderBottom:"1px solid #E8EBF4"}}>
+                                  📦 {trade} ({vendors.length})
+                                </div>
+                                {vendors.map(v => (
+                                  <VendorRow key={v.id} v={v} BID_TRADES={BID_TRADES} onUpdate={(fields)=>updateVendor(v.id,fields)} onRemove={()=>removeVendor(v.id)} />
+                                ))}
+                              </div>
+                            ))}
+                            {noTradeVendors.length > 0 && (
+                              <div>
+                                <div style={{background:"#F4F6FB",padding:"5px 14px",fontSize:10,fontWeight:700,color:"#9BA3BF",textTransform:"uppercase",letterSpacing:"0.07em",borderBottom:"1px solid #E8EBF4"}}>
+                                  Unassigned ({noTradeVendors.length})
+                                </div>
+                                {noTradeVendors.map(v => (
+                                  <VendorRow key={v.id} v={v} BID_TRADES={BID_TRADES} onUpdate={(fields)=>updateVendor(v.id,fields)} onRemove={()=>removeVendor(v.id)} />
+                                ))}
+                              </div>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             );
           })()}
@@ -9916,6 +10090,186 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
         );
       })()}
 
+
+      {/* ── ADD VENDOR MODAL ── */}
+      {showAddVendor && activeBidOpp && (() => {
+        const pkg = bidPackages[activeBidOpp] || { vendors:[], trades:[] };
+        const BID_TRADES = [
+          "Concrete","Masonry","Demo","Rough Carpentry","Fluid Applied Flooring","Roofing",
+          "Metal Wall Panels / Siding","Doors & Frames","Roll-Up Doors","Security / Access Control",
+          "Plumbing","Earthwork & Utilities","Asphalt","Fencing & Gates","Landscaping / Irrigation",
+          "Metal Building (PEMB)","Electrical","Lighting","Automated Doors","HVAC",
+          "Fire Suppression","Fire Alarm","Elevators","Material Lift","Canopies",
+          "General Conditions","Dumpster / Porta John","Architect","Civil Engineer","Other"
+        ];
+        const opp = pipeline.find(o=>o.id===activeBidOpp);
+        const fi = {width:"100%",padding:"8px 10px",border:"1.5px solid #CBD1E8",borderRadius:7,fontSize:13,fontFamily:"inherit",outline:"none",boxSizing:"border-box"};
+        const W = vendorForm;
+        const setW = (k,v) => setVendorForm(f=>({...f,[k]:v}));
+
+        const save = () => {
+          if (!W.company.trim()) return;
+          const newV = {...W, id:"v"+Date.now()};
+          setBidPackages(prev=>({...prev,[activeBidOpp]:{...pkg,vendors:[...pkg.vendors,newV]}}));
+          setVendorForm({company:"",contact:"",phone:"",email:"",trades:[],bidding:false,infoSent:false,bidReceived:false,bidAmount:"",notes:""});
+          setShowAddVendor(false);
+        };
+
+        return (
+          <div style={{position:"fixed",inset:0,background:"rgba(10,16,36,0.7)",zIndex:2500,display:"flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(3px)",padding:16}}>
+            <div style={{background:"#fff",borderRadius:14,width:"min(540px,100%)",maxHeight:"88vh",display:"flex",flexDirection:"column",boxShadow:"0 12px 60px rgba(0,0,0,0.25)",overflow:"hidden"}}>
+              <div style={{background:"linear-gradient(135deg,#1A2240,#253260)",padding:"16px 22px",display:"flex",alignItems:"center",gap:10}}>
+                <div style={{fontSize:15,fontWeight:800,color:"#fff",flex:1}}>+ Add Vendor{opp?` — ${opp.name}`:""}</div>
+                <button onClick={()=>setShowAddVendor(false)} style={{background:"rgba(255,255,255,0.12)",border:"none",color:"#fff",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontSize:12,fontFamily:"inherit"}}>✕</button>
+              </div>
+              <div style={{padding:"18px 22px",overflowY:"auto",display:"flex",flexDirection:"column",gap:12}}>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+                  <div><div style={{fontSize:10,color:"#9BA3BF",textTransform:"uppercase",marginBottom:3}}>Company Name *</div><input value={W.company} onChange={e=>setW("company",e.target.value)} placeholder="Vendor company…" style={fi}/></div>
+                  <div><div style={{fontSize:10,color:"#9BA3BF",textTransform:"uppercase",marginBottom:3}}>Contact Name</div><input value={W.contact} onChange={e=>setW("contact",e.target.value)} placeholder="Contact…" style={fi}/></div>
+                  <div><div style={{fontSize:10,color:"#9BA3BF",textTransform:"uppercase",marginBottom:3}}>Phone</div><input value={W.phone} onChange={e=>setW("phone",e.target.value)} placeholder="(555) 000-0000" style={fi}/></div>
+                  <div><div style={{fontSize:10,color:"#9BA3BF",textTransform:"uppercase",marginBottom:3}}>Email</div><input value={W.email} onChange={e=>setW("email",e.target.value)} placeholder="email@vendor.com" style={fi}/></div>
+                </div>
+
+                <div>
+                  <div style={{fontSize:10,color:"#9BA3BF",textTransform:"uppercase",marginBottom:6}}>Bid Packages — Select All That Apply</div>
+                  <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
+                    {BID_TRADES.map(t=>{
+                      const sel = (W.trades||[]).includes(t);
+                      return (
+                        <button key={t} type="button" onClick={()=>{const cur=W.trades||[];setW("trades",sel?cur.filter(x=>x!==t):[...cur,t]);}}
+                          style={{padding:"4px 10px",borderRadius:5,border:"1.5px solid "+(sel?"#3B6FE8":"#CBD1E8"),background:sel?"#3B6FE8":"#F9FAFC",color:sel?"#fff":"#4A5278",fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>
+                          {t}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div style={{display:"flex",gap:12,alignItems:"center",padding:"10px 12px",background:"#F4F6FB",borderRadius:8}}>
+                  {[{key:"infoSent",label:"Info Sent"},{key:"bidding",label:"Bidding"},{key:"bidReceived",label:"Bid Received"}].map(s=>(
+                    <label key={s.key} style={{display:"flex",alignItems:"center",gap:6,cursor:"pointer",fontSize:12,color:"#1A2240"}}>
+                      <input type="checkbox" checked={!!W[s.key]} onChange={e=>setW(s.key,e.target.checked)}/>
+                      {s.label}
+                    </label>
+                  ))}
+                </div>
+
+                <div><div style={{fontSize:10,color:"#9BA3BF",textTransform:"uppercase",marginBottom:3}}>Notes</div>
+                  <textarea value={W.notes} onChange={e=>setW("notes",e.target.value)} rows={2} placeholder="Any notes about this vendor…"
+                    style={{...fi,resize:"vertical"}}/></div>
+              </div>
+              <div style={{padding:"12px 22px",borderTop:"1px solid #D4D9EE",display:"flex",gap:8,background:"#F9FAFC"}}>
+                <button onClick={()=>setShowAddVendor(false)} style={{flex:1,padding:"9px",background:"#F0F2F8",border:"1px solid #CBD1E8",borderRadius:7,cursor:"pointer",fontFamily:"inherit",fontSize:13,color:"#4A5278"}}>Cancel</button>
+                <button onClick={save} style={{flex:2,padding:"9px",background:"#3B6FE8",border:"none",borderRadius:7,cursor:"pointer",fontFamily:"inherit",fontSize:13,color:"#fff",fontWeight:700}}>Add Vendor</button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* ── BID PACKAGE PDF PRINT MODAL ── */}
+      {showBidPrintModal && bidPrintOppId && (() => {
+        const opp  = pipeline.find(o=>o.id===bidPrintOppId);
+        const co   = companies.find(c=>c.id===opp?.companyId);
+        const pkg  = bidPackages[bidPrintOppId] || {vendors:[]};
+        const today = new Date().toLocaleDateString("en-US",{year:"numeric",month:"long",day:"numeric"});
+        // Group by trade
+        const tradeGroups = {};
+        pkg.vendors.forEach(v=>{
+          (v.trades||["Unassigned"]).forEach(t=>{
+            if (!tradeGroups[t]) tradeGroups[t]=[];
+            if (!tradeGroups[t].find(x=>x.id===v.id)) tradeGroups[t].push(v);
+          });
+          if ((v.trades||[]).length===0){ if(!tradeGroups["Unassigned"]) tradeGroups["Unassigned"]=[]; tradeGroups["Unassigned"].push(v); }
+        });
+
+        return (
+          <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.65)",zIndex:3000,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+            <div style={{background:"#fff",borderRadius:12,width:"min(860px,100%)",maxHeight:"94vh",display:"flex",flexDirection:"column",boxShadow:"0 20px 80px rgba(0,0,0,0.3)",overflow:"hidden"}}>
+              <div className="no-print" style={{background:"#F4F6FB",padding:"10px 20px",display:"flex",gap:10,alignItems:"center",borderBottom:"1px solid #D4D9EE",flexShrink:0}}>
+                <div style={{fontSize:13,fontWeight:700,color:"#1A2240",flex:1}}>🖨 Bid Package — {opp?.name}</div>
+                <button onClick={()=>window.print()} style={{padding:"6px 16px",background:"#3B6FE8",color:"#fff",border:"none",borderRadius:6,cursor:"pointer",fontFamily:"inherit",fontSize:12,fontWeight:700}}>🖨 Print / Save PDF</button>
+                <button onClick={()=>setShowBidPrintModal(false)} style={{padding:"6px 12px",background:"#F0F2F8",color:"#4A5278",border:"1px solid #CBD1E8",borderRadius:6,cursor:"pointer",fontFamily:"inherit",fontSize:12}}>✕ Close</button>
+              </div>
+
+              <div style={{overflowY:"auto",flex:1,padding:"36px 44px",fontFamily:"'Helvetica Neue',Arial,sans-serif"}}>
+                <style>{`@media print{body>*{display:none!important}#bid-print-area{display:block!important;position:fixed;inset:0;overflow:visible;padding:36px 44px}.no-print{display:none!important}}`}</style>
+                <div id="bid-print-area">
+                  {/* Letterhead */}
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:28,paddingBottom:16,borderBottom:"3px solid #1A2240"}}>
+                    <div>
+                      <div style={{fontSize:26,fontWeight:900,color:"#1A2240",letterSpacing:"-0.02em"}}>FARMER GROUP</div>
+                      <div style={{fontSize:10,color:"#4A5278",marginTop:2,letterSpacing:"0.05em"}}>DEVELOPMENT · CONSTRUCTION · MANAGEMENT</div>
+                      <div style={{fontSize:9,color:"#9BA3BF",marginTop:5}}>Farmer Development Inc. · (810) 844-1544 · farmerdevelopment.com</div>
+                    </div>
+                    <div style={{textAlign:"right"}}>
+                      <div style={{fontSize:10,color:"#9BA3BF"}}>Bid Package</div>
+                      <div style={{fontSize:11,fontWeight:600,color:"#1A2240"}}>{today}</div>
+                    </div>
+                  </div>
+
+                  <div style={{marginBottom:20}}>
+                    <div style={{fontSize:18,fontWeight:800,color:"#1A2240",marginBottom:2}}>{opp?.name}</div>
+                    {co && <div style={{fontSize:12,color:"#4A5278"}}>{co.name}</div>}
+                  </div>
+
+                  {/* Requirements box */}
+                  <div style={{background:"#F4F6FB",border:"1px solid #D4D9EE",borderRadius:8,padding:"14px 16px",marginBottom:24}}>
+                    <div style={{fontSize:11,fontWeight:700,color:"#1A2240",marginBottom:8,textTransform:"uppercase",letterSpacing:"0.06em"}}>Bid Requirements</div>
+                    <div style={{fontSize:11,color:"#4A5278",lineHeight:1.8}}>
+                      Please provide a detailed breakdown of your bid including:<br/>
+                      • <strong>Labor and material costs broken out separately</strong><br/>
+                      • <strong>Any exclusions clearly listed</strong><br/>
+                      • Proposed schedule and lead times<br/>
+                      • Unit pricing where applicable<br/>
+                      • Certificate of Insurance requirements upon award<br/>
+                      • W-9 on file with Farmer Development Inc.
+                    </div>
+                  </div>
+
+                  {/* Vendor table per trade */}
+                  {Object.entries(tradeGroups).map(([trade, vendors])=>(
+                    <div key={trade} style={{marginBottom:20}}>
+                      <div style={{background:"#1A2240",color:"#fff",padding:"5px 10px",fontSize:11,fontWeight:700,marginBottom:0,borderRadius:"6px 6px 0 0"}}>
+                        {trade} ({vendors.length} vendor{vendors.length!==1?"s":""})
+                      </div>
+                      <table style={{width:"100%",borderCollapse:"collapse",border:"1px solid #D4D9EE"}}>
+                        <thead>
+                          <tr style={{background:"#F4F6FB"}}>
+                            {["Company","Contact","Phone","Email","Info Sent","Bidding","Bid Rec'd","Amount","Notes"].map((h,i)=>(
+                              <th key={i} style={{padding:"5px 8px",fontSize:9,color:"#4A5278",textAlign:i>=4&&i<=6?"center":"left",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.06em",borderBottom:"1px solid #D4D9EE"}}>{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {vendors.map((v,i)=>(
+                            <tr key={v.id} style={{background:i%2===0?"#fff":"#F9FAFC",borderBottom:"1px solid #EEF0F8"}}>
+                              <td style={{padding:"5px 8px",fontSize:11,fontWeight:600}}>{v.company}</td>
+                              <td style={{padding:"5px 8px",fontSize:10,color:"#4A5278"}}>{v.contact||"—"}</td>
+                              <td style={{padding:"5px 8px",fontSize:10}}>{v.phone||"—"}</td>
+                              <td style={{padding:"5px 8px",fontSize:9,color:"#3B6FE8"}}>{v.email||"—"}</td>
+                              <td style={{padding:"5px 8px",textAlign:"center",fontSize:12}}>{v.infoSent?"✓":"—"}</td>
+                              <td style={{padding:"5px 8px",textAlign:"center",fontSize:12}}>{v.bidding?"✓":"—"}</td>
+                              <td style={{padding:"5px 8px",textAlign:"center",fontSize:12}}>{v.bidReceived?"✓":"—"}</td>
+                              <td style={{padding:"5px 8px",fontSize:10,fontWeight:700,color:v.bidAmount?"#059669":"#CBD1E8"}}>{v.bidAmount?"$"+parseFloat(v.bidAmount).toLocaleString():"—"}</td>
+                              <td style={{padding:"5px 8px",fontSize:9,color:"#4A5278"}}>{v.notes||""}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ))}
+
+                  <div style={{borderTop:"2px solid #1A2240",paddingTop:12,display:"flex",justifyContent:"space-between",marginTop:20}}>
+                    <div style={{fontSize:9,color:"#9BA3BF"}}>This bid package is confidential and for use by Farmer Development Inc. only.</div>
+                    <div style={{fontSize:9,color:"#9BA3BF"}}>Farmer Development Inc. · (810) 844-1544</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ── WON → CONVERT TO ACTIVE PROJECT ── */}
       {showWonConvert && wonConvertOpp && (() => {
