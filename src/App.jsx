@@ -1974,26 +1974,38 @@ function CustomerPicker({ companyId, contactId, onCompanyChange, onContactChange
 
 // ── Trade defaults for MP budgeting ─────────────────────────────────────────
 const TRADE_DEFAULTS = [
-  {id:"demo",     label:"Demolition",           unit:"LS",  rate:0},
-  {id:"masonry",  label:"Masonry / Block",       unit:"SF",  rate:12},
-  {id:"concrete", label:"Concrete",              unit:"CY",  rate:450},
-  {id:"struct",   label:"Structural Steel",      unit:"TON", rate:3200},
-  {id:"roofing",  label:"Roofing",               unit:"SQ",  rate:850},
-  {id:"doors",    label:"Doors & Frames",        unit:"EA",  rate:1800},
-  {id:"janus",    label:"Janus Hallway Systems", unit:"LF",  rate:95},
-  {id:"drywall",  label:"Drywall / Framing",     unit:"SF",  rate:4.5},
-  {id:"paint",    label:"Painting & Coating",    unit:"SF",  rate:1.8},
-  {id:"flooring", label:"Flooring / Sealing",    unit:"SF",  rate:3.5},
-  {id:"plumb",    label:"Plumbing",              unit:"LS",  rate:0},
-  {id:"hvac",     label:"HVAC",                  unit:"TON", rate:4500},
-  {id:"elec",     label:"Electrical",            unit:"LS",  rate:0},
-  {id:"fire",     label:"Fire Suppression",      unit:"HD",  rate:65},
-  {id:"alarm",    label:"Fire Alarm",            unit:"LS",  rate:0},
-  {id:"access",   label:"Access Control",        unit:"LS",  rate:0},
-  {id:"elevator", label:"Elevator",              unit:"EA",  rate:85000},
-  {id:"site",     label:"Site Work / Paving",    unit:"SY",  rate:55},
-  {id:"gc",       label:"General Conditions",    unit:"MO",  rate:8500},
-  {id:"misc",     label:"Miscellaneous",         unit:"LS",  rate:0},
+  // Building types — auto-populate from SF in opportunity
+  {id:"multistory", label:"Multistory Building",    unit:"SF",  rate:18,  isBldg:true},
+  {id:"singlestory",label:"Single Story Building",  unit:"SF",  rate:16,  isBldg:true},
+  {id:"canopy",     label:"Canopy",                 unit:"SF",  rate:16,  isBldg:true},
+  {id:"mezzanine",  label:"Mezzanine",              unit:"SF",  rate:0,   isBldg:true},
+  // Structural / envelope
+  {id:"demo",       label:"Demolition",             unit:"LS",  rate:0},
+  {id:"masonry",    label:"Masonry / Block",        unit:"SF",  rate:12},
+  {id:"concrete",   label:"Concrete",               unit:"CY",  rate:450},
+  {id:"struct",     label:"Structural Steel",       unit:"TON", rate:3200},
+  {id:"roofing",    label:"Roofing",                unit:"SQ",  rate:850},
+  {id:"doors",      label:"Doors & Frames",         unit:"EA",  rate:1800},
+  {id:"janus",      label:"Janus Hallway Systems",  unit:"LF",  rate:95},
+  {id:"matlift",    label:"Material Lift",          unit:"EA",  rate:0},
+  {id:"elevator",   label:"Elevator",               unit:"EA",  rate:85000},
+  // Interior finishes
+  {id:"drywall",    label:"Drywall / Framing",      unit:"SF",  rate:4.5},
+  {id:"paint",      label:"Painting & Coating",     unit:"SF",  rate:1.8},
+  {id:"flooring",   label:"Flooring / Sealing",     unit:"SF",  rate:3.5},
+  // MEP
+  {id:"plumb",      label:"Plumbing",               unit:"LS",  rate:0},
+  {id:"hvac",       label:"HVAC",                   unit:"TON", rate:4500},
+  {id:"elec",       label:"Electrical",             unit:"LS",  rate:0},
+  {id:"fire",       label:"Fire Suppression",       unit:"HD",  rate:65},
+  {id:"alarm",      label:"Fire Alarm",             unit:"LS",  rate:0},
+  {id:"access",     label:"Access Control",         unit:"LS",  rate:0},
+  // Site
+  {id:"sitework",   label:"Site Work",              unit:"LS",  rate:0},
+  {id:"paving",     label:"Paving / Asphalt",       unit:"SY",  rate:55},
+  // Soft costs
+  {id:"gc",         label:"General Conditions",     unit:"MO",  rate:8500},
+  {id:"misc",       label:"Miscellaneous",          unit:"LS",  rate:0},
 ];
 
 // ── Single budget line row ───────────────────────────────────────────────────
@@ -2031,17 +2043,16 @@ function MpBudgetLine({ item, onUpdate, onRemove }) {
 
 // ── Full budget tool ─────────────────────────────────────────────────────────
 function MpBudgetTool({ opp, company, items, setItems, overrides, setOverrides }) {
-  const W = {laborBurden:35,overhead:8,contingency:5,margin:15,...overrides};
+  const W = {gcPct:10,contingency:5,margin:15,...overrides};
   const setW = (k,v) => setOverrides(p=>({...p,[k]:v}));
   const [showAdd, setShowAdd] = useState(false);
   const [sfInput, setSfInput] = useState("");
 
   const direct      = items.reduce((s,i)=>s+(i.qty||0)*(i.rate||0),0);
-  const burden      = direct * (W.laborBurden/100);
-  const overhead    = direct * (W.overhead/100);
-  const contingency = (direct+burden+overhead) * (W.contingency/100);
-  const subtotal    = direct+burden+overhead+contingency;
-  const marginAmt   = subtotal * (W.margin/(100-W.margin));
+  const gcAmt       = direct * (W.gcPct/100);
+  const contingency = (direct+gcAmt) * (W.contingency/100);
+  const subtotal    = direct+gcAmt+contingency;
+  const marginAmt   = subtotal * (W.margin/(100-Math.min(W.margin,99)));
   const totalBid    = subtotal+marginAmt;
   const gpm         = totalBid>0 ? marginAmt/totalBid : 0;
   const fmtC = n => "$"+Math.round(n).toLocaleString();
@@ -2127,10 +2138,9 @@ function MpBudgetTool({ opp, company, items, setItems, overrides, setOverrides }
         <div style={{background:"#fff",borderRadius:10,border:"1px solid #D4D9EE",padding:"14px 16px"}}>
           <div style={{fontSize:11,fontWeight:700,color:"#4A5278",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:12}}>Cost Assumptions</div>
           {[
-            {label:"Labor Burden %",  key:"laborBurden", hint:"Payroll taxes, insurance"},
-            {label:"Overhead %",      key:"overhead",    hint:"G&A, office, vehicles"},
-            {label:"Contingency %",   key:"contingency", hint:"Risk allowance"},
-            {label:"Margin %",        key:"margin",      hint:"Target gross profit"},
+            {label:"General Conditions %", key:"gcPct",       hint:"GC costs as % of direct cost"},
+            {label:"Contingency %",        key:"contingency", hint:"Risk / unknown allowance"},
+            {label:"Margin %",             key:"margin",      hint:"Target gross profit margin"},
           ].map(f=>(
             <div key={f.key} style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
               <div style={{flex:1}}>
@@ -2147,12 +2157,11 @@ function MpBudgetTool({ opp, company, items, setItems, overrides, setOverrides }
         <div style={{background:"#fff",borderRadius:10,border:"1px solid #D4D9EE",padding:"14px 16px"}}>
           <div style={{fontSize:11,fontWeight:700,color:"#4A5278",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:10}}>Cost Breakdown</div>
           {[
-            {label:"Direct Costs",              value:direct,        bold:false, color:"#1A2240"},
-            {label:`  + Labor Burden (${W.laborBurden}%)`, value:burden,        bold:false, color:"#4A5278",indent:true},
-            {label:`  + Overhead (${W.overhead}%)`,     value:overhead,      bold:false, color:"#4A5278",indent:true},
-            {label:`  + Contingency (${W.contingency}%)`,value:contingency,   bold:false, color:"#4A5278",indent:true},
-            {label:"Cost Subtotal",              value:subtotal,      bold:true,  color:"#1A2240"},
-            {label:`  + Margin (${W.margin}%)`,         value:marginAmt,     bold:false, color:"#4ADE80"},
+            {label:"Direct Costs",                        value:direct,       bold:false, color:"#1A2240"},
+            {label:`  + General Conditions (${W.gcPct}%)`,value:gcAmt,        bold:false, color:"#4A5278",indent:true},
+            {label:`  + Contingency (${W.contingency}%)`, value:contingency,  bold:false, color:"#4A5278",indent:true},
+            {label:"Cost Subtotal",                       value:subtotal,     bold:true,  color:"#1A2240"},
+            {label:`  + Margin (${W.margin}%)`,           value:marginAmt,    bold:false, color:"#4ADE80"},
           ].map((r,i)=>(
             <div key={i} style={{display:"flex",justifyContent:"space-between",padding:"4px 0",borderTop:r.bold?"1px solid #E0E4F0":"none",marginTop:r.bold?6:0}}>
               <span style={{fontSize:11,color:r.color,fontWeight:r.bold?700:400,paddingLeft:r.indent?8:0}}>{r.label}</span>
@@ -2259,7 +2268,7 @@ export default function App() {
   const [pipeline,     setPipeline]     = useState([]);
   const [showForm,     setShowForm]     = useState(false);
   const [editId,       setEditId]       = useState(null);
-  const [form,         setForm]         = useState({ name: "", companyId: "", contactId: "", value: "", stage: "Budgeting", closeDate: "", notes: "", bu: "major", budgetDueDate: "", bidDueDate: "", nextSteps: [] });
+  const [form,         setForm]         = useState({ name: "", companyId: "", contactId: "", value: "", stage: "Budgeting", closeDate: "", notes: "", bu: "major", budgetDueDate: "", bidDueDate: "", nextSteps: [], sf:"", buildingType:"" });
   const [pipelineView, setPipelineView] = useState("kanban");
   const [filterBU,     setFilterBU]     = useState("all");
   const [search,       setSearch]       = useState("");
@@ -2318,7 +2327,7 @@ export default function App() {
   const [showWonConvert,   setShowWonConvert]   = useState(false);
   const [budgetItems,      setBudgetItems]      = useState([]);
   const [activeBudgetOpp,  setActiveBudgetOpp]  = useState(null);
-  const [budgetOverrides,  setBudgetOverrides]  = useState({ laborBurden:35, overhead:8, contingency:5, margin:15 });
+  const [budgetOverrides,  setBudgetOverrides]  = useState({ gcPct:10, contingency:5, margin:15 });
   const [wonConvertOpp,    setWonConvertOpp]    = useState(null);
   const [wonConvertForm,   setWonConvertForm]   = useState({ startDate:"", endDate:"", contractValue:"", pm:"", notes:"" });
   const [newCoName,        setNewCoName]        = useState("");
@@ -2938,7 +2947,7 @@ Return ONLY valid JSON, no markdown, no extra text:
   // Pipeline helpers
   const openAdd = (defaultStage) => {
     setEditId(null);
-    setForm({ name: "", companyId: "", contactId: "", value: "", stage: defaultStage || "Budgeting", pipelineType: "budgeting", closeDate: "", notes: "", bu: activeBU === "all" ? "major" : activeBU, budgetDueDate: "", bidDueDate: "", nextSteps: [] });
+    setForm({ name: "", companyId: "", contactId: "", value: "", stage: defaultStage || "Budgeting", pipelineType: "budgeting", closeDate: "", notes: "", bu: activeBU === "all" ? "major" : activeBU, budgetDueDate: "", bidDueDate: "", nextSteps: [], sf:"", buildingType:"" });
     setShowForm(true);
   };
   const openEdit = (o) => {
@@ -7454,7 +7463,16 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
                       const stgColors={"lead":"#A78BFA","budgeting_lead":"#818CF8","proposal_bid":"#60A5FA","negotiation":"#FCD34D"};
                       const stgLabels={"lead":"Lead","budgeting_lead":"Budgeting","proposal_bid":"Bid","negotiation":"Neg."};
                       return (
-                        <div key={o.id} onClick={()=>{ setActiveBudgetOpp(o.id); setBudgetItems([]); }}
+                        <div key={o.id} onClick={()=>{
+                          setActiveBudgetOpp(o.id);
+                          // Auto-populate building type if set
+                          if (o.buildingType && o.sf) {
+                            const trade = TRADE_DEFAULTS.find(t=>t.id===o.buildingType);
+                            if (trade) {
+                              setBudgetItems([{...trade, qty:parseFloat(o.sf)||0, rate:trade.rate, desc:o.buildingType==="multistory"?"Multistory conversion":o.buildingType==="singlestory"?"Single story conversion":o.buildingType==="canopy"?"Canopy structure":"Mezzanine"}]);
+                            } else { setBudgetItems([]); }
+                          } else { setBudgetItems([]); }
+                        }}
                           style={{padding:"10px 14px",cursor:"pointer",background:isActive?"#EEF3FF":"transparent",borderBottom:"1px solid #F0F2F8",borderLeft:isActive?"3px solid #3B6FE8":"3px solid transparent"}}
                           onMouseEnter={e=>{if(!isActive)e.currentTarget.style.background="#F4F6FB";}}
                           onMouseLeave={e=>{if(!isActive)e.currentTarget.style.background="transparent";}}>
@@ -8842,6 +8860,27 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
                 </div>
               )}
 
+              {form.bu === "major" && (
+                <div style={{ background:"#F4F6FB", border:"1px solid #D4D9EE", borderRadius:8, padding:"12px 14px", display:"flex", flexDirection:"column", gap:10 }}>
+                  <div style={{ fontSize:11, fontWeight:700, color:"#3B6FE8", textTransform:"uppercase", letterSpacing:"0.07em" }}>📐 Building Details (auto-populates budget)</div>
+                  <div className="g2">
+                    <div>
+                      <label className="lbl">Building Type</label>
+                      <select className="fi" value={form.buildingType||""} onChange={e=>setForm(f=>({...f,buildingType:e.target.value}))}>
+                        <option value="">Select type…</option>
+                        <option value="multistory">Multistory Building ($18/SF)</option>
+                        <option value="singlestory">Single Story Building ($16/SF)</option>
+                        <option value="canopy">Canopy ($16/SF)</option>
+                        <option value="mezzanine">Mezzanine</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="lbl">Square Footage (SF)</label>
+                      <input className="fi" type="number" value={form.sf||""} onChange={e=>setForm(f=>({...f,sf:e.target.value}))} placeholder="e.g. 40000"/>
+                    </div>
+                  </div>
+                </div>
+              )}
               <div><label className="lbl">Expected Close Date</label><input className="fi" type="date" value={form.closeDate} onChange={fp("closeDate")} /></div>
               <div><label className="lbl">Notes</label><textarea className="fi" rows={3} value={form.notes} onChange={fp("notes")} placeholder="Key details…" style={{ resize: "vertical" }} /></div>
               <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 6 }}>
