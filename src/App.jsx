@@ -7663,7 +7663,7 @@ if(bounds.length)map.fitBounds(bounds,{padding:[30,30]});
                               onMouseLeave={e=>e.currentTarget.style.boxShadow="none"}>
                               <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:6}}>
                                 <div style={{fontSize:13,fontWeight:700,color:"#1A2240"}}>{v.company}</div>
-                                <div style={{display:"flex",gap:4"}}>
+                                <div style={{display:"flex",gap:4}}>
                                   <button onClick={()=>{
                                     setMpVendorForm({...v});setShowMpVendorForm(true);
                                   }} style={{background:"none",border:"none",color:"#9BA3BF",cursor:"pointer",fontSize:12,padding:"0 4px"}}>edit</button>
