@@ -1971,6 +1971,239 @@ function CustomerPicker({ companyId, contactId, onCompanyChange, onContactChange
   );
 }
 
+
+// ── Trade defaults for MP budgeting ─────────────────────────────────────────
+const TRADE_DEFAULTS = [
+  {id:"demo",     label:"Demolition",           unit:"LS",  rate:0},
+  {id:"masonry",  label:"Masonry / Block",       unit:"SF",  rate:12},
+  {id:"concrete", label:"Concrete",              unit:"CY",  rate:450},
+  {id:"struct",   label:"Structural Steel",      unit:"TON", rate:3200},
+  {id:"roofing",  label:"Roofing",               unit:"SQ",  rate:850},
+  {id:"doors",    label:"Doors & Frames",        unit:"EA",  rate:1800},
+  {id:"janus",    label:"Janus Hallway Systems", unit:"LF",  rate:95},
+  {id:"drywall",  label:"Drywall / Framing",     unit:"SF",  rate:4.5},
+  {id:"paint",    label:"Painting & Coating",    unit:"SF",  rate:1.8},
+  {id:"flooring", label:"Flooring / Sealing",    unit:"SF",  rate:3.5},
+  {id:"plumb",    label:"Plumbing",              unit:"LS",  rate:0},
+  {id:"hvac",     label:"HVAC",                  unit:"TON", rate:4500},
+  {id:"elec",     label:"Electrical",            unit:"LS",  rate:0},
+  {id:"fire",     label:"Fire Suppression",      unit:"HD",  rate:65},
+  {id:"alarm",    label:"Fire Alarm",            unit:"LS",  rate:0},
+  {id:"access",   label:"Access Control",        unit:"LS",  rate:0},
+  {id:"elevator", label:"Elevator",              unit:"EA",  rate:85000},
+  {id:"site",     label:"Site Work / Paving",    unit:"SY",  rate:55},
+  {id:"gc",       label:"General Conditions",    unit:"MO",  rate:8500},
+  {id:"misc",     label:"Miscellaneous",         unit:"LS",  rate:0},
+];
+
+// ── Single budget line row ───────────────────────────────────────────────────
+function MpBudgetLine({ item, onUpdate, onRemove }) {
+  const [qty,  setQty]  = useState(String(item.qty||""));
+  const [rate, setRate] = useState(String(item.rate||""));
+  const [desc, setDesc] = useState(item.desc||"");
+  useEffect(()=>setQty(String(item.qty||"")),[item.qty]);
+  useEffect(()=>setRate(String(item.rate||"")),[item.rate]);
+  useEffect(()=>setDesc(item.desc||""),[item.desc]);
+  const total = (parseFloat(qty)||0)*(parseFloat(rate)||0);
+  const fi = {padding:"5px 7px",border:"1px solid #D4D9EE",borderRadius:5,fontSize:12,fontFamily:"inherit",outline:"none",background:"#fff",width:"100%",boxSizing:"border-box"};
+  return (
+    <tr style={{borderBottom:"1px solid #F4F6FB"}}>
+      <td style={{padding:"6px 8px",fontSize:12,color:"#1A2240",fontWeight:500}}>{item.label}</td>
+      <td style={{padding:"4px 6px",minWidth:160}}>
+        <input value={desc} onChange={e=>{setDesc(e.target.value);onUpdate({...item,desc:e.target.value});}} placeholder="Scope notes…" style={fi}/>
+      </td>
+      <td style={{padding:"4px 6px",width:50,textAlign:"center",fontSize:11,color:"#9BA3BF"}}>{item.unit}</td>
+      <td style={{padding:"4px 6px",width:80}}>
+        <input type="number" value={qty} onChange={e=>{setQty(e.target.value);onUpdate({...item,qty:parseFloat(e.target.value)||0});}} placeholder="0" style={{...fi,textAlign:"right"}}/>
+      </td>
+      <td style={{padding:"4px 6px",width:90}}>
+        <input type="number" value={rate} onChange={e=>{setRate(e.target.value);onUpdate({...item,rate:parseFloat(e.target.value)||0});}} placeholder="0.00" style={{...fi,textAlign:"right"}}/>
+      </td>
+      <td style={{padding:"6px 8px",textAlign:"right",fontSize:13,fontWeight:700,color:total>0?"#1A2240":"#CBD1E8",whiteSpace:"nowrap"}}>
+        {total>0?"$"+Math.round(total).toLocaleString():"—"}
+      </td>
+      <td style={{padding:"4px 4px",textAlign:"center",width:28}}>
+        <button onClick={onRemove} style={{background:"none",border:"none",color:"#F87171",cursor:"pointer",fontSize:14,padding:0,lineHeight:1}}>✕</button>
+      </td>
+    </tr>
+  );
+}
+
+// ── Full budget tool ─────────────────────────────────────────────────────────
+function MpBudgetTool({ opp, company, items, setItems, overrides, setOverrides }) {
+  const W = {laborBurden:35,overhead:8,contingency:5,margin:15,...overrides};
+  const setW = (k,v) => setOverrides(p=>({...p,[k]:v}));
+  const [showAdd, setShowAdd] = useState(false);
+  const [sfInput, setSfInput] = useState("");
+
+  const direct      = items.reduce((s,i)=>s+(i.qty||0)*(i.rate||0),0);
+  const burden      = direct * (W.laborBurden/100);
+  const overhead    = direct * (W.overhead/100);
+  const contingency = (direct+burden+overhead) * (W.contingency/100);
+  const subtotal    = direct+burden+overhead+contingency;
+  const marginAmt   = subtotal * (W.margin/(100-W.margin));
+  const totalBid    = subtotal+marginAmt;
+  const gpm         = totalBid>0 ? marginAmt/totalBid : 0;
+  const fmtC = n => "$"+Math.round(n).toLocaleString();
+  const pctSty = {width:70,padding:"5px 8px",border:"1.5px solid #CBD1E8",borderRadius:6,fontSize:13,fontFamily:"inherit",outline:"none",textAlign:"right"};
+
+  const addTrade = (t) => { setItems(prev=>[...prev,{...t,qty:0,rate:t.rate,desc:""}]); setShowAdd(false); };
+  const updateItem = (id,u) => setItems(prev=>prev.map(i=>i.id===id?u:i));
+  const removeItem = (id)   => setItems(prev=>prev.filter(i=>i.id!==id));
+
+  return (
+    <div style={{display:"grid",gridTemplateColumns:"1fr 320px",gap:0,flex:1,minHeight:0,overflow:"hidden"}}>
+      {/* Left — line items */}
+      <div style={{overflowY:"auto",padding:"18px 20px",display:"flex",flexDirection:"column",gap:14}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <div style={{fontSize:13,fontWeight:700,color:"#1A2240"}}>
+            {opp ? <span>📋 {opp.name} <span style={{fontSize:11,color:"#9BA3BF",fontWeight:400}}>— {company?.name||""}</span></span> : "Select a project to budget"}
+          </div>
+          {opp && <button onClick={()=>setShowAdd(v=>!v)} style={{padding:"6px 14px",background:"#3B6FE8",color:"#fff",border:"none",borderRadius:7,cursor:"pointer",fontFamily:"inherit",fontSize:12,fontWeight:700}}>+ Add Trade</button>}
+        </div>
+
+        {/* Trade picker */}
+        {showAdd && (
+          <div style={{background:"#fff",borderRadius:10,border:"1px solid #D4D9EE",padding:"14px 16px"}}>
+            <div style={{fontSize:11,fontWeight:700,color:"#4A5278",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:10}}>Select trade to add</div>
+            <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+              {TRADE_DEFAULTS.filter(t=>!items.find(i=>i.id===t.id)).map(t=>(
+                <button key={t.id} onClick={()=>addTrade(t)}
+                  style={{padding:"5px 12px",borderRadius:6,border:"1px solid #CBD1E8",background:"#F9FAFC",color:"#1A2240",fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>
+                  {t.label}
+                </button>
+              ))}
+            </div>
+            <button onClick={()=>setShowAdd(false)} style={{marginTop:10,background:"none",border:"none",color:"#9BA3BF",cursor:"pointer",fontSize:12,fontFamily:"inherit"}}>Cancel</button>
+          </div>
+        )}
+
+        {!opp && (
+          <div style={{textAlign:"center",padding:"60px 24px",color:"#9BA3BF",border:"2px dashed #E0E4F0",borderRadius:12}}>
+            <div style={{fontSize:36,marginBottom:10}}>📊</div>
+            <div style={{fontSize:15,fontWeight:600,color:"#1A2240",marginBottom:6}}>Select a project from the left</div>
+            <div style={{fontSize:12}}>Choose any Budgeting Lead opportunity to start building your estimate</div>
+          </div>
+        )}
+
+        {opp && items.length===0 && !showAdd && (
+          <div style={{textAlign:"center",padding:"48px 24px",color:"#9BA3BF",border:"2px dashed #E0E4F0",borderRadius:10}}>
+            <div style={{fontSize:28,marginBottom:8}}>📋</div>
+            <div style={{fontSize:14,fontWeight:600,color:"#1A2240",marginBottom:4}}>No line items yet</div>
+            <div style={{fontSize:12}}>Click "+ Add Trade" to begin estimating</div>
+          </div>
+        )}
+
+        {items.length > 0 && (
+          <div style={{background:"#fff",borderRadius:10,border:"1px solid #D4D9EE",overflow:"hidden"}}>
+            <table style={{width:"100%",borderCollapse:"collapse"}}>
+              <thead>
+                <tr style={{background:"#F9FAFC",borderBottom:"2px solid #D4D9EE"}}>
+                  {["Trade","Scope / Notes","Unit","Qty","Unit Rate ($)","Total",""].map((h,i)=>(
+                    <th key={i} style={{padding:"7px 8px",fontSize:9,color:"#9BA3BF",textTransform:"uppercase",letterSpacing:"0.07em",textAlign:i>=3&&i<=5?"right":"left",fontWeight:700}}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {items.map(item=>(
+                  <MpBudgetLine key={item.id} item={item} onUpdate={u=>updateItem(item.id,u)} onRemove={()=>removeItem(item.id)}/>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr style={{background:"#F4F6FB",borderTop:"2px solid #D4D9EE"}}>
+                  <td colSpan={5} style={{padding:"8px 8px",fontSize:12,fontWeight:700,color:"#4A5278"}}>Direct Cost Subtotal</td>
+                  <td style={{padding:"8px 8px",textAlign:"right",fontSize:14,fontWeight:800,color:"#1A2240"}}>{fmtC(direct)}</td>
+                  <td/>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* Right — summary */}
+      <div style={{background:"#F4F6FB",borderLeft:"1px solid #D4D9EE",overflowY:"auto",padding:"16px 18px",display:"flex",flexDirection:"column",gap:12}}>
+        {/* Assumptions */}
+        <div style={{background:"#fff",borderRadius:10,border:"1px solid #D4D9EE",padding:"14px 16px"}}>
+          <div style={{fontSize:11,fontWeight:700,color:"#4A5278",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:12}}>Cost Assumptions</div>
+          {[
+            {label:"Labor Burden %",  key:"laborBurden", hint:"Payroll taxes, insurance"},
+            {label:"Overhead %",      key:"overhead",    hint:"G&A, office, vehicles"},
+            {label:"Contingency %",   key:"contingency", hint:"Risk allowance"},
+            {label:"Margin %",        key:"margin",      hint:"Target gross profit"},
+          ].map(f=>(
+            <div key={f.key} style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+              <div style={{flex:1}}>
+                <div style={{fontSize:12,fontWeight:600,color:"#1A2240"}}>{f.label}</div>
+                <div style={{fontSize:10,color:"#9BA3BF"}}>{f.hint}</div>
+              </div>
+              <input type="number" value={W[f.key]} onChange={e=>setW(f.key,parseFloat(e.target.value)||0)} style={pctSty}/>
+              <span style={{fontSize:11,color:"#4A5278"}}>%</span>
+            </div>
+          ))}
+        </div>
+
+        {/* Cost breakdown */}
+        <div style={{background:"#fff",borderRadius:10,border:"1px solid #D4D9EE",padding:"14px 16px"}}>
+          <div style={{fontSize:11,fontWeight:700,color:"#4A5278",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:10}}>Cost Breakdown</div>
+          {[
+            {label:"Direct Costs",              value:direct,        bold:false, color:"#1A2240"},
+            {label:`  + Labor Burden (${W.laborBurden}%)`, value:burden,        bold:false, color:"#4A5278",indent:true},
+            {label:`  + Overhead (${W.overhead}%)`,     value:overhead,      bold:false, color:"#4A5278",indent:true},
+            {label:`  + Contingency (${W.contingency}%)`,value:contingency,   bold:false, color:"#4A5278",indent:true},
+            {label:"Cost Subtotal",              value:subtotal,      bold:true,  color:"#1A2240"},
+            {label:`  + Margin (${W.margin}%)`,         value:marginAmt,     bold:false, color:"#4ADE80"},
+          ].map((r,i)=>(
+            <div key={i} style={{display:"flex",justifyContent:"space-between",padding:"4px 0",borderTop:r.bold?"1px solid #E0E4F0":"none",marginTop:r.bold?6:0}}>
+              <span style={{fontSize:11,color:r.color,fontWeight:r.bold?700:400,paddingLeft:r.indent?8:0}}>{r.label}</span>
+              <span style={{fontSize:11,fontWeight:r.bold?800:600,color:r.color}}>{fmtC(r.value)}</span>
+            </div>
+          ))}
+        </div>
+
+        {/* Total bid */}
+        <div style={{background:"linear-gradient(135deg,#1A2240,#253260)",borderRadius:12,padding:"16px 16px",color:"#fff"}}>
+          <div style={{fontSize:9,color:"rgba(255,255,255,0.5)",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:4}}>Total Bid Price</div>
+          <div style={{fontSize:28,fontWeight:900,letterSpacing:"-0.02em",marginBottom:10}}>{fmtC(totalBid)}</div>
+          <div style={{display:"flex",gap:14,paddingTop:10,borderTop:"1px solid rgba(255,255,255,0.15)"}}>
+            <div style={{textAlign:"center"}}>
+              <div style={{fontSize:16,fontWeight:800,color:"#4ADE80"}}>{(gpm*100).toFixed(1)}%</div>
+              <div style={{fontSize:8,color:"rgba(255,255,255,0.4)",textTransform:"uppercase",letterSpacing:"0.06em"}}>GPM</div>
+            </div>
+            <div style={{textAlign:"center"}}>
+              <div style={{fontSize:16,fontWeight:800,color:"#60A5FA"}}>{fmtC(marginAmt)}</div>
+              <div style={{fontSize:8,color:"rgba(255,255,255,0.4)",textTransform:"uppercase",letterSpacing:"0.06em"}}>Gross Profit $</div>
+            </div>
+          </div>
+        </div>
+
+        {/* $/SF checker */}
+        <div style={{background:"#fff",borderRadius:10,border:"1px solid #D4D9EE",padding:"14px 16px"}}>
+          <div style={{fontSize:11,fontWeight:700,color:"#4A5278",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:8}}>$/SF Sanity Check</div>
+          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
+            <input type="number" value={sfInput} onChange={e=>setSfInput(e.target.value)} placeholder="Project SF"
+              style={{flex:1,padding:"7px 10px",border:"1px solid #CBD1E8",borderRadius:6,fontSize:13,fontFamily:"inherit",outline:"none"}}/>
+            <span style={{fontSize:11,color:"#9BA3BF",whiteSpace:"nowrap"}}>total SF</span>
+          </div>
+          {(parseFloat(sfInput)||0)>0 && (
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
+              {[
+                {label:"Direct $/SF",  value:(direct/parseFloat(sfInput)).toFixed(2)},
+                {label:"Bid $/SF",     value:(totalBid/parseFloat(sfInput)).toFixed(2)},
+              ].map(r=>(
+                <div key={r.label} style={{background:"#F4F6FB",borderRadius:6,padding:"6px 8px",textAlign:"center"}}>
+                  <div style={{fontSize:11,fontWeight:700,color:"#1A2240"}}>${r.value}</div>
+                  <div style={{fontSize:9,color:"#9BA3BF"}}>{r.label}</div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   // URL routing — sub-facing page
   const urlToken  = useMemo(() => new URLSearchParams(window.location.search).get("subtoken"), []);
@@ -2083,6 +2316,9 @@ export default function App() {
   const [parsedFields,     setParsedFields]     = useState(null);
   const [showAddCo,        setShowAddCo]        = useState(false);
   const [showWonConvert,   setShowWonConvert]   = useState(false);
+  const [budgetItems,      setBudgetItems]      = useState([]);
+  const [activeBudgetOpp,  setActiveBudgetOpp]  = useState(null);
+  const [budgetOverrides,  setBudgetOverrides]  = useState({ laborBurden:35, overhead:8, contingency:5, margin:15 });
   const [wonConvertOpp,    setWonConvertOpp]    = useState(null);
   const [wonConvertForm,   setWonConvertForm]   = useState({ startDate:"", endDate:"", contractValue:"", pm:"", notes:"" });
   const [newCoName,        setNewCoName]        = useState("");
@@ -7170,6 +7406,104 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
             );
           })()}
 
+          {/* ── MP BUDGETING ── */}
+          {activeNav === "budgeting" && activeBU === "major" && (() => {
+            // Projects in budgeting_lead stage + normalize stages
+            const normalizeStage = (s) => {
+              if (!s) return "lead";
+              if (s==="Budgeting"||s==="budgeting_lead") return "budgeting_lead";
+              if (s==="Lead"||s==="lead") return "lead";
+              return s;
+            };
+            const budgetOpps = pipeline.filter(o =>
+              o.bu==="major" &&
+              ["budgeting_lead","Budgeting","budgeting"].includes(o.stage||o.pipelineType||"")
+            );
+            const allMpOpps = pipeline.filter(o => o.bu==="major" && !["won","lost","Won","Lost"].includes(o.stage));
+            const activeOpp = allMpOpps.find(o=>o.id===activeBudgetOpp) || (budgetOpps[0]||null);
+
+            return (
+              <div className="fade-in" style={{display:"flex",flexDirection:"column",gap:0,height:"calc(100vh - 100px)"}}>
+                {/* Header */}
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14,flexShrink:0}}>
+                  <div>
+                    <div style={{fontSize:22,fontWeight:800,color:"#1A2240",letterSpacing:"-0.01em",textTransform:"uppercase"}}>MP Budgeting</div>
+                    <div style={{fontSize:11,color:"#4A5278",marginTop:3}}>{budgetOpps.length} projects in budgeting · click a project to estimate</div>
+                  </div>
+                  <button className="btn-primary" onClick={()=>{
+                    setForm({name:"",companyId:"",contactId:"",value:"",stage:"budgeting_lead",pipelineType:"budgeting",closeDate:"",notes:"",bu:"major",budgetDueDate:"",bidDueDate:"",nextSteps:[]});
+                    setShowForm(true);
+                  }}>+ Add Project</button>
+                </div>
+
+                <div style={{display:"grid",gridTemplateColumns:"240px 1fr",flex:1,gap:0,minHeight:0,background:"#fff",borderRadius:12,border:"1px solid #D4D9EE",overflow:"hidden"}}>
+                  {/* Left sidebar — project list */}
+                  <div style={{borderRight:"1px solid #D4D9EE",overflowY:"auto",background:"#F9FAFC"}}>
+                    <div style={{padding:"10px 14px",borderBottom:"1px solid #D4D9EE",fontSize:10,fontWeight:700,color:"#9BA3BF",textTransform:"uppercase",letterSpacing:"0.07em"}}>
+                      Budgeting Lead ({budgetOpps.length})
+                    </div>
+                    {budgetOpps.length===0 && (
+                      <div style={{padding:"24px 14px",textAlign:"center",color:"#9BA3BF",fontSize:12}}>
+                        No projects in budgeting yet.<br/>Add one from the Pipeline.
+                      </div>
+                    )}
+                    {allMpOpps.map(o=>{
+                      const co=companies.find(c=>c.id===o.companyId);
+                      const isActive=(o.id===activeBudgetOpp)||(activeBudgetOpp===null&&o.id===budgetOpps[0]?.id);
+                      const stg=normalizeStage(o.stage);
+                      const stgColors={"lead":"#A78BFA","budgeting_lead":"#818CF8","proposal_bid":"#60A5FA","negotiation":"#FCD34D"};
+                      const stgLabels={"lead":"Lead","budgeting_lead":"Budgeting","proposal_bid":"Bid","negotiation":"Neg."};
+                      return (
+                        <div key={o.id} onClick={()=>{ setActiveBudgetOpp(o.id); setBudgetItems([]); }}
+                          style={{padding:"10px 14px",cursor:"pointer",background:isActive?"#EEF3FF":"transparent",borderBottom:"1px solid #F0F2F8",borderLeft:isActive?"3px solid #3B6FE8":"3px solid transparent"}}
+                          onMouseEnter={e=>{if(!isActive)e.currentTarget.style.background="#F4F6FB";}}
+                          onMouseLeave={e=>{if(!isActive)e.currentTarget.style.background="transparent";}}>
+                          <div style={{fontSize:12,fontWeight:700,color:"#1A2240",lineHeight:1.3,marginBottom:2}}>{o.name}</div>
+                          <div style={{fontSize:10,color:"#9BA3BF"}}>{co?.name||"—"}</div>
+                          <div style={{display:"flex",justifyContent:"space-between",marginTop:4,alignItems:"center"}}>
+                            <span style={{fontSize:9,fontWeight:700,background:(stgColors[stg]||"#9BA3BF")+"20",color:stgColors[stg]||"#9BA3BF",borderRadius:3,padding:"1px 5px"}}>
+                              {stgLabels[stg]||stg}
+                            </span>
+                            {(parseFloat(o.value)||0)>0 && <span style={{fontSize:10,fontWeight:700,color:"#1A2240"}}>${(parseFloat(o.value)/1000).toFixed(0)}k</span>}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Right — budget tool */}
+                  <div style={{display:"flex",flexDirection:"column",overflow:"hidden"}}>
+                    {/* Project header bar */}
+                    {activeOpp && (
+                      <div style={{background:"linear-gradient(135deg,#1A2240,#253260)",padding:"12px 18px",flexShrink:0,display:"flex",alignItems:"center",gap:12}}>
+                        <div style={{flex:1}}>
+                          <div style={{fontSize:14,fontWeight:800,color:"#fff"}}>{activeOpp.name}</div>
+                          <div style={{fontSize:10,color:"rgba(255,255,255,0.5)",marginTop:1}}>
+                            {companies.find(c=>c.id===activeOpp.companyId)?.name||""}{(parseFloat(activeOpp.value)||0)>0?" · Target: $"+(parseFloat(activeOpp.value)/1000).toFixed(0)+"k":""}
+                          </div>
+                        </div>
+                        <button onClick={()=>{ setWonConvertOpp(activeOpp); setWonConvertForm({startDate:"",endDate:"",contractValue:activeOpp.value||"",pm:"",notes:activeOpp.notes||""}); setShowWonConvert(true); }}
+                          style={{padding:"6px 12px",background:"#4ADE80",border:"none",borderRadius:6,color:"#1A2240",fontWeight:700,fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>
+                          ✓ Won — Create Project
+                        </button>
+                      </div>
+                    )}
+                    <div style={{flex:1,overflow:"hidden",display:"flex"}}>
+                      <MpBudgetTool
+                        opp={activeOpp}
+                        company={companies.find(c=>c.id===activeOpp?.companyId)}
+                        items={budgetItems}
+                        setItems={setBudgetItems}
+                        overrides={budgetOverrides}
+                        setOverrides={setBudgetOverrides}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+
           {/* ── LAWN BUDGETING ── */}
           {activeNav === "bids" && activeBU === "lawn" && (() => {
             const allLawnSites = lawnSites;
@@ -8811,8 +9145,8 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
         const setW = (k,v) => setWonConvertForm(f=>({...f,[k]:v}));
 
         const confirm = async () => {
-          // 1. Mark opp as won
-          moveOpp(opp.id, "won");
+          // 1. Mark opp as won — inline since moveOpp is in pipeline IIFE scope
+          setPipeline(prev => prev.map(o => o.id===opp.id ? {...o, stage:"won"} : o));
           // 2. Create mp_job
           import("https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm").catch(()=>{});
           const jobId = "mp" + Date.now();
