@@ -2872,12 +2872,21 @@ export default function App() {
         // Load estimates (wbs, takeoff, bid packages, phase, critical trades)
         if (Array.isArray(estRes.data) && estRes.data.length) {
           const wbsMap = {}, toMap = {}, pkgMap = {}, phaseMap = {}, critMap = {};
+          const parseJ = (v) => {
+            if (!v) return null;
+            if (typeof v === "string") { try { return JSON.parse(v); } catch(e) { return null; } }
+            return v; // already object/array (JSONB)
+          };
           estRes.data.forEach(r => {
-            if (r.wbs_data)       try { wbsMap[r.opp_id]   = JSON.parse(r.wbs_data); } catch(e) {}
-            if (r.takeoff_data)   try { toMap[r.opp_id]    = JSON.parse(r.takeoff_data); } catch(e) {}
-            if (r.bid_packages)   try { pkgMap[r.opp_id]   = JSON.parse(r.bid_packages); } catch(e) {}
-            if (r.estimate_phase)       phaseMap[r.opp_id] = r.estimate_phase;
-            if (r.critical_trades) try { critMap[r.opp_id] = JSON.parse(r.critical_trades); } catch(e) {}
+            const wbs = parseJ(r.wbs_data);
+            const to  = parseJ(r.takeoff_data);
+            const pkg = parseJ(r.bid_packages);
+            const crit= parseJ(r.critical_trades);
+            if (Array.isArray(wbs))  wbsMap[r.opp_id]   = wbs;
+            if (to && typeof to === "object") toMap[r.opp_id] = to;
+            if (pkg && typeof pkg === "object") pkgMap[r.opp_id] = pkg;
+            if (r.estimate_phase)    phaseMap[r.opp_id] = r.estimate_phase;
+            if (Array.isArray(crit)) critMap[r.opp_id]  = crit;
           });
           if (Object.keys(wbsMap).length)   setWbsData(wbsMap);
           if (Object.keys(toMap).length)    setTakeoffData(toMap);
@@ -2890,7 +2899,7 @@ export default function App() {
           setMpVendorDB(vendRes.data.map(r => ({
             id: r.id, company: r.company||"", contact: r.contact||"",
             phone: r.phone||"", email: r.email||"",
-            trades: Array.isArray(r.trades) ? r.trades : (typeof r.trades==="string" ? JSON.parse(r.trades||"[]") : []),
+            trades: Array.isArray(r.trades) ? r.trades : [],
             notes: r.notes||"", rating: r.rating||5
           })));
         }
@@ -3267,36 +3276,49 @@ Return ONLY valid JSON, no markdown, no extra text:
       const updated = {...prev, [oppId]: {...(prev[oppId]||{}), ...fields}};
       try {
         const id = String(oppId);
-        fetch(`${SUPA_URL}/rest/v1/mp_pipeline?id=eq.${id}`, {
-          method: "PATCH",
-          headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}`, "Content-Type": "application/json", Prefer: "return=minimal" },
-          body: JSON.stringify({ notes: JSON.stringify(updated[oppId]) })
-        }).catch(()=>{});
+        // Debounce: cancel previous pending save for this opp
+        if (window._saveOppTimers) clearTimeout(window._saveOppTimers[id]);
+        else window._saveOppTimers = {};
+        window._saveOppTimers[id] = setTimeout(() => {
+          fetch(`${SUPA_URL}/rest/v1/mp_pipeline?id=eq.${id}`, {
+            method: "PATCH",
+            headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}`, "Content-Type": "application/json", Prefer: "return=minimal" },
+            body: JSON.stringify({ notes: JSON.stringify(updated[oppId]) })
+          }).catch(()=>{});
+        }, 800);
       } catch(e) {}
       return updated;
     });
   };
 
-  // Save all estimate data for one opp to mp_estimates table
+  // Save all estimate data for one opp to mp_estimates table (upsert, debounced)
   const saveEstimateField = (oppId, field, value) => {
     const id = String(oppId);
-    const strVal = typeof value === "string" ? value : JSON.stringify(value);
-    const body = { opp_id: id, [field]: strVal, updated_at: new Date().toISOString() };
-    // Use upsert (POST with on conflict update)
-    fetch(`${SUPA_URL}/rest/v1/mp_estimates`, {
-      method: "POST",
-      headers: {
-        apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}`,
-        "Content-Type": "application/json",
-        Prefer: "resolution=merge-duplicates,return=minimal"
-      },
-      body: JSON.stringify(body)
-    }).catch(()=>{});
+    const key = id + "_" + field;
+    if (!window._saveEstTimers) window._saveEstTimers = {};
+    clearTimeout(window._saveEstTimers[key]);
+    window._saveEstTimers[key] = setTimeout(() => {
+      const body = { opp_id: id, [field]: value, updated_at: new Date().toISOString() };
+      fetch(`${SUPA_URL}/rest/v1/mp_estimates`, {
+        method: "POST",
+        headers: {
+          apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}`,
+          "Content-Type": "application/json",
+          Prefer: "resolution=merge-duplicates,return=minimal"
+        },
+        body: JSON.stringify(body)
+      }).catch(()=>{});
+    }, 600);
   };
 
   // Upsert vendor to mp_vendor_db
   const saveVendorToDB = (v) => {
-    const row = { id: v.id, company: v.company, contact: v.contact||"", phone: v.phone||"", email: v.email||"", trades: JSON.stringify(v.trades||[]), notes: v.notes||"", rating: v.rating||5 };
+    const row = {
+      id: v.id, company: v.company, contact: v.contact||"",
+      phone: v.phone||"", email: v.email||"",
+      trades: v.trades||[],   // JSONB — pass array directly
+      notes: v.notes||"", rating: v.rating||5
+    };
     fetch(`${SUPA_URL}/rest/v1/mp_vendor_db`, {
       method: "POST",
       headers: {
