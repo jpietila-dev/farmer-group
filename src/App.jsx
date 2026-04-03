@@ -8746,7 +8746,7 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
                               <span style={{fontSize:12,fontWeight:700,color:"#1A2240",flex:1}}>
                                 {wbs.length} Cost Codes · {pkg.vendors.length} Vendors · {totalBids} Bids Received
                               </span>
-                              <button onClick={()=>setShowAddVendor(true)} style={{padding:"5px 12px",background:"#3B6FE8",color:"#fff",border:"none",borderRadius:5,cursor:"pointer",fontFamily:"inherit",fontSize:11,fontWeight:700}}>+ Add Vendor</button>
+                              <button onClick={()=>{setActiveBidOpp(activeOppId);setVendorForm({company:"",contact:"",phone:"",email:"",trades:[],bidding:false,infoSent:false,bidReceived:false,bidAmount:"",notes:""});setShowAddVendor(true);}} style={{padding:"5px 12px",background:"#3B6FE8",color:"#fff",border:"none",borderRadius:5,cursor:"pointer",fontFamily:"inherit",fontSize:11,fontWeight:700}}>+ Add Vendor</button>
                               <button onClick={()=>{setBidPrintOppId(activeOppId);setShowBidPrintModal(true);}} style={{padding:"5px 10px",background:"#F0F2F8",border:"1px solid #CBD1E8",borderRadius:5,cursor:"pointer",fontFamily:"inherit",fontSize:11,color:"#4A5278"}}>Print PDF</button>
                             </div>
 
@@ -8821,7 +8821,7 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
                                         ? <span style={{fontSize:10,color:"#9BA3BF"}}>{item.subItems.length} sub-codes</span>
                                         : <span style={{fontSize:11,fontWeight:700,color:bidsIn>0?coverage:"#9BA3BF"}}>{bidsIn} bid{bidsIn!==1?"s":""}</span>
                                       }
-                                      {!hasSubs&&<button onClick={()=>setShowAddVendor(true)} style={{padding:"2px 8px",background:"#3B6FE815",border:"1px solid #3B6FE830",borderRadius:4,color:"#3B6FE8",fontSize:10,cursor:"pointer",fontFamily:"inherit",fontWeight:600}}>+ Vendor</button>}
+                                      {!hasSubs&&<button onClick={()=>{setActiveBidOpp(activeOppId);setVendorForm({company:"",contact:"",phone:"",email:"",trades:item.trade?[item.trade]:[],bidding:false,infoSent:false,bidReceived:false,bidAmount:"",notes:""});setShowAddVendor(true);}} style={{padding:"2px 8px",background:"#3B6FE815",border:"1px solid #3B6FE830",borderRadius:4,color:"#3B6FE8",fontSize:10,cursor:"pointer",fontFamily:"inherit",fontWeight:600}}>+ Vendor</button>}
                                     </div>
 
                                     {/* If no sub-items: show vendors directly under parent */}
@@ -8842,7 +8842,7 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
                                             <span style={{fontSize:12,fontWeight:600,color:"#1A2240",flex:1}}>{sub.description||"Sub-item "+(si+1)}</span>
                                             <span style={{fontSize:10,color:"#9BA3BF"}}>{sub.unit||item.unit}</span>
                                             <span style={{fontSize:10,fontWeight:700,color:subBids>0?subCov:"#9BA3BF"}}>{subBids} bid{subBids!==1?"s":""}</span>
-                                            <button onClick={()=>setShowAddVendor(true)} style={{padding:"2px 8px",background:"#3B6FE815",border:"1px solid #3B6FE830",borderRadius:4,color:"#3B6FE8",fontSize:10,cursor:"pointer",fontFamily:"inherit",fontWeight:600}}>+ Vendor</button>
+                                            <button onClick={()=>{setActiveBidOpp(activeOppId);setVendorForm({company:"",contact:"",phone:"",email:"",trades:item.trade?[item.trade]:[],bidding:false,infoSent:false,bidReceived:false,bidAmount:"",notes:""});setShowAddVendor(true);}} style={{padding:"2px 8px",background:"#3B6FE815",border:"1px solid #3B6FE830",borderRadius:4,color:"#3B6FE8",fontSize:10,cursor:"pointer",fontFamily:"inherit",fontWeight:600}}>+ Vendor</button>
                                           </div>
                                           <VendorTable vendors={subVendors} itemId={subKey}/>
                                         </div>
@@ -11053,12 +11053,14 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
 
 
       {/* -- ADD VENDOR MODAL -- */}
-      {showAddVendor && activeBidOpp && (() => {
-        const pkg = bidPackages[activeBidOpp] || { vendors:[], trades:[] };
-        const opp = pipeline.find(o=>o.id===activeBidOpp);
-        const det = oppDetails[activeBidOpp] || {};
+      {showAddVendor && (activeBidOpp || pipeline.filter(o=>o.bu==="major")[0]?.id) && (() => {
+        const _bidId = activeBidOpp || pipeline.filter(o=>o.bu==="major")[0]?.id;
+        const pkg = bidPackages[_bidId] || { vendors:[], trades:[] };
+        const opp = pipeline.find(o=>o.id===_bidId);
+        const det = oppDetails[_bidId] || {};
         const projCity  = det.city  || "";
         const projState = det.state || "";
+        // Use _bidId for all saves
         const BID_TRADES = ["Concrete","Masonry","Demo","Rough Carpentry","Fluid Applied Flooring","Roofing","Metal Wall Panels / Siding","Doors & Frames","Roll-Up Doors","Security / Access Control","Plumbing","Earthwork & Utilities","Asphalt","Fencing & Gates","Landscaping / Irrigation","Metal Building (PEMB)","Electrical","Lighting","Automated Doors","HVAC","Fire Suppression","Fire Alarm","Elevators","Material Lift","Canopies","General Conditions","Other"];
         const fi = {width:"100%",padding:"8px 10px",border:"1.5px solid #CBD1E8",borderRadius:7,fontSize:13,fontFamily:"inherit",outline:"none",boxSizing:"border-box"};
         const W = vendorForm;
@@ -11077,16 +11079,16 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
         const addFromDB = (dbV) => {
           const newV = { ...dbV, id:"v"+Date.now(), bidding:false, infoSent:false, bidReceived:false, bidAmount:"", costCodes:W.trades };
           const newPkgM = {...pkg, vendors:[...pkg.vendors,newV]};
-          setBidPackages(prev=>({...prev,[activeBidOpp]:newPkgM}));
-          saveEstimateField(activeBidOpp,'bid_packages',newPkgM);
+          setBidPackages(prev=>({...prev,[_bidId]:newPkgM}));
+          saveEstimateField(_bidId,'bid_packages',newPkgM);
         };
 
         const save = () => {
           if (!W.company.trim()) return;
           const newV = {...W, id:"v"+Date.now()};
           const newPkgM = {...pkg, vendors:[...pkg.vendors,newV]};
-          setBidPackages(prev=>({...prev,[activeBidOpp]:newPkgM}));
-          saveEstimateField(activeBidOpp,'bid_packages',newPkgM);
+          setBidPackages(prev=>({...prev,[_bidId]:newPkgM}));
+          saveEstimateField(_bidId,'bid_packages',newPkgM);
           // Also save to vendor DB if not already there
           if (!mpVendorDB.find(v=>v.company===W.company)) {
             const dbV = {id:"mpv"+Date.now(),company:W.company,contact:W.contact||"",phone:W.phone||"",email:W.email||"",trades:W.trades||[],notes:"",rating:5,address:"",city:"",state:"",zip:""};
