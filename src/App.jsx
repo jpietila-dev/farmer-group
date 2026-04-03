@@ -5280,13 +5280,68 @@ Return ONLY valid JSON, no markdown, no extra text:
                               onMouseEnter={e=>e.currentTarget.style.boxShadow="0 4px 16px rgba(59,111,232,0.12)"}
                               onMouseLeave={e=>e.currentTarget.style.boxShadow="0 1px 4px rgba(0,0,0,0.04)"}>
                               <div style={{height:3,background:stageObj.color}}/>
-                              <div style={{padding:"12px 14px"}}>
-                                <div style={{fontSize:13,fontWeight:700,color:"#1A2240",marginBottom:4,lineHeight:1.3}}>{o.name}</div>
-                                {co && <div style={{fontSize:11,color:"#3B6FE8",marginBottom:6,fontWeight:500}}>{co.name}</div>}
-                                {o.contactName && <div style={{fontSize:11,color:"#4A5278",marginBottom:4}}>👤 {o.contactName}</div>}
-                                {(parseFloat(o.value)||0)>0 && <div style={{fontSize:14,fontWeight:800,color:"#1A2240",marginBottom:6}}>{fmt(parseFloat(o.value))}</div>}
-                                {o.notes && <div style={{fontSize:11,color:"#4A5278",marginBottom:8,lineHeight:1.5,borderLeft:"2px solid #E0E4F0",paddingLeft:8}}>{o.notes}</div>}
-                                {o.closeDate && <div style={{fontSize:10,color:"#9BA3BF",marginBottom:8}}>📅 Close: {o.closeDate}</div>}
+                              <div style={{padding:"11px 13px"}}>
+                                {/* Name + company */}
+                                <div style={{fontSize:13,fontWeight:700,color:"#1A2240",marginBottom:2,lineHeight:1.3}}>{o.name}</div>
+                                {co && <div style={{fontSize:10,color:"#3B6FE8",marginBottom:6,fontWeight:500}}>{co.name}</div>}
+
+                                {/* Stage-aware key metrics */}
+                                {(() => {
+                                  const det = oppDetails[o.id] || {};
+                                  const locStr = [det.city,det.state].filter(Boolean).join(", ");
+                                  const totalSF = det.totalSF ? Number(det.totalSF).toLocaleString()+" SF" : null;
+                                  const val = (parseFloat(o.value)||0)>0 ? fmt(parseFloat(o.value)) : null;
+                                  const budgetTotal = (det.budgetItems||[]).reduce((s,item)=>{
+                                    const dc=(item.qty||0)*(item.rate||0);
+                                    return s+dc;
+                                  },0);
+                                  const budgetNum = budgetTotal>0 ? fmt(Math.round(budgetTotal*1.15)) : null;
+
+                                  if (o.stage==="lead") return (
+                                    <div style={{display:"flex",flexDirection:"column",gap:4,marginBottom:8}}>
+                                      {val && <div style={{fontSize:14,fontWeight:800,color:"#1A2240"}}>{val}</div>}
+                                      <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                                        {locStr && <span style={{fontSize:10,color:"#4A5278"}}>📍 {locStr}</span>}
+                                        {totalSF && <span style={{fontSize:10,color:"#4A5278"}}>📐 {totalSF}</span>}
+                                      </div>
+                                      {det.buildingConfig&&det.buildingConfig.length>0 && (
+                                        <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
+                                          {det.buildingConfig.map(c=>({single_story:"Single Story",multi_story:"Multi Story",canopy:"Canopy",mezzanine:"Mezzanine"}[c]||c)).map(l=>(
+                                            <span key={l} style={{fontSize:9,fontWeight:700,background:"#EEF3FF",color:"#3B6FE8",borderRadius:3,padding:"1px 5px"}}>{l}</span>
+                                          ))}
+                                          {det.projectCategory && <span style={{fontSize:9,fontWeight:700,background:"#F0FDF4",color:"#059669",borderRadius:3,padding:"1px 5px"}}>{det.projectCategory}</span>}
+                                          {det.climateControl && <span style={{fontSize:9,fontWeight:700,background:"#F9FAFC",color:"#4A5278",borderRadius:3,padding:"1px 5px"}}>{det.climateControl}</span>}
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+
+                                  if (o.stage==="budgeting_lead") return (
+                                    <div style={{display:"flex",flexDirection:"column",gap:4,marginBottom:8}}>
+                                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+                                        {val && <div style={{fontSize:14,fontWeight:800,color:"#1A2240"}}>{val}</div>}
+                                        {budgetNum && <div style={{fontSize:12,fontWeight:700,color:"#818CF8"}}>Budget: {budgetNum}</div>}
+                                      </div>
+                                      {locStr && <span style={{fontSize:10,color:"#4A5278"}}>📍 {locStr}</span>}
+                                      {totalSF && <span style={{fontSize:10,color:"#4A5278"}}>📐 {totalSF}</span>}
+                                      <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+                                        {det.ownershipStatus && <span style={{fontSize:9,fontWeight:700,background:"#F4F6FB",color:"#4A5278",borderRadius:3,padding:"1px 5px"}}>🏠 {det.ownershipStatus}</span>}
+                                        {det.budgetDueDate && <span style={{fontSize:9,color:"#F87171",fontWeight:700}}>Due {det.budgetDueDate}</span>}
+                                      </div>
+                                    </div>
+                                  );
+
+                                  // proposal_bid, negotiation, won, closed_won
+                                  return (
+                                    <div style={{display:"flex",flexDirection:"column",gap:4,marginBottom:8}}>
+                                      {val && <div style={{fontSize:14,fontWeight:800,color:"#1A2240"}}>{val}</div>}
+                                      {locStr && <span style={{fontSize:10,color:"#4A5278"}}>📍 {locStr}</span>}
+                                      {totalSF && <span style={{fontSize:10,color:"#4A5278"}}>📐 {totalSF}</span>}
+                                      {det.bidDueDate && <span style={{fontSize:9,color:"#F87171",fontWeight:700}}>Bid Due {det.bidDueDate}</span>}
+                                    </div>
+                                  );
+                                })()}
+
                                 {/* Stage move + actions */}
                                 <div style={{display:"flex",gap:5,flexWrap:"wrap",paddingTop:8,borderTop:"1px solid #F0F2F8"}} onClick={e=>e.stopPropagation()}>
                                   {ACTIVE_STAGES.filter(s=>s.id!==getStage(o)).map(s=>(
@@ -10430,79 +10485,127 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
               {/* -- INFO / PROPERTY TAB -- */}
               {activeTab==="info" && (
                 <div style={{display:"flex",flexDirection:"column",gap:12}}>
-                  {/* Company + Contact */}
+
+                  {/* -- LEAD SECTION (all stages) -- */}
                   <div style={{background:"#F9FAFC",borderRadius:8,border:"1px solid #E8EBF4",padding:"12px 14px"}}>
-                    <div style={{fontSize:10,fontWeight:700,color:"#4A5278",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:10}}>Owner / Contact Info</div>
+                    <div style={{fontSize:10,fontWeight:700,color:"#A78BFA",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:10}}>Lead Info</div>
                     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-                      <div style={{gridColumn:"span 2"}}>
-                        {lbl("Company")}
+                      <div>{lbl("Company")}
                         <div style={{fontSize:13,fontWeight:700,color:"#1A2240"}}>{co?.name||"—"}</div>
                       </div>
-                      {ct && <>
-                        <div>{lbl("Contact")}<div style={{fontSize:12,fontWeight:600,color:"#1A2240"}}>{ct.firstName} {ct.lastName}</div></div>
-                        <div>{lbl("Title")}<div style={{fontSize:12,color:"#4A5278"}}>{ct.title||"—"}</div></div>
-                        {ct.email && <div style={{gridColumn:"span 2"}}>{lbl("Email")}<a href={"mailto:"+ct.email} style={{fontSize:12,color:"#3B6FE8",textDecoration:"none"}}>{ct.email}</a></div>}
-                        {ct.phone && <div>{lbl("Phone")}<a href={"tel:"+ct.phone} style={{fontSize:12,color:"#3B6FE8",textDecoration:"none"}}>{ct.phone}</a></div>}
-                      </>}
-                      <div>{lbl("Estimated Value")}<input style={fi} type="number" value={o.value||""} onChange={e=>{setPipeline(prev=>prev.map(p=>p.id===o.id?{...p,value:parseFloat(e.target.value)||0}:p));setSelectedOpp({...o,value:parseFloat(e.target.value)||0});}}/></div>
-                      <div>{lbl("Expected Close Date")}<input style={fi} type="date" value={o.closeDate||""} onChange={e=>{setPipeline(prev=>prev.map(p=>p.id===o.id?{...p,closeDate:e.target.value}:p));setSelectedOpp({...o,closeDate:e.target.value});}}/></div>
-                    </div>
-                  </div>
-
-                  {/* Property Details */}
-                  <div style={{background:"#F9FAFC",borderRadius:8,border:"1px solid #E8EBF4",padding:"12px 14px"}}>
-                    <div style={{fontSize:10,fontWeight:700,color:"#4A5278",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:10}}>Property Details</div>
-                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-                      <div>{lbl("Property Address")}<input style={fi} value={det.propertyAddress||""} onChange={e=>setDet({propertyAddress:e.target.value})} placeholder="123 Main St…"/></div>
-                      <div>
-                        {lbl("Ownership Status")}
-                        <select style={fi} value={det.ownershipStatus||""} onChange={e=>setDet({ownershipStatus:e.target.value})}>
-                          <option value="">Select…</option>
-                          <option>Owned — Free & Clear</option>
-                          <option>Owned — Mortgage</option>
-                          <option>Under Contract</option>
-                          <option>Leased</option>
-                          <option>Site Control</option>
-                          <option>Unknown</option>
-                        </select>
+                      <div>{lbl("Contact")}
+                        {ct ? <div style={{fontSize:12,fontWeight:600,color:"#1A2240"}}>{ct.firstName} {ct.lastName}{ct.phone?" · "+ct.phone:""}</div> : <div style={{fontSize:12,color:"#9BA3BF"}}>—</div>}
                       </div>
-                      <div>{lbl("Owner Name")}<input style={fi} value={det.ownerName||""} onChange={e=>setDet({ownerName:e.target.value})} placeholder="Property owner…"/></div>
-                      <div>{lbl("Owner Phone")}<input style={fi} value={det.ownerPhone||""} onChange={e=>setDet({ownerPhone:e.target.value})} placeholder="(555) 000-0000"/></div>
-                      <div style={{gridColumn:"span 2"}}>{lbl("Owner Email")}<input style={fi} value={det.ownerEmail||""} onChange={e=>setDet({ownerEmail:e.target.value})} placeholder="owner@example.com"/></div>
-                      <div style={{gridColumn:"span 2"}}>{lbl("Property Notes")}<textarea style={{...fi,resize:"vertical"}} rows={2} value={det.propertyNotes||""} onChange={e=>setDet({propertyNotes:e.target.value})} placeholder="Zoning, site conditions, access…"/></div>
+                      <div>{lbl("Project Value ($)")}
+                        <input style={fi} type="number" value={o.value||""} onChange={e=>{setPipeline(prev=>prev.map(p=>p.id===o.id?{...p,value:parseFloat(e.target.value)||0}:p));setSelectedOpp({...o,value:parseFloat(e.target.value)||0});}} placeholder="0"/>
+                      </div>
+                      <div>{lbl("Expected Close Date")}
+                        <input style={fi} type="date" value={o.closeDate||""} onChange={e=>{setPipeline(prev=>prev.map(p=>p.id===o.id?{...p,closeDate:e.target.value}:p));setSelectedOpp({...o,closeDate:e.target.value});}}/>
+                      </div>
+                      <div>{lbl("City")}
+                        <input style={fi} value={det.city||""} onChange={e=>setDet({city:e.target.value})} placeholder="Detroit"/>
+                      </div>
+                      <div>{lbl("State")}
+                        <input style={fi} value={det.state||""} onChange={e=>setDet({state:e.target.value})} placeholder="MI" maxLength={2}/>
+                      </div>
+                      <div style={{gridColumn:"span 2"}}>{lbl("Total Square Footage")}
+                        <input style={fi} type="number" value={det.totalSF||""} onChange={e=>setDet({totalSF:e.target.value})} placeholder="0"/>
+                      </div>
                     </div>
                   </div>
 
-                  {/* Building types if set */}
-                  {(o.buildingTypes||[]).length>0 && (
-                    <div style={{background:"#F9FAFC",borderRadius:8,border:"1px solid #E8EBF4",padding:"12px 14px"}}>
-                      <div style={{fontSize:10,fontWeight:700,color:"#4A5278",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:8}}>Building Scope</div>
-                      <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-                        {(o.buildingTypes||[]).map(bt=>{
-                          const labels={multistory:"Multistory",singlestory:"Single Story",canopy:"Canopy",mezzanine:"Mezzanine"};
-                          const sf=parseFloat(o["sf_"+bt]||0);
-                          return (
-                            <div key={bt} style={{background:"#3B6FE812",border:"1px solid #3B6FE830",borderRadius:6,padding:"5px 10px"}}>
-                              <div style={{fontSize:11,fontWeight:700,color:"#3B6FE8"}}>{labels[bt]||bt}</div>
-                              {sf>0 && <div style={{fontSize:10,color:"#4A5278"}}>{sf.toLocaleString()} SF</div>}
-                            </div>
-                          );
+                  {/* -- PROJECT TYPE -- */}
+                  <div style={{background:"#F9FAFC",borderRadius:8,border:"1px solid #E8EBF4",padding:"12px 14px"}}>
+                    <div style={{fontSize:10,fontWeight:700,color:"#4A5278",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:10}}>Project Type</div>
+                    {/* Building configuration */}
+                    <div style={{marginBottom:10}}>
+                      <div style={{fontSize:10,color:"#9BA3BF",marginBottom:5}}>BUILDING CONFIGURATION</div>
+                      <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
+                        {[
+                          {id:"single_story",label:"Single Story"},
+                          {id:"multi_story",label:"Multi Story"},
+                          {id:"canopy",label:"Canopy"},
+                          {id:"mezzanine",label:"Mezzanine"},
+                        ].map(t=>{
+                          const sel=(det.buildingConfig||[]).includes(t.id);
+                          return <button key={t.id} type="button" onClick={()=>{const cur=det.buildingConfig||[];setDet({buildingConfig:sel?cur.filter(x=>x!==t.id):[...cur,t.id]});}}
+                            style={{padding:"4px 10px",borderRadius:5,border:"1.5px solid "+(sel?"#3B6FE8":"#CBD1E8"),background:sel?"#3B6FE8":"#F9FAFC",color:sel?"#fff":"#4A5278",fontSize:11,cursor:"pointer",fontFamily:"inherit",fontWeight:sel?700:400}}>{t.label}</button>;
                         })}
                       </div>
                     </div>
-                  )}
+                    {/* Climate control */}
+                    <div style={{marginBottom:10}}>
+                      <div style={{fontSize:10,color:"#9BA3BF",marginBottom:5}}>CLIMATE CONTROL</div>
+                      <div style={{display:"flex",gap:5}}>
+                        {["Climate Controlled","Non-Climate","Mixed"].map(t=>{
+                          const sel=det.climateControl===t;
+                          return <button key={t} type="button" onClick={()=>setDet({climateControl:sel?"":t})}
+                            style={{padding:"4px 10px",borderRadius:5,border:"1.5px solid "+(sel?"#60A5FA":"#CBD1E8"),background:sel?"#60A5FA":"#F9FAFC",color:sel?"#fff":"#4A5278",fontSize:11,cursor:"pointer",fontFamily:"inherit",fontWeight:sel?700:400}}>{t}</button>;
+                        })}
+                      </div>
+                    </div>
+                    {/* Project category */}
+                    <div>
+                      <div style={{fontSize:10,color:"#9BA3BF",marginBottom:5}}>PROJECT CATEGORY</div>
+                      <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
+                        {["Greenfield","Conversion","Expansion","Renovation","Repositioning"].map(t=>{
+                          const sel=det.projectCategory===t;
+                          return <button key={t} type="button" onClick={()=>setDet({projectCategory:sel?"":t})}
+                            style={{padding:"4px 10px",borderRadius:5,border:"1.5px solid "+(sel?"#4ADE80":"#CBD1E8"),background:sel?"#4ADE80":"#F9FAFC",color:sel?"#1A2240":"#4A5278",fontSize:11,cursor:"pointer",fontFamily:"inherit",fontWeight:sel?700:400}}>{t}</button>;
+                        })}
+                      </div>
+                    </div>
+                  </div>
 
-                  {/* Stage-specific fields */}
-                  {o.stage==="budgeting_lead" && (
+                  {/* -- PROJECT INFO -- */}
+                  <div style={{background:"#F9FAFC",borderRadius:8,border:"1px solid #E8EBF4",padding:"12px 14px"}}>
+                    <div style={{fontSize:10,fontWeight:700,color:"#4A5278",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:8}}>Project Info</div>
+                    <textarea style={{...fi,resize:"vertical"}} rows={4} value={det.projectInfo||""} onChange={e=>setDet({projectInfo:e.target.value})} placeholder="Project description, scope overview, special requirements, site conditions, existing structure details…"/>
+                  </div>
+
+                  {/* -- BUDGETING STAGE FIELDS -- */}
+                  {(o.stage==="budgeting_lead"||o.stage==="proposal_bid"||o.stage==="negotiation"||o.stage==="won"||o.stage==="closed_won") && (
                     <div style={{background:"#EEF3FF",borderRadius:8,border:"1px solid #3B6FE820",padding:"12px 14px"}}>
-                      <div style={{fontSize:10,fontWeight:700,color:"#3B6FE8",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:10}}>Budgeting Stage</div>
-                      <div style={{display:"flex",flexDirection:"column",gap:8}}>
-                        <div>{lbl("Budget Reception")}<select style={fi} value={det.budgetReception||""} onChange={e=>setDet({budgetReception:e.target.value})}><option value="">Select…</option><option>Accepted — Moving to Bid</option><option>Under Review</option><option>Too High — Revising</option><option>Rejected</option><option>Pending Submission</option></select></div>
-                        <div>{lbl("Next Steps")}<textarea style={{...fi,resize:"vertical"}} rows={2} value={det.budgetNextSteps||""} onChange={e=>setDet({budgetNextSteps:e.target.value})} placeholder="What happens next…"/></div>
+                      <div style={{fontSize:10,fontWeight:700,color:"#3B6FE8",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:10}}>Budgeting Details</div>
+                      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                        <div>{lbl("Property Address")}
+                          <input style={fi} value={det.propertyAddress||""} onChange={e=>setDet({propertyAddress:e.target.value})} placeholder="123 Main St…"/>
+                        </div>
+                        <div>{lbl("Ownership Status")}
+                          <select style={fi} value={det.ownershipStatus||""} onChange={e=>setDet({ownershipStatus:e.target.value})}>
+                            <option value="">Select…</option>
+                            <option>Owned</option>
+                            <option>Under Contract</option>
+                            <option>Browsing / Site Search</option>
+                            <option>Leased</option>
+                            <option>Site Control</option>
+                          </select>
+                        </div>
+                        <div>{lbl("Budget Due Date")}
+                          <input style={fi} type="date" value={det.budgetDueDate||""} onChange={e=>setDet({budgetDueDate:e.target.value})}/>
+                        </div>
+                        <div>{lbl("Budget Reception")}
+                          <select style={fi} value={det.budgetReception||""} onChange={e=>setDet({budgetReception:e.target.value})}>
+                            <option value="">Select…</option>
+                            <option>Pending Submission</option>
+                            <option>Under Review</option>
+                            <option>Accepted — Moving to Bid</option>
+                            <option>Too High — Revising</option>
+                            <option>Rejected</option>
+                          </select>
+                        </div>
+                        <div style={{gridColumn:"span 2"}}>{lbl("Conceptual Sketch / Site Plan URL")}
+                          <input style={fi} value={det.sketchUrl||""} onChange={e=>setDet({sketchUrl:e.target.value})} placeholder="https://drive.google.com/… or paste image URL"/>
+                          {det.sketchUrl && <a href={det.sketchUrl} target="_blank" rel="noreferrer" style={{fontSize:11,color:"#3B6FE8",display:"block",marginTop:4}}>Open sketch →</a>}
+                        </div>
+                        <div style={{gridColumn:"span 2"}}>{lbl("Budget Next Steps")}
+                          <textarea style={{...fi,resize:"vertical"}} rows={2} value={det.budgetNextSteps||""} onChange={e=>setDet({budgetNextSteps:e.target.value})} placeholder="What happens next…"/>
+                        </div>
                       </div>
                     </div>
                   )}
 
+                  {/* -- BID/PROPOSAL FIELDS -- */}
                   {(o.stage==="proposal_bid"||o.stage==="negotiation") && (
                     <div style={{background:"#FFF9E6",borderRadius:8,border:"1px solid #FCD34D30",padding:"12px 14px"}}>
                       <div style={{fontSize:10,fontWeight:700,color:"#B45309",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:10}}>Bid Stage</div>
