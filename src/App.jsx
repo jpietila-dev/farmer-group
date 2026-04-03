@@ -3259,21 +3259,71 @@ Return ONLY valid JSON, no markdown, no extra text:
     setShowForm(true);
   };
   const saveOpp = () => {
-    if (!form.name.trim() || !form.value) return;
+    if (!form.name.trim()) return;
     const ct    = contacts.find(p => p.id === form.contactId);
     const entry = { ...form, value: Number(form.value), contact: ct ? ct.email : "" };
     if (editId !== null) {
-      setPipeline(pipeline.map(o => o.id === editId ? { ...entry, id: editId } : o));
-      if (selectedOpp && selectedOpp.id === editId) setSelectedOpp({ ...entry, id: editId });
+      // Update existing
+      const updated = { ...entry, id: editId };
+      setPipeline(pipeline.map(o => o.id === editId ? updated : o));
+      if (selectedOpp && selectedOpp.id === editId) setSelectedOpp(updated);
+      // Persist to Supabase
+      const stageNorm = (s) => {
+        if(!s) return "budgeting_lead";
+        const m = {Budgeting:"budgeting_lead",Lead:"lead",Won:"won","Proposal/Bid":"proposal_bid","Proposal / Bid":"proposal_bid",Negotiation:"negotiation","Closed/Won":"closed_won"};
+        return m[s]||s;
+      };
+      const row = {
+        name: form.name.trim(),
+        company_id: form.companyId||null,
+        contact_name: form.contactName||ct?.firstName+" "+(ct?.lastName||"")||"",
+        value: Number(form.value)||0,
+        stage: stageNorm(form.stage),
+        close_date: form.closeDate||null,
+        bu: form.bu||"major",
+      };
+      console.log("[Pipeline] Updating opp id="+editId+":", row);
+      fetch(`${SUPA_URL}/rest/v1/mp_pipeline?id=eq.${String(editId)}`, {
+        method: "PATCH",
+        headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}`, "Content-Type": "application/json", Prefer: "return=minimal" },
+        body: JSON.stringify(row)
+      }).then(r=>{console.log("[Pipeline] PATCH status:", r.status);return r.text();}).then(t=>{if(t)console.log("[Pipeline] PATCH response:",t);}).catch(e=>console.error("[Pipeline] PATCH error:",e));
     } else {
-      setPipeline([...pipeline, { ...entry, id: Date.now() }]);
-      // Auto-tag CRM contacts for this company with the division
+      // Create new
+      const newId = String(Date.now());
+      const newEntry = { ...entry, id: newId, dbId: newId };
+      setPipeline(prev => [...prev, newEntry]);
       const divTag = form.bu==="major"?"MP":form.bu==="capital"?"CapEx":form.bu==="facility"?"FM":form.bu==="lawn"?"Lawn":form.bu==="snow"?"Snow":null;
       if (divTag) autoTagCrmContacts(form.companyId, divTag);
+      // Persist to Supabase
+      const row = {
+        id: newId,
+        name: form.name.trim(),
+        company_id: form.companyId||null,
+        contact_name: form.contactName||ct?.firstName+" "+(ct?.lastName||"")||"",
+        value: Number(form.value)||0,
+        stage: stageNorm(form.stage),
+        notes: form.notes||"",
+        close_date: form.closeDate||null,
+        bu: form.bu||"major",
+      };
+      console.log("[Pipeline] Creating new opp:", row);
+      fetch(`${SUPA_URL}/rest/v1/mp_pipeline`, {
+        method: "POST",
+        headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}`, "Content-Type": "application/json", Prefer: "return=minimal" },
+        body: JSON.stringify(row)
+      }).then(r=>{console.log("[Pipeline] POST status:", r.status);return r.text();}).then(t=>{if(t)console.log("[Pipeline] POST response:",t);}).catch(e=>console.error("[Pipeline] POST error:",e));
     }
     setShowForm(false);
   };
-  const deleteOpp  = (id) => { setPipeline(pipeline.filter(o => o.id !== id)); setSelectedOpp(null); };
+  const deleteOpp  = (id) => {
+    setPipeline(pipeline.filter(o => o.id !== id));
+    setSelectedOpp(null);
+    fetch(`${SUPA_URL}/rest/v1/mp_pipeline?id=eq.${String(id)}`, {
+      method: "DELETE",
+      headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}`, Prefer: "return=minimal" }
+    }).catch(()=>{});
+  };
   const saveOppDetail = (oppId, fields) => {
     setOppDetails(prev => {
       const updated = {...prev, [oppId]: {...(prev[oppId]||{}), ...fields}};
@@ -5251,8 +5301,12 @@ Return ONLY valid JSON, no markdown, no extra text:
             const moveOpp = (id, newStage) => {
               const updated = pipeline.map(o => o.id===id ? {...o, stage:newStage} : o);
               setPipeline(updated);
-              const opp = updated.find(o=>o.id===id);
-              if (opp?.dbId) supa.from("mp_pipeline").update({stage:newStage}).eq("id",opp.dbId);
+              // id IS the Supabase row id (both for loaded rows and new rows)
+              fetch(`${SUPA_URL}/rest/v1/mp_pipeline?id=eq.${String(id)}`, {
+                method: "PATCH",
+                headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}`, "Content-Type": "application/json", Prefer: "return=minimal" },
+                body: JSON.stringify({ stage: newStage })
+              }).catch(()=>{});
             };
 
             const saveNewOpp = async (fields) => {
@@ -5260,7 +5314,8 @@ Return ONLY valid JSON, no markdown, no extra text:
               const entry = { ...fields, id, bu:"major", nextSteps:[] };
               setPipeline(prev=>[...prev, entry]);
               // Persist
-              const row = { id:String(id), name:fields.name, company_id:fields.companyId||null, contact_name:fields.contactName||"", value:parseFloat(fields.value)||0, stage:fields.stage||"budgeting_lead", notes:fields.notes||"", bu:"major", close_date:fields.closeDate||null };
+              const sNorm = (s) => { if(!s) return "budgeting_lead"; const m={Budgeting:"budgeting_lead",Lead:"lead",Won:"won"}; return m[s]||s; };
+              const row = { id:String(id), name:fields.name, company_id:fields.companyId||null, contact_name:fields.contactName||"", value:parseFloat(fields.value)||0, stage:sNorm(fields.stage), notes:fields.notes||"", bu:"major", close_date:fields.closeDate||null };
               try { await fetch(`${SUPA_URL}/rest/v1/mp_pipeline`, { method:"POST", headers:{apikey:SUPA_KEY,Authorization:`Bearer ${SUPA_KEY}`,"Content-Type":"application/json",Prefer:"return=minimal"}, body:JSON.stringify(row) }); } catch(e){}
             };
 
