@@ -3262,21 +3262,20 @@ Return ONLY valid JSON, no markdown, no extra text:
     if (!form.name.trim()) return;
     const ct    = contacts.find(p => p.id === form.contactId);
     const entry = { ...form, value: Number(form.value), contact: ct ? ct.email : "" };
+    const stageNorm = (s) => {
+      if(!s) return "budgeting_lead";
+      const m = {Budgeting:"budgeting_lead",Lead:"lead",Won:"won","Proposal/Bid":"proposal_bid","Proposal / Bid":"proposal_bid",Negotiation:"negotiation","Closed/Won":"closed_won","closed_won":"closed_won"};
+      return m[s]||s;
+    };
     if (editId !== null) {
       // Update existing
       const updated = { ...entry, id: editId };
       setPipeline(pipeline.map(o => o.id === editId ? updated : o));
       if (selectedOpp && selectedOpp.id === editId) setSelectedOpp(updated);
-      // Persist to Supabase
-      const stageNorm = (s) => {
-        if(!s) return "budgeting_lead";
-        const m = {Budgeting:"budgeting_lead",Lead:"lead",Won:"won","Proposal/Bid":"proposal_bid","Proposal / Bid":"proposal_bid",Negotiation:"negotiation","Closed/Won":"closed_won"};
-        return m[s]||s;
-      };
       const row = {
         name: form.name.trim(),
         company_id: form.companyId||null,
-        contact_name: form.contactName||ct?.firstName+" "+(ct?.lastName||"")||"",
+        contact_name: form.contactName||(ct ? ct.firstName+" "+(ct.lastName||"") : ""),
         value: Number(form.value)||0,
         stage: stageNorm(form.stage),
         close_date: form.closeDate||null,
@@ -3295,15 +3294,14 @@ Return ONLY valid JSON, no markdown, no extra text:
       setPipeline(prev => [...prev, newEntry]);
       const divTag = form.bu==="major"?"MP":form.bu==="capital"?"CapEx":form.bu==="facility"?"FM":form.bu==="lawn"?"Lawn":form.bu==="snow"?"Snow":null;
       if (divTag) autoTagCrmContacts(form.companyId, divTag);
-      // Persist to Supabase
       const row = {
         id: newId,
         name: form.name.trim(),
         company_id: form.companyId||null,
-        contact_name: form.contactName||ct?.firstName+" "+(ct?.lastName||"")||"",
+        contact_name: form.contactName||(ct ? ct.firstName+" "+(ct.lastName||"") : ""),
         value: Number(form.value)||0,
         stage: stageNorm(form.stage),
-        notes: form.notes||"",
+        notes: form.notes ? JSON.stringify({userNotes: form.notes}) : "",
         close_date: form.closeDate||null,
         bu: form.bu||"major",
       };
