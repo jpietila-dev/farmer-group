@@ -1,469 +1,4 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
-// ================================================================
-// src/VendorsPage.jsx
-// ----------------------------------------------------------------
-// HOW TO WIRE INTO App.jsx — 2 changes only:
-//
-//   1. Near the top of App.jsx, add this import:
-//      import VendorsPage from "./VendorsPage";
-//
-//   2. Find where "vendors" page is rendered. It will look like:
-//        {page === 'vendors' && <div>...</div>}
-//      Replace whatever is in that block with:
-//        {page === 'vendors' && <VendorsPage supa={supa} />}
-//
-//      If there is no vendors case yet, add it alongside the other
-//      page === '...' blocks.
-//
-// The component receives your existing `supa` helper object so it
-// reuses the same Supabase client — no new credentials needed.
-// ================================================================
-
-import { useState, useEffect, useCallback, useRef } from "react";
-
-const TABS       = ["All", "MP", "FM", "CapEx", "Lawn", "Snow"];
-const CATEGORIES = ["MP", "FM", "CapEx", "Lawn", "Snow"];
-
-const CAT_STYLE = {
-  MP:    { active: { background: "#1e3a5f", color: "#60a5fa", border: "1px solid #2d5a8f" }, inactive: { background: "#111827", color: "#374151", border: "1px solid #1f2937" } },
-  FM:    { active: { background: "#14532d", color: "#4ade80", border: "1px solid #166534" }, inactive: { background: "#111827", color: "#374151", border: "1px solid #1f2937" } },
-  CapEx: { active: { background: "#4a1942", color: "#f0abfc", border: "1px solid #701a75" }, inactive: { background: "#111827", color: "#374151", border: "1px solid #1f2937" } },
-  Lawn:  { active: { background: "#14532d", color: "#86efac", border: "1px solid #15803d" }, inactive: { background: "#111827", color: "#374151", border: "1px solid #1f2937" } },
-  Snow:  { active: { background: "#1e3a5f", color: "#bae6fd", border: "1px solid #0369a1" }, inactive: { background: "#111827", color: "#374151", border: "1px solid #1f2937" } },
-};
-
-const EMPTY_FORM = {
-  vendor_name: "", company_name: "", street_address: "",
-  city: "", state: "", country: "USA", zip: "",
-  phone: "", email: "", trade: "", notes: "", categories: [],
-};
-
-export default function VendorsPage({ supa }) {
-  const [vendors,        setVendors]        = useState([]);
-  const [loading,        setLoading]        = useState(true);
-  const [activeTab,      setActiveTab]      = useState("All");
-  const [search,         setSearch]         = useState("");
-  const [tradeFilter,    setTradeFilter]    = useState("All");
-  const [selected,       setSelected]       = useState(null);
-  const [saving,         setSaving]         = useState(false);
-  const [showAdd,        setShowAdd]        = useState(false);
-  const [form,           setForm]           = useState(EMPTY_FORM);
-  const [addSaving,      setAddSaving]      = useState(false);
-  const [editNotes,      setEditNotes]      = useState(false);
-  const [notesValue,     setNotesValue]     = useState("");
-  const notesRef = useRef(null);
-
-  // ── Fetch ──────────────────────────────────────────────────────
-  const load = useCallback(async () => {
-    setLoading(true);
-    const { data } = await supa.from("vendors").select("*").order("vendor_name");
-    setVendors(data || []);
-    setLoading(false);
-  }, [supa]);
-
-  useEffect(() => { load(); }, [load]);
-
-  // ── Toggle category (inline pill click) ───────────────────────
-  const toggleCat = async (vendor, cat, e) => {
-    e?.stopPropagation();
-    const current  = vendor.categories || [];
-    const updated  = current.includes(cat)
-      ? current.filter(c => c !== cat)
-      : [...current, cat];
-    setSaving(vendor.id);
-    await supa.from("vendors").update({ categories: updated }).eq("id", vendor.id);
-    const patch = v => v.id === vendor.id ? { ...v, categories: updated } : v;
-    setVendors(vs => vs.map(patch));
-    setSelected(s  => s?.id === vendor.id ? { ...s, categories: updated } : s);
-    setSaving(false);
-  };
-
-  // ── Save notes ────────────────────────────────────────────────
-  const saveNotes = async () => {
-    if (!selected) return;
-    await supa.from("vendors").update({ notes: notesValue }).eq("id", selected.id);
-    setVendors(vs => vs.map(v => v.id === selected.id ? { ...v, notes: notesValue } : v));
-    setSelected(s => ({ ...s, notes: notesValue }));
-    setEditNotes(false);
-  };
-
-  // ── Add new vendor ────────────────────────────────────────────
-  const addVendor = async () => {
-    if (!form.vendor_name.trim()) return;
-    setAddSaving(true);
-    const { data } = await supa.from("vendors").insert(form).select().single();
-    if (data) {
-      setVendors(vs => [...vs, data].sort((a, b) => (a.vendor_name || "").localeCompare(b.vendor_name || "")));
-      setSelected(data);
-    }
-    setShowAdd(false);
-    setForm(EMPTY_FORM);
-    setAddSaving(false);
-  };
-
-  // ── Derived data ──────────────────────────────────────────────
-  const trades = ["All", ...Array.from(new Set(vendors.map(v => v.trade).filter(Boolean))).sort()];
-
-  const tabCounts = Object.fromEntries(
-    CATEGORIES.map(cat => [cat, vendors.filter(v => (v.categories || []).includes(cat)).length])
-  );
-
-  const filtered = vendors.filter(v => {
-    const cats = v.categories || [];
-    if (activeTab !== "All" && !cats.includes(activeTab)) return false;
-    if (tradeFilter !== "All" && v.trade !== tradeFilter)  return false;
-    if (search) {
-      const q = search.toLowerCase();
-      return (
-        (v.vendor_name    || "").toLowerCase().includes(q) ||
-        (v.company_name   || "").toLowerCase().includes(q) ||
-        (v.trade          || "").toLowerCase().includes(q) ||
-        (v.city           || "").toLowerCase().includes(q) ||
-        (v.email          || "").toLowerCase().includes(q) ||
-        (v.phone          || "").toLowerCase().includes(q)
-      );
-    }
-    return true;
-  });
-
-  // ── Styles (matches your existing dark navy theme) ─────────────
-  const s = {
-    wrap:        { display: "flex", flexDirection: "column", height: "100%", background: "#0d1117", color: "#e2e8f0", fontFamily: "inherit", position: "relative" },
-    header:      { padding: "20px 28px 0", borderBottom: "1px solid #1e2533", flexShrink: 0 },
-    headerRow:   { display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 },
-    title:       { margin: 0, fontSize: 20, fontWeight: 700, color: "#f8fafc", letterSpacing: "0.02em" },
-    subtitle:    { margin: "3px 0 0", fontSize: 12, color: "#475569" },
-    addBtn:      { background: "#2563eb", color: "#fff", border: "none", borderRadius: 6, padding: "8px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" },
-    tabs:        { display: "flex", gap: 2 },
-    tab:         (active) => ({
-      padding: "8px 18px", border: "none", borderRadius: "6px 6px 0 0",
-      cursor: "pointer", fontSize: 12, fontWeight: 600, transition: "all 0.1s",
-      background: active ? "#161f2e" : "transparent",
-      color:      active ? "#60a5fa" : "#64748b",
-      borderBottom: active ? "2px solid #3b82f6" : "2px solid transparent",
-    }),
-    badge:       { marginLeft: 6, background: "#1e3a5f", color: "#7dd3fc", borderRadius: 10, padding: "1px 6px", fontSize: 10, fontWeight: 700 },
-    toolbar:     { display: "flex", gap: 10, padding: "12px 28px", borderBottom: "1px solid #1e2533", background: "#0d1117", flexShrink: 0 },
-    input:       { flex: 1, background: "#161f2e", border: "1px solid #253040", borderRadius: 6, color: "#e2e8f0", padding: "8px 12px", fontSize: 13, outline: "none" },
-    select:      { background: "#161f2e", border: "1px solid #253040", borderRadius: 6, color: "#e2e8f0", padding: "8px 12px", fontSize: 13, outline: "none", minWidth: 175 },
-    tableWrap:   { flex: 1, overflowY: "auto" },
-    table:       { width: "100%", borderCollapse: "collapse", fontSize: 13 },
-    th:          { padding: "10px 14px", textAlign: "left", color: "#475569", fontWeight: 600, fontSize: 10, textTransform: "uppercase", letterSpacing: "0.06em", background: "#0d1117", position: "sticky", top: 0, zIndex: 2, borderBottom: "1px solid #1e2533" },
-    tr:          (active, hover) => ({ borderBottom: "1px solid #141c27", cursor: "pointer", background: active ? "#1a2845" : "transparent" }),
-    td:          { padding: "9px 14px", verticalAlign: "middle" },
-    tradePill:   { background: "#161f2e", color: "#94a3b8", borderRadius: 4, padding: "2px 8px", fontSize: 11, whiteSpace: "nowrap", display: "inline-block" },
-    loc:         { color: "#64748b", fontSize: 12, whiteSpace: "nowrap" },
-    email:       { color: "#60a5fa", fontSize: 12, textDecoration: "none" },
-    catPill:     (cat, active) => ({
-      padding: "2px 7px", borderRadius: 4, fontSize: 10, fontWeight: 700,
-      cursor: "pointer", transition: "all 0.12s",
-      ...(active ? CAT_STYLE[cat].active : CAT_STYLE[cat].inactive),
-    }),
-    // Drawer
-    drawer:      { position: "fixed", right: 0, top: 0, bottom: 0, width: 360, background: "#111827", borderLeft: "1px solid #1e2d3d", zIndex: 100, display: "flex", flexDirection: "column", boxShadow: "-6px 0 32px rgba(0,0,0,0.5)" },
-    drawerHead:  { display: "flex", justifyContent: "space-between", alignItems: "flex-start", padding: "20px 20px 0" },
-    closeBtn:    { background: "none", border: "none", color: "#4b5563", fontSize: 22, cursor: "pointer", lineHeight: 1, padding: 2 },
-    drawerBody:  { flex: 1, overflowY: "auto", padding: "16px 20px 24px" },
-    sectionLabel:{ margin: "16px 0 8px", fontSize: 10, fontWeight: 700, color: "#475569", textTransform: "uppercase", letterSpacing: "0.07em" },
-    fieldLabel:  { margin: "0 0 2px", fontSize: 10, color: "#374151", textTransform: "uppercase", letterSpacing: "0.05em" },
-    fieldVal:    { margin: 0, fontSize: 13, color: "#cbd5e1" },
-    divider:     { border: "none", borderTop: "1px solid #1f2937", margin: "14px 0" },
-    // Modal
-    overlay:     { position: "fixed", inset: 0, background: "rgba(0,0,0,0.72)", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center" },
-    modal:       { background: "#111827", borderRadius: 10, border: "1px solid #1e2d3d", padding: 28, width: 460, maxHeight: "88vh", overflowY: "auto" },
-    modalTitle:  { margin: "0 0 20px", fontSize: 16, fontWeight: 700, color: "#f1f5f9" },
-    label:       { display: "block", fontSize: 11, color: "#64748b", marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.04em" },
-    formInput:   { width: "100%", background: "#161f2e", border: "1px solid #253040", borderRadius: 6, color: "#e2e8f0", padding: "8px 10px", fontSize: 13, outline: "none", boxSizing: "border-box" },
-    modalFooter: { display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 20 },
-    cancelBtn:   { padding: "8px 18px", background: "#161f2e", border: "1px solid #253040", borderRadius: 6, color: "#94a3b8", fontSize: 13, cursor: "pointer" },
-    saveBtn:     (enabled) => ({ padding: "8px 20px", background: enabled ? "#2563eb" : "#1a2533", border: "none", borderRadius: 6, color: enabled ? "#fff" : "#374151", fontSize: 13, fontWeight: 600, cursor: enabled ? "pointer" : "default" }),
-    notesArea:   { width: "100%", background: "#161f2e", border: "1px solid #253040", borderRadius: 6, color: "#e2e8f0", padding: "8px 10px", fontSize: 12, outline: "none", boxSizing: "border-box", resize: "vertical", minHeight: 80, fontFamily: "inherit" },
-    editLink:    { background: "none", border: "none", color: "#3b82f6", fontSize: 11, cursor: "pointer", padding: 0 },
-  };
-
-  return (
-    <div style={s.wrap}>
-
-      {/* ── Header ─────────────────────────────────────────────── */}
-      <div style={s.header}>
-        <div style={s.headerRow}>
-          <div>
-            <h1 style={s.title}>VENDORS</h1>
-            <p style={s.subtitle}>{filtered.length.toLocaleString()} of {vendors.length.toLocaleString()} vendors</p>
-          </div>
-          <button style={s.addBtn} onClick={() => setShowAdd(true)}>+ Add Vendor</button>
-        </div>
-        <div style={s.tabs}>
-          {TABS.map(tab => (
-            <button key={tab} style={s.tab(activeTab === tab)} onClick={() => setActiveTab(tab)}>
-              {tab}
-              {tab !== "All" && <span style={s.badge}>{tabCounts[tab] ?? 0}</span>}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* ── Toolbar ────────────────────────────────────────────── */}
-      <div style={s.toolbar}>
-        <input
-          style={s.input}
-          placeholder="Search by name, trade, city, email, phone..."
-          value={search}
-          onChange={e => setSearch(e.target.value)}
-        />
-        <select style={s.select} value={tradeFilter} onChange={e => setTradeFilter(e.target.value)}>
-          {trades.map(t => <option key={t} value={t}>{t === "All" ? "All Trades" : t}</option>)}
-        </select>
-      </div>
-
-      {/* ── Table ──────────────────────────────────────────────── */}
-      <div style={s.tableWrap}>
-        {loading ? (
-          <div style={{ textAlign: "center", padding: 80, color: "#4b5563" }}>Loading vendors…</div>
-        ) : (
-          <table style={s.table}>
-            <thead>
-              <tr>
-                {["Vendor", "Trade", "Location", "Phone", "Email", "Categories"].map(h => (
-                  <th key={h} style={s.th}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map(v => {
-                const isSelected = selected?.id === v.id;
-                return (
-                  <tr
-                    key={v.id}
-                    style={s.tr(isSelected)}
-                    onClick={() => { setSelected(v); setEditNotes(false); setNotesValue(v.notes || ""); }}
-                    onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = "#141c27"; }}
-                    onMouseLeave={e => { if (!isSelected) e.currentTarget.style.background = "transparent"; }}
-                  >
-                    <td style={{ ...s.td, fontWeight: 500, color: "#f1f5f9", maxWidth: 220 }}>
-                      <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{v.vendor_name || "—"}</div>
-                    </td>
-                    <td style={s.td}>
-                      {v.trade && <span style={s.tradePill}>{v.trade}</span>}
-                    </td>
-                    <td style={{ ...s.td, ...s.loc }}>
-                      {[v.city, v.state].filter(Boolean).join(", ") || "—"}
-                    </td>
-                    <td style={{ ...s.td, color: "#64748b", fontSize: 12 }}>
-                      {v.phone || "—"}
-                    </td>
-                    <td style={s.td}>
-                      {v.email
-                        ? <a href={`mailto:${v.email}`} style={s.email} onClick={e => e.stopPropagation()}>{v.email}</a>
-                        : <span style={{ color: "#374151", fontSize: 12 }}>—</span>}
-                    </td>
-                    <td style={{ ...s.td, minWidth: 220 }}>
-                      <div style={{ display: "flex", gap: 4, flexWrap: "wrap", alignItems: "center" }}>
-                        {CATEGORIES.map(cat => {
-                          const active = (v.categories || []).includes(cat);
-                          return (
-                            <button
-                              key={cat}
-                              style={s.catPill(cat, active)}
-                              onClick={e => toggleCat(v, cat, e)}
-                              disabled={saving === v.id}
-                              title={active ? `Remove from ${cat}` : `Add to ${cat}`}
-                            >
-                              {cat}
-                            </button>
-                          );
-                        })}
-                        {saving === v.id && (
-                          <span style={{ fontSize: 10, color: "#3b82f6", marginLeft: 4 }}>saving…</span>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        )}
-        {!loading && filtered.length === 0 && (
-          <div style={{ textAlign: "center", padding: 80, color: "#4b5563" }}>No vendors match your filters.</div>
-        )}
-      </div>
-
-      {/* ── Detail Drawer ──────────────────────────────────────── */}
-      {selected && (
-        <div style={s.drawer}>
-          <div style={s.drawerHead}>
-            <div style={{ flex: 1, paddingRight: 12 }}>
-              <h2 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: "#f1f5f9", lineHeight: 1.3 }}>{selected.vendor_name}</h2>
-              {selected.company_name && selected.company_name !== selected.vendor_name && (
-                <p style={{ margin: "4px 0 0", fontSize: 12, color: "#4b5563" }}>{selected.company_name}</p>
-              )}
-            </div>
-            <button style={s.closeBtn} onClick={() => setSelected(null)}>×</button>
-          </div>
-
-          <div style={s.drawerBody}>
-            {/* Trade */}
-            {selected.trade && (
-              <div style={{ marginTop: 12 }}>
-                <span style={{ ...s.tradePill, fontSize: 12, padding: "4px 12px" }}>{selected.trade}</span>
-              </div>
-            )}
-
-            {/* Categories */}
-            <p style={s.sectionLabel}>
-              Categories
-              {saving === selected.id && <span style={{ color: "#3b82f6", marginLeft: 6, textTransform: "none", fontSize: 10 }}>saving…</span>}
-            </p>
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              {CATEGORIES.map(cat => {
-                const active = (selected.categories || []).includes(cat);
-                return (
-                  <button
-                    key={cat}
-                    onClick={e => toggleCat(selected, cat, e)}
-                    style={{ ...s.catPill(cat, active), padding: "6px 14px", fontSize: 12, borderRadius: 6 }}
-                  >
-                    {active ? "✓ " : ""}{cat}
-                  </button>
-                );
-              })}
-            </div>
-
-            <hr style={s.divider} />
-
-            {/* Contact details */}
-            <p style={{ ...s.sectionLabel, marginTop: 0 }}>Contact Details</p>
-
-            {[
-              { label: "Address",
-                value: [selected.street_address, selected.city, selected.state, selected.zip, selected.country]
-                         .filter(Boolean).join(", ") },
-              { label: "Phone", value: selected.phone, href: selected.phone ? `tel:${selected.phone}` : null },
-              { label: "Email", value: selected.email, href: selected.email ? `mailto:${selected.email}` : null },
-            ].map(({ label, value, href }) => !value ? null : (
-              <div key={label} style={{ marginBottom: 12 }}>
-                <p style={s.fieldLabel}>{label}</p>
-                {href
-                  ? <a href={href} style={{ ...s.email, fontSize: 13 }}>{value}</a>
-                  : <p style={s.fieldVal}>{value}</p>}
-              </div>
-            ))}
-
-            <hr style={s.divider} />
-
-            {/* Notes */}
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <p style={{ ...s.sectionLabel, margin: 0 }}>Notes</p>
-              {!editNotes && (
-                <button style={s.editLink} onClick={() => { setEditNotes(true); setNotesValue(selected.notes || ""); setTimeout(() => notesRef.current?.focus(), 50); }}>
-                  {selected.notes ? "Edit" : "+ Add note"}
-                </button>
-              )}
-            </div>
-            {editNotes ? (
-              <div style={{ marginTop: 8 }}>
-                <textarea
-                  ref={notesRef}
-                  style={s.notesArea}
-                  value={notesValue}
-                  onChange={e => setNotesValue(e.target.value)}
-                  placeholder="Add notes about this vendor…"
-                />
-                <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
-                  <button style={s.saveBtn(true)} onClick={saveNotes}>Save</button>
-                  <button style={s.cancelBtn} onClick={() => setEditNotes(false)}>Cancel</button>
-                </div>
-              </div>
-            ) : (
-              <p style={{ ...s.fieldVal, marginTop: 6, fontSize: 12, color: selected.notes ? "#94a3b8" : "#374151", fontStyle: selected.notes ? "normal" : "italic" }}>
-                {selected.notes || "No notes yet."}
-              </p>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* ── Add Vendor Modal ───────────────────────────────────── */}
-      {showAdd && (
-        <div style={s.overlay} onClick={e => { if (e.target === e.currentTarget) setShowAdd(false); }}>
-          <div style={s.modal}>
-            <h2 style={s.modalTitle}>Add Vendor</h2>
-
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px 16px" }}>
-              {[
-                { key: "vendor_name",    label: "Vendor Name *",   full: true },
-                { key: "company_name",   label: "Company Name",    full: true },
-                { key: "trade",          label: "Trade",           full: false },
-                { key: "phone",          label: "Phone",           full: false },
-                { key: "email",          label: "Email",           full: true  },
-                { key: "street_address", label: "Street Address",  full: true  },
-                { key: "city",           label: "City",            full: false },
-                { key: "state",          label: "State",           full: false },
-                { key: "zip",            label: "Zip",             full: false },
-                { key: "country",        label: "Country",         full: false },
-              ].map(({ key, label, full }) => (
-                <div key={key} style={{ gridColumn: full ? "1 / -1" : "auto" }}>
-                  <label style={s.label}>{label}</label>
-                  <input
-                    value={form[key]}
-                    onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))}
-                    style={s.formInput}
-                    autoComplete="off"
-                  />
-                </div>
-              ))}
-            </div>
-
-            {/* Categories in modal */}
-            <div style={{ marginTop: 16 }}>
-              <label style={s.label}>Categories</label>
-              <div style={{ display: "flex", gap: 8, marginTop: 6, flexWrap: "wrap" }}>
-                {CATEGORIES.map(cat => {
-                  const active = form.categories.includes(cat);
-                  return (
-                    <button
-                      key={cat}
-                      style={{ ...s.catPill(cat, active), padding: "5px 14px", fontSize: 12, borderRadius: 6 }}
-                      onClick={() => setForm(f => ({
-                        ...f,
-                        categories: active ? f.categories.filter(c => c !== cat) : [...f.categories, cat]
-                      }))}
-                    >
-                      {active ? "✓ " : ""}{cat}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Notes in modal */}
-            <div style={{ marginTop: 16 }}>
-              <label style={s.label}>Notes</label>
-              <textarea
-                value={form.notes}
-                onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
-                style={{ ...s.notesArea, marginTop: 4 }}
-                placeholder="Optional notes…"
-              />
-            </div>
-
-            <div style={s.modalFooter}>
-              <button style={s.cancelBtn} onClick={() => { setShowAdd(false); setForm(EMPTY_FORM); }}>Cancel</button>
-              <button
-                style={s.saveBtn(!!form.vendor_name.trim())}
-                disabled={!form.vendor_name.trim() || addSaving}
-                onClick={addVendor}
-              >
-                {addSaving ? "Saving…" : "Add Vendor"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
 
 // ── Supabase client ─────────────────────────────────────────
 const SUPA_URL = "https://bplleiwxbejqfinmyxnq.supabase.co";
@@ -2907,6 +2442,328 @@ function WbsRow({ item, BID_TRADES, onUpdate, onRemove, onAddSub, critical }) {
 }
 
 
+
+// ── VendorsPage ─────────────────────────────────────────────────────────────
+const VENDOR_TABS       = ["All", "MP", "FM", "CapEx", "Lawn", "Snow"];
+const VENDOR_CATEGORIES = ["MP", "FM", "CapEx", "Lawn", "Snow"];
+
+const VCAT_STYLE = {
+  MP:    { active: { background:"#1e3a5f", color:"#60a5fa", border:"1px solid #2d5a8f" }, inactive: { background:"#f4f6fb", color:"#9ba3bf", border:"1px solid #d4d9ee" } },
+  FM:    { active: { background:"#14532d", color:"#4ade80", border:"1px solid #166534" }, inactive: { background:"#f4f6fb", color:"#9ba3bf", border:"1px solid #d4d9ee" } },
+  CapEx: { active: { background:"#4a1942", color:"#f0abfc", border:"1px solid #701a75" }, inactive: { background:"#f4f6fb", color:"#9ba3bf", border:"1px solid #d4d9ee" } },
+  Lawn:  { active: { background:"#14532d", color:"#86efac", border:"1px solid #15803d" }, inactive: { background:"#f4f6fb", color:"#9ba3bf", border:"1px solid #d4d9ee" } },
+  Snow:  { active: { background:"#1e3a5f", color:"#bae6fd", border:"1px solid #0369a1" }, inactive: { background:"#f4f6fb", color:"#9ba3bf", border:"1px solid #d4d9ee" } },
+};
+
+const VEMPTY_FORM = {
+  vendor_name:"", company_name:"", street_address:"",
+  city:"", state:"", country:"USA", zip:"",
+  phone:"", email:"", trade:"", notes:"", categories:[],
+};
+
+function VendorsPage({ supa }) {
+  const [vendors,      setVendors]      = useState([]);
+  const [loading,      setLoading]      = useState(true);
+  const [activeTab,    setActiveTab]    = useState("All");
+  const [search,       setSearch]       = useState("");
+  const [tradeFilter,  setTradeFilter]  = useState("All");
+  const [selected,     setSelected]     = useState(null);
+  const [saving,       setSaving]       = useState(false);
+  const [showAdd,      setShowAdd]      = useState(false);
+  const [form,         setForm]         = useState(VEMPTY_FORM);
+  const [addSaving,    setAddSaving]    = useState(false);
+  const [editNotes,    setEditNotes]    = useState(false);
+  const [notesValue,   setNotesValue]   = useState("");
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    const { data } = await supa.from("vendors").select("*").order("vendor_name");
+    setVendors(Array.isArray(data) ? data : []);
+    setLoading(false);
+  }, [supa]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const toggleCat = async (vendor, cat, e) => {
+    e && e.stopPropagation();
+    const current = vendor.categories || [];
+    const updated = current.includes(cat) ? current.filter(c => c !== cat) : [...current, cat];
+    setSaving(vendor.id);
+    await supa.from("vendors").update({ categories: updated }).eq("id", vendor.id);
+    const patch = v => v.id === vendor.id ? { ...v, categories: updated } : v;
+    setVendors(vs => vs.map(patch));
+    setSelected(s => s?.id === vendor.id ? { ...s, categories: updated } : s);
+    setSaving(false);
+  };
+
+  const saveNotes = async () => {
+    if (!selected) return;
+    await supa.from("vendors").update({ notes: notesValue }).eq("id", selected.id);
+    setVendors(vs => vs.map(v => v.id === selected.id ? { ...v, notes: notesValue } : v));
+    setSelected(s => ({ ...s, notes: notesValue }));
+    setEditNotes(false);
+  };
+
+  const addVendor = async () => {
+    if (!form.vendor_name.trim()) return;
+    setAddSaving(true);
+    const { data } = await supa.from("vendors").insert(form).select("*");
+    if (data && data[0]) {
+      setVendors(vs => [...vs, data[0]].sort((a,b)=>(a.vendor_name||"").localeCompare(b.vendor_name||"")));
+      setSelected(data[0]);
+    }
+    setShowAdd(false); setForm(VEMPTY_FORM); setAddSaving(false);
+  };
+
+  const trades = ["All", ...Array.from(new Set(vendors.map(v=>v.trade).filter(Boolean))).sort()];
+  const tabCounts = Object.fromEntries(VENDOR_CATEGORIES.map(cat=>[cat, vendors.filter(v=>(v.categories||[]).includes(cat)).length]));
+  const filtered = vendors.filter(v => {
+    if (activeTab !== "All" && !(v.categories||[]).includes(activeTab)) return false;
+    if (tradeFilter !== "All" && v.trade !== tradeFilter) return false;
+    if (search) {
+      const q = search.toLowerCase();
+      return (v.vendor_name||"").toLowerCase().includes(q) || (v.company_name||"").toLowerCase().includes(q) ||
+             (v.trade||"").toLowerCase().includes(q) || (v.city||"").toLowerCase().includes(q) ||
+             (v.email||"").toLowerCase().includes(q) || (v.phone||"").toLowerCase().includes(q);
+    }
+    return true;
+  });
+
+  return (
+    <div className="fade-in" style={{ display:"flex", flexDirection:"column", height:"calc(100vh - 80px)", background:"#F4F6FB", borderRadius:14, overflow:"hidden", border:"1px solid #D4D9EE" }}>
+
+      {/* Header */}
+      <div style={{ background:"#fff", padding:"18px 24px 0", borderBottom:"1px solid #ECEEF8", flexShrink:0 }}>
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:14 }}>
+          <div>
+            <div style={{ fontSize:22, fontWeight:700, color:"#1A2240", letterSpacing:"-0.01em", textTransform:"uppercase" }}>Vendors</div>
+            <div style={{ fontSize:11, color:"#4A5278", marginTop:3, letterSpacing:"0.06em" }}>{filtered.length.toLocaleString()} OF {vendors.length.toLocaleString()} VENDORS</div>
+          </div>
+          <button className="btn-primary" onClick={() => setShowAdd(true)}>+ Add Vendor</button>
+        </div>
+        {/* Tabs */}
+        <div style={{ display:"flex", gap:2 }}>
+          {VENDOR_TABS.map(tab => (
+            <button key={tab} onClick={() => setActiveTab(tab)}
+              style={{ padding:"8px 16px", border:"none", borderRadius:"6px 6px 0 0", cursor:"pointer", fontSize:12, fontWeight:600,
+                background: activeTab===tab ? "#F4F6FB" : "transparent",
+                color: activeTab===tab ? "#3B6FE8" : "#4A5278",
+                borderBottom: activeTab===tab ? "2px solid #3B6FE8" : "2px solid transparent" }}>
+              {tab}
+              {tab !== "All" && (
+                <span style={{ marginLeft:5, background:"#EEF2FF", color:"#3B6FE8", borderRadius:10, padding:"1px 6px", fontSize:10, fontWeight:700 }}>
+                  {tabCounts[tab]||0}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Toolbar */}
+      <div style={{ display:"flex", gap:10, padding:"12px 24px", background:"#fff", borderBottom:"1px solid #ECEEF8", flexShrink:0 }}>
+        <input placeholder="Search vendors, trade, city, email..." value={search} onChange={e=>setSearch(e.target.value)}
+          style={{ flex:1, background:"#F4F6FB", border:"1px solid #D4D9EE", borderRadius:8, color:"#1A2240", padding:"8px 12px", fontSize:13, outline:"none" }}/>
+        <select value={tradeFilter} onChange={e=>setTradeFilter(e.target.value)}
+          style={{ background:"#F4F6FB", border:"1px solid #D4D9EE", borderRadius:8, color:"#1A2240", padding:"8px 12px", fontSize:13, outline:"none", minWidth:170 }}>
+          {trades.map(t => <option key={t} value={t}>{t==="All" ? "All Trades" : t}</option>)}
+        </select>
+      </div>
+
+      {/* Table */}
+      <div style={{ flex:1, overflowY:"auto", background:"#fff" }}>
+        {loading ? (
+          <div style={{ textAlign:"center", padding:80, color:"#9BA3BF", fontSize:14 }}>Loading vendors…</div>
+        ) : (
+          <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
+            <thead>
+              <tr style={{ borderBottom:"1px solid #ECEEF8" }}>
+                {["Vendor","Trade","Location","Phone","Email","Categories"].map(h => (
+                  <th key={h} style={{ padding:"10px 16px", textAlign:"left", color:"#4A5278", fontWeight:600, fontSize:10, textTransform:"uppercase", letterSpacing:"0.07em", background:"#fff", position:"sticky", top:0, zIndex:2, borderBottom:"1px solid #ECEEF8" }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map(v => {
+                const isSel = selected?.id === v.id;
+                return (
+                  <tr key={v.id}
+                    onClick={() => { setSelected(v); setEditNotes(false); setNotesValue(v.notes||""); }}
+                    style={{ borderBottom:"1px solid #F4F6FB", cursor:"pointer", background: isSel ? "#EEF2FF" : "transparent" }}
+                    onMouseEnter={e => { if (!isSel) e.currentTarget.style.background="#F8F9FE"; }}
+                    onMouseLeave={e => { if (!isSel) e.currentTarget.style.background="transparent"; }}>
+                    <td style={{ padding:"10px 16px", fontWeight:600, color:"#1A2240", maxWidth:220 }}>
+                      <div style={{ overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{v.vendor_name||"—"}</div>
+                    </td>
+                    <td style={{ padding:"10px 16px" }}>
+                      {v.trade && <span style={{ background:"#EEF2FF", color:"#3B6FE8", borderRadius:4, padding:"2px 8px", fontSize:11, fontWeight:600, whiteSpace:"nowrap" }}>{v.trade}</span>}
+                    </td>
+                    <td style={{ padding:"10px 16px", color:"#4A5278", fontSize:12, whiteSpace:"nowrap" }}>
+                      {[v.city,v.state].filter(Boolean).join(", ")||"—"}
+                    </td>
+                    <td style={{ padding:"10px 16px", color:"#4A5278", fontSize:12 }}>{v.phone||"—"}</td>
+                    <td style={{ padding:"10px 16px", fontSize:12, maxWidth:200 }}>
+                      {v.email ? <a href={"mailto:"+v.email} style={{ color:"#3B6FE8", textDecoration:"none" }} onClick={e=>e.stopPropagation()}>{v.email}</a> : <span style={{color:"#CBD1E8"}}>—</span>}
+                    </td>
+                    <td style={{ padding:"10px 16px", minWidth:230 }}>
+                      <div style={{ display:"flex", gap:4, flexWrap:"wrap", alignItems:"center" }}>
+                        {VENDOR_CATEGORIES.map(cat => {
+                          const active = (v.categories||[]).includes(cat);
+                          return (
+                            <button key={cat} onClick={e=>toggleCat(v,cat,e)} disabled={saving===v.id}
+                              style={{ padding:"2px 8px", borderRadius:4, fontSize:10, fontWeight:700, cursor:"pointer",
+                                ...(active ? VCAT_STYLE[cat].active : VCAT_STYLE[cat].inactive) }}>
+                              {cat}
+                            </button>
+                          );
+                        })}
+                        {saving===v.id && <span style={{fontSize:10,color:"#3B6FE8",marginLeft:2}}>saving…</span>}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
+        {!loading && filtered.length===0 && (
+          <div style={{ textAlign:"center", padding:80, color:"#9BA3BF" }}>No vendors match your filters.</div>
+        )}
+      </div>
+
+      {/* Detail Drawer */}
+      {selected && (
+        <div style={{ position:"fixed", right:0, top:0, bottom:0, width:360, background:"#fff", borderLeft:"1px solid #D4D9EE", zIndex:100, display:"flex", flexDirection:"column", boxShadow:"-4px 0 24px rgba(0,0,0,0.08)" }}>
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", padding:"20px 20px 0" }}>
+            <div style={{ flex:1, paddingRight:12 }}>
+              <div style={{ fontSize:15, fontWeight:700, color:"#1A2240", lineHeight:1.3 }}>{selected.vendor_name}</div>
+              {selected.company_name && selected.company_name!==selected.vendor_name && (
+                <div style={{ fontSize:12, color:"#4A5278", marginTop:3 }}>{selected.company_name}</div>
+              )}
+            </div>
+            <button className="btn-ghost" style={{ fontSize:18, padding:"2px 6px" }} onClick={()=>setSelected(null)}>×</button>
+          </div>
+          <div style={{ flex:1, overflowY:"auto", padding:"16px 20px 24px" }}>
+            {selected.trade && (
+              <span style={{ background:"#EEF2FF", color:"#3B6FE8", borderRadius:4, padding:"3px 10px", fontSize:12, fontWeight:600 }}>{selected.trade}</span>
+            )}
+            {/* Categories */}
+            <div style={{ margin:"16px 0 8px", fontSize:10, fontWeight:700, color:"#4A5278", textTransform:"uppercase", letterSpacing:"0.07em" }}>
+              Categories {saving===selected.id && <span style={{color:"#3B6FE8",marginLeft:6}}>saving…</span>}
+            </div>
+            <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+              {VENDOR_CATEGORIES.map(cat => {
+                const active = (selected.categories||[]).includes(cat);
+                return (
+                  <button key={cat} onClick={e=>toggleCat(selected,cat,e)}
+                    style={{ padding:"5px 14px", borderRadius:6, fontSize:12, fontWeight:700, cursor:"pointer",
+                      ...(active ? VCAT_STYLE[cat].active : VCAT_STYLE[cat].inactive) }}>
+                    {active ? "✓ " : ""}{cat}
+                  </button>
+                );
+              })}
+            </div>
+            <hr style={{ border:"none", borderTop:"1px solid #ECEEF8", margin:"16px 0" }}/>
+            {/* Contact details */}
+            <div style={{ fontSize:10, fontWeight:700, color:"#4A5278", textTransform:"uppercase", letterSpacing:"0.07em", marginBottom:10 }}>Contact Details</div>
+            {[
+              { label:"Address", value:[selected.street_address,selected.city,selected.state,selected.zip].filter(Boolean).join(", ") },
+              { label:"Phone",   value:selected.phone, href:`tel:${selected.phone}` },
+              { label:"Email",   value:selected.email, href:`mailto:${selected.email}` },
+            ].map(({ label, value, href }) => !value ? null : (
+              <div key={label} style={{ marginBottom:12 }}>
+                <div style={{ fontSize:10, color:"#9BA3BF", textTransform:"uppercase", marginBottom:2 }}>{label}</div>
+                {href ? <a href={href} style={{ color:"#3B6FE8", fontSize:13, textDecoration:"none" }}>{value}</a>
+                      : <div style={{ fontSize:13, color:"#1A2240" }}>{value}</div>}
+              </div>
+            ))}
+            <hr style={{ border:"none", borderTop:"1px solid #ECEEF8", margin:"16px 0" }}/>
+            {/* Notes */}
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
+              <div style={{ fontSize:10, fontWeight:700, color:"#4A5278", textTransform:"uppercase", letterSpacing:"0.07em" }}>Notes</div>
+              {!editNotes && <button className="btn-ghost" style={{fontSize:11}} onClick={()=>{setEditNotes(true);setNotesValue(selected.notes||"");}}>{selected.notes?"Edit":"+ Add"}</button>}
+            </div>
+            {editNotes ? (
+              <div>
+                <textarea value={notesValue} onChange={e=>setNotesValue(e.target.value)}
+                  style={{ width:"100%", background:"#F4F6FB", border:"1px solid #D4D9EE", borderRadius:8, color:"#1A2240", padding:"8px 10px", fontSize:12, outline:"none", resize:"vertical", minHeight:80, fontFamily:"inherit", boxSizing:"border-box" }}
+                  placeholder="Add notes…" autoFocus/>
+                <div style={{ display:"flex", gap:8, marginTop:6 }}>
+                  <button className="btn-primary" style={{fontSize:12,padding:"5px 14px"}} onClick={saveNotes}>Save</button>
+                  <button className="btn-ghost" style={{fontSize:12}} onClick={()=>setEditNotes(false)}>Cancel</button>
+                </div>
+              </div>
+            ) : (
+              <div style={{ fontSize:12, color:selected.notes?"#4A5278":"#CBD1E8", fontStyle:selected.notes?"normal":"italic" }}>
+                {selected.notes||"No notes yet."}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Add Vendor Modal */}
+      {showAdd && (
+        <div style={{ position:"fixed", inset:0, background:"rgba(26,34,64,0.45)", zIndex:200, display:"flex", alignItems:"center", justifyContent:"center" }}
+          onClick={e=>{ if(e.target===e.currentTarget){setShowAdd(false);setForm(VEMPTY_FORM);} }}>
+          <div style={{ background:"#fff", borderRadius:14, border:"1px solid #D4D9EE", padding:28, width:480, maxHeight:"88vh", overflowY:"auto", boxShadow:"0 8px 40px rgba(0,0,0,0.18)" }}>
+            <div style={{ fontSize:16, fontWeight:700, color:"#1A2240", marginBottom:20 }}>Add Vendor</div>
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"12px 16px" }}>
+              {[
+                { key:"vendor_name",    label:"Vendor Name *", full:true },
+                { key:"company_name",   label:"Company Name",  full:true },
+                { key:"trade",          label:"Trade",         full:false },
+                { key:"phone",          label:"Phone",         full:false },
+                { key:"email",          label:"Email",         full:true },
+                { key:"street_address", label:"Street Address",full:true },
+                { key:"city",           label:"City",          full:false },
+                { key:"state",          label:"State",         full:false },
+                { key:"zip",            label:"Zip",           full:false },
+                { key:"country",        label:"Country",       full:false },
+              ].map(({ key, label, full }) => (
+                <div key={key} style={{ gridColumn: full?"1 / -1":"auto" }}>
+                  <label style={{ display:"block", fontSize:11, color:"#4A5278", marginBottom:4, textTransform:"uppercase", letterSpacing:"0.04em" }}>{label}</label>
+                  <input value={form[key]} onChange={e=>setForm(f=>({...f,[key]:e.target.value}))} autoComplete="off"
+                    style={{ width:"100%", background:"#F4F6FB", border:"1px solid #D4D9EE", borderRadius:8, color:"#1A2240", padding:"8px 10px", fontSize:13, outline:"none", boxSizing:"border-box" }}/>
+                </div>
+              ))}
+            </div>
+            <div style={{ marginTop:16 }}>
+              <div style={{ fontSize:11, color:"#4A5278", marginBottom:6, textTransform:"uppercase", letterSpacing:"0.04em" }}>Categories</div>
+              <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+                {VENDOR_CATEGORIES.map(cat => {
+                  const active = form.categories.includes(cat);
+                  return (
+                    <button key={cat} onClick={()=>setForm(f=>({ ...f, categories: active ? f.categories.filter(c=>c!==cat) : [...f.categories,cat] }))}
+                      style={{ padding:"5px 14px", borderRadius:6, fontSize:12, fontWeight:700, cursor:"pointer",
+                        ...(active ? VCAT_STYLE[cat].active : VCAT_STYLE[cat].inactive) }}>
+                      {active?"✓ ":""}{cat}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            <div style={{ marginTop:16 }}>
+              <label style={{ display:"block", fontSize:11, color:"#4A5278", marginBottom:4, textTransform:"uppercase" }}>Notes</label>
+              <textarea value={form.notes} onChange={e=>setForm(f=>({...f,notes:e.target.value}))}
+                style={{ width:"100%", background:"#F4F6FB", border:"1px solid #D4D9EE", borderRadius:8, color:"#1A2240", padding:"8px 10px", fontSize:13, outline:"none", resize:"vertical", minHeight:60, fontFamily:"inherit", boxSizing:"border-box" }}
+                placeholder="Optional notes…"/>
+            </div>
+            <div style={{ display:"flex", gap:10, justifyContent:"flex-end", marginTop:20 }}>
+              <button className="btn-ghost" onClick={()=>{setShowAdd(false);setForm(VEMPTY_FORM);}}>Cancel</button>
+              <button className="btn-primary" disabled={!form.vendor_name.trim()||addSaving} onClick={addVendor}
+                style={{ opacity: form.vendor_name.trim()?1:0.4 }}>
+                {addSaving ? "Saving…" : "Add Vendor"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+// ── End VendorsPage ──────────────────────────────────────────────────────────
+
 export default function App() {
   // URL routing — sub-facing page
   const urlToken  = useMemo(() => new URLSearchParams(window.location.search).get("subtoken"), []);
@@ -3032,8 +2889,7 @@ export default function App() {
   const [showMpVendorForm, setShowMpVendorForm]  = useState(false);
   const [mpVendorSearch,   setMpVendorSearch]   = useState("");
   const [mpVendorTrade,    setMpVendorTrade]    = useState("");
-  const [mpVendorForm,     setMpVendorForm]      = useState({company:"",contact:"",phone:"",email:"",address:"",city:"",state:"",zip:"",trades:[],notes:"",rating:5});
-  const [selectedMpVendor, setSelectedMpVendor] = useState(null); // vendor detail slide-in
+  const [mpVendorForm,     setMpVendorForm]      = useState({company:"",contact:"",phone:"",email:"",trades:[],notes:"",rating:5}); // {oppId: {vendors:[{id,company,contact,phone,email,trades:[],bidding,infoSent,bidReceived,bidAmount,notes}], trades:[str]}}
   const [activeBidOpp,     setActiveBidOpp]     = useState(null);
   const [showAddVendor,    setShowAddVendor]     = useState(false);
   const [vendorForm,       setVendorForm]        = useState({company:"",contact:"",phone:"",email:"",trades:[],bidding:false,infoSent:false,bidReceived:false,bidAmount:"",notes:""});
@@ -3264,7 +3120,7 @@ export default function App() {
     const load = async () => {
       setDbLoading(l => ({ ...l, companies: true, sites: true, lawnSites: true, subcontractors: true }));
       try {
-        const [coRes, siteRes, subRes, fmRes, teamRes, crmRes, ctRes, mpPipeRes, mpRes, mpwRes, estRes, vendRes] = await Promise.all([
+        const [coRes, siteRes, subRes, fmRes, teamRes, crmRes, ctRes, mpPipeRes, mpRes, mpwRes] = await Promise.all([
           supa.from("companies").select("*"),
           fetch(`${SUPA_URL}/rest/v1/sites?select=*&limit=1000`, {
             headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}` }
@@ -3287,13 +3143,6 @@ export default function App() {
           fetch(`${SUPA_URL}/rest/v1/mp_weekly_reports?select=*&limit=1000`, {
             headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}` }
           }).then(r => r.json()).then(data => ({ data, error: null })).catch(() => ({ data: null, error: null })),
-          // NEW: load estimates and vendor db
-          fetch(`${SUPA_URL}/rest/v1/mp_estimates?select=*&limit=500`, {
-            headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}` }
-          }).then(r => r.json()).then(data => ({ data, error: null })).catch(() => ({ data: null, error: null })),
-          fetch(`${SUPA_URL}/rest/v1/mp_vendor_db?select=*&limit=1000`, {
-            headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}` }
-          }).then(r => r.json()).then(data => ({ data, error: null })).catch(() => ({ data: null, error: null })),
         ]);
         if (coRes.data?.length)   setCompanies(coRes.data.map(dbToCompany));
         if (siteRes.data?.length) setSites(siteRes.data.map(dbToSite));
@@ -3308,14 +3157,6 @@ export default function App() {
             bu: "major", closeDate: r.close_date||"", nextSteps: [],
             pipelineType: "budgeting", budgetDueDate: "", bidDueDate: "", dbId: r.id
           }));
-          // Load oppDetails from notes field (JSON blob)
-          const detMap = {};
-          mpPipeRes.data.forEach(r => {
-            if (r.notes && r.notes.startsWith("{")) {
-              try { detMap[r.id] = JSON.parse(r.notes); } catch(e) {}
-            }
-          });
-          if (Object.keys(detMap).length) setOppDetails(detMap);
           setPipeline(prev => {
             const existing = prev.filter(p => p.bu !== "major");
             return [...existing, ...pipeLoaded];
@@ -3325,7 +3166,7 @@ export default function App() {
           try { setMpJobs(mpRes.data.map(dbToMpJob)); } catch(e) { console.warn("mpJobs map error:", e); }
         }
         if (Array.isArray(mpwRes.data) && mpwRes.data.length) setMpWeeklyReports(mpwRes.data.map(dbToMpWeekly));
-        // contacts table
+        // contacts table — deduplicate by name+company before setting
         if (Array.isArray(ctRes.data) && ctRes.data.length) {
           const seen = new Set();
           const deduped = ctRes.data.filter(r => {
@@ -3335,46 +3176,10 @@ export default function App() {
           });
           setContacts(deduped.map(dbToContact));
         }
-        // Load estimates (wbs, takeoff, bid packages, phase, critical trades)
-        if (Array.isArray(estRes.data) && estRes.data.length) {
-          const wbsMap = {}, toMap = {}, pkgMap = {}, phaseMap = {}, critMap = {};
-          const parseJ = (v) => {
-            if (!v) return null;
-            if (typeof v === "string") { try { return JSON.parse(v); } catch(e) { return null; } }
-            return v; // already object/array (JSONB)
-          };
-          estRes.data.forEach(r => {
-            const wbs = parseJ(r.wbs_data);
-            const to  = parseJ(r.takeoff_data);
-            const pkg = parseJ(r.bid_packages);
-            const crit= parseJ(r.critical_trades);
-            if (Array.isArray(wbs))  wbsMap[r.opp_id]   = wbs;
-            if (to && typeof to === "object") toMap[r.opp_id] = to;
-            if (pkg && typeof pkg === "object") pkgMap[r.opp_id] = pkg;
-            if (r.estimate_phase)    phaseMap[r.opp_id] = r.estimate_phase;
-            if (Array.isArray(crit)) critMap[r.opp_id]  = crit;
-          });
-          if (Object.keys(wbsMap).length)   setWbsData(wbsMap);
-          if (Object.keys(toMap).length)    setTakeoffData(toMap);
-          if (Object.keys(pkgMap).length)   setBidPackages(pkgMap);
-          if (Object.keys(phaseMap).length) setEstimatePhase(phaseMap);
-          if (Object.keys(critMap).length)  setCriticalTrades(critMap);
-        }
-        // Load vendor database
-        if (Array.isArray(vendRes.data) && vendRes.data.length) {
-          setMpVendorDB(vendRes.data.map(r => ({
-            id: r.id, company: r.company||"", contact: r.contact||"",
-            phone: r.phone||"", email: r.email||"",
-            trades: Array.isArray(r.trades) ? r.trades : [],
-            notes: r.notes||"", rating: r.rating||5,
-            address: r.address||"", city: r.city||"",
-            state: r.state||"", zip: r.zip||""
-          })));
-        }
         setSupaReady(true);
       } catch(e) {
         setDbError("Could not connect to database.");
-        setSupaReady(true);
+        setSupaReady(true); // Always show the app even if DB fails
       }
       setDbLoading(l => ({ ...l, companies: false, sites: false, lawnSites: false, subcontractors: false }));
       clearTimeout(timeout);
@@ -3724,134 +3529,34 @@ Return ONLY valid JSON, no markdown, no extra text:
     setShowForm(true);
   };
   const saveOpp = () => {
-    if (!form.name.trim()) return;
+    if (!form.name.trim() || !form.value) return;
     const ct    = contacts.find(p => p.id === form.contactId);
     const entry = { ...form, value: Number(form.value), contact: ct ? ct.email : "" };
-    const stageNorm = (s) => {
-      if(!s) return "budgeting_lead";
-      const m = {Budgeting:"budgeting_lead",Lead:"lead",Won:"won","Proposal/Bid":"proposal_bid","Proposal / Bid":"proposal_bid",Negotiation:"negotiation","Closed/Won":"closed_won","closed_won":"closed_won"};
-      return m[s]||s;
-    };
     if (editId !== null) {
-      // Update existing
-      const updated = { ...entry, id: editId };
-      setPipeline(pipeline.map(o => o.id === editId ? updated : o));
-      if (selectedOpp && selectedOpp.id === editId) setSelectedOpp(updated);
-      const row = {
-        name: form.name.trim(),
-        company_id: form.companyId||null,
-        contact_name: form.contactName||(ct ? ct.firstName+" "+(ct.lastName||"") : ""),
-        value: Number(form.value)||0,
-        stage: stageNorm(form.stage),
-        close_date: form.closeDate||null,
-        bu: form.bu||"major",
-      };
-      console.log("[Pipeline] Updating opp id="+editId+":", row);
-      fetch(`${SUPA_URL}/rest/v1/mp_pipeline?id=eq.${String(editId)}`, {
-        method: "PATCH",
-        headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}`, "Content-Type": "application/json", Prefer: "return=minimal" },
-        body: JSON.stringify(row)
-      }).then(r=>{console.log("[Pipeline] PATCH status:", r.status);return r.text();}).then(t=>{if(t)console.log("[Pipeline] PATCH response:",t);}).catch(e=>console.error("[Pipeline] PATCH error:",e));
+      setPipeline(pipeline.map(o => o.id === editId ? { ...entry, id: editId } : o));
+      if (selectedOpp && selectedOpp.id === editId) setSelectedOpp({ ...entry, id: editId });
     } else {
-      // Create new
-      const newId = String(Date.now());
-      const newEntry = { ...entry, id: newId, dbId: newId };
-      setPipeline(prev => [...prev, newEntry]);
+      setPipeline([...pipeline, { ...entry, id: Date.now() }]);
+      // Auto-tag CRM contacts for this company with the division
       const divTag = form.bu==="major"?"MP":form.bu==="capital"?"CapEx":form.bu==="facility"?"FM":form.bu==="lawn"?"Lawn":form.bu==="snow"?"Snow":null;
       if (divTag) autoTagCrmContacts(form.companyId, divTag);
-      const row = {
-        id: newId,
-        name: form.name.trim(),
-        company_id: form.companyId||null,
-        contact_name: form.contactName||(ct ? ct.firstName+" "+(ct.lastName||"") : ""),
-        value: Number(form.value)||0,
-        stage: stageNorm(form.stage),
-        notes: form.notes ? JSON.stringify({userNotes: form.notes}) : "",
-        close_date: form.closeDate||null,
-        bu: form.bu||"major",
-      };
-      console.log("[Pipeline] Creating new opp:", row);
-      fetch(`${SUPA_URL}/rest/v1/mp_pipeline`, {
-        method: "POST",
-        headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}`, "Content-Type": "application/json", Prefer: "return=minimal" },
-        body: JSON.stringify(row)
-      }).then(r=>{console.log("[Pipeline] POST status:", r.status);return r.text();}).then(t=>{if(t)console.log("[Pipeline] POST response:",t);}).catch(e=>console.error("[Pipeline] POST error:",e));
     }
     setShowForm(false);
   };
-  const deleteOpp  = (id) => {
-    setPipeline(pipeline.filter(o => o.id !== id));
-    setSelectedOpp(null);
-    fetch(`${SUPA_URL}/rest/v1/mp_pipeline?id=eq.${String(id)}`, {
-      method: "DELETE",
-      headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}`, Prefer: "return=minimal" }
-    }).catch(()=>{});
-  };
+  const deleteOpp  = (id) => { setPipeline(pipeline.filter(o => o.id !== id)); setSelectedOpp(null); };
   const saveOppDetail = (oppId, fields) => {
     setOppDetails(prev => {
       const updated = {...prev, [oppId]: {...(prev[oppId]||{}), ...fields}};
+      // Persist to Supabase notes field as JSON
       try {
-        const id = String(oppId);
-        // Debounce: cancel previous pending save for this opp
-        if (window._saveOppTimers) clearTimeout(window._saveOppTimers[id]);
-        else window._saveOppTimers = {};
-        window._saveOppTimers[id] = setTimeout(() => {
-          fetch(`${SUPA_URL}/rest/v1/mp_pipeline?id=eq.${id}`, {
-            method: "PATCH",
-            headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}`, "Content-Type": "application/json", Prefer: "return=minimal" },
-            body: JSON.stringify({ notes: JSON.stringify(updated[oppId]) })
-          }).catch(()=>{});
-        }, 800);
+        const row = pipeline.find(o=>o.id===oppId);
+        if (row?.dbId || String(oppId).length > 8) {
+          const id = row?.dbId || String(oppId);
+          supa.from("mp_pipeline").update({notes: JSON.stringify(updated[oppId])}).eq("id", id);
+        }
       } catch(e) {}
       return updated;
     });
-  };
-
-  // Save all estimate data for one opp to mp_estimates table (upsert, debounced)
-  const saveEstimateField = (oppId, field, value) => {
-    const id = String(oppId);
-    const key = id + "_" + field;
-    if (!window._saveEstTimers) window._saveEstTimers = {};
-    clearTimeout(window._saveEstTimers[key]);
-    window._saveEstTimers[key] = setTimeout(() => {
-      const body = { opp_id: id, [field]: value, updated_at: new Date().toISOString() };
-      fetch(`${SUPA_URL}/rest/v1/mp_estimates`, {
-        method: "POST",
-        headers: {
-          apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}`,
-          "Content-Type": "application/json",
-          Prefer: "resolution=merge-duplicates,return=minimal"
-        },
-        body: JSON.stringify(body)
-      }).catch(()=>{});
-    }, 600);
-  };
-
-  // Upsert vendor to mp_vendor_db
-  const saveVendorToDB = (v) => {
-    const row = {
-      id: v.id, company: v.company, contact: v.contact||"",
-      phone: v.phone||"", email: v.email||"",
-      trades: v.trades||[],
-      notes: v.notes||"", rating: v.rating||5,
-      address: v.address||"", city: v.city||"",
-      state: v.state||"", zip: v.zip||""
-    };
-    fetch(`${SUPA_URL}/rest/v1/mp_vendor_db`, {
-      method: "POST",
-      headers: {
-        apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}`,
-        "Content-Type": "application/json",
-        Prefer: "resolution=merge-duplicates,return=minimal"
-      },
-      body: JSON.stringify(row)
-    }).catch(()=>{});
-  };
-
-  const deleteVendorFromDB = (id) => {
-    fetch(`${SUPA_URL}/rest/v1/mp_vendor_db?id=eq.${id}`, {
-      method: "DELETE", headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}`, Prefer: "return=minimal" }
-    }).catch(()=>{});
   };
   const moveStage  = (id, dir) => setPipeline(pipeline.map(o => {
     if (o.id !== id) return o;
@@ -5764,12 +5469,8 @@ Return ONLY valid JSON, no markdown, no extra text:
             const moveOpp = (id, newStage) => {
               const updated = pipeline.map(o => o.id===id ? {...o, stage:newStage} : o);
               setPipeline(updated);
-              // id IS the Supabase row id (both for loaded rows and new rows)
-              fetch(`${SUPA_URL}/rest/v1/mp_pipeline?id=eq.${String(id)}`, {
-                method: "PATCH",
-                headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}`, "Content-Type": "application/json", Prefer: "return=minimal" },
-                body: JSON.stringify({ stage: newStage })
-              }).catch(()=>{});
+              const opp = updated.find(o=>o.id===id);
+              if (opp?.dbId) supa.from("mp_pipeline").update({stage:newStage}).eq("id",opp.dbId);
             };
 
             const saveNewOpp = async (fields) => {
@@ -5777,8 +5478,7 @@ Return ONLY valid JSON, no markdown, no extra text:
               const entry = { ...fields, id, bu:"major", nextSteps:[] };
               setPipeline(prev=>[...prev, entry]);
               // Persist
-              const sNorm = (s) => { if(!s) return "budgeting_lead"; const m={Budgeting:"budgeting_lead",Lead:"lead",Won:"won"}; return m[s]||s; };
-              const row = { id:String(id), name:fields.name, company_id:fields.companyId||null, contact_name:fields.contactName||"", value:parseFloat(fields.value)||0, stage:sNorm(fields.stage), notes:fields.notes||"", bu:"major", close_date:fields.closeDate||null };
+              const row = { id:String(id), name:fields.name, company_id:fields.companyId||null, contact_name:fields.contactName||"", value:parseFloat(fields.value)||0, stage:fields.stage||"budgeting_lead", notes:fields.notes||"", bu:"major", close_date:fields.closeDate||null };
               try { await fetch(`${SUPA_URL}/rest/v1/mp_pipeline`, { method:"POST", headers:{apikey:SUPA_KEY,Authorization:`Bearer ${SUPA_KEY}`,"Content-Type":"application/json",Prefer:"return=minimal"}, body:JSON.stringify(row) }); } catch(e){}
             };
 
@@ -5902,68 +5602,13 @@ Return ONLY valid JSON, no markdown, no extra text:
                               onMouseEnter={e=>e.currentTarget.style.boxShadow="0 4px 16px rgba(59,111,232,0.12)"}
                               onMouseLeave={e=>e.currentTarget.style.boxShadow="0 1px 4px rgba(0,0,0,0.04)"}>
                               <div style={{height:3,background:stageObj.color}}/>
-                              <div style={{padding:"11px 13px"}}>
-                                {/* Name + company */}
-                                <div style={{fontSize:13,fontWeight:700,color:"#1A2240",marginBottom:2,lineHeight:1.3}}>{o.name}</div>
-                                {co && <div style={{fontSize:10,color:"#3B6FE8",marginBottom:6,fontWeight:500}}>{co.name}</div>}
-
-                                {/* Stage-aware key metrics */}
-                                {(() => {
-                                  const det = oppDetails[o.id] || {};
-                                  const locStr = [det.city,det.state].filter(Boolean).join(", ");
-                                  const totalSF = det.totalSF ? Number(det.totalSF).toLocaleString()+" SF" : null;
-                                  const val = (parseFloat(o.value)||0)>0 ? fmt(parseFloat(o.value)) : null;
-                                  const budgetTotal = (det.budgetItems||[]).reduce((s,item)=>{
-                                    const dc=(item.qty||0)*(item.rate||0);
-                                    return s+dc;
-                                  },0);
-                                  const budgetNum = budgetTotal>0 ? fmt(Math.round(budgetTotal*1.15)) : null;
-
-                                  if (o.stage==="lead") return (
-                                    <div style={{display:"flex",flexDirection:"column",gap:4,marginBottom:8}}>
-                                      {val && <div style={{fontSize:14,fontWeight:800,color:"#1A2240"}}>{val}</div>}
-                                      <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-                                        {locStr && <span style={{fontSize:10,color:"#4A5278"}}>📍 {locStr}</span>}
-                                        {totalSF && <span style={{fontSize:10,color:"#4A5278"}}>📐 {totalSF}</span>}
-                                      </div>
-                                      {det.buildingConfig&&det.buildingConfig.length>0 && (
-                                        <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
-                                          {det.buildingConfig.map(c=>({single_story:"Single Story",multi_story:"Multi Story",canopy:"Canopy",mezzanine:"Mezzanine"}[c]||c)).map(l=>(
-                                            <span key={l} style={{fontSize:9,fontWeight:700,background:"#EEF3FF",color:"#3B6FE8",borderRadius:3,padding:"1px 5px"}}>{l}</span>
-                                          ))}
-                                          {det.projectCategory && <span style={{fontSize:9,fontWeight:700,background:"#F0FDF4",color:"#059669",borderRadius:3,padding:"1px 5px"}}>{det.projectCategory}</span>}
-                                          {det.climateControl && <span style={{fontSize:9,fontWeight:700,background:"#F9FAFC",color:"#4A5278",borderRadius:3,padding:"1px 5px"}}>{det.climateControl}</span>}
-                                        </div>
-                                      )}
-                                    </div>
-                                  );
-
-                                  if (o.stage==="budgeting_lead") return (
-                                    <div style={{display:"flex",flexDirection:"column",gap:4,marginBottom:8}}>
-                                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
-                                        {val && <div style={{fontSize:14,fontWeight:800,color:"#1A2240"}}>{val}</div>}
-                                        {budgetNum && <div style={{fontSize:12,fontWeight:700,color:"#818CF8"}}>Budget: {budgetNum}</div>}
-                                      </div>
-                                      {locStr && <span style={{fontSize:10,color:"#4A5278"}}>📍 {locStr}</span>}
-                                      {totalSF && <span style={{fontSize:10,color:"#4A5278"}}>📐 {totalSF}</span>}
-                                      <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-                                        {det.ownershipStatus && <span style={{fontSize:9,fontWeight:700,background:"#F4F6FB",color:"#4A5278",borderRadius:3,padding:"1px 5px"}}>🏠 {det.ownershipStatus}</span>}
-                                        {det.budgetDueDate && <span style={{fontSize:9,color:"#F87171",fontWeight:700}}>Due {det.budgetDueDate}</span>}
-                                      </div>
-                                    </div>
-                                  );
-
-                                  // proposal_bid, negotiation, won, closed_won
-                                  return (
-                                    <div style={{display:"flex",flexDirection:"column",gap:4,marginBottom:8}}>
-                                      {val && <div style={{fontSize:14,fontWeight:800,color:"#1A2240"}}>{val}</div>}
-                                      {locStr && <span style={{fontSize:10,color:"#4A5278"}}>📍 {locStr}</span>}
-                                      {totalSF && <span style={{fontSize:10,color:"#4A5278"}}>📐 {totalSF}</span>}
-                                      {det.bidDueDate && <span style={{fontSize:9,color:"#F87171",fontWeight:700}}>Bid Due {det.bidDueDate}</span>}
-                                    </div>
-                                  );
-                                })()}
-
+                              <div style={{padding:"12px 14px"}}>
+                                <div style={{fontSize:13,fontWeight:700,color:"#1A2240",marginBottom:4,lineHeight:1.3}}>{o.name}</div>
+                                {co && <div style={{fontSize:11,color:"#3B6FE8",marginBottom:6,fontWeight:500}}>{co.name}</div>}
+                                {o.contactName && <div style={{fontSize:11,color:"#4A5278",marginBottom:4}}>👤 {o.contactName}</div>}
+                                {(parseFloat(o.value)||0)>0 && <div style={{fontSize:14,fontWeight:800,color:"#1A2240",marginBottom:6}}>{fmt(parseFloat(o.value))}</div>}
+                                {o.notes && <div style={{fontSize:11,color:"#4A5278",marginBottom:8,lineHeight:1.5,borderLeft:"2px solid #E0E4F0",paddingLeft:8}}>{o.notes}</div>}
+                                {o.closeDate && <div style={{fontSize:10,color:"#9BA3BF",marginBottom:8}}>📅 Close: {o.closeDate}</div>}
                                 {/* Stage move + actions */}
                                 <div style={{display:"flex",gap:5,flexWrap:"wrap",paddingTop:8,borderTop:"1px solid #F0F2F8"}} onClick={e=>e.stopPropagation()}>
                                   {ACTIVE_STAGES.filter(s=>s.id!==getStage(o)).map(s=>(
@@ -8322,15 +7967,13 @@ if(bounds.length)map.fitBounds(bounds,{padding:[30,30]});
               "Fire Suppression","Fire Alarm","Elevators","Material Lift","Canopies",
               "General Conditions","Other"
             ];
-
-            const search     = mpVendorSearch;
-            const tradeFilter= mpVendorTrade;
+            const search = mpVendorSearch;
+            const setSearch = setMpVendorSearch;
+            const tradeFilter = mpVendorTrade;
+            const setTradeFilter = setMpVendorTrade;
 
             const filtered = mpVendorDB.filter(v =>
-              (!search || v.company.toLowerCase().includes(search.toLowerCase()) ||
-               (v.contact||"").toLowerCase().includes(search.toLowerCase()) ||
-               (v.city||"").toLowerCase().includes(search.toLowerCase()) ||
-               (v.state||"").toLowerCase().includes(search.toLowerCase())) &&
+              (!search || v.company.toLowerCase().includes(search.toLowerCase()) || (v.contact||"").toLowerCase().includes(search.toLowerCase())) &&
               (!tradeFilter || (v.trades||[]).includes(tradeFilter))
             );
 
@@ -8342,37 +7985,17 @@ if(bounds.length)map.fitBounds(bounds,{padding:[30,30]});
               tradeGroups[t].push(v);
             });
 
-            // Per-vendor: build project history
-            const getVendorHistory = (vendorId, vendorCompany) => {
-              const bidProjects = [];
-              // Scan all bid packages
-              Object.entries(bidPackages).forEach(([oppId, pkg]) => {
-                const opp = pipeline.find(o=>o.id===oppId);
-                if (!opp) return;
-                const v = (pkg.vendors||[]).find(v2=>v2.id===vendorId||v2.company===vendorCompany);
-                if (v) {
-                  bidProjects.push({
-                    opp, vendor: v,
-                    status: v.bidReceived?"Bid Received":v.bidding?"Bidding":v.infoSent?"Info Sent":"Contacted",
-                    amount: v.bidAmount||null,
-                    isActive: ["won","closed_won"].includes(opp.stage),
-                  });
-                }
-              });
-              const completed = bidProjects.filter(p=>p.isActive);
-              const bid       = bidProjects.filter(p=>!p.isActive);
-              return { completed, bid, all: bidProjects };
-            };
+            const fi = {padding:"7px 10px",border:"1.5px solid #CBD1E8",borderRadius:7,fontSize:13,fontFamily:"inherit",outline:"none",width:"100%",boxSizing:"border-box"};
 
             return (
-              <div className="fade-in" style={{display:"flex",flexDirection:"column",gap:14}}>
+              <div className="fade-in" style={{display:"flex",flexDirection:"column",gap:16}}>
                 {/* Header */}
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                   <div>
                     <div style={{fontSize:22,fontWeight:800,color:"#1A2240",letterSpacing:"-0.01em",textTransform:"uppercase"}}>MP Vendors</div>
-                    <div style={{fontSize:11,color:"#4A5278",marginTop:3}}>{mpVendorDB.length} vendors in database</div>
+                    <div style={{fontSize:11,color:"#4A5278",marginTop:3}}>{mpVendorDB.length} vendors · click a vendor to add to active estimate</div>
                   </div>
-                  <button onClick={()=>{setMpVendorForm({company:"",contact:"",phone:"",email:"",address:"",city:"",state:"",zip:"",trades:[],notes:"",rating:5});setShowMpVendorForm(true);}}
+                  <button onClick={()=>{setMpVendorForm({company:"",contact:"",phone:"",email:"",trades:[],notes:"",rating:5});setShowMpVendorForm(true);}}
                     style={{padding:"8px 18px",background:"#3B6FE8",color:"#fff",border:"none",borderRadius:8,cursor:"pointer",fontFamily:"inherit",fontSize:13,fontWeight:700}}>
                     + Add Vendor
                   </button>
@@ -8380,9 +8003,9 @@ if(bounds.length)map.fitBounds(bounds,{padding:[30,30]});
 
                 {/* Search + filter */}
                 <div style={{display:"flex",gap:10}}>
-                  <input value={search} onChange={e=>setMpVendorSearch(e.target.value)} placeholder="Search name, city, state..."
+                  <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search vendors..."
                     style={{flex:1,padding:"8px 12px",border:"1px solid #D4D9EE",borderRadius:8,fontSize:13,fontFamily:"inherit",outline:"none"}}/>
-                  <select value={tradeFilter} onChange={e=>setMpVendorTrade(e.target.value)}
+                  <select value={tradeFilter} onChange={e=>setTradeFilter(e.target.value)}
                     style={{padding:"8px 12px",border:"1px solid #D4D9EE",borderRadius:8,fontSize:13,fontFamily:"inherit",outline:"none",minWidth:180}}>
                     <option value="">All Trades</option>
                     {BID_TRADES.map(t=><option key={t}>{t}</option>)}
@@ -8393,72 +8016,57 @@ if(bounds.length)map.fitBounds(bounds,{padding:[30,30]});
                   <div style={{textAlign:"center",padding:"60px 24px",color:"#9BA3BF",border:"2px dashed #E0E4F0",borderRadius:12}}>
                     <div style={{fontSize:40,marginBottom:12}}>🏗</div>
                     <div style={{fontSize:16,fontWeight:700,color:"#1A2240",marginBottom:6}}>No vendors yet</div>
-                    <div style={{fontSize:12,marginBottom:20}}>Add vendors with their address to enable location-based suggestions</div>
-                    <button onClick={()=>{setMpVendorForm({company:"",contact:"",phone:"",email:"",address:"",city:"",state:"",zip:"",trades:[],notes:"",rating:5});setShowMpVendorForm(true);}}
+                    <div style={{fontSize:12,marginBottom:20}}>Build your vendor database to speed up bid collection</div>
+                    <button onClick={()=>{setMpVendorForm({company:"",contact:"",phone:"",email:"",trades:[],notes:"",rating:5});setShowMpVendorForm(true);}}
                       style={{padding:"9px 20px",background:"#3B6FE8",border:"none",borderRadius:8,color:"#fff",fontWeight:700,cursor:"pointer",fontFamily:"inherit",fontSize:13}}>
                       + Add First Vendor
                     </button>
                   </div>
-                ) : filtered.length === 0 ? (
-                  <div style={{textAlign:"center",padding:"40px",color:"#9BA3BF"}}>
-                    <div style={{fontSize:13}}>No vendors match your search</div>
-                    <button onClick={()=>{setMpVendorSearch("");setMpVendorTrade("");}} style={{marginTop:8,padding:"5px 12px",background:"#F0F2F8",border:"1px solid #CBD1E8",borderRadius:6,cursor:"pointer",fontFamily:"inherit",fontSize:11,color:"#4A5278"}}>Clear filters</button>
-                  </div>
                 ) : (
-                  <div style={{display:"flex",flexDirection:"column",gap:20}}>
+                  <div style={{display:"flex",flexDirection:"column",gap:16}}>
                     {Object.entries(tradeGroups).sort((a,b)=>a[0].localeCompare(b[0])).map(([trade, vendors]) => (
                       <div key={trade}>
-                        <div style={{fontSize:11,fontWeight:700,color:"#4A5278",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:8,paddingBottom:4,borderBottom:"2px solid #E8EBF4",display:"flex",alignItems:"center",gap:8}}>
-                          {trade}
-                          <span style={{fontSize:10,fontWeight:400,color:"#9BA3BF",textTransform:"none"}}>{vendors.length} vendor{vendors.length!==1?"s":""}</span>
+                        <div style={{fontSize:11,fontWeight:700,color:"#4A5278",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:8,paddingBottom:4,borderBottom:"2px solid #E8EBF4"}}>
+                          {trade} ({vendors.length})
                         </div>
-                        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(300px,1fr))",gap:10}}>
-                          {vendors.map(v => {
-                            const hist = getVendorHistory(v.id, v.company);
-                            const hasAddr = v.city || v.state;
-                            return (
-                              <div key={v.id}
-                                style={{background:"#fff",border:"1px solid #D4D9EE",borderRadius:10,padding:"12px 14px",cursor:"pointer",transition:"box-shadow 0.15s"}}
-                                onMouseEnter={e=>e.currentTarget.style.boxShadow="0 4px 16px rgba(59,111,232,0.1)"}
-                                onMouseLeave={e=>e.currentTarget.style.boxShadow="none"}
-                                onClick={()=>setSelectedMpVendor(v)}>
-                                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:6}}>
-                                  <div style={{flex:1}}>
-                                    <div style={{fontSize:13,fontWeight:700,color:"#1A2240"}}>{v.company}</div>
-                                    {v.contact && <div style={{fontSize:11,color:"#4A5278",marginTop:1}}>👤 {v.contact}</div>}
-                                  </div>
-                                  <div style={{display:"flex",flexDirection:"column",alignItems:"flex-end",gap:3}}>
-                                    <button onClick={e=>{e.stopPropagation();setMpVendorForm({...v,address:v.address||"",city:v.city||"",state:v.state||"",zip:v.zip||""});setShowMpVendorForm(true);}}
-                                      style={{background:"none",border:"1px solid #E0E4F0",borderRadius:5,color:"#9BA3BF",cursor:"pointer",fontSize:10,padding:"2px 7px",fontFamily:"inherit"}}
-                                      title="Edit vendor">✎</button>
-                                  </div>
+                        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:10}}>
+                          {vendors.map(v => (
+                            <div key={v.id} style={{background:"#fff",border:"1px solid #D4D9EE",borderRadius:10,padding:"12px 14px",cursor:"pointer",position:"relative"}}
+                              onMouseEnter={e=>e.currentTarget.style.boxShadow="0 4px 16px rgba(59,111,232,0.1)"}
+                              onMouseLeave={e=>e.currentTarget.style.boxShadow="none"}>
+                              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:6}}>
+                                <div style={{fontSize:13,fontWeight:700,color:"#1A2240"}}>{v.company}</div>
+                                <div style={{display:"flex",gap:4}}>
+                                  <button onClick={()=>{
+                                    setMpVendorForm({...v});setShowMpVendorForm(true);
+                                  }} style={{background:"none",border:"none",color:"#9BA3BF",cursor:"pointer",fontSize:12,padding:"0 4px"}}>edit</button>
                                 </div>
-                                {v.phone && <div style={{fontSize:11,color:"#4A5278",marginBottom:1}}>📞 {v.phone}</div>}
-                                {v.email && <div style={{fontSize:11,color:"#3B6FE8",marginBottom:4,wordBreak:"break-all"}}>✉ {v.email}</div>}
-                                {hasAddr && (
-                                  <div style={{fontSize:10,color:"#4A5278",marginBottom:4}}>
-                                    📍 {[v.city,v.state,v.zip].filter(Boolean).join(", ")}
-                                  </div>
-                                )}
-                                {!hasAddr && (
-                                  <div style={{fontSize:10,color:"#F87171",marginBottom:4}}>📍 No location — add address for local suggestions</div>
-                                )}
-                                <div style={{display:"flex",flexWrap:"wrap",gap:4,marginTop:6}}>
-                                  {(v.trades||[]).map(t=>(
-                                    <span key={t} style={{fontSize:9,fontWeight:700,background:"#EEF3FF",color:"#3B6FE8",borderRadius:3,padding:"1px 6px"}}>{t}</span>
-                                  ))}
-                                </div>
-                                {/* Project history badges */}
-                                {hist.all.length > 0 && (
-                                  <div style={{display:"flex",gap:8,marginTop:8,paddingTop:8,borderTop:"1px solid #F0F2F8"}}>
-                                    {hist.completed.length>0 && <span style={{fontSize:10,color:"#059669",background:"#F0FDF4",border:"1px solid #4ADE8030",borderRadius:4,padding:"2px 7px",fontWeight:600}}>{hist.completed.length} project{hist.completed.length!==1?"s":""} completed</span>}
-                                    {hist.bid.length>0 && <span style={{fontSize:10,color:"#3B6FE8",background:"#EEF3FF",border:"1px solid #3B6FE830",borderRadius:4,padding:"2px 7px",fontWeight:600}}>{hist.bid.length} bid{hist.bid.length!==1?"s":""}</span>}
-                                  </div>
-                                )}
-                                {v.notes && <div style={{fontSize:10,color:"#9BA3BF",marginTop:6,borderTop:"1px solid #F0F2F8",paddingTop:4}}>{v.notes}</div>}
                               </div>
-                            );
-                          })}
+                              {v.contact && <div style={{fontSize:11,color:"#4A5278",marginBottom:2}}>👤 {v.contact}</div>}
+                              {v.phone   && <div style={{fontSize:11,color:"#4A5278",marginBottom:2}}>📞 {v.phone}</div>}
+                              {v.email   && <div style={{fontSize:11,color:"#3B6FE8",marginBottom:6,wordBreak:"break-all"}}>✉ {v.email}</div>}
+                              <div style={{display:"flex",flexWrap:"wrap",gap:4,marginTop:6}}>
+                                {(v.trades||[]).map(t=>(
+                                  <span key={t} style={{fontSize:9,fontWeight:700,background:"#EEF3FF",color:"#3B6FE8",borderRadius:3,padding:"1px 6px"}}>{t}</span>
+                                ))}
+                              </div>
+                              {v.notes && <div style={{fontSize:10,color:"#9BA3BF",marginTop:6,borderTop:"1px solid #F0F2F8",paddingTop:4}}>{v.notes}</div>}
+                              {/* Quick-add to active estimate */}
+                              {activeBidOpp && (
+                                <button onClick={()=>{
+                                  const pkg = bidPackages[activeBidOpp] || {vendors:[]};
+                                  if (pkg.vendors.find(x=>x.company===v.company)) return;
+                                  const newV = {...v, id:"v"+Date.now(), bidding:false, infoSent:false, bidReceived:false, bidAmount:"" };
+                                  setBidPackages(prev=>({...prev,[activeBidOpp]:{...pkg,vendors:[...pkg.vendors,newV]}}));
+                                  // Show feedback
+                                  alert(`${v.company} added to estimate!`);
+                                }}
+                                  style={{marginTop:8,width:"100%",padding:"5px",background:"#F0F2F8",border:"1px solid #CBD1E8",borderRadius:5,cursor:"pointer",fontFamily:"inherit",fontSize:11,color:"#3B6FE8",fontWeight:600}}>
+                                  + Add to Estimate
+                                </button>
+                              )}
+                            </div>
+                          ))}
                         </div>
                       </div>
                     ))}
@@ -8468,180 +8076,9 @@ if(bounds.length)map.fitBounds(bounds,{padding:[30,30]});
             );
           })()}
 
-
-          {activeNav === "vendors" && activeBU === "facility" && (() => {
-            const subs = subcontractors;
-            const TRADE_COLORS = {
-              plumbing:   "#3B6FE8", electrical: "#F59E0B", hvac: "#10B981",
-              roofing:    "#EF4444", concrete:   "#8B5CF6", painting: "#EC4899",
-              landscaping:"#84CC16", general:    "#6366F1", other:    "#9BA3BF",
-            };
-            const getColor = (s) => {
-              const t = (s.trade||s.services?.[0]||"other").toLowerCase();
-              return TRADE_COLORS[t] || "#9BA3BF";
-            };
-            const withCoords = subs.filter(s => s.lat && s.lng);
-
-            return (
-              <div className="fade-in" style={{ display: "flex", flexDirection: "column", gap: 22 }}>
-                {/* Header */}
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <div>
-                    <div style={{ fontSize: 22, fontWeight: 700, color: "#1A2240", letterSpacing: "-0.01em", textTransform: "uppercase" }}>Vendors</div>
-                    <div style={{ fontSize: 11, color: "#4A5278", marginTop: 3, letterSpacing: "0.06em" }}>{subs.length} VENDORS · {withCoords.length} MAPPED</div>
-                  </div>
-                  <button className="btn-primary" onClick={() => { setEditSubId(null); setSubForm({ name:"", trade:"", phone:"", email:"", address:"", city:"", state:"", contact_name:"", msa_status:"missing", coi_expiry:"", notes:"", services:[], coverage:"" }); setShowSubForm(true); }}>+ Add Vendor</button>
-                </div>
-
-                {/* Stats */}
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 12 }}>
-                  {[
-                    { label:"Total Vendors",   value: subs.length,                                           color:"#3B6FE8" },
-                    { label:"MSA Signed",      value: subs.filter(s=>s.msa_status==="signed").length,        color:"#4ADE80" },
-                    { label:"COI Active",      value: subs.filter(s=>s.coi_expiry && new Date(s.coi_expiry) > new Date()).length, color:"#60A5FA" },
-                    { label:"On Map",          value: withCoords.length,                                     color:"#A78BFA" },
-                  ].map(st => (
-                    <div key={st.label} className="stat-card" style={{ position:"relative", overflow:"hidden", padding:"14px 18px" }}>
-                      <div style={{ position:"absolute", top:0, left:0, right:0, height:2, background:st.color }}/>
-                      <div style={{ fontSize:10, letterSpacing:"0.1em", textTransform:"uppercase", color:"#4A5278", marginBottom:6 }}>{st.label}</div>
-                      <div style={{ fontSize:22, fontWeight:700, color:st.color }}>{st.value}</div>
-                    </div>
-                  ))}
-                </div>
-
-                {/* MAP */}
-                <div style={{ borderRadius:12, overflow:"hidden", border:"1px solid #D4D9EE", boxShadow:"0 2px 16px rgba(0,0,0,0.07)" }}>
-                  <div style={{ background:"#fff", padding:"10px 16px", borderBottom:"1px solid #F0F2F8", display:"flex", gap:14, flexWrap:"wrap", alignItems:"center" }}>
-                    <span style={{ fontSize:12, fontWeight:700, color:"#1A2240" }}>🗺 Coverage Map</span>
-                    {withCoords.length === 0 && <span style={{ fontSize:11, color:"#F87171" }}>No vendors geocoded yet — add addresses to vendors to see them on the map</span>}
-                    {withCoords.length > 0 && subs.map(s => {
-                      if (!s.lat) return null;
-                      const c = getColor(s);
-                      return (
-                        <div key={s.id} style={{ display:"flex", alignItems:"center", gap:5, fontSize:11, color:"#4A5278" }}>
-                          <span style={{ width:9, height:9, borderRadius:"50%", background:c, display:"inline-block", border:"1.5px solid white", boxShadow:"0 1px 3px rgba(0,0,0,0.3)" }}/>
-                          {s.name}
-                        </div>
-                      );
-                    })}
-                  </div>
-                  {withCoords.length === 0 ? (
-                    <div style={{ background:"#F9FAFC", padding:"60px 24px", textAlign:"center", color:"#9BA3BF" }}>
-                      <div style={{ fontSize:40, marginBottom:10 }}>📍</div>
-                      <div style={{ fontSize:15, fontWeight:700, color:"#1A2240", marginBottom:6 }}>No vendor locations yet</div>
-                      <div style={{ fontSize:13 }}>Add city/state or full address to vendor records and they'll appear here automatically.</div>
-                    </div>
-                  ) : (
-                    <iframe
-                      key={"vendor-map-" + withCoords.length}
-                      srcDoc={`<!DOCTYPE html><html><head>
-<meta charset="utf-8">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"><\/script>
-<style>html,body,#map{margin:0;padding:0;height:100%;width:100%}.leaflet-popup-content-wrapper{border-radius:10px;box-shadow:0 4px 20px rgba(0,0,0,0.15)}.leaflet-popup-content{margin:10px 14px}</style>
-</head><body><div id="map"></div>
-<script>
-const map=L.map("map",{zoomControl:true,attributionControl:false});
-L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19}).addTo(map);
-L.control.attribution({prefix:'© <a href="https://openstreetmap.org">OSM</a>'}).addTo(map);
-const vendors=${JSON.stringify(withCoords.map(s=>({
-  lat:s.lat, lng:s.lng, name:s.name,
-  trade:s.trade||"General",
-  phone:s.phone||"",
-  coverage:s.coverage||"",
-  color:getColor(s),
-  msa:s.msa_status,
-  coi:s.coi_expiry
-})))};
-const bounds=[];
-vendors.forEach(v=>{
-  const icon=L.divIcon({className:"",
-    html:'<div style="width:14px;height:14px;border-radius:50%;background:'+v.color+';border:2.5px solid white;box-shadow:0 2px 8px rgba(0,0,0,0.4)"></div>',
-    iconSize:[14,14],iconAnchor:[7,7],popupAnchor:[0,-8]});
-  let popup='<div style="font-family:Inter,sans-serif;min-width:180px;line-height:1.6">';
-  popup+='<b style="font-size:14px;color:#1A2240">'+v.name+'</b><br>';
-  if(v.trade) popup+='<span style="font-size:11px;color:'+v.color+';font-weight:600">'+v.trade+'</span><br>';
-  if(v.phone) popup+='<span style="font-size:11px;color:#555">📞 '+v.phone+'</span><br>';
-  if(v.coverage) popup+='<span style="font-size:11px;color:#555">📍 '+v.coverage+'</span><br>';
-  popup+='<span style="font-size:10px;color:'+( v.msa==="signed"?"#4ADE80":"#F87171" )+'">MSA: '+v.msa+'</span>';
-  popup+='</div>';
-  L.marker([v.lat,v.lng],{icon}).addTo(map).bindPopup(popup);
-  bounds.push([v.lat,v.lng]);
-});
-if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
-<\/script></body></html>`}
-                      style={{ width:"100%", height:440, border:"none", display:"block" }}
-                      title="Vendor Map"
-                    />
-                  )}
-                </div>
-
-                {/* Vendor cards */}
-                <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(300px,1fr))", gap:14 }}>
-                  {subs.length === 0 && (
-                    <div style={{ gridColumn:"1/-1", textAlign:"center", padding:"48px", color:"#9BA3BF", background:"#F4F6FB", borderRadius:12, border:"1px solid #D4D9EE" }}>
-                      <div style={{ fontSize:32, marginBottom:8 }}>🏢</div>
-                      <div style={{ fontSize:14, fontWeight:600 }}>No vendors yet</div>
-                    </div>
-                  )}
-                  {subs.map(s => {
-                    const color = getColor(s);
-                    const coiOk = s.coi_expiry && new Date(s.coi_expiry) > new Date();
-                    const coiSoon = s.coi_expiry && new Date(s.coi_expiry) > new Date() && new Date(s.coi_expiry) < new Date(Date.now() + 30*24*60*60*1000);
-                    return (
-                      <div key={s.id} style={{ background:"#fff", borderRadius:12, border:"1px solid #D4D9EE", overflow:"hidden", boxShadow:"0 1px 6px rgba(0,0,0,0.04)" }}>
-                        {/* Top color bar */}
-                        <div style={{ height:4, background:color }}/>
-                        <div style={{ padding:"14px 16px" }}>
-                          {/* Name + trade */}
-                          <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", marginBottom:10 }}>
-                            <div>
-                              <div style={{ fontSize:15, fontWeight:700, color:"#1A2240", marginBottom:2 }}>{s.name}</div>
-                              {s.contact_name && <div style={{ fontSize:11, color:"#4A5278" }}>Contact: {s.contact_name}</div>}
-                              {(s.trade||s.services?.[0]) && (
-                                <div style={{ display:"flex", gap:4, marginTop:4, flexWrap:"wrap" }}>
-                                  {(s.services||[s.trade]).filter(Boolean).map(t=>(
-                                    <span key={t} style={{ fontSize:10, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.06em", background:color+"15", color, border:"1px solid "+color+"40", borderRadius:4, padding:"1px 7px" }}>{t}</span>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-                            <button className="btn-ghost" style={{ fontSize:11, flexShrink:0 }}
-                              onClick={() => { setEditSubId(s.id); setSubForm({ name:s.name, trade:s.trade||"", phone:s.phone||"", email:s.email||"", address:s.address||"", city:s.city||"", state:s.state||"", contact_name:s.contact_name||"", msa_status:s.msa_status||"missing", coi_expiry:s.coi_expiry||"", notes:s.notes||"", services:s.services||[], coverage:s.coverage||"" }); setShowSubForm(true); }}>
-                              ✎ Edit
-                            </button>
-                          </div>
-
-                          {/* Contact info */}
-                          <div style={{ display:"flex", flexDirection:"column", gap:3, marginBottom:10 }}>
-                            {s.phone && <a href={"tel:"+s.phone} style={{ fontSize:12, color:"#3B6FE8", textDecoration:"none" }}>📞 {s.phone}</a>}
-                            {s.email && <a href={"mailto:"+s.email} style={{ fontSize:12, color:"#3B6FE8", textDecoration:"none" }}>✉ {s.email}</a>}
-                            {(s.city||s.address) && <div style={{ fontSize:12, color:"#4A5278" }}>📍 {[s.address,s.city,s.state].filter(Boolean).join(", ")}</div>}
-                            {s.coverage && <div style={{ fontSize:11, color:"#9BA3BF" }}>Coverage: {s.coverage}</div>}
-                          </div>
-
-                          {/* Status badges */}
-                          <div style={{ display:"flex", gap:6, flexWrap:"wrap", paddingTop:10, borderTop:"1px solid #F0F2F8" }}>
-                            <span style={{ fontSize:10, fontWeight:700, padding:"2px 8px", borderRadius:4, background:s.msa_status==="signed"?"#4ADE8015":"#F8717115", color:s.msa_status==="signed"?"#4ADE80":"#F87171", border:"1px solid "+(s.msa_status==="signed"?"#4ADE8040":"#F8717140") }}>
-                              MSA {s.msa_status==="signed"?"✓ Signed":"✗ Missing"}
-                            </span>
-                            <span style={{ fontSize:10, fontWeight:700, padding:"2px 8px", borderRadius:4, background:s.w9?"#4ADE8015":"#F8717115", color:s.w9?"#4ADE80":"#F87171", border:"1px solid "+(s.w9?"#4ADE8040":"#F8717140") }}>
-                              W9 {s.w9?"✓":"✗"}
-                            </span>
-                            {s.coi_expiry && (
-                              <span style={{ fontSize:10, fontWeight:700, padding:"2px 8px", borderRadius:4, background:coiOk?(coiSoon?"#FCD34D15":"#4ADE8015"):"#F8717115", color:coiOk?(coiSoon?"#D97706":"#4ADE80"):"#F87171", border:"1px solid "+(coiOk?(coiSoon?"#FCD34D40":"#4ADE8040"):"#F8717140") }}>
-                                COI {coiOk?(coiSoon?"⚠ Expires soon":"✓ Active"):"✗ Expired"}: {s.coi_expiry}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            );
-          })()}
+          {activeNav === "vendors" && activeBU === "facility" && (
+            <VendorsPage supa={supa} />
+          )}
 
           {/* -- MP BUDGETING -- */}
           {activeNav === "budgeting" && activeBU === "major" && (() => {
@@ -8888,29 +8325,12 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
             const activeOppId = activeBidOpp || allMpOpps[0]?.id;
             const activeOpp   = allMpOpps.find(o => o.id === activeOppId) || null;
             const phase       = estimatePhase[activeOppId] || "wbs";
-            const setPhase    = (p) => { setEstimatePhase(prev => ({...prev, [activeOppId]: p})); saveEstimateField(activeOppId, "estimate_phase", p); };
+            const setPhase    = (p) => setEstimatePhase(prev => ({...prev, [activeOppId]: p}));
             const pkg         = bidPackages[activeOppId] || {vendors:[]};
             const wbs         = wbsData[activeOppId] || [];
             const takeoff     = takeoffData[activeOppId] || {};
-            const setWbs      = (items) => setWbsData(prev => {
-              const next = {...prev, [activeOppId]: typeof items==="function"?items(prev[activeOppId]||[]):items};
-              saveEstimateField(activeOppId, "wbs_data", next[activeOppId]);
-              return next;
-            });
-            const setTakeoff  = (data)  => setTakeoffData(prev => {
-              const next = {...prev, [activeOppId]: typeof data==="function"?data(prev[activeOppId]||{}):data};
-              saveEstimateField(activeOppId, "takeoff_data", next[activeOppId]);
-              return next;
-            });
-
-            // Save bid packages helper
-            const savePkg = (newPkg) => {
-              setBidPackages(prev => {
-                const next = {...prev, [activeOppId]: newPkg};
-                saveEstimateField(activeOppId, "bid_packages", newPkg);
-                return next;
-              });
-            };
+            const setWbs      = (items) => setWbsData(prev => ({...prev, [activeOppId]: typeof items==="function"?items(wbs):items}));
+            const setTakeoff  = (data)  => setTakeoffData(prev => ({...prev, [activeOppId]: typeof data==="function"?data(takeoff):data}));
 
             // Critical = wbs items marked critical individually
             const criticalCodes = wbs.filter(i=>i.critical);
@@ -9209,7 +8629,7 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
                               <span style={{fontSize:12,fontWeight:700,color:"#1A2240",flex:1}}>
                                 {wbs.length} Cost Codes · {pkg.vendors.length} Vendors · {totalBids} Bids Received
                               </span>
-                              <button onClick={()=>{setActiveBidOpp(activeOppId);setVendorForm({company:"",contact:"",phone:"",email:"",trades:[],bidding:false,infoSent:false,bidReceived:false,bidAmount:"",notes:""});setShowAddVendor(true);}} style={{padding:"5px 12px",background:"#3B6FE8",color:"#fff",border:"none",borderRadius:5,cursor:"pointer",fontFamily:"inherit",fontSize:11,fontWeight:700}}>+ Add Vendor</button>
+                              <button onClick={()=>setShowAddVendor(true)} style={{padding:"5px 12px",background:"#3B6FE8",color:"#fff",border:"none",borderRadius:5,cursor:"pointer",fontFamily:"inherit",fontSize:11,fontWeight:700}}>+ Add Vendor</button>
                               <button onClick={()=>{setBidPrintOppId(activeOppId);setShowBidPrintModal(true);}} style={{padding:"5px 10px",background:"#F0F2F8",border:"1px solid #CBD1E8",borderRadius:5,cursor:"pointer",fontFamily:"inherit",fontSize:11,color:"#4A5278"}}>Print PDF</button>
                             </div>
 
@@ -9248,20 +8668,20 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
                                             <div key={key} style={{display:"flex",justifyContent:"center"}}>
                                               <div onClick={()=>{
                                                 const updated={...pkg,vendors:pkg.vendors.map(x=>x.id===v.id?{...x,[key]:!v[key]}:x)};
-                                                savePkg(updated);
+                                                setBidPackages(prev=>({...prev,[activeOppId]:updated}));
                                               }} style={{width:14,height:14,borderRadius:"50%",background:v[key]?"#4ADE80":"#E0E4F0",border:v[key]?"2px solid #4ADE8060":"2px solid #CBD1E8",cursor:"pointer",margin:"0 auto"}}/>
                                             </div>
                                           ))}
                                           <div>
                                             <input type="text" defaultValue={v.bidAmount||""} onBlur={e=>{
                                               const updated={...pkg,vendors:pkg.vendors.map(x=>x.id===v.id?{...x,bidAmount:e.target.value}:x)};
-                                              savePkg(updated);
+                                              setBidPackages(prev=>({...prev,[activeOppId]:updated}));
                                             }} placeholder="$0" style={{padding:"3px 6px",border:"1px solid #D4D9EE",borderRadius:4,fontSize:11,fontFamily:"inherit",outline:"none",width:"100%",boxSizing:"border-box",textAlign:"right",background:v.bidReceived?"#F0FDF4":"#F9FAFC"}}/>
                                           </div>
                                           <div>
                                             <input type="text" defaultValue={v.notes||""} onBlur={e=>{
                                               const updated={...pkg,vendors:pkg.vendors.map(x=>x.id===v.id?{...x,notes:e.target.value}:x)};
-                                              savePkg(updated);
+                                              setBidPackages(prev=>({...prev,[activeOppId]:updated}));
                                             }} placeholder="Notes..." style={{padding:"3px 6px",border:"1px solid #D4D9EE",borderRadius:4,fontSize:11,fontFamily:"inherit",outline:"none",width:"100%",boxSizing:"border-box"}}/>
                                           </div>
                                         </div>
@@ -9284,7 +8704,7 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
                                         ? <span style={{fontSize:10,color:"#9BA3BF"}}>{item.subItems.length} sub-codes</span>
                                         : <span style={{fontSize:11,fontWeight:700,color:bidsIn>0?coverage:"#9BA3BF"}}>{bidsIn} bid{bidsIn!==1?"s":""}</span>
                                       }
-                                      {!hasSubs&&<button onClick={()=>{setActiveBidOpp(activeOppId);setVendorForm({company:"",contact:"",phone:"",email:"",trades:item.trade?[item.trade]:[],bidding:false,infoSent:false,bidReceived:false,bidAmount:"",notes:""});setShowAddVendor(true);}} style={{padding:"2px 8px",background:"#3B6FE815",border:"1px solid #3B6FE830",borderRadius:4,color:"#3B6FE8",fontSize:10,cursor:"pointer",fontFamily:"inherit",fontWeight:600}}>+ Vendor</button>}
+                                      {!hasSubs&&<button onClick={()=>setShowAddVendor(true)} style={{padding:"2px 8px",background:"#3B6FE815",border:"1px solid #3B6FE830",borderRadius:4,color:"#3B6FE8",fontSize:10,cursor:"pointer",fontFamily:"inherit",fontWeight:600}}>+ Vendor</button>}
                                     </div>
 
                                     {/* If no sub-items: show vendors directly under parent */}
@@ -9305,7 +8725,7 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
                                             <span style={{fontSize:12,fontWeight:600,color:"#1A2240",flex:1}}>{sub.description||"Sub-item "+(si+1)}</span>
                                             <span style={{fontSize:10,color:"#9BA3BF"}}>{sub.unit||item.unit}</span>
                                             <span style={{fontSize:10,fontWeight:700,color:subBids>0?subCov:"#9BA3BF"}}>{subBids} bid{subBids!==1?"s":""}</span>
-                                            <button onClick={()=>{setActiveBidOpp(activeOppId);setVendorForm({company:"",contact:"",phone:"",email:"",trades:item.trade?[item.trade]:[],bidding:false,infoSent:false,bidReceived:false,bidAmount:"",notes:""});setShowAddVendor(true);}} style={{padding:"2px 8px",background:"#3B6FE815",border:"1px solid #3B6FE830",borderRadius:4,color:"#3B6FE8",fontSize:10,cursor:"pointer",fontFamily:"inherit",fontWeight:600}}>+ Vendor</button>
+                                            <button onClick={()=>setShowAddVendor(true)} style={{padding:"2px 8px",background:"#3B6FE815",border:"1px solid #3B6FE830",borderRadius:4,color:"#3B6FE8",fontSize:10,cursor:"pointer",fontFamily:"inherit",fontWeight:600}}>+ Vendor</button>
                                           </div>
                                           <VendorTable vendors={subVendors} itemId={subKey}/>
                                         </div>
@@ -10186,7 +9606,7 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
           })()}
 
           {/* -- COMING SOON (other nav items) -- */}
-          {!["dashboard", "customers", "jobs", "pipeline", "budgeting", "estimating", "mpvendors", "finance", "sites", "projects", "team", "subcontractors", "bids", "active-sites", "pricing"].includes(activeNav) && (
+          {!["dashboard", "customers", "jobs", "pipeline", "budgeting", "estimating", "mpvendors", "vendors", "finance", "sites", "projects", "team", "subcontractors", "bids", "active-sites", "pricing"].includes(activeNav) && (
             <div className="fade-in">
               <div style={{ marginBottom: 28 }}>
                 <div style={{ fontSize: 22, fontWeight: 700, color: "#1A2240", textTransform: "uppercase" }}>{navItems.find(n => n.id === activeNav)?.label}</div>
@@ -11162,127 +10582,79 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
               {/* -- INFO / PROPERTY TAB -- */}
               {activeTab==="info" && (
                 <div style={{display:"flex",flexDirection:"column",gap:12}}>
-
-                  {/* -- LEAD SECTION (all stages) -- */}
+                  {/* Company + Contact */}
                   <div style={{background:"#F9FAFC",borderRadius:8,border:"1px solid #E8EBF4",padding:"12px 14px"}}>
-                    <div style={{fontSize:10,fontWeight:700,color:"#A78BFA",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:10}}>Lead Info</div>
+                    <div style={{fontSize:10,fontWeight:700,color:"#4A5278",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:10}}>Owner / Contact Info</div>
                     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-                      <div>{lbl("Company")}
+                      <div style={{gridColumn:"span 2"}}>
+                        {lbl("Company")}
                         <div style={{fontSize:13,fontWeight:700,color:"#1A2240"}}>{co?.name||"—"}</div>
                       </div>
-                      <div>{lbl("Contact")}
-                        {ct ? <div style={{fontSize:12,fontWeight:600,color:"#1A2240"}}>{ct.firstName} {ct.lastName}{ct.phone?" · "+ct.phone:""}</div> : <div style={{fontSize:12,color:"#9BA3BF"}}>—</div>}
-                      </div>
-                      <div>{lbl("Project Value ($)")}
-                        <input style={fi} type="number" value={o.value||""} onChange={e=>{setPipeline(prev=>prev.map(p=>p.id===o.id?{...p,value:parseFloat(e.target.value)||0}:p));setSelectedOpp({...o,value:parseFloat(e.target.value)||0});}} placeholder="0"/>
-                      </div>
-                      <div>{lbl("Expected Close Date")}
-                        <input style={fi} type="date" value={o.closeDate||""} onChange={e=>{setPipeline(prev=>prev.map(p=>p.id===o.id?{...p,closeDate:e.target.value}:p));setSelectedOpp({...o,closeDate:e.target.value});}}/>
-                      </div>
-                      <div>{lbl("City")}
-                        <input style={fi} value={det.city||""} onChange={e=>setDet({city:e.target.value})} placeholder="Detroit"/>
-                      </div>
-                      <div>{lbl("State")}
-                        <input style={fi} value={det.state||""} onChange={e=>setDet({state:e.target.value})} placeholder="MI" maxLength={2}/>
-                      </div>
-                      <div style={{gridColumn:"span 2"}}>{lbl("Total Square Footage")}
-                        <input style={fi} type="number" value={det.totalSF||""} onChange={e=>setDet({totalSF:e.target.value})} placeholder="0"/>
-                      </div>
+                      {ct && <>
+                        <div>{lbl("Contact")}<div style={{fontSize:12,fontWeight:600,color:"#1A2240"}}>{ct.firstName} {ct.lastName}</div></div>
+                        <div>{lbl("Title")}<div style={{fontSize:12,color:"#4A5278"}}>{ct.title||"—"}</div></div>
+                        {ct.email && <div style={{gridColumn:"span 2"}}>{lbl("Email")}<a href={"mailto:"+ct.email} style={{fontSize:12,color:"#3B6FE8",textDecoration:"none"}}>{ct.email}</a></div>}
+                        {ct.phone && <div>{lbl("Phone")}<a href={"tel:"+ct.phone} style={{fontSize:12,color:"#3B6FE8",textDecoration:"none"}}>{ct.phone}</a></div>}
+                      </>}
+                      <div>{lbl("Estimated Value")}<input style={fi} type="number" value={o.value||""} onChange={e=>{setPipeline(prev=>prev.map(p=>p.id===o.id?{...p,value:parseFloat(e.target.value)||0}:p));setSelectedOpp({...o,value:parseFloat(e.target.value)||0});}}/></div>
+                      <div>{lbl("Expected Close Date")}<input style={fi} type="date" value={o.closeDate||""} onChange={e=>{setPipeline(prev=>prev.map(p=>p.id===o.id?{...p,closeDate:e.target.value}:p));setSelectedOpp({...o,closeDate:e.target.value});}}/></div>
                     </div>
                   </div>
 
-                  {/* -- PROJECT TYPE -- */}
+                  {/* Property Details */}
                   <div style={{background:"#F9FAFC",borderRadius:8,border:"1px solid #E8EBF4",padding:"12px 14px"}}>
-                    <div style={{fontSize:10,fontWeight:700,color:"#4A5278",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:10}}>Project Type</div>
-                    {/* Building configuration */}
-                    <div style={{marginBottom:10}}>
-                      <div style={{fontSize:10,color:"#9BA3BF",marginBottom:5}}>BUILDING CONFIGURATION</div>
-                      <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
-                        {[
-                          {id:"single_story",label:"Single Story"},
-                          {id:"multi_story",label:"Multi Story"},
-                          {id:"canopy",label:"Canopy"},
-                          {id:"mezzanine",label:"Mezzanine"},
-                        ].map(t=>{
-                          const sel=(det.buildingConfig||[]).includes(t.id);
-                          return <button key={t.id} type="button" onClick={()=>{const cur=det.buildingConfig||[];setDet({buildingConfig:sel?cur.filter(x=>x!==t.id):[...cur,t.id]});}}
-                            style={{padding:"4px 10px",borderRadius:5,border:"1.5px solid "+(sel?"#3B6FE8":"#CBD1E8"),background:sel?"#3B6FE8":"#F9FAFC",color:sel?"#fff":"#4A5278",fontSize:11,cursor:"pointer",fontFamily:"inherit",fontWeight:sel?700:400}}>{t.label}</button>;
-                        })}
+                    <div style={{fontSize:10,fontWeight:700,color:"#4A5278",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:10}}>Property Details</div>
+                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                      <div>{lbl("Property Address")}<input style={fi} value={det.propertyAddress||""} onChange={e=>setDet({propertyAddress:e.target.value})} placeholder="123 Main St…"/></div>
+                      <div>
+                        {lbl("Ownership Status")}
+                        <select style={fi} value={det.ownershipStatus||""} onChange={e=>setDet({ownershipStatus:e.target.value})}>
+                          <option value="">Select…</option>
+                          <option>Owned — Free & Clear</option>
+                          <option>Owned — Mortgage</option>
+                          <option>Under Contract</option>
+                          <option>Leased</option>
+                          <option>Site Control</option>
+                          <option>Unknown</option>
+                        </select>
                       </div>
-                    </div>
-                    {/* Climate control */}
-                    <div style={{marginBottom:10}}>
-                      <div style={{fontSize:10,color:"#9BA3BF",marginBottom:5}}>CLIMATE CONTROL</div>
-                      <div style={{display:"flex",gap:5}}>
-                        {["Climate Controlled","Non-Climate","Mixed"].map(t=>{
-                          const sel=det.climateControl===t;
-                          return <button key={t} type="button" onClick={()=>setDet({climateControl:sel?"":t})}
-                            style={{padding:"4px 10px",borderRadius:5,border:"1.5px solid "+(sel?"#60A5FA":"#CBD1E8"),background:sel?"#60A5FA":"#F9FAFC",color:sel?"#fff":"#4A5278",fontSize:11,cursor:"pointer",fontFamily:"inherit",fontWeight:sel?700:400}}>{t}</button>;
-                        })}
-                      </div>
-                    </div>
-                    {/* Project category */}
-                    <div>
-                      <div style={{fontSize:10,color:"#9BA3BF",marginBottom:5}}>PROJECT CATEGORY</div>
-                      <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
-                        {["Greenfield","Conversion","Expansion","Renovation","Repositioning"].map(t=>{
-                          const sel=det.projectCategory===t;
-                          return <button key={t} type="button" onClick={()=>setDet({projectCategory:sel?"":t})}
-                            style={{padding:"4px 10px",borderRadius:5,border:"1.5px solid "+(sel?"#4ADE80":"#CBD1E8"),background:sel?"#4ADE80":"#F9FAFC",color:sel?"#1A2240":"#4A5278",fontSize:11,cursor:"pointer",fontFamily:"inherit",fontWeight:sel?700:400}}>{t}</button>;
-                        })}
-                      </div>
+                      <div>{lbl("Owner Name")}<input style={fi} value={det.ownerName||""} onChange={e=>setDet({ownerName:e.target.value})} placeholder="Property owner…"/></div>
+                      <div>{lbl("Owner Phone")}<input style={fi} value={det.ownerPhone||""} onChange={e=>setDet({ownerPhone:e.target.value})} placeholder="(555) 000-0000"/></div>
+                      <div style={{gridColumn:"span 2"}}>{lbl("Owner Email")}<input style={fi} value={det.ownerEmail||""} onChange={e=>setDet({ownerEmail:e.target.value})} placeholder="owner@example.com"/></div>
+                      <div style={{gridColumn:"span 2"}}>{lbl("Property Notes")}<textarea style={{...fi,resize:"vertical"}} rows={2} value={det.propertyNotes||""} onChange={e=>setDet({propertyNotes:e.target.value})} placeholder="Zoning, site conditions, access…"/></div>
                     </div>
                   </div>
 
-                  {/* -- PROJECT INFO -- */}
-                  <div style={{background:"#F9FAFC",borderRadius:8,border:"1px solid #E8EBF4",padding:"12px 14px"}}>
-                    <div style={{fontSize:10,fontWeight:700,color:"#4A5278",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:8}}>Project Info</div>
-                    <textarea style={{...fi,resize:"vertical"}} rows={4} value={det.projectInfo||""} onChange={e=>setDet({projectInfo:e.target.value})} placeholder="Project description, scope overview, special requirements, site conditions, existing structure details…"/>
-                  </div>
-
-                  {/* -- BUDGETING STAGE FIELDS -- */}
-                  {(o.stage==="budgeting_lead"||o.stage==="proposal_bid"||o.stage==="negotiation"||o.stage==="won"||o.stage==="closed_won") && (
-                    <div style={{background:"#EEF3FF",borderRadius:8,border:"1px solid #3B6FE820",padding:"12px 14px"}}>
-                      <div style={{fontSize:10,fontWeight:700,color:"#3B6FE8",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:10}}>Budgeting Details</div>
-                      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-                        <div>{lbl("Property Address")}
-                          <input style={fi} value={det.propertyAddress||""} onChange={e=>setDet({propertyAddress:e.target.value})} placeholder="123 Main St…"/>
-                        </div>
-                        <div>{lbl("Ownership Status")}
-                          <select style={fi} value={det.ownershipStatus||""} onChange={e=>setDet({ownershipStatus:e.target.value})}>
-                            <option value="">Select…</option>
-                            <option>Owned</option>
-                            <option>Under Contract</option>
-                            <option>Browsing / Site Search</option>
-                            <option>Leased</option>
-                            <option>Site Control</option>
-                          </select>
-                        </div>
-                        <div>{lbl("Budget Due Date")}
-                          <input style={fi} type="date" value={det.budgetDueDate||""} onChange={e=>setDet({budgetDueDate:e.target.value})}/>
-                        </div>
-                        <div>{lbl("Budget Reception")}
-                          <select style={fi} value={det.budgetReception||""} onChange={e=>setDet({budgetReception:e.target.value})}>
-                            <option value="">Select…</option>
-                            <option>Pending Submission</option>
-                            <option>Under Review</option>
-                            <option>Accepted — Moving to Bid</option>
-                            <option>Too High — Revising</option>
-                            <option>Rejected</option>
-                          </select>
-                        </div>
-                        <div style={{gridColumn:"span 2"}}>{lbl("Conceptual Sketch / Site Plan URL")}
-                          <input style={fi} value={det.sketchUrl||""} onChange={e=>setDet({sketchUrl:e.target.value})} placeholder="https://drive.google.com/… or paste image URL"/>
-                          {det.sketchUrl && <a href={det.sketchUrl} target="_blank" rel="noreferrer" style={{fontSize:11,color:"#3B6FE8",display:"block",marginTop:4}}>Open sketch →</a>}
-                        </div>
-                        <div style={{gridColumn:"span 2"}}>{lbl("Budget Next Steps")}
-                          <textarea style={{...fi,resize:"vertical"}} rows={2} value={det.budgetNextSteps||""} onChange={e=>setDet({budgetNextSteps:e.target.value})} placeholder="What happens next…"/>
-                        </div>
+                  {/* Building types if set */}
+                  {(o.buildingTypes||[]).length>0 && (
+                    <div style={{background:"#F9FAFC",borderRadius:8,border:"1px solid #E8EBF4",padding:"12px 14px"}}>
+                      <div style={{fontSize:10,fontWeight:700,color:"#4A5278",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:8}}>Building Scope</div>
+                      <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                        {(o.buildingTypes||[]).map(bt=>{
+                          const labels={multistory:"Multistory",singlestory:"Single Story",canopy:"Canopy",mezzanine:"Mezzanine"};
+                          const sf=parseFloat(o["sf_"+bt]||0);
+                          return (
+                            <div key={bt} style={{background:"#3B6FE812",border:"1px solid #3B6FE830",borderRadius:6,padding:"5px 10px"}}>
+                              <div style={{fontSize:11,fontWeight:700,color:"#3B6FE8"}}>{labels[bt]||bt}</div>
+                              {sf>0 && <div style={{fontSize:10,color:"#4A5278"}}>{sf.toLocaleString()} SF</div>}
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
                   )}
 
-                  {/* -- BID/PROPOSAL FIELDS -- */}
+                  {/* Stage-specific fields */}
+                  {o.stage==="budgeting_lead" && (
+                    <div style={{background:"#EEF3FF",borderRadius:8,border:"1px solid #3B6FE820",padding:"12px 14px"}}>
+                      <div style={{fontSize:10,fontWeight:700,color:"#3B6FE8",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:10}}>Budgeting Stage</div>
+                      <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                        <div>{lbl("Budget Reception")}<select style={fi} value={det.budgetReception||""} onChange={e=>setDet({budgetReception:e.target.value})}><option value="">Select…</option><option>Accepted — Moving to Bid</option><option>Under Review</option><option>Too High — Revising</option><option>Rejected</option><option>Pending Submission</option></select></div>
+                        <div>{lbl("Next Steps")}<textarea style={{...fi,resize:"vertical"}} rows={2} value={det.budgetNextSteps||""} onChange={e=>setDet({budgetNextSteps:e.target.value})} placeholder="What happens next…"/></div>
+                      </div>
+                    </div>
+                  )}
+
                   {(o.stage==="proposal_bid"||o.stage==="negotiation") && (
                     <div style={{background:"#FFF9E6",borderRadius:8,border:"1px solid #FCD34D30",padding:"12px 14px"}}>
                       <div style={{fontSize:10,fontWeight:700,color:"#B45309",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:10}}>Bid Stage</div>
@@ -11448,45 +10820,28 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
           if (!W.company.trim()) return;
           if (isEdit) {
             setMpVendorDB(prev=>prev.map(v=>v.id===W.id?{...W}:v));
-            saveVendorToDB(W);
           } else {
-            const newV2 = {...W,id:"mpv"+Date.now()};
-            setMpVendorDB(prev=>[...prev,newV2]);
-            saveVendorToDB(newV2);
+            setMpVendorDB(prev=>[...prev,{...W,id:"mpv"+Date.now()}]);
           }
           setShowMpVendorForm(false);
         };
 
         return (
           <div style={{position:"fixed",inset:0,background:"rgba(10,16,36,0.7)",zIndex:2500,display:"flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(3px)",padding:16}}>
-            <div style={{background:"#fff",borderRadius:14,width:"min(560px,100%)",maxHeight:"90vh",display:"flex",flexDirection:"column",boxShadow:"0 12px 60px rgba(0,0,0,0.25)",overflow:"hidden"}}>
-              <div style={{background:"linear-gradient(135deg,#1A2240,#253260)",padding:"16px 22px",display:"flex",alignItems:"center",gap:10,flexShrink:0}}>
-                <div style={{fontSize:15,fontWeight:800,color:"#fff",flex:1}}>{isEdit?"Edit Vendor":"+ Add Vendor to Database"}</div>
+            <div style={{background:"#fff",borderRadius:14,width:"min(520px,100%)",maxHeight:"88vh",display:"flex",flexDirection:"column",boxShadow:"0 12px 60px rgba(0,0,0,0.25)",overflow:"hidden"}}>
+              <div style={{background:"linear-gradient(135deg,#1A2240,#253260)",padding:"16px 22px",display:"flex",alignItems:"center",gap:10}}>
+                <div style={{fontSize:15,fontWeight:800,color:"#fff",flex:1}}>{isEdit?"Edit Vendor":"+ Add MP Vendor"}</div>
                 <button onClick={()=>setShowMpVendorForm(false)} style={{background:"rgba(255,255,255,0.12)",border:"none",color:"#fff",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontSize:12,fontFamily:"inherit"}}>x</button>
               </div>
               <div style={{padding:"18px 22px",overflowY:"auto",display:"flex",flexDirection:"column",gap:12}}>
-                {/* Company + Contact */}
                 <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-                  <div><div style={{fontSize:10,color:"#9BA3BF",textTransform:"uppercase",marginBottom:3}}>Company Name *</div><input value={W.company} onChange={e=>setW("company",e.target.value)} placeholder="Company name" style={fi}/></div>
-                  <div><div style={{fontSize:10,color:"#9BA3BF",textTransform:"uppercase",marginBottom:3}}>Contact Name</div><input value={W.contact||""} onChange={e=>setW("contact",e.target.value)} placeholder="Primary contact" style={fi}/></div>
+                  <div><div style={{fontSize:10,color:"#9BA3BF",textTransform:"uppercase",marginBottom:3}}>Company Name *</div><input value={W.company} onChange={e=>setW("company",e.target.value)} placeholder="Vendor company" style={fi}/></div>
+                  <div><div style={{fontSize:10,color:"#9BA3BF",textTransform:"uppercase",marginBottom:3}}>Contact Name</div><input value={W.contact||""} onChange={e=>setW("contact",e.target.value)} placeholder="Contact" style={fi}/></div>
                   <div><div style={{fontSize:10,color:"#9BA3BF",textTransform:"uppercase",marginBottom:3}}>Phone</div><input value={W.phone||""} onChange={e=>setW("phone",e.target.value)} placeholder="(555) 000-0000" style={fi}/></div>
                   <div><div style={{fontSize:10,color:"#9BA3BF",textTransform:"uppercase",marginBottom:3}}>Email</div><input value={W.email||""} onChange={e=>setW("email",e.target.value)} placeholder="email@vendor.com" style={fi}/></div>
                 </div>
-                {/* Address */}
-                <div style={{background:"#F4F6FB",borderRadius:8,padding:"10px 12px"}}>
-                  <div style={{fontSize:10,fontWeight:700,color:"#4A5278",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:8}}>Location (used for local suggestions)</div>
-                  <div style={{display:"grid",gridTemplateColumns:"1fr",gap:8,marginBottom:8}}>
-                    <div><div style={{fontSize:10,color:"#9BA3BF",textTransform:"uppercase",marginBottom:3}}>Street Address</div><input value={W.address||""} onChange={e=>setW("address",e.target.value)} placeholder="123 Main St" style={fi}/></div>
-                  </div>
-                  <div style={{display:"grid",gridTemplateColumns:"2fr 1fr 1fr",gap:8}}>
-                    <div><div style={{fontSize:10,color:"#9BA3BF",textTransform:"uppercase",marginBottom:3}}>City</div><input value={W.city||""} onChange={e=>setW("city",e.target.value)} placeholder="Detroit" style={fi}/></div>
-                    <div><div style={{fontSize:10,color:"#9BA3BF",textTransform:"uppercase",marginBottom:3}}>State</div><input value={W.state||""} onChange={e=>setW("state",e.target.value.toUpperCase())} placeholder="MI" maxLength={2} style={fi}/></div>
-                    <div><div style={{fontSize:10,color:"#9BA3BF",textTransform:"uppercase",marginBottom:3}}>Zip</div><input value={W.zip||""} onChange={e=>setW("zip",e.target.value)} placeholder="48201" style={fi}/></div>
-                  </div>
-                </div>
-                {/* Trades */}
                 <div>
-                  <div style={{fontSize:10,color:"#9BA3BF",textTransform:"uppercase",marginBottom:6}}>Trades</div>
+                  <div style={{fontSize:10,color:"#9BA3BF",textTransform:"uppercase",marginBottom:6}}>Trades -- Select All That Apply</div>
                   <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
                     {BID_TRADES.map(t=>{
                       const sel=(W.trades||[]).includes(t);
@@ -11499,161 +10854,95 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
                     })}
                   </div>
                 </div>
-                {/* Notes */}
                 <div><div style={{fontSize:10,color:"#9BA3BF",textTransform:"uppercase",marginBottom:3}}>Notes</div>
-                  <textarea value={W.notes||""} onChange={e=>setW("notes",e.target.value)} rows={2} placeholder="Coverage area, specialty, past experience..."
+                  <textarea value={W.notes||""} onChange={e=>setW("notes",e.target.value)} rows={2} placeholder="Past experience, specialty, etc."
                     style={{...fi,resize:"vertical"}}/></div>
               </div>
-              <div style={{padding:"12px 22px",borderTop:"1px solid #D4D9EE",display:"flex",gap:8,background:"#F9FAFC",flexShrink:0}}>
-                {isEdit && <button onClick={()=>{setMpVendorDB(prev=>prev.filter(v=>v.id!==W.id));deleteVendorFromDB(W.id);setShowMpVendorForm(false);}} style={{padding:"9px 14px",background:"#FEE2E2",border:"1px solid #FECACA",borderRadius:7,cursor:"pointer",fontFamily:"inherit",fontSize:12,color:"#DC2626",fontWeight:600}}>Delete</button>}
+              <div style={{padding:"12px 22px",borderTop:"1px solid #D4D9EE",display:"flex",gap:8,background:"#F9FAFC"}}>
+                {isEdit && <button onClick={()=>{setMpVendorDB(prev=>prev.filter(v=>v.id!==W.id));setShowMpVendorForm(false);}} style={{padding:"9px 14px",background:"#FEE2E2",border:"1px solid #FECACA",borderRadius:7,cursor:"pointer",fontFamily:"inherit",fontSize:12,color:"#DC2626",fontWeight:600}}>Delete</button>}
                 <button onClick={()=>setShowMpVendorForm(false)} style={{flex:1,padding:"9px",background:"#F0F2F8",border:"1px solid #CBD1E8",borderRadius:7,cursor:"pointer",fontFamily:"inherit",fontSize:13,color:"#4A5278"}}>Cancel</button>
-                <button onClick={save} style={{flex:2,padding:"9px",background:"#3B6FE8",border:"none",borderRadius:7,cursor:"pointer",fontFamily:"inherit",fontSize:13,color:"#fff",fontWeight:700}}>{isEdit?"Save Changes":"Add to Database"}</button>
+                <button onClick={save} style={{flex:2,padding:"9px",background:"#3B6FE8",border:"none",borderRadius:7,cursor:"pointer",fontFamily:"inherit",fontSize:13,color:"#fff",fontWeight:700}}>{isEdit?"Save Changes":"Add Vendor"}</button>
               </div>
             </div>
           </div>
         );
       })()}
 
-
       {/* -- ADD VENDOR MODAL -- */}
-      {showAddVendor && (activeBidOpp || pipeline.filter(o=>o.bu==="major")[0]?.id) && (() => {
-        const _bidId = activeBidOpp || pipeline.filter(o=>o.bu==="major")[0]?.id;
-        const pkg = bidPackages[_bidId] || { vendors:[], trades:[] };
-        const opp = pipeline.find(o=>o.id===_bidId);
-        const det = oppDetails[_bidId] || {};
-        const projCity  = det.city  || "";
-        const projState = det.state || "";
-        // Use _bidId for all saves
-        const BID_TRADES = ["Concrete","Masonry","Demo","Rough Carpentry","Fluid Applied Flooring","Roofing","Metal Wall Panels / Siding","Doors & Frames","Roll-Up Doors","Security / Access Control","Plumbing","Earthwork & Utilities","Asphalt","Fencing & Gates","Landscaping / Irrigation","Metal Building (PEMB)","Electrical","Lighting","Automated Doors","HVAC","Fire Suppression","Fire Alarm","Elevators","Material Lift","Canopies","General Conditions","Other"];
+      {showAddVendor && activeBidOpp && (() => {
+        const pkg = bidPackages[activeBidOpp] || { vendors:[], trades:[] };
+        const BID_TRADES = [
+          "Concrete","Masonry","Demo","Rough Carpentry","Fluid Applied Flooring","Roofing",
+          "Metal Wall Panels / Siding","Doors & Frames","Roll-Up Doors","Security / Access Control",
+          "Plumbing","Earthwork & Utilities","Asphalt","Fencing & Gates","Landscaping / Irrigation",
+          "Metal Building (PEMB)","Electrical","Lighting","Automated Doors","HVAC",
+          "Fire Suppression","Fire Alarm","Elevators","Material Lift","Canopies",
+          "General Conditions","Dumpster / Porta John","Architect","Civil Engineer","Other"
+        ];
+        const opp = pipeline.find(o=>o.id===activeBidOpp);
         const fi = {width:"100%",padding:"8px 10px",border:"1.5px solid #CBD1E8",borderRadius:7,fontSize:13,fontFamily:"inherit",outline:"none",boxSizing:"border-box"};
         const W = vendorForm;
         const setW = (k,v) => setVendorForm(f=>({...f,[k]:v}));
 
-        // Local vendor suggestions from DB (same state as project)
-        const localSuggestions = projState
-          ? mpVendorDB.filter(v => {
-              const alreadyAdded = pkg.vendors.find(pv=>pv.company===v.company);
-              const sameState = (v.state||"").toUpperCase() === projState.toUpperCase();
-              const nearCity  = projCity && (v.city||"").toLowerCase().includes(projCity.toLowerCase().slice(0,4));
-              return (sameState || nearCity) && !alreadyAdded;
-            })
-          : [];
-
-        const addFromDB = (dbV) => {
-          const newV = { ...dbV, id:"v"+Date.now(), bidding:false, infoSent:false, bidReceived:false, bidAmount:"", costCodes:W.trades };
-          const newPkgM = {...pkg, vendors:[...pkg.vendors,newV]};
-          setBidPackages(prev=>({...prev,[_bidId]:newPkgM}));
-          saveEstimateField(_bidId,'bid_packages',newPkgM);
-        };
-
         const save = () => {
           if (!W.company.trim()) return;
           const newV = {...W, id:"v"+Date.now()};
-          const newPkgM = {...pkg, vendors:[...pkg.vendors,newV]};
-          setBidPackages(prev=>({...prev,[_bidId]:newPkgM}));
-          saveEstimateField(_bidId,'bid_packages',newPkgM);
-          // Also save to vendor DB if not already there
-          if (!mpVendorDB.find(v=>v.company===W.company)) {
-            const dbV = {id:"mpv"+Date.now(),company:W.company,contact:W.contact||"",phone:W.phone||"",email:W.email||"",trades:W.trades||[],notes:"",rating:5,address:"",city:"",state:"",zip:""};
-            setMpVendorDB(prev=>[...prev,dbV]);
-            saveVendorToDB(dbV);
-          }
+          setBidPackages(prev=>({...prev,[activeBidOpp]:{...pkg,vendors:[...pkg.vendors,newV]}}));
           setVendorForm({company:"",contact:"",phone:"",email:"",trades:[],bidding:false,infoSent:false,bidReceived:false,bidAmount:"",notes:""});
           setShowAddVendor(false);
         };
 
         return (
           <div style={{position:"fixed",inset:0,background:"rgba(10,16,36,0.7)",zIndex:2500,display:"flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(3px)",padding:16}}>
-            <div style={{background:"#fff",borderRadius:14,width:"min(580px,100%)",maxHeight:"90vh",display:"flex",flexDirection:"column",boxShadow:"0 12px 60px rgba(0,0,0,0.25)",overflow:"hidden"}}>
-              <div style={{background:"linear-gradient(135deg,#1A2240,#253260)",padding:"14px 22px",display:"flex",alignItems:"center",gap:10,flexShrink:0}}>
-                <div style={{fontSize:14,fontWeight:800,color:"#fff",flex:1}}>+ Add Vendor to Estimate{opp?" — "+opp.name:""}</div>
-                <button onClick={()=>setShowAddVendor(false)} style={{background:"rgba(255,255,255,0.12)",border:"none",color:"#fff",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontSize:12,fontFamily:"inherit"}}>x</button>
+            <div style={{background:"#fff",borderRadius:14,width:"min(540px,100%)",maxHeight:"88vh",display:"flex",flexDirection:"column",boxShadow:"0 12px 60px rgba(0,0,0,0.25)",overflow:"hidden"}}>
+              <div style={{background:"linear-gradient(135deg,#1A2240,#253260)",padding:"16px 22px",display:"flex",alignItems:"center",gap:10}}>
+                <div style={{fontSize:15,fontWeight:800,color:"#fff",flex:1}}>+ Add Vendor{opp?` — ${opp.name}`:""}</div>
+                <button onClick={()=>setShowAddVendor(false)} style={{background:"rgba(255,255,255,0.12)",border:"none",color:"#fff",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontSize:12,fontFamily:"inherit"}}>✕</button>
               </div>
+              <div style={{padding:"18px 22px",overflowY:"auto",display:"flex",flexDirection:"column",gap:12}}>
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+                  <div><div style={{fontSize:10,color:"#9BA3BF",textTransform:"uppercase",marginBottom:3}}>Company Name *</div><input value={W.company} onChange={e=>setW("company",e.target.value)} placeholder="Vendor company…" style={fi}/></div>
+                  <div><div style={{fontSize:10,color:"#9BA3BF",textTransform:"uppercase",marginBottom:3}}>Contact Name</div><input value={W.contact} onChange={e=>setW("contact",e.target.value)} placeholder="Contact…" style={fi}/></div>
+                  <div><div style={{fontSize:10,color:"#9BA3BF",textTransform:"uppercase",marginBottom:3}}>Phone</div><input value={W.phone} onChange={e=>setW("phone",e.target.value)} placeholder="(555) 000-0000" style={fi}/></div>
+                  <div><div style={{fontSize:10,color:"#9BA3BF",textTransform:"uppercase",marginBottom:3}}>Email</div><input value={W.email} onChange={e=>setW("email",e.target.value)} placeholder="email@vendor.com" style={fi}/></div>
+                </div>
 
-              <div style={{overflowY:"auto",flex:1}}>
-                {/* Local suggestions */}
-                {localSuggestions.length > 0 && (
-                  <div style={{padding:"12px 22px",background:"#F0FDF4",borderBottom:"1px solid #4ADE8020"}}>
-                    <div style={{fontSize:10,fontWeight:700,color:"#059669",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:8}}>
-                      Local Suggestions — {projCity}{projCity&&projState?", ":""}{projState} ({localSuggestions.length})
-                    </div>
-                    <div style={{display:"flex",flexDirection:"column",gap:6}}>
-                      {localSuggestions.slice(0,6).map(v=>(
-                        <div key={v.id} style={{display:"flex",alignItems:"center",gap:10,padding:"7px 10px",background:"#fff",borderRadius:7,border:"1px solid #4ADE8030"}}>
-                          <div style={{flex:1}}>
-                            <div style={{fontSize:12,fontWeight:700,color:"#1A2240"}}>{v.company}</div>
-                            <div style={{fontSize:10,color:"#4A5278"}}>{[v.city,v.state].filter(Boolean).join(", ")} · {(v.trades||[]).slice(0,2).join(", ")}</div>
-                          </div>
-                          {v.phone&&<div style={{fontSize:10,color:"#4A5278"}}>{v.phone}</div>}
-                          <button onClick={()=>{addFromDB(v);}}
-                            style={{padding:"4px 10px",background:"#059669",color:"#fff",border:"none",borderRadius:5,cursor:"pointer",fontFamily:"inherit",fontSize:11,fontWeight:700,flexShrink:0}}>
-                            + Add
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* From DB picker */}
-                {mpVendorDB.length > 0 && (
-                  <div style={{padding:"12px 22px",borderBottom:"1px solid #E8EBF4"}}>
-                    <div style={{fontSize:10,fontWeight:700,color:"#4A5278",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:8}}>From Vendor Database</div>
-                    <div style={{maxHeight:160,overflowY:"auto",display:"flex",flexDirection:"column",gap:5}}>
-                      {mpVendorDB.filter(v=>!pkg.vendors.find(pv=>pv.company===v.company)).map(v=>(
-                        <div key={v.id} style={{display:"flex",alignItems:"center",gap:8,padding:"5px 8px",borderRadius:6,background:"#F9FAFC",border:"1px solid #E8EBF4"}}>
-                          <div style={{flex:1}}>
-                            <span style={{fontSize:12,fontWeight:600,color:"#1A2240"}}>{v.company}</span>
-                            {v.contact&&<span style={{fontSize:10,color:"#9BA3BF",marginLeft:8}}>{v.contact}</span>}
-                            {(v.city||v.state)&&<span style={{fontSize:10,color:"#9BA3BF",marginLeft:8}}>📍{[v.city,v.state].filter(Boolean).join(", ")}</span>}
-                          </div>
-                          <div style={{display:"flex",gap:3,flexWrap:"wrap",maxWidth:140}}>
-                            {(v.trades||[]).slice(0,2).map(t=><span key={t} style={{fontSize:8,background:"#EEF3FF",color:"#3B6FE8",borderRadius:3,padding:"1px 4px"}}>{t}</span>)}
-                          </div>
-                          <button onClick={()=>{addFromDB(v);}}
-                            style={{padding:"3px 8px",background:"#3B6FE8",color:"#fff",border:"none",borderRadius:4,cursor:"pointer",fontFamily:"inherit",fontSize:10,fontWeight:700,flexShrink:0}}>
-                            + Add
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Manual entry */}
-                <div style={{padding:"14px 22px",display:"flex",flexDirection:"column",gap:10}}>
-                  <div style={{fontSize:10,fontWeight:700,color:"#4A5278",textTransform:"uppercase",letterSpacing:"0.07em"}}>Add New Vendor Manually</div>
-                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-                    <div><div style={{fontSize:10,color:"#9BA3BF",textTransform:"uppercase",marginBottom:3}}>Company *</div><input value={W.company} onChange={e=>setW("company",e.target.value)} placeholder="Company name" style={fi}/></div>
-                    <div><div style={{fontSize:10,color:"#9BA3BF",textTransform:"uppercase",marginBottom:3}}>Contact</div><input value={W.contact||""} onChange={e=>setW("contact",e.target.value)} placeholder="Contact" style={fi}/></div>
-                    <div><div style={{fontSize:10,color:"#9BA3BF",textTransform:"uppercase",marginBottom:3}}>Phone</div><input value={W.phone||""} onChange={e=>setW("phone",e.target.value)} placeholder="(555) 000-0000" style={fi}/></div>
-                    <div><div style={{fontSize:10,color:"#9BA3BF",textTransform:"uppercase",marginBottom:3}}>Email</div><input value={W.email||""} onChange={e=>setW("email",e.target.value)} placeholder="email@vendor.com" style={fi}/></div>
-                  </div>
-                  <div>
-                    <div style={{fontSize:10,color:"#9BA3BF",textTransform:"uppercase",marginBottom:6}}>Bid Packages</div>
-                    <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
-                      {BID_TRADES.map(t=>{
-                        const sel=(W.trades||[]).includes(t);
-                        return <button key={t} type="button" onClick={()=>{const cur=W.trades||[];setW("trades",sel?cur.filter(x=>x!==t):[...cur,t]);}}
-                          style={{padding:"3px 9px",borderRadius:5,border:"1.5px solid "+(sel?"#3B6FE8":"#CBD1E8"),background:sel?"#3B6FE8":"#F9FAFC",color:sel?"#fff":"#4A5278",fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>{t}</button>;
-                      })}
-                    </div>
-                  </div>
-                  <div style={{display:"flex",gap:10,alignItems:"center",padding:"8px 10px",background:"#F4F6FB",borderRadius:7,fontSize:12,color:"#4A5278"}}>
-                    <span style={{fontSize:10,color:"#9BA3BF"}}>✓ New vendors are automatically saved to your vendor database</span>
+                <div>
+                  <div style={{fontSize:10,color:"#9BA3BF",textTransform:"uppercase",marginBottom:6}}>Bid Packages — Select All That Apply</div>
+                  <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
+                    {BID_TRADES.map(t=>{
+                      const sel = (W.trades||[]).includes(t);
+                      return (
+                        <button key={t} type="button" onClick={()=>{const cur=W.trades||[];setW("trades",sel?cur.filter(x=>x!==t):[...cur,t]);}}
+                          style={{padding:"4px 10px",borderRadius:5,border:"1.5px solid "+(sel?"#3B6FE8":"#CBD1E8"),background:sel?"#3B6FE8":"#F9FAFC",color:sel?"#fff":"#4A5278",fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>
+                          {t}
+                        </button>
+                      );
+                    })}
                   </div>
                 </div>
-              </div>
 
-              <div style={{padding:"12px 22px",borderTop:"1px solid #D4D9EE",display:"flex",gap:8,background:"#F9FAFC",flexShrink:0}}>
+                <div style={{display:"flex",gap:12,alignItems:"center",padding:"10px 12px",background:"#F4F6FB",borderRadius:8}}>
+                  {[{key:"infoSent",label:"Info Sent"},{key:"bidding",label:"Bidding"},{key:"bidReceived",label:"Bid Received"}].map(s=>(
+                    <label key={s.key} style={{display:"flex",alignItems:"center",gap:6,cursor:"pointer",fontSize:12,color:"#1A2240"}}>
+                      <input type="checkbox" checked={!!W[s.key]} onChange={e=>setW(s.key,e.target.checked)}/>
+                      {s.label}
+                    </label>
+                  ))}
+                </div>
+
+                <div><div style={{fontSize:10,color:"#9BA3BF",textTransform:"uppercase",marginBottom:3}}>Notes</div>
+                  <textarea value={W.notes} onChange={e=>setW("notes",e.target.value)} rows={2} placeholder="Any notes about this vendor…"
+                    style={{...fi,resize:"vertical"}}/></div>
+              </div>
+              <div style={{padding:"12px 22px",borderTop:"1px solid #D4D9EE",display:"flex",gap:8,background:"#F9FAFC"}}>
                 <button onClick={()=>setShowAddVendor(false)} style={{flex:1,padding:"9px",background:"#F0F2F8",border:"1px solid #CBD1E8",borderRadius:7,cursor:"pointer",fontFamily:"inherit",fontSize:13,color:"#4A5278"}}>Cancel</button>
-                <button onClick={save} disabled={!W.company.trim()} style={{flex:2,padding:"9px",background:W.company.trim()?"#3B6FE8":"#CBD1E8",border:"none",borderRadius:7,cursor:W.company.trim()?"pointer":"default",fontFamily:"inherit",fontSize:13,color:"#fff",fontWeight:700}}>Add Vendor to Estimate</button>
+                <button onClick={save} style={{flex:2,padding:"9px",background:"#3B6FE8",border:"none",borderRadius:7,cursor:"pointer",fontFamily:"inherit",fontSize:13,color:"#fff",fontWeight:700}}>Add Vendor</button>
               </div>
             </div>
           </div>
         );
       })()}
-
 
       {/* -- BID PACKAGE PDF PRINT MODAL -- */}
       {showBidPrintModal && bidPrintOppId && (() => {
@@ -11754,146 +11043,6 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
                   </div>
                 </div>
               </div>
-            </div>
-          </div>
-        );
-      })()}
-
-      {/* -- MP VENDOR DETAIL PANEL -- */}
-      {selectedMpVendor && (() => {
-        const v = selectedMpVendor;
-        // Build full history across all bid packages
-        const history = [];
-        Object.entries(bidPackages).forEach(([oppId, pkg]) => {
-          const opp = pipeline.find(o=>o.id===oppId);
-          if (!opp) return;
-          const match = (pkg.vendors||[]).find(v2=>v2.id===v.id||v2.company===v.company);
-          if (match) {
-            history.push({ opp, vendor: match,
-              status: match.bidReceived?"Bid Received":match.bidding?"Bidding":match.infoSent?"Info Sent":"Contacted",
-              amount: match.bidAmount ? parseFloat(match.bidAmount)||0 : 0,
-              isWon: ["won","closed_won"].includes(opp.stage),
-            });
-          }
-        });
-        // Also check active mp_jobs by name match
-        const activeJobs = mpJobs.filter(j => {
-          const opp = pipeline.find(o=>o.id===j.id||o.name===j.name);
-          return history.some(h=>h.opp?.id===opp?.id||h.opp?.name===j.name);
-        });
-        const completed = history.filter(h=>h.isWon);
-        const bids      = history.filter(h=>!h.isWon);
-        const totalBid  = history.reduce((s,h)=>s+h.amount,0);
-
-        const STAGE_COLORS={lead:"#A78BFA",budgeting_lead:"#818CF8",proposal_bid:"#60A5FA",negotiation:"#FCD34D",won:"#4ADE80",closed_won:"#059669",lost:"#F87171"};
-        const STAGE_LABELS={lead:"Lead",budgeting_lead:"Budgeting",proposal_bid:"Proposal/Bid",negotiation:"Negotiation",won:"Won",closed_won:"Closed/Won",lost:"Lost"};
-
-        return (
-          <div style={{position:"fixed",right:0,top:0,bottom:0,width:"min(520px,100vw)",background:"#fff",boxShadow:"-4px 0 40px rgba(0,0,0,0.15)",zIndex:1200,display:"flex",flexDirection:"column",overflow:"hidden"}}>
-            {/* Header */}
-            <div style={{background:"linear-gradient(135deg,#1A2240,#253260)",padding:"18px 22px",flexShrink:0}}>
-              <div style={{display:"flex",alignItems:"flex-start",gap:10,marginBottom:12}}>
-                <div style={{flex:1}}>
-                  <div style={{fontSize:17,fontWeight:800,color:"#fff",lineHeight:1.3}}>{v.company}</div>
-                  {v.contact && <div style={{fontSize:11,color:"rgba(255,255,255,0.55)",marginTop:2}}>👤 {v.contact}</div>}
-                  {(v.city||v.state) && <div style={{fontSize:11,color:"rgba(255,255,255,0.55)",marginTop:1}}>📍 {[v.city,v.state,v.zip].filter(Boolean).join(", ")}</div>}
-                </div>
-                <div style={{display:"flex",gap:6}}>
-                  <button onClick={()=>{setMpVendorForm({...v,address:v.address||"",city:v.city||"",state:v.state||"",zip:v.zip||""});setShowMpVendorForm(true);}}
-                    style={{background:"rgba(255,255,255,0.15)",border:"1px solid rgba(255,255,255,0.3)",color:"#fff",borderRadius:6,padding:"5px 10px",cursor:"pointer",fontSize:11,fontFamily:"inherit"}}>✎ Edit</button>
-                  <button onClick={()=>setSelectedMpVendor(null)} style={{background:"rgba(255,255,255,0.12)",border:"none",color:"#fff",borderRadius:6,padding:"5px 10px",cursor:"pointer",fontSize:12,fontFamily:"inherit"}}>✕</button>
-                </div>
-              </div>
-              {/* Stats row */}
-              <div style={{display:"flex",gap:0,background:"rgba(255,255,255,0.08)",borderRadius:8,overflow:"hidden"}}>
-                {[
-                  {l:"Bid On",     v:history.length,              c:"#60A5FA"},
-                  {l:"Won",        v:completed.length,            c:"#4ADE80"},
-                  {l:"Total Bid",  v:totalBid>0?fmt(totalBid):"—",c:"#FCD34D"},
-                ].map((s,i)=>(
-                  <div key={s.l} style={{flex:1,textAlign:"center",padding:"8px 4px",borderLeft:i>0?"1px solid rgba(255,255,255,0.1)":"none"}}>
-                    <div style={{fontSize:16,fontWeight:800,color:s.c}}>{s.v}</div>
-                    <div style={{fontSize:9,color:"rgba(255,255,255,0.4)",textTransform:"uppercase",letterSpacing:"0.06em"}}>{s.l}</div>
-                  </div>
-                ))}
-              </div>
-              {/* Trades */}
-              <div style={{display:"flex",flexWrap:"wrap",gap:4,marginTop:10}}>
-                {(v.trades||[]).map(t=>(
-                  <span key={t} style={{fontSize:10,fontWeight:700,background:"rgba(59,111,232,0.3)",color:"#93C5FD",borderRadius:4,padding:"2px 7px"}}>{t}</span>
-                ))}
-              </div>
-            </div>
-
-            {/* Contact info strip */}
-            <div style={{background:"#F9FAFC",padding:"10px 22px",borderBottom:"1px solid #E8EBF4",display:"flex",gap:16,flexShrink:0}}>
-              {v.phone && <a href={"tel:"+v.phone} style={{fontSize:11,color:"#3B6FE8",textDecoration:"none"}}>📞 {v.phone}</a>}
-              {v.email && <a href={"mailto:"+v.email} style={{fontSize:11,color:"#3B6FE8",textDecoration:"none"}}>✉ {v.email}</a>}
-              {v.address && <span style={{fontSize:11,color:"#4A5278"}}>📍 {v.address}</span>}
-            </div>
-
-            <div style={{overflowY:"auto",flex:1,padding:"16px 22px",display:"flex",flexDirection:"column",gap:16}}>
-              {/* Projects completed */}
-              <div>
-                <div style={{fontSize:11,fontWeight:700,color:"#4A5278",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:10}}>
-                  Projects Completed ({completed.length})
-                </div>
-                {completed.length===0 ? (
-                  <div style={{fontSize:12,color:"#9BA3BF",fontStyle:"italic",padding:"8px 0"}}>No completed projects yet</div>
-                ) : completed.map((h,i)=>(
-                  <div key={i} style={{background:"#F0FDF4",border:"1px solid #4ADE8030",borderRadius:8,padding:"10px 12px",marginBottom:8}}>
-                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
-                      <div>
-                        <div style={{fontSize:12,fontWeight:700,color:"#1A2240"}}>{h.opp.name}</div>
-                        <div style={{fontSize:11,color:"#4A5278",marginTop:1}}>{companies.find(c=>c.id===h.opp.companyId)?.name||""}</div>
-                        <span style={{fontSize:9,fontWeight:700,background:"#4ADE8020",color:"#059669",borderRadius:3,padding:"1px 5px",display:"inline-block",marginTop:4}}>{STAGE_LABELS[h.opp.stage]||h.opp.stage}</span>
-                      </div>
-                      <div style={{textAlign:"right"}}>
-                        {h.amount>0 && <div style={{fontSize:13,fontWeight:800,color:"#059669"}}>{fmt(h.amount)}</div>}
-                        <div style={{fontSize:10,color:"#9BA3BF",marginTop:2}}>{h.status}</div>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              {/* Projects bid on */}
-              <div>
-                <div style={{fontSize:11,fontWeight:700,color:"#4A5278",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:10}}>
-                  Projects Bid On ({bids.length})
-                </div>
-                {bids.length===0 ? (
-                  <div style={{fontSize:12,color:"#9BA3BF",fontStyle:"italic",padding:"8px 0"}}>No bids recorded yet</div>
-                ) : bids.map((h,i)=>{
-                  const sc=STAGE_COLORS[h.opp.stage]||"#818CF8";
-                  return (
-                    <div key={i} style={{background:"#F9FAFC",border:"1px solid #E8EBF4",borderRadius:8,padding:"10px 12px",marginBottom:8,borderLeft:"3px solid "+sc}}>
-                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
-                        <div>
-                          <div style={{fontSize:12,fontWeight:700,color:"#1A2240"}}>{h.opp.name}</div>
-                          <div style={{fontSize:11,color:"#4A5278",marginTop:1}}>{companies.find(c=>c.id===h.opp.companyId)?.name||""}</div>
-                          <div style={{display:"flex",gap:6,marginTop:4,alignItems:"center"}}>
-                            <span style={{fontSize:9,fontWeight:700,background:sc+"20",color:sc,borderRadius:3,padding:"1px 5px"}}>{STAGE_LABELS[h.opp.stage]||h.opp.stage}</span>
-                            <span style={{fontSize:10,color:"#9BA3BF"}}>{h.status}</span>
-                          </div>
-                        </div>
-                        <div style={{textAlign:"right"}}>
-                          {h.amount>0 && <div style={{fontSize:13,fontWeight:800,color:"#1A2240"}}>{fmt(h.amount)}</div>}
-                          <div style={{fontSize:10,color:h.vendor.bidReceived?"#4ADE80":h.vendor.bidding?"#FCD34D":"#9BA3BF",marginTop:2,fontWeight:600}}>{h.status}</div>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              {/* Notes */}
-              {v.notes && (
-                <div style={{background:"#F9FAFC",borderRadius:8,border:"1px solid #E8EBF4",padding:"10px 12px"}}>
-                  <div style={{fontSize:10,fontWeight:700,color:"#9BA3BF",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:4}}>Notes</div>
-                  <div style={{fontSize:12,color:"#4A5278",lineHeight:1.6}}>{v.notes}</div>
-                </div>
-              )}
             </div>
           </div>
         );
