@@ -2798,7 +2798,7 @@ export default function App() {
     const load = async () => {
       setDbLoading(l => ({ ...l, companies: true, sites: true, lawnSites: true, subcontractors: true }));
       try {
-        const [coRes, siteRes, subRes, fmRes, teamRes, crmRes, ctRes, mpPipeRes, mpRes, mpwRes] = await Promise.all([
+        const [coRes, siteRes, subRes, fmRes, teamRes, crmRes, ctRes, mpPipeRes, mpRes, mpwRes, estRes, vendRes] = await Promise.all([
           supa.from("companies").select("*"),
           fetch(`${SUPA_URL}/rest/v1/sites?select=*&limit=1000`, {
             headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}` }
@@ -2821,6 +2821,13 @@ export default function App() {
           fetch(`${SUPA_URL}/rest/v1/mp_weekly_reports?select=*&limit=1000`, {
             headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}` }
           }).then(r => r.json()).then(data => ({ data, error: null })).catch(() => ({ data: null, error: null })),
+          // NEW: load estimates and vendor db
+          fetch(`${SUPA_URL}/rest/v1/mp_estimates?select=*&limit=500`, {
+            headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}` }
+          }).then(r => r.json()).then(data => ({ data, error: null })).catch(() => ({ data: null, error: null })),
+          fetch(`${SUPA_URL}/rest/v1/mp_vendor_db?select=*&limit=1000`, {
+            headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}` }
+          }).then(r => r.json()).then(data => ({ data, error: null })).catch(() => ({ data: null, error: null })),
         ]);
         if (coRes.data?.length)   setCompanies(coRes.data.map(dbToCompany));
         if (siteRes.data?.length) setSites(siteRes.data.map(dbToSite));
@@ -2835,6 +2842,14 @@ export default function App() {
             bu: "major", closeDate: r.close_date||"", nextSteps: [],
             pipelineType: "budgeting", budgetDueDate: "", bidDueDate: "", dbId: r.id
           }));
+          // Load oppDetails from notes field (JSON blob)
+          const detMap = {};
+          mpPipeRes.data.forEach(r => {
+            if (r.notes && r.notes.startsWith("{")) {
+              try { detMap[r.id] = JSON.parse(r.notes); } catch(e) {}
+            }
+          });
+          if (Object.keys(detMap).length) setOppDetails(detMap);
           setPipeline(prev => {
             const existing = prev.filter(p => p.bu !== "major");
             return [...existing, ...pipeLoaded];
@@ -2844,7 +2859,7 @@ export default function App() {
           try { setMpJobs(mpRes.data.map(dbToMpJob)); } catch(e) { console.warn("mpJobs map error:", e); }
         }
         if (Array.isArray(mpwRes.data) && mpwRes.data.length) setMpWeeklyReports(mpwRes.data.map(dbToMpWeekly));
-        // contacts table — deduplicate by name+company before setting
+        // contacts table
         if (Array.isArray(ctRes.data) && ctRes.data.length) {
           const seen = new Set();
           const deduped = ctRes.data.filter(r => {
@@ -2854,10 +2869,35 @@ export default function App() {
           });
           setContacts(deduped.map(dbToContact));
         }
+        // Load estimates (wbs, takeoff, bid packages, phase, critical trades)
+        if (Array.isArray(estRes.data) && estRes.data.length) {
+          const wbsMap = {}, toMap = {}, pkgMap = {}, phaseMap = {}, critMap = {};
+          estRes.data.forEach(r => {
+            if (r.wbs_data)       try { wbsMap[r.opp_id]   = JSON.parse(r.wbs_data); } catch(e) {}
+            if (r.takeoff_data)   try { toMap[r.opp_id]    = JSON.parse(r.takeoff_data); } catch(e) {}
+            if (r.bid_packages)   try { pkgMap[r.opp_id]   = JSON.parse(r.bid_packages); } catch(e) {}
+            if (r.estimate_phase)       phaseMap[r.opp_id] = r.estimate_phase;
+            if (r.critical_trades) try { critMap[r.opp_id] = JSON.parse(r.critical_trades); } catch(e) {}
+          });
+          if (Object.keys(wbsMap).length)   setWbsData(wbsMap);
+          if (Object.keys(toMap).length)    setTakeoffData(toMap);
+          if (Object.keys(pkgMap).length)   setBidPackages(pkgMap);
+          if (Object.keys(phaseMap).length) setEstimatePhase(phaseMap);
+          if (Object.keys(critMap).length)  setCriticalTrades(critMap);
+        }
+        // Load vendor database
+        if (Array.isArray(vendRes.data) && vendRes.data.length) {
+          setMpVendorDB(vendRes.data.map(r => ({
+            id: r.id, company: r.company||"", contact: r.contact||"",
+            phone: r.phone||"", email: r.email||"",
+            trades: Array.isArray(r.trades) ? r.trades : (typeof r.trades==="string" ? JSON.parse(r.trades||"[]") : []),
+            notes: r.notes||"", rating: r.rating||5
+          })));
+        }
         setSupaReady(true);
       } catch(e) {
         setDbError("Could not connect to database.");
-        setSupaReady(true); // Always show the app even if DB fails
+        setSupaReady(true);
       }
       setDbLoading(l => ({ ...l, companies: false, sites: false, lawnSites: false, subcontractors: false }));
       clearTimeout(timeout);
@@ -3225,16 +3265,53 @@ Return ONLY valid JSON, no markdown, no extra text:
   const saveOppDetail = (oppId, fields) => {
     setOppDetails(prev => {
       const updated = {...prev, [oppId]: {...(prev[oppId]||{}), ...fields}};
-      // Persist to Supabase notes field as JSON
       try {
-        const row = pipeline.find(o=>o.id===oppId);
-        if (row?.dbId || String(oppId).length > 8) {
-          const id = row?.dbId || String(oppId);
-          supa.from("mp_pipeline").update({notes: JSON.stringify(updated[oppId])}).eq("id", id);
-        }
+        const id = String(oppId);
+        fetch(`${SUPA_URL}/rest/v1/mp_pipeline?id=eq.${id}`, {
+          method: "PATCH",
+          headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}`, "Content-Type": "application/json", Prefer: "return=minimal" },
+          body: JSON.stringify({ notes: JSON.stringify(updated[oppId]) })
+        }).catch(()=>{});
       } catch(e) {}
       return updated;
     });
+  };
+
+  // Save all estimate data for one opp to mp_estimates table
+  const saveEstimateField = (oppId, field, value) => {
+    const id = String(oppId);
+    const strVal = typeof value === "string" ? value : JSON.stringify(value);
+    const body = { opp_id: id, [field]: strVal, updated_at: new Date().toISOString() };
+    // Use upsert (POST with on conflict update)
+    fetch(`${SUPA_URL}/rest/v1/mp_estimates`, {
+      method: "POST",
+      headers: {
+        apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}`,
+        "Content-Type": "application/json",
+        Prefer: "resolution=merge-duplicates,return=minimal"
+      },
+      body: JSON.stringify(body)
+    }).catch(()=>{});
+  };
+
+  // Upsert vendor to mp_vendor_db
+  const saveVendorToDB = (v) => {
+    const row = { id: v.id, company: v.company, contact: v.contact||"", phone: v.phone||"", email: v.email||"", trades: JSON.stringify(v.trades||[]), notes: v.notes||"", rating: v.rating||5 };
+    fetch(`${SUPA_URL}/rest/v1/mp_vendor_db`, {
+      method: "POST",
+      headers: {
+        apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}`,
+        "Content-Type": "application/json",
+        Prefer: "resolution=merge-duplicates,return=minimal"
+      },
+      body: JSON.stringify(row)
+    }).catch(()=>{});
+  };
+
+  const deleteVendorFromDB = (id) => {
+    fetch(`${SUPA_URL}/rest/v1/mp_vendor_db?id=eq.${id}`, {
+      method: "DELETE", headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}`, Prefer: "return=minimal" }
+    }).catch(()=>{});
   };
   const moveStage  = (id, dir) => setPipeline(pipeline.map(o => {
     if (o.id !== id) return o;
@@ -7790,7 +7867,9 @@ if(bounds.length)map.fitBounds(bounds,{padding:[30,30]});
                                   const pkg = bidPackages[activeBidOpp] || {vendors:[]};
                                   if (pkg.vendors.find(x=>x.company===v.company)) return;
                                   const newV = {...v, id:"v"+Date.now(), bidding:false, infoSent:false, bidReceived:false, bidAmount:"" };
-                                  setBidPackages(prev=>({...prev,[activeBidOpp]:{...pkg,vendors:[...pkg.vendors,newV]}}));
+                                  const newPkg3 = {...pkg,vendors:[...pkg.vendors,newV]};
+                                  setBidPackages(prev=>({...prev,[activeBidOpp]:newPkg3}));
+                                  saveEstimateField(activeBidOpp,'bid_packages',newPkg3);
                                   // Show feedback
                                   alert(`${v.company} added to estimate!`);
                                 }}
@@ -8228,12 +8307,29 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
             const activeOppId = activeBidOpp || allMpOpps[0]?.id;
             const activeOpp   = allMpOpps.find(o => o.id === activeOppId) || null;
             const phase       = estimatePhase[activeOppId] || "wbs";
-            const setPhase    = (p) => setEstimatePhase(prev => ({...prev, [activeOppId]: p}));
+            const setPhase    = (p) => { setEstimatePhase(prev => ({...prev, [activeOppId]: p})); saveEstimateField(activeOppId, "estimate_phase", p); };
             const pkg         = bidPackages[activeOppId] || {vendors:[]};
             const wbs         = wbsData[activeOppId] || [];
             const takeoff     = takeoffData[activeOppId] || {};
-            const setWbs      = (items) => setWbsData(prev => ({...prev, [activeOppId]: typeof items==="function"?items(wbs):items}));
-            const setTakeoff  = (data)  => setTakeoffData(prev => ({...prev, [activeOppId]: typeof data==="function"?data(takeoff):data}));
+            const setWbs      = (items) => setWbsData(prev => {
+              const next = {...prev, [activeOppId]: typeof items==="function"?items(prev[activeOppId]||[]):items};
+              saveEstimateField(activeOppId, "wbs_data", next[activeOppId]);
+              return next;
+            });
+            const setTakeoff  = (data)  => setTakeoffData(prev => {
+              const next = {...prev, [activeOppId]: typeof data==="function"?data(prev[activeOppId]||{}):data};
+              saveEstimateField(activeOppId, "takeoff_data", next[activeOppId]);
+              return next;
+            });
+
+            // Save bid packages helper
+            const savePkg = (newPkg) => {
+              setBidPackages(prev => {
+                const next = {...prev, [activeOppId]: newPkg};
+                saveEstimateField(activeOppId, "bid_packages", newPkg);
+                return next;
+              });
+            };
 
             // Critical = wbs items marked critical individually
             const criticalCodes = wbs.filter(i=>i.critical);
@@ -8571,20 +8667,20 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
                                             <div key={key} style={{display:"flex",justifyContent:"center"}}>
                                               <div onClick={()=>{
                                                 const updated={...pkg,vendors:pkg.vendors.map(x=>x.id===v.id?{...x,[key]:!v[key]}:x)};
-                                                setBidPackages(prev=>({...prev,[activeOppId]:updated}));
+                                                savePkg(updated);
                                               }} style={{width:14,height:14,borderRadius:"50%",background:v[key]?"#4ADE80":"#E0E4F0",border:v[key]?"2px solid #4ADE8060":"2px solid #CBD1E8",cursor:"pointer",margin:"0 auto"}}/>
                                             </div>
                                           ))}
                                           <div>
                                             <input type="text" defaultValue={v.bidAmount||""} onBlur={e=>{
                                               const updated={...pkg,vendors:pkg.vendors.map(x=>x.id===v.id?{...x,bidAmount:e.target.value}:x)};
-                                              setBidPackages(prev=>({...prev,[activeOppId]:updated}));
+                                              savePkg(updated);
                                             }} placeholder="$0" style={{padding:"3px 6px",border:"1px solid #D4D9EE",borderRadius:4,fontSize:11,fontFamily:"inherit",outline:"none",width:"100%",boxSizing:"border-box",textAlign:"right",background:v.bidReceived?"#F0FDF4":"#F9FAFC"}}/>
                                           </div>
                                           <div>
                                             <input type="text" defaultValue={v.notes||""} onBlur={e=>{
                                               const updated={...pkg,vendors:pkg.vendors.map(x=>x.id===v.id?{...x,notes:e.target.value}:x)};
-                                              setBidPackages(prev=>({...prev,[activeOppId]:updated}));
+                                              savePkg(updated);
                                             }} placeholder="Notes..." style={{padding:"3px 6px",border:"1px solid #D4D9EE",borderRadius:4,fontSize:11,fontFamily:"inherit",outline:"none",width:"100%",boxSizing:"border-box"}}/>
                                           </div>
                                         </div>
@@ -10771,8 +10867,11 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
           if (!W.company.trim()) return;
           if (isEdit) {
             setMpVendorDB(prev=>prev.map(v=>v.id===W.id?{...W}:v));
+            saveVendorToDB(W);
           } else {
-            setMpVendorDB(prev=>[...prev,{...W,id:"mpv"+Date.now()}]);
+            const newV2 = {...W,id:"mpv"+Date.now()};
+            setMpVendorDB(prev=>[...prev,newV2]);
+            saveVendorToDB(newV2);
           }
           setShowMpVendorForm(false);
         };
@@ -10810,7 +10909,7 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
                     style={{...fi,resize:"vertical"}}/></div>
               </div>
               <div style={{padding:"12px 22px",borderTop:"1px solid #D4D9EE",display:"flex",gap:8,background:"#F9FAFC"}}>
-                {isEdit && <button onClick={()=>{setMpVendorDB(prev=>prev.filter(v=>v.id!==W.id));setShowMpVendorForm(false);}} style={{padding:"9px 14px",background:"#FEE2E2",border:"1px solid #FECACA",borderRadius:7,cursor:"pointer",fontFamily:"inherit",fontSize:12,color:"#DC2626",fontWeight:600}}>Delete</button>}
+                {isEdit && <button onClick={()=>{setMpVendorDB(prev=>prev.filter(v=>v.id!==W.id));deleteVendorFromDB(W.id);setShowMpVendorForm(false);}} style={{padding:"9px 14px",background:"#FEE2E2",border:"1px solid #FECACA",borderRadius:7,cursor:"pointer",fontFamily:"inherit",fontSize:12,color:"#DC2626",fontWeight:600}}>Delete</button>}
                 <button onClick={()=>setShowMpVendorForm(false)} style={{flex:1,padding:"9px",background:"#F0F2F8",border:"1px solid #CBD1E8",borderRadius:7,cursor:"pointer",fontFamily:"inherit",fontSize:13,color:"#4A5278"}}>Cancel</button>
                 <button onClick={save} style={{flex:2,padding:"9px",background:"#3B6FE8",border:"none",borderRadius:7,cursor:"pointer",fontFamily:"inherit",fontSize:13,color:"#fff",fontWeight:700}}>{isEdit?"Save Changes":"Add Vendor"}</button>
               </div>
@@ -10838,7 +10937,9 @@ if(bounds.length) map.fitBounds(bounds,{padding:[40,40]});
         const save = () => {
           if (!W.company.trim()) return;
           const newV = {...W, id:"v"+Date.now()};
-          setBidPackages(prev=>({...prev,[activeBidOpp]:{...pkg,vendors:[...pkg.vendors,newV]}}));
+          const newPkgM = {...pkg,vendors:[...pkg.vendors,newV]};
+          setBidPackages(prev=>({...prev,[activeBidOpp]:newPkgM}));
+          saveEstimateField(activeBidOpp,'bid_packages',newPkgM);
           setVendorForm({company:"",contact:"",phone:"",email:"",trades:[],bidding:false,infoSent:false,bidReceived:false,bidAmount:"",notes:""});
           setShowAddVendor(false);
         };
