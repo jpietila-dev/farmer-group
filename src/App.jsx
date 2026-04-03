@@ -1,4 +1,469 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
+// ================================================================
+// src/VendorsPage.jsx
+// ----------------------------------------------------------------
+// HOW TO WIRE INTO App.jsx — 2 changes only:
+//
+//   1. Near the top of App.jsx, add this import:
+//      import VendorsPage from "./VendorsPage";
+//
+//   2. Find where "vendors" page is rendered. It will look like:
+//        {page === 'vendors' && <div>...</div>}
+//      Replace whatever is in that block with:
+//        {page === 'vendors' && <VendorsPage supa={supa} />}
+//
+//      If there is no vendors case yet, add it alongside the other
+//      page === '...' blocks.
+//
+// The component receives your existing `supa` helper object so it
+// reuses the same Supabase client — no new credentials needed.
+// ================================================================
+
+import { useState, useEffect, useCallback, useRef } from "react";
+
+const TABS       = ["All", "MP", "FM", "CapEx", "Lawn", "Snow"];
+const CATEGORIES = ["MP", "FM", "CapEx", "Lawn", "Snow"];
+
+const CAT_STYLE = {
+  MP:    { active: { background: "#1e3a5f", color: "#60a5fa", border: "1px solid #2d5a8f" }, inactive: { background: "#111827", color: "#374151", border: "1px solid #1f2937" } },
+  FM:    { active: { background: "#14532d", color: "#4ade80", border: "1px solid #166534" }, inactive: { background: "#111827", color: "#374151", border: "1px solid #1f2937" } },
+  CapEx: { active: { background: "#4a1942", color: "#f0abfc", border: "1px solid #701a75" }, inactive: { background: "#111827", color: "#374151", border: "1px solid #1f2937" } },
+  Lawn:  { active: { background: "#14532d", color: "#86efac", border: "1px solid #15803d" }, inactive: { background: "#111827", color: "#374151", border: "1px solid #1f2937" } },
+  Snow:  { active: { background: "#1e3a5f", color: "#bae6fd", border: "1px solid #0369a1" }, inactive: { background: "#111827", color: "#374151", border: "1px solid #1f2937" } },
+};
+
+const EMPTY_FORM = {
+  vendor_name: "", company_name: "", street_address: "",
+  city: "", state: "", country: "USA", zip: "",
+  phone: "", email: "", trade: "", notes: "", categories: [],
+};
+
+export default function VendorsPage({ supa }) {
+  const [vendors,        setVendors]        = useState([]);
+  const [loading,        setLoading]        = useState(true);
+  const [activeTab,      setActiveTab]      = useState("All");
+  const [search,         setSearch]         = useState("");
+  const [tradeFilter,    setTradeFilter]    = useState("All");
+  const [selected,       setSelected]       = useState(null);
+  const [saving,         setSaving]         = useState(false);
+  const [showAdd,        setShowAdd]        = useState(false);
+  const [form,           setForm]           = useState(EMPTY_FORM);
+  const [addSaving,      setAddSaving]      = useState(false);
+  const [editNotes,      setEditNotes]      = useState(false);
+  const [notesValue,     setNotesValue]     = useState("");
+  const notesRef = useRef(null);
+
+  // ── Fetch ──────────────────────────────────────────────────────
+  const load = useCallback(async () => {
+    setLoading(true);
+    const { data } = await supa.from("vendors").select("*").order("vendor_name");
+    setVendors(data || []);
+    setLoading(false);
+  }, [supa]);
+
+  useEffect(() => { load(); }, [load]);
+
+  // ── Toggle category (inline pill click) ───────────────────────
+  const toggleCat = async (vendor, cat, e) => {
+    e?.stopPropagation();
+    const current  = vendor.categories || [];
+    const updated  = current.includes(cat)
+      ? current.filter(c => c !== cat)
+      : [...current, cat];
+    setSaving(vendor.id);
+    await supa.from("vendors").update({ categories: updated }).eq("id", vendor.id);
+    const patch = v => v.id === vendor.id ? { ...v, categories: updated } : v;
+    setVendors(vs => vs.map(patch));
+    setSelected(s  => s?.id === vendor.id ? { ...s, categories: updated } : s);
+    setSaving(false);
+  };
+
+  // ── Save notes ────────────────────────────────────────────────
+  const saveNotes = async () => {
+    if (!selected) return;
+    await supa.from("vendors").update({ notes: notesValue }).eq("id", selected.id);
+    setVendors(vs => vs.map(v => v.id === selected.id ? { ...v, notes: notesValue } : v));
+    setSelected(s => ({ ...s, notes: notesValue }));
+    setEditNotes(false);
+  };
+
+  // ── Add new vendor ────────────────────────────────────────────
+  const addVendor = async () => {
+    if (!form.vendor_name.trim()) return;
+    setAddSaving(true);
+    const { data } = await supa.from("vendors").insert(form).select().single();
+    if (data) {
+      setVendors(vs => [...vs, data].sort((a, b) => (a.vendor_name || "").localeCompare(b.vendor_name || "")));
+      setSelected(data);
+    }
+    setShowAdd(false);
+    setForm(EMPTY_FORM);
+    setAddSaving(false);
+  };
+
+  // ── Derived data ──────────────────────────────────────────────
+  const trades = ["All", ...Array.from(new Set(vendors.map(v => v.trade).filter(Boolean))).sort()];
+
+  const tabCounts = Object.fromEntries(
+    CATEGORIES.map(cat => [cat, vendors.filter(v => (v.categories || []).includes(cat)).length])
+  );
+
+  const filtered = vendors.filter(v => {
+    const cats = v.categories || [];
+    if (activeTab !== "All" && !cats.includes(activeTab)) return false;
+    if (tradeFilter !== "All" && v.trade !== tradeFilter)  return false;
+    if (search) {
+      const q = search.toLowerCase();
+      return (
+        (v.vendor_name    || "").toLowerCase().includes(q) ||
+        (v.company_name   || "").toLowerCase().includes(q) ||
+        (v.trade          || "").toLowerCase().includes(q) ||
+        (v.city           || "").toLowerCase().includes(q) ||
+        (v.email          || "").toLowerCase().includes(q) ||
+        (v.phone          || "").toLowerCase().includes(q)
+      );
+    }
+    return true;
+  });
+
+  // ── Styles (matches your existing dark navy theme) ─────────────
+  const s = {
+    wrap:        { display: "flex", flexDirection: "column", height: "100%", background: "#0d1117", color: "#e2e8f0", fontFamily: "inherit", position: "relative" },
+    header:      { padding: "20px 28px 0", borderBottom: "1px solid #1e2533", flexShrink: 0 },
+    headerRow:   { display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 },
+    title:       { margin: 0, fontSize: 20, fontWeight: 700, color: "#f8fafc", letterSpacing: "0.02em" },
+    subtitle:    { margin: "3px 0 0", fontSize: 12, color: "#475569" },
+    addBtn:      { background: "#2563eb", color: "#fff", border: "none", borderRadius: 6, padding: "8px 16px", fontSize: 13, fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap" },
+    tabs:        { display: "flex", gap: 2 },
+    tab:         (active) => ({
+      padding: "8px 18px", border: "none", borderRadius: "6px 6px 0 0",
+      cursor: "pointer", fontSize: 12, fontWeight: 600, transition: "all 0.1s",
+      background: active ? "#161f2e" : "transparent",
+      color:      active ? "#60a5fa" : "#64748b",
+      borderBottom: active ? "2px solid #3b82f6" : "2px solid transparent",
+    }),
+    badge:       { marginLeft: 6, background: "#1e3a5f", color: "#7dd3fc", borderRadius: 10, padding: "1px 6px", fontSize: 10, fontWeight: 700 },
+    toolbar:     { display: "flex", gap: 10, padding: "12px 28px", borderBottom: "1px solid #1e2533", background: "#0d1117", flexShrink: 0 },
+    input:       { flex: 1, background: "#161f2e", border: "1px solid #253040", borderRadius: 6, color: "#e2e8f0", padding: "8px 12px", fontSize: 13, outline: "none" },
+    select:      { background: "#161f2e", border: "1px solid #253040", borderRadius: 6, color: "#e2e8f0", padding: "8px 12px", fontSize: 13, outline: "none", minWidth: 175 },
+    tableWrap:   { flex: 1, overflowY: "auto" },
+    table:       { width: "100%", borderCollapse: "collapse", fontSize: 13 },
+    th:          { padding: "10px 14px", textAlign: "left", color: "#475569", fontWeight: 600, fontSize: 10, textTransform: "uppercase", letterSpacing: "0.06em", background: "#0d1117", position: "sticky", top: 0, zIndex: 2, borderBottom: "1px solid #1e2533" },
+    tr:          (active, hover) => ({ borderBottom: "1px solid #141c27", cursor: "pointer", background: active ? "#1a2845" : "transparent" }),
+    td:          { padding: "9px 14px", verticalAlign: "middle" },
+    tradePill:   { background: "#161f2e", color: "#94a3b8", borderRadius: 4, padding: "2px 8px", fontSize: 11, whiteSpace: "nowrap", display: "inline-block" },
+    loc:         { color: "#64748b", fontSize: 12, whiteSpace: "nowrap" },
+    email:       { color: "#60a5fa", fontSize: 12, textDecoration: "none" },
+    catPill:     (cat, active) => ({
+      padding: "2px 7px", borderRadius: 4, fontSize: 10, fontWeight: 700,
+      cursor: "pointer", transition: "all 0.12s",
+      ...(active ? CAT_STYLE[cat].active : CAT_STYLE[cat].inactive),
+    }),
+    // Drawer
+    drawer:      { position: "fixed", right: 0, top: 0, bottom: 0, width: 360, background: "#111827", borderLeft: "1px solid #1e2d3d", zIndex: 100, display: "flex", flexDirection: "column", boxShadow: "-6px 0 32px rgba(0,0,0,0.5)" },
+    drawerHead:  { display: "flex", justifyContent: "space-between", alignItems: "flex-start", padding: "20px 20px 0" },
+    closeBtn:    { background: "none", border: "none", color: "#4b5563", fontSize: 22, cursor: "pointer", lineHeight: 1, padding: 2 },
+    drawerBody:  { flex: 1, overflowY: "auto", padding: "16px 20px 24px" },
+    sectionLabel:{ margin: "16px 0 8px", fontSize: 10, fontWeight: 700, color: "#475569", textTransform: "uppercase", letterSpacing: "0.07em" },
+    fieldLabel:  { margin: "0 0 2px", fontSize: 10, color: "#374151", textTransform: "uppercase", letterSpacing: "0.05em" },
+    fieldVal:    { margin: 0, fontSize: 13, color: "#cbd5e1" },
+    divider:     { border: "none", borderTop: "1px solid #1f2937", margin: "14px 0" },
+    // Modal
+    overlay:     { position: "fixed", inset: 0, background: "rgba(0,0,0,0.72)", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center" },
+    modal:       { background: "#111827", borderRadius: 10, border: "1px solid #1e2d3d", padding: 28, width: 460, maxHeight: "88vh", overflowY: "auto" },
+    modalTitle:  { margin: "0 0 20px", fontSize: 16, fontWeight: 700, color: "#f1f5f9" },
+    label:       { display: "block", fontSize: 11, color: "#64748b", marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.04em" },
+    formInput:   { width: "100%", background: "#161f2e", border: "1px solid #253040", borderRadius: 6, color: "#e2e8f0", padding: "8px 10px", fontSize: 13, outline: "none", boxSizing: "border-box" },
+    modalFooter: { display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 20 },
+    cancelBtn:   { padding: "8px 18px", background: "#161f2e", border: "1px solid #253040", borderRadius: 6, color: "#94a3b8", fontSize: 13, cursor: "pointer" },
+    saveBtn:     (enabled) => ({ padding: "8px 20px", background: enabled ? "#2563eb" : "#1a2533", border: "none", borderRadius: 6, color: enabled ? "#fff" : "#374151", fontSize: 13, fontWeight: 600, cursor: enabled ? "pointer" : "default" }),
+    notesArea:   { width: "100%", background: "#161f2e", border: "1px solid #253040", borderRadius: 6, color: "#e2e8f0", padding: "8px 10px", fontSize: 12, outline: "none", boxSizing: "border-box", resize: "vertical", minHeight: 80, fontFamily: "inherit" },
+    editLink:    { background: "none", border: "none", color: "#3b82f6", fontSize: 11, cursor: "pointer", padding: 0 },
+  };
+
+  return (
+    <div style={s.wrap}>
+
+      {/* ── Header ─────────────────────────────────────────────── */}
+      <div style={s.header}>
+        <div style={s.headerRow}>
+          <div>
+            <h1 style={s.title}>VENDORS</h1>
+            <p style={s.subtitle}>{filtered.length.toLocaleString()} of {vendors.length.toLocaleString()} vendors</p>
+          </div>
+          <button style={s.addBtn} onClick={() => setShowAdd(true)}>+ Add Vendor</button>
+        </div>
+        <div style={s.tabs}>
+          {TABS.map(tab => (
+            <button key={tab} style={s.tab(activeTab === tab)} onClick={() => setActiveTab(tab)}>
+              {tab}
+              {tab !== "All" && <span style={s.badge}>{tabCounts[tab] ?? 0}</span>}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* ── Toolbar ────────────────────────────────────────────── */}
+      <div style={s.toolbar}>
+        <input
+          style={s.input}
+          placeholder="Search by name, trade, city, email, phone..."
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+        />
+        <select style={s.select} value={tradeFilter} onChange={e => setTradeFilter(e.target.value)}>
+          {trades.map(t => <option key={t} value={t}>{t === "All" ? "All Trades" : t}</option>)}
+        </select>
+      </div>
+
+      {/* ── Table ──────────────────────────────────────────────── */}
+      <div style={s.tableWrap}>
+        {loading ? (
+          <div style={{ textAlign: "center", padding: 80, color: "#4b5563" }}>Loading vendors…</div>
+        ) : (
+          <table style={s.table}>
+            <thead>
+              <tr>
+                {["Vendor", "Trade", "Location", "Phone", "Email", "Categories"].map(h => (
+                  <th key={h} style={s.th}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map(v => {
+                const isSelected = selected?.id === v.id;
+                return (
+                  <tr
+                    key={v.id}
+                    style={s.tr(isSelected)}
+                    onClick={() => { setSelected(v); setEditNotes(false); setNotesValue(v.notes || ""); }}
+                    onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = "#141c27"; }}
+                    onMouseLeave={e => { if (!isSelected) e.currentTarget.style.background = "transparent"; }}
+                  >
+                    <td style={{ ...s.td, fontWeight: 500, color: "#f1f5f9", maxWidth: 220 }}>
+                      <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{v.vendor_name || "—"}</div>
+                    </td>
+                    <td style={s.td}>
+                      {v.trade && <span style={s.tradePill}>{v.trade}</span>}
+                    </td>
+                    <td style={{ ...s.td, ...s.loc }}>
+                      {[v.city, v.state].filter(Boolean).join(", ") || "—"}
+                    </td>
+                    <td style={{ ...s.td, color: "#64748b", fontSize: 12 }}>
+                      {v.phone || "—"}
+                    </td>
+                    <td style={s.td}>
+                      {v.email
+                        ? <a href={`mailto:${v.email}`} style={s.email} onClick={e => e.stopPropagation()}>{v.email}</a>
+                        : <span style={{ color: "#374151", fontSize: 12 }}>—</span>}
+                    </td>
+                    <td style={{ ...s.td, minWidth: 220 }}>
+                      <div style={{ display: "flex", gap: 4, flexWrap: "wrap", alignItems: "center" }}>
+                        {CATEGORIES.map(cat => {
+                          const active = (v.categories || []).includes(cat);
+                          return (
+                            <button
+                              key={cat}
+                              style={s.catPill(cat, active)}
+                              onClick={e => toggleCat(v, cat, e)}
+                              disabled={saving === v.id}
+                              title={active ? `Remove from ${cat}` : `Add to ${cat}`}
+                            >
+                              {cat}
+                            </button>
+                          );
+                        })}
+                        {saving === v.id && (
+                          <span style={{ fontSize: 10, color: "#3b82f6", marginLeft: 4 }}>saving…</span>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
+        {!loading && filtered.length === 0 && (
+          <div style={{ textAlign: "center", padding: 80, color: "#4b5563" }}>No vendors match your filters.</div>
+        )}
+      </div>
+
+      {/* ── Detail Drawer ──────────────────────────────────────── */}
+      {selected && (
+        <div style={s.drawer}>
+          <div style={s.drawerHead}>
+            <div style={{ flex: 1, paddingRight: 12 }}>
+              <h2 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: "#f1f5f9", lineHeight: 1.3 }}>{selected.vendor_name}</h2>
+              {selected.company_name && selected.company_name !== selected.vendor_name && (
+                <p style={{ margin: "4px 0 0", fontSize: 12, color: "#4b5563" }}>{selected.company_name}</p>
+              )}
+            </div>
+            <button style={s.closeBtn} onClick={() => setSelected(null)}>×</button>
+          </div>
+
+          <div style={s.drawerBody}>
+            {/* Trade */}
+            {selected.trade && (
+              <div style={{ marginTop: 12 }}>
+                <span style={{ ...s.tradePill, fontSize: 12, padding: "4px 12px" }}>{selected.trade}</span>
+              </div>
+            )}
+
+            {/* Categories */}
+            <p style={s.sectionLabel}>
+              Categories
+              {saving === selected.id && <span style={{ color: "#3b82f6", marginLeft: 6, textTransform: "none", fontSize: 10 }}>saving…</span>}
+            </p>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              {CATEGORIES.map(cat => {
+                const active = (selected.categories || []).includes(cat);
+                return (
+                  <button
+                    key={cat}
+                    onClick={e => toggleCat(selected, cat, e)}
+                    style={{ ...s.catPill(cat, active), padding: "6px 14px", fontSize: 12, borderRadius: 6 }}
+                  >
+                    {active ? "✓ " : ""}{cat}
+                  </button>
+                );
+              })}
+            </div>
+
+            <hr style={s.divider} />
+
+            {/* Contact details */}
+            <p style={{ ...s.sectionLabel, marginTop: 0 }}>Contact Details</p>
+
+            {[
+              { label: "Address",
+                value: [selected.street_address, selected.city, selected.state, selected.zip, selected.country]
+                         .filter(Boolean).join(", ") },
+              { label: "Phone", value: selected.phone, href: selected.phone ? `tel:${selected.phone}` : null },
+              { label: "Email", value: selected.email, href: selected.email ? `mailto:${selected.email}` : null },
+            ].map(({ label, value, href }) => !value ? null : (
+              <div key={label} style={{ marginBottom: 12 }}>
+                <p style={s.fieldLabel}>{label}</p>
+                {href
+                  ? <a href={href} style={{ ...s.email, fontSize: 13 }}>{value}</a>
+                  : <p style={s.fieldVal}>{value}</p>}
+              </div>
+            ))}
+
+            <hr style={s.divider} />
+
+            {/* Notes */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <p style={{ ...s.sectionLabel, margin: 0 }}>Notes</p>
+              {!editNotes && (
+                <button style={s.editLink} onClick={() => { setEditNotes(true); setNotesValue(selected.notes || ""); setTimeout(() => notesRef.current?.focus(), 50); }}>
+                  {selected.notes ? "Edit" : "+ Add note"}
+                </button>
+              )}
+            </div>
+            {editNotes ? (
+              <div style={{ marginTop: 8 }}>
+                <textarea
+                  ref={notesRef}
+                  style={s.notesArea}
+                  value={notesValue}
+                  onChange={e => setNotesValue(e.target.value)}
+                  placeholder="Add notes about this vendor…"
+                />
+                <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
+                  <button style={s.saveBtn(true)} onClick={saveNotes}>Save</button>
+                  <button style={s.cancelBtn} onClick={() => setEditNotes(false)}>Cancel</button>
+                </div>
+              </div>
+            ) : (
+              <p style={{ ...s.fieldVal, marginTop: 6, fontSize: 12, color: selected.notes ? "#94a3b8" : "#374151", fontStyle: selected.notes ? "normal" : "italic" }}>
+                {selected.notes || "No notes yet."}
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Add Vendor Modal ───────────────────────────────────── */}
+      {showAdd && (
+        <div style={s.overlay} onClick={e => { if (e.target === e.currentTarget) setShowAdd(false); }}>
+          <div style={s.modal}>
+            <h2 style={s.modalTitle}>Add Vendor</h2>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px 16px" }}>
+              {[
+                { key: "vendor_name",    label: "Vendor Name *",   full: true },
+                { key: "company_name",   label: "Company Name",    full: true },
+                { key: "trade",          label: "Trade",           full: false },
+                { key: "phone",          label: "Phone",           full: false },
+                { key: "email",          label: "Email",           full: true  },
+                { key: "street_address", label: "Street Address",  full: true  },
+                { key: "city",           label: "City",            full: false },
+                { key: "state",          label: "State",           full: false },
+                { key: "zip",            label: "Zip",             full: false },
+                { key: "country",        label: "Country",         full: false },
+              ].map(({ key, label, full }) => (
+                <div key={key} style={{ gridColumn: full ? "1 / -1" : "auto" }}>
+                  <label style={s.label}>{label}</label>
+                  <input
+                    value={form[key]}
+                    onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))}
+                    style={s.formInput}
+                    autoComplete="off"
+                  />
+                </div>
+              ))}
+            </div>
+
+            {/* Categories in modal */}
+            <div style={{ marginTop: 16 }}>
+              <label style={s.label}>Categories</label>
+              <div style={{ display: "flex", gap: 8, marginTop: 6, flexWrap: "wrap" }}>
+                {CATEGORIES.map(cat => {
+                  const active = form.categories.includes(cat);
+                  return (
+                    <button
+                      key={cat}
+                      style={{ ...s.catPill(cat, active), padding: "5px 14px", fontSize: 12, borderRadius: 6 }}
+                      onClick={() => setForm(f => ({
+                        ...f,
+                        categories: active ? f.categories.filter(c => c !== cat) : [...f.categories, cat]
+                      }))}
+                    >
+                      {active ? "✓ " : ""}{cat}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Notes in modal */}
+            <div style={{ marginTop: 16 }}>
+              <label style={s.label}>Notes</label>
+              <textarea
+                value={form.notes}
+                onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
+                style={{ ...s.notesArea, marginTop: 4 }}
+                placeholder="Optional notes…"
+              />
+            </div>
+
+            <div style={s.modalFooter}>
+              <button style={s.cancelBtn} onClick={() => { setShowAdd(false); setForm(EMPTY_FORM); }}>Cancel</button>
+              <button
+                style={s.saveBtn(!!form.vendor_name.trim())}
+                disabled={!form.vendor_name.trim() || addSaving}
+                onClick={addVendor}
+              >
+                {addSaving ? "Saving…" : "Add Vendor"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 // ── Supabase client ─────────────────────────────────────────
 const SUPA_URL = "https://bplleiwxbejqfinmyxnq.supabase.co";
