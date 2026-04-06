@@ -7622,7 +7622,7 @@ if(bounds.length)map.fitBounds(bounds,{padding:[30,30]});
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                   <div>
                     <div style={{ fontSize: 22, fontWeight: 700, color: "#1A2240", letterSpacing: "-0.01em", textTransform: "uppercase" }}>Subcontractors</div>
-                    <div style={{ fontSize: 11, color: "#4A5278", marginTop: 3, letterSpacing: "0.06em" }}>{divisionSubs.length} {activeBU !== "all" ? BUSINESS_UNITS.find(b=>b.id===activeBU)?.label+" · " : ""}TOTAL · {mappableSubs.length} GEOCODED</div>
+                    <div style={{ fontSize: 11, color: "#4A5278", marginTop: 3, letterSpacing: "0.06em" }}>{divisionSubs.length} TOTAL · {mappableSubs.length} GEOCODED</div>
                   </div>
                   <div style={{ display: "flex", gap: 8 }}>
                     <div style={{ display: "flex", border: "1px solid #CBD1E8", borderRadius: 7, overflow: "hidden" }}>
