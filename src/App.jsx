@@ -174,6 +174,7 @@ const NAV_ITEMS = {
     { id: "dashboard", label: "Dashboard", icon: "⊞" },
     { id: "team",      label: "Team",      icon: "👥" },
     { id: "customers", label: "Customers", icon: "🏢" },
+    { id: "subcontractors", label: "Subcontractors", icon: "🔧" },
     { id: "finance",   label: "Finance",   icon: "💰" },
   ],
   major: [
@@ -184,6 +185,7 @@ const NAV_ITEMS = {
     { id: "budgeting",   label: "Budgeting",   icon: "💲" },
     { id: "estimating",  label: "Estimating",  icon: "📐" },
     { id: "mpvendors",   label: "Vendors",     icon: "🏗" },
+    { id: "subcontractors", label: "Subcontractors", icon: "🔧" },
     { id: "team",        label: "Team",        icon: "👥" },
     { id: "customers",   label: "Customers",   icon: "🤝" },
   ],
@@ -204,7 +206,6 @@ const NAV_ITEMS = {
     { id: "sites",          label: "Sites",          icon: "📍" },
     { id: "customers",      label: "Customers",      icon: "🤝" },
     { id: "subcontractors", label: "Subcontractors", icon: "🔧" },
-  { id: "vendors",        label: "Vendors",        icon: "🏢" },
     { id: "team",           label: "Team",           icon: "👥" },
     { id: "calendar",       label: "Calendar",       icon: "📅" },
   ],
@@ -2441,328 +2442,6 @@ function WbsRow({ item, BID_TRADES, onUpdate, onRemove, onAddSub, critical }) {
   );
 }
 
-
-
-// ── VendorsPage ─────────────────────────────────────────────────────────────
-const VENDOR_TABS       = ["All", "MP", "FM", "CapEx", "Lawn", "Snow"];
-const VENDOR_CATEGORIES = ["MP", "FM", "CapEx", "Lawn", "Snow"];
-
-const VCAT_STYLE = {
-  MP:    { active: { background:"#1e3a5f", color:"#60a5fa", border:"1px solid #2d5a8f" }, inactive: { background:"#f4f6fb", color:"#9ba3bf", border:"1px solid #d4d9ee" } },
-  FM:    { active: { background:"#14532d", color:"#4ade80", border:"1px solid #166534" }, inactive: { background:"#f4f6fb", color:"#9ba3bf", border:"1px solid #d4d9ee" } },
-  CapEx: { active: { background:"#4a1942", color:"#f0abfc", border:"1px solid #701a75" }, inactive: { background:"#f4f6fb", color:"#9ba3bf", border:"1px solid #d4d9ee" } },
-  Lawn:  { active: { background:"#14532d", color:"#86efac", border:"1px solid #15803d" }, inactive: { background:"#f4f6fb", color:"#9ba3bf", border:"1px solid #d4d9ee" } },
-  Snow:  { active: { background:"#1e3a5f", color:"#bae6fd", border:"1px solid #0369a1" }, inactive: { background:"#f4f6fb", color:"#9ba3bf", border:"1px solid #d4d9ee" } },
-};
-
-const VEMPTY_FORM = {
-  vendor_name:"", company_name:"", street_address:"",
-  city:"", state:"", country:"USA", zip:"",
-  phone:"", email:"", trade:"", notes:"", categories:[],
-};
-
-function VendorsPage({ supa }) {
-  const [vendors,      setVendors]      = useState([]);
-  const [loading,      setLoading]      = useState(true);
-  const [activeTab,    setActiveTab]    = useState("All");
-  const [search,       setSearch]       = useState("");
-  const [tradeFilter,  setTradeFilter]  = useState("All");
-  const [selected,     setSelected]     = useState(null);
-  const [saving,       setSaving]       = useState(false);
-  const [showAdd,      setShowAdd]      = useState(false);
-  const [form,         setForm]         = useState(VEMPTY_FORM);
-  const [addSaving,    setAddSaving]    = useState(false);
-  const [editNotes,    setEditNotes]    = useState(false);
-  const [notesValue,   setNotesValue]   = useState("");
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    const { data } = await supa.from("vendors").select("*").order("vendor_name");
-    setVendors(Array.isArray(data) ? data : []);
-    setLoading(false);
-  }, [supa]);
-
-  useEffect(() => { load(); }, [load]);
-
-  const toggleCat = async (vendor, cat, e) => {
-    e && e.stopPropagation();
-    const current = vendor.categories || [];
-    const updated = current.includes(cat) ? current.filter(c => c !== cat) : [...current, cat];
-    setSaving(vendor.id);
-    await supa.from("vendors").update({ categories: updated }).eq("id", vendor.id);
-    const patch = v => v.id === vendor.id ? { ...v, categories: updated } : v;
-    setVendors(vs => vs.map(patch));
-    setSelected(s => s?.id === vendor.id ? { ...s, categories: updated } : s);
-    setSaving(false);
-  };
-
-  const saveNotes = async () => {
-    if (!selected) return;
-    await supa.from("vendors").update({ notes: notesValue }).eq("id", selected.id);
-    setVendors(vs => vs.map(v => v.id === selected.id ? { ...v, notes: notesValue } : v));
-    setSelected(s => ({ ...s, notes: notesValue }));
-    setEditNotes(false);
-  };
-
-  const addVendor = async () => {
-    if (!form.vendor_name.trim()) return;
-    setAddSaving(true);
-    const { data } = await supa.from("vendors").insert(form).select("*");
-    if (data && data[0]) {
-      setVendors(vs => [...vs, data[0]].sort((a,b)=>(a.vendor_name||"").localeCompare(b.vendor_name||"")));
-      setSelected(data[0]);
-    }
-    setShowAdd(false); setForm(VEMPTY_FORM); setAddSaving(false);
-  };
-
-  const trades = ["All", ...Array.from(new Set(vendors.map(v=>v.trade).filter(Boolean))).sort()];
-  const tabCounts = Object.fromEntries(VENDOR_CATEGORIES.map(cat=>[cat, vendors.filter(v=>(v.categories||[]).includes(cat)).length]));
-  const filtered = vendors.filter(v => {
-    if (activeTab !== "All" && !(v.categories||[]).includes(activeTab)) return false;
-    if (tradeFilter !== "All" && v.trade !== tradeFilter) return false;
-    if (search) {
-      const q = search.toLowerCase();
-      return (v.vendor_name||"").toLowerCase().includes(q) || (v.company_name||"").toLowerCase().includes(q) ||
-             (v.trade||"").toLowerCase().includes(q) || (v.city||"").toLowerCase().includes(q) ||
-             (v.email||"").toLowerCase().includes(q) || (v.phone||"").toLowerCase().includes(q);
-    }
-    return true;
-  });
-
-  return (
-    <div className="fade-in" style={{ display:"flex", flexDirection:"column", height:"calc(100vh - 80px)", background:"#F4F6FB", borderRadius:14, overflow:"hidden", border:"1px solid #D4D9EE" }}>
-
-      {/* Header */}
-      <div style={{ background:"#fff", padding:"18px 24px 0", borderBottom:"1px solid #ECEEF8", flexShrink:0 }}>
-        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:14 }}>
-          <div>
-            <div style={{ fontSize:22, fontWeight:700, color:"#1A2240", letterSpacing:"-0.01em", textTransform:"uppercase" }}>Vendors</div>
-            <div style={{ fontSize:11, color:"#4A5278", marginTop:3, letterSpacing:"0.06em" }}>{filtered.length.toLocaleString()} OF {vendors.length.toLocaleString()} VENDORS</div>
-          </div>
-          <button className="btn-primary" onClick={() => setShowAdd(true)}>+ Add Vendor</button>
-        </div>
-        {/* Tabs */}
-        <div style={{ display:"flex", gap:2 }}>
-          {VENDOR_TABS.map(tab => (
-            <button key={tab} onClick={() => setActiveTab(tab)}
-              style={{ padding:"8px 16px", border:"none", borderRadius:"6px 6px 0 0", cursor:"pointer", fontSize:12, fontWeight:600,
-                background: activeTab===tab ? "#F4F6FB" : "transparent",
-                color: activeTab===tab ? "#3B6FE8" : "#4A5278",
-                borderBottom: activeTab===tab ? "2px solid #3B6FE8" : "2px solid transparent" }}>
-              {tab}
-              {tab !== "All" && (
-                <span style={{ marginLeft:5, background:"#EEF2FF", color:"#3B6FE8", borderRadius:10, padding:"1px 6px", fontSize:10, fontWeight:700 }}>
-                  {tabCounts[tab]||0}
-                </span>
-              )}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Toolbar */}
-      <div style={{ display:"flex", gap:10, padding:"12px 24px", background:"#fff", borderBottom:"1px solid #ECEEF8", flexShrink:0 }}>
-        <input placeholder="Search vendors, trade, city, email..." value={search} onChange={e=>setSearch(e.target.value)}
-          style={{ flex:1, background:"#F4F6FB", border:"1px solid #D4D9EE", borderRadius:8, color:"#1A2240", padding:"8px 12px", fontSize:13, outline:"none" }}/>
-        <select value={tradeFilter} onChange={e=>setTradeFilter(e.target.value)}
-          style={{ background:"#F4F6FB", border:"1px solid #D4D9EE", borderRadius:8, color:"#1A2240", padding:"8px 12px", fontSize:13, outline:"none", minWidth:170 }}>
-          {trades.map(t => <option key={t} value={t}>{t==="All" ? "All Trades" : t}</option>)}
-        </select>
-      </div>
-
-      {/* Table */}
-      <div style={{ flex:1, overflowY:"auto", background:"#fff" }}>
-        {loading ? (
-          <div style={{ textAlign:"center", padding:80, color:"#9BA3BF", fontSize:14 }}>Loading vendors…</div>
-        ) : (
-          <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
-            <thead>
-              <tr style={{ borderBottom:"1px solid #ECEEF8" }}>
-                {["Vendor","Trade","Location","Phone","Email","Categories"].map(h => (
-                  <th key={h} style={{ padding:"10px 16px", textAlign:"left", color:"#4A5278", fontWeight:600, fontSize:10, textTransform:"uppercase", letterSpacing:"0.07em", background:"#fff", position:"sticky", top:0, zIndex:2, borderBottom:"1px solid #ECEEF8" }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map(v => {
-                const isSel = selected?.id === v.id;
-                return (
-                  <tr key={v.id}
-                    onClick={() => { setSelected(v); setEditNotes(false); setNotesValue(v.notes||""); }}
-                    style={{ borderBottom:"1px solid #F4F6FB", cursor:"pointer", background: isSel ? "#EEF2FF" : "transparent" }}
-                    onMouseEnter={e => { if (!isSel) e.currentTarget.style.background="#F8F9FE"; }}
-                    onMouseLeave={e => { if (!isSel) e.currentTarget.style.background="transparent"; }}>
-                    <td style={{ padding:"10px 16px", fontWeight:600, color:"#1A2240", maxWidth:220 }}>
-                      <div style={{ overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{v.vendor_name||"—"}</div>
-                    </td>
-                    <td style={{ padding:"10px 16px" }}>
-                      {v.trade && <span style={{ background:"#EEF2FF", color:"#3B6FE8", borderRadius:4, padding:"2px 8px", fontSize:11, fontWeight:600, whiteSpace:"nowrap" }}>{v.trade}</span>}
-                    </td>
-                    <td style={{ padding:"10px 16px", color:"#4A5278", fontSize:12, whiteSpace:"nowrap" }}>
-                      {[v.city,v.state].filter(Boolean).join(", ")||"—"}
-                    </td>
-                    <td style={{ padding:"10px 16px", color:"#4A5278", fontSize:12 }}>{v.phone||"—"}</td>
-                    <td style={{ padding:"10px 16px", fontSize:12, maxWidth:200 }}>
-                      {v.email ? <a href={"mailto:"+v.email} style={{ color:"#3B6FE8", textDecoration:"none" }} onClick={e=>e.stopPropagation()}>{v.email}</a> : <span style={{color:"#CBD1E8"}}>—</span>}
-                    </td>
-                    <td style={{ padding:"10px 16px", minWidth:230 }}>
-                      <div style={{ display:"flex", gap:4, flexWrap:"wrap", alignItems:"center" }}>
-                        {VENDOR_CATEGORIES.map(cat => {
-                          const active = (v.categories||[]).includes(cat);
-                          return (
-                            <button key={cat} onClick={e=>toggleCat(v,cat,e)} disabled={saving===v.id}
-                              style={{ padding:"2px 8px", borderRadius:4, fontSize:10, fontWeight:700, cursor:"pointer",
-                                ...(active ? VCAT_STYLE[cat].active : VCAT_STYLE[cat].inactive) }}>
-                              {cat}
-                            </button>
-                          );
-                        })}
-                        {saving===v.id && <span style={{fontSize:10,color:"#3B6FE8",marginLeft:2}}>saving…</span>}
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        )}
-        {!loading && filtered.length===0 && (
-          <div style={{ textAlign:"center", padding:80, color:"#9BA3BF" }}>No vendors match your filters.</div>
-        )}
-      </div>
-
-      {/* Detail Drawer */}
-      {selected && (
-        <div style={{ position:"fixed", right:0, top:0, bottom:0, width:360, background:"#fff", borderLeft:"1px solid #D4D9EE", zIndex:100, display:"flex", flexDirection:"column", boxShadow:"-4px 0 24px rgba(0,0,0,0.08)" }}>
-          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", padding:"20px 20px 0" }}>
-            <div style={{ flex:1, paddingRight:12 }}>
-              <div style={{ fontSize:15, fontWeight:700, color:"#1A2240", lineHeight:1.3 }}>{selected.vendor_name}</div>
-              {selected.company_name && selected.company_name!==selected.vendor_name && (
-                <div style={{ fontSize:12, color:"#4A5278", marginTop:3 }}>{selected.company_name}</div>
-              )}
-            </div>
-            <button className="btn-ghost" style={{ fontSize:18, padding:"2px 6px" }} onClick={()=>setSelected(null)}>×</button>
-          </div>
-          <div style={{ flex:1, overflowY:"auto", padding:"16px 20px 24px" }}>
-            {selected.trade && (
-              <span style={{ background:"#EEF2FF", color:"#3B6FE8", borderRadius:4, padding:"3px 10px", fontSize:12, fontWeight:600 }}>{selected.trade}</span>
-            )}
-            {/* Categories */}
-            <div style={{ margin:"16px 0 8px", fontSize:10, fontWeight:700, color:"#4A5278", textTransform:"uppercase", letterSpacing:"0.07em" }}>
-              Categories {saving===selected.id && <span style={{color:"#3B6FE8",marginLeft:6}}>saving…</span>}
-            </div>
-            <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
-              {VENDOR_CATEGORIES.map(cat => {
-                const active = (selected.categories||[]).includes(cat);
-                return (
-                  <button key={cat} onClick={e=>toggleCat(selected,cat,e)}
-                    style={{ padding:"5px 14px", borderRadius:6, fontSize:12, fontWeight:700, cursor:"pointer",
-                      ...(active ? VCAT_STYLE[cat].active : VCAT_STYLE[cat].inactive) }}>
-                    {active ? "✓ " : ""}{cat}
-                  </button>
-                );
-              })}
-            </div>
-            <hr style={{ border:"none", borderTop:"1px solid #ECEEF8", margin:"16px 0" }}/>
-            {/* Contact details */}
-            <div style={{ fontSize:10, fontWeight:700, color:"#4A5278", textTransform:"uppercase", letterSpacing:"0.07em", marginBottom:10 }}>Contact Details</div>
-            {[
-              { label:"Address", value:[selected.street_address,selected.city,selected.state,selected.zip].filter(Boolean).join(", ") },
-              { label:"Phone",   value:selected.phone, href:`tel:${selected.phone}` },
-              { label:"Email",   value:selected.email, href:`mailto:${selected.email}` },
-            ].map(({ label, value, href }) => !value ? null : (
-              <div key={label} style={{ marginBottom:12 }}>
-                <div style={{ fontSize:10, color:"#9BA3BF", textTransform:"uppercase", marginBottom:2 }}>{label}</div>
-                {href ? <a href={href} style={{ color:"#3B6FE8", fontSize:13, textDecoration:"none" }}>{value}</a>
-                      : <div style={{ fontSize:13, color:"#1A2240" }}>{value}</div>}
-              </div>
-            ))}
-            <hr style={{ border:"none", borderTop:"1px solid #ECEEF8", margin:"16px 0" }}/>
-            {/* Notes */}
-            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
-              <div style={{ fontSize:10, fontWeight:700, color:"#4A5278", textTransform:"uppercase", letterSpacing:"0.07em" }}>Notes</div>
-              {!editNotes && <button className="btn-ghost" style={{fontSize:11}} onClick={()=>{setEditNotes(true);setNotesValue(selected.notes||"");}}>{selected.notes?"Edit":"+ Add"}</button>}
-            </div>
-            {editNotes ? (
-              <div>
-                <textarea value={notesValue} onChange={e=>setNotesValue(e.target.value)}
-                  style={{ width:"100%", background:"#F4F6FB", border:"1px solid #D4D9EE", borderRadius:8, color:"#1A2240", padding:"8px 10px", fontSize:12, outline:"none", resize:"vertical", minHeight:80, fontFamily:"inherit", boxSizing:"border-box" }}
-                  placeholder="Add notes…" autoFocus/>
-                <div style={{ display:"flex", gap:8, marginTop:6 }}>
-                  <button className="btn-primary" style={{fontSize:12,padding:"5px 14px"}} onClick={saveNotes}>Save</button>
-                  <button className="btn-ghost" style={{fontSize:12}} onClick={()=>setEditNotes(false)}>Cancel</button>
-                </div>
-              </div>
-            ) : (
-              <div style={{ fontSize:12, color:selected.notes?"#4A5278":"#CBD1E8", fontStyle:selected.notes?"normal":"italic" }}>
-                {selected.notes||"No notes yet."}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Add Vendor Modal */}
-      {showAdd && (
-        <div style={{ position:"fixed", inset:0, background:"rgba(26,34,64,0.45)", zIndex:200, display:"flex", alignItems:"center", justifyContent:"center" }}
-          onClick={e=>{ if(e.target===e.currentTarget){setShowAdd(false);setForm(VEMPTY_FORM);} }}>
-          <div style={{ background:"#fff", borderRadius:14, border:"1px solid #D4D9EE", padding:28, width:480, maxHeight:"88vh", overflowY:"auto", boxShadow:"0 8px 40px rgba(0,0,0,0.18)" }}>
-            <div style={{ fontSize:16, fontWeight:700, color:"#1A2240", marginBottom:20 }}>Add Vendor</div>
-            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"12px 16px" }}>
-              {[
-                { key:"vendor_name",    label:"Vendor Name *", full:true },
-                { key:"company_name",   label:"Company Name",  full:true },
-                { key:"trade",          label:"Trade",         full:false },
-                { key:"phone",          label:"Phone",         full:false },
-                { key:"email",          label:"Email",         full:true },
-                { key:"street_address", label:"Street Address",full:true },
-                { key:"city",           label:"City",          full:false },
-                { key:"state",          label:"State",         full:false },
-                { key:"zip",            label:"Zip",           full:false },
-                { key:"country",        label:"Country",       full:false },
-              ].map(({ key, label, full }) => (
-                <div key={key} style={{ gridColumn: full?"1 / -1":"auto" }}>
-                  <label style={{ display:"block", fontSize:11, color:"#4A5278", marginBottom:4, textTransform:"uppercase", letterSpacing:"0.04em" }}>{label}</label>
-                  <input value={form[key]} onChange={e=>setForm(f=>({...f,[key]:e.target.value}))} autoComplete="off"
-                    style={{ width:"100%", background:"#F4F6FB", border:"1px solid #D4D9EE", borderRadius:8, color:"#1A2240", padding:"8px 10px", fontSize:13, outline:"none", boxSizing:"border-box" }}/>
-                </div>
-              ))}
-            </div>
-            <div style={{ marginTop:16 }}>
-              <div style={{ fontSize:11, color:"#4A5278", marginBottom:6, textTransform:"uppercase", letterSpacing:"0.04em" }}>Categories</div>
-              <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
-                {VENDOR_CATEGORIES.map(cat => {
-                  const active = form.categories.includes(cat);
-                  return (
-                    <button key={cat} onClick={()=>setForm(f=>({ ...f, categories: active ? f.categories.filter(c=>c!==cat) : [...f.categories,cat] }))}
-                      style={{ padding:"5px 14px", borderRadius:6, fontSize:12, fontWeight:700, cursor:"pointer",
-                        ...(active ? VCAT_STYLE[cat].active : VCAT_STYLE[cat].inactive) }}>
-                      {active?"✓ ":""}{cat}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-            <div style={{ marginTop:16 }}>
-              <label style={{ display:"block", fontSize:11, color:"#4A5278", marginBottom:4, textTransform:"uppercase" }}>Notes</label>
-              <textarea value={form.notes} onChange={e=>setForm(f=>({...f,notes:e.target.value}))}
-                style={{ width:"100%", background:"#F4F6FB", border:"1px solid #D4D9EE", borderRadius:8, color:"#1A2240", padding:"8px 10px", fontSize:13, outline:"none", resize:"vertical", minHeight:60, fontFamily:"inherit", boxSizing:"border-box" }}
-                placeholder="Optional notes…"/>
-            </div>
-            <div style={{ display:"flex", gap:10, justifyContent:"flex-end", marginTop:20 }}>
-              <button className="btn-ghost" onClick={()=>{setShowAdd(false);setForm(VEMPTY_FORM);}}>Cancel</button>
-              <button className="btn-primary" disabled={!form.vendor_name.trim()||addSaving} onClick={addVendor}
-                style={{ opacity: form.vendor_name.trim()?1:0.4 }}>
-                {addSaving ? "Saving…" : "Add Vendor"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-// ── End VendorsPage ──────────────────────────────────────────────────────────
 
 export default function App() {
   // URL routing — sub-facing page
@@ -7830,38 +7509,136 @@ if(bounds.length)map.fitBounds(bounds,{padding:[30,30]});
           })()}
 
 
-          {/* -- SUBCONTRACTORS (master list - FM, Lawn, Snow) -- */}
-          {activeNav === "subcontractors" && ["facility","lawn","snow"].includes(activeBU) && (() => {
+          {/* -- SUBCONTRACTORS (all divisions) -- */}
+          {activeNav === "subcontractors" && (() => {
             const TRADE_MAP = {"HVAC":["❄️","#60A5FA"],"Plumbing":["🔧","#3B82F6"],"Electrical":["⚡","#F59E0B"],"Roofing":["🏠","#8B5CF6"],"Painting":["🎨","#EC4899"],"Concrete":["🪨","#6B7280"],"Landscaping":["🌿","#10B981"],"Snow":["🌨","#A8C4F8"],"General":["🔨","#7BA7F5"],"Fire":["🔥","#EF4444"],"Pest":["🪲","#84CC16"],"Cleaning":["🧹","#14B8A6"],"Security":["🔒","#6366F1"],"Elevator":["🛗","#D97706"],"Carpentry":["🪵","#92400E"]};
             const getTS = (trade) => { const match = Object.entries(TRADE_MAP).find(([k]) => trade && trade.toLowerCase().includes(k.toLowerCase())); return match ? {icon:match[1][0],color:match[1][1]} : {icon:"🔧",color:"#7BA7F5"}; };
-            const allTrades = [...new Set(subcontractors.map(s => s.trade).filter(Boolean))].sort();
-            const visibleSubs = subcontractors.filter(s => !subTradeFilter || s.trade === subTradeFilter);
-            const mappableSubs = subcontractors.filter(s => s.lat && s.lng);
-            const mapPts = (subTradeFilter ? visibleSubs : subcontractors).filter(s => s.lat && s.lng);
-            const allCount = subcontractors.length;
+            // Division filter: "all" shows everything, others filter by services tag
+            const divisionKey = activeBU === "facility" ? "fm" : activeBU === "major" ? "mp" : activeBU === "capital" ? "capex" : activeBU;
+            const divisionSubs = activeBU === "all"
+              ? subcontractors
+              : subcontractors.filter(s => {
+                  const svcs = (s.services||[]).map(x=>x.toLowerCase());
+                  return svcs.includes(divisionKey) || svcs.includes(activeBU.toLowerCase());
+                });
+            const [subLocalView, setSubLocalView] = useState("list");
+            const [subLocalTrade, setSubLocalTrade] = useState(null);
+            const [subDetailId, setSubDetailId] = useState(null);
+            const allTrades = [...new Set(divisionSubs.map(s => s.trade).filter(Boolean))].sort();
+            const visibleSubs = divisionSubs.filter(s => !subLocalTrade || s.trade === subLocalTrade);
+            const mappableSubs = divisionSubs.filter(s => s.lat && s.lng);
+            const mapPts = (subLocalTrade ? visibleSubs : divisionSubs).filter(s => s.lat && s.lng);
+            const subDetail = subDetailId ? subcontractors.find(s => s.id === subDetailId) : null;
+
+            // Jobs this sub has worked on (across all departments)
+            const getSubJobs = (subId) => {
+              const fm = fmJobs.filter(j => j.subcontractorId === subId);
+              return { fm };
+            };
+
+            if (subDetail) {
+              const subJobs = getSubJobs(subDetail.id);
+              const ts = getTS(subDetail.trade);
+              const msaColor = subDetail.msaStatus==="signed"?"#4ADE80":subDetail.msaStatus==="expired"?"#F87171":"#FCD34D";
+              const coiDate = subDetail.coiExpiry ? new Date(subDetail.coiExpiry) : null;
+              const coiExpired = coiDate && coiDate < new Date();
+              const coiSoon = coiDate && !coiExpired && coiDate <= new Date(Date.now()+30*86400000);
+              const coiColor = !coiDate?"#F87171":coiExpired?"#F87171":coiSoon?"#FCD34D":"#4ADE80";
+              return (
+                <div className="fade-in" style={{display:"flex",flexDirection:"column",gap:20}}>
+                  <div style={{display:"flex",alignItems:"center",gap:10}}>
+                    <button className="btn-ghost" onClick={()=>setSubDetailId(null)} style={{fontSize:12}}>← Back</button>
+                    <div style={{fontSize:11,color:"#9BA3BF"}}>Subcontractors / {subDetail.name}</div>
+                  </div>
+                  <div style={{background:"#fff",borderRadius:12,border:"1px solid #D4D9EE",padding:"20px 24px"}}>
+                    <div style={{display:"flex",alignItems:"flex-start",gap:16,marginBottom:20}}>
+                      <div style={{width:56,height:56,borderRadius:12,background:ts.color+"18",border:"1px solid "+ts.color+"40",display:"flex",alignItems:"center",justifyContent:"center",fontSize:26,flexShrink:0}}>{ts.icon}</div>
+                      <div style={{flex:1}}>
+                        <div style={{fontSize:20,fontWeight:700,color:"#1A2240"}}>{subDetail.name}</div>
+                        {subDetail.trade&&<span style={{fontSize:11,color:ts.color,background:ts.color+"18",border:"1px solid "+ts.color+"40",padding:"2px 10px",borderRadius:10,fontWeight:600}}>{subDetail.trade}</span>}
+                      </div>
+                      <button className="btn-ghost" style={{fontSize:11}} onClick={()=>{setEditSubId(subDetail.id);setSubForm({...subDetail});setShowSubForm(true);}}>✎ Edit</button>
+                    </div>
+                    <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10,marginBottom:16}}>
+                      {[
+                        {label:"MSA Status", value:subDetail.msaStatus==="signed"?"✓ Signed":"⚠ "+subDetail.msaStatus, color:msaColor},
+                        {label:"COI Status", value:!coiDate?"Missing":coiExpired?"Expired":coiSoon?"Expires Soon":"✓ Active", color:coiColor},
+                        {label:"W-9", value:subDetail.w9?"✓ On File":"⚠ Missing", color:subDetail.w9?"#4ADE80":"#F87171"},
+                      ].map(st=>(
+                        <div key={st.label} style={{background:st.color+"10",border:"1px solid "+st.color+"30",borderRadius:8,padding:"10px 14px"}}>
+                          <div style={{fontSize:10,color:"#9BA3BF",textTransform:"uppercase",letterSpacing:"0.07em"}}>{st.label}</div>
+                          <div style={{fontSize:14,fontWeight:700,color:st.color,marginTop:4}}>{st.value}</div>
+                        </div>
+                      ))}
+                    </div>
+                    <div style={{display:"flex",gap:20,flexWrap:"wrap",fontSize:13,color:"#4A5278"}}>
+                      {subDetail.phone&&<a href={"tel:"+subDetail.phone} style={{color:"#3B6FE8",textDecoration:"none"}}>📞 {subDetail.phone}</a>}
+                      {subDetail.email&&<a href={"mailto:"+subDetail.email} style={{color:"#3B6FE8",textDecoration:"none"}}>✉ {subDetail.email}</a>}
+                      {(subDetail.city||subDetail.state)&&<span>📍 {[subDetail.city,subDetail.state].filter(Boolean).join(", ")}</span>}
+                    </div>
+                    {subDetail.notes&&<div style={{marginTop:12,padding:"10px 14px",background:"#F4F6FB",borderRadius:8,fontSize:12,color:"#4A5278"}}>{subDetail.notes}</div>}
+                  </div>
+
+                  {/* Jobs by department */}
+                  <div>
+                    <div style={{fontSize:14,fontWeight:700,color:"#1A2240",marginBottom:12,letterSpacing:"-0.01em"}}>JOB HISTORY BY DEPARTMENT</div>
+                    {/* FM Jobs */}
+                    <div style={{background:"#fff",borderRadius:12,border:"1px solid #D4D9EE",overflow:"hidden",marginBottom:12}}>
+                      <div style={{padding:"12px 16px",borderBottom:"1px solid #F0F2F8",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                        <div style={{fontWeight:700,color:"#1A2240",fontSize:13}}>🔨 Facility Maintenance</div>
+                        <span style={{fontSize:11,color:"#9BA3BF"}}>{subJobs.fm.length} jobs</span>
+                      </div>
+                      {subJobs.fm.length === 0 ? (
+                        <div style={{padding:"20px 16px",color:"#9BA3BF",fontSize:12,textAlign:"center"}}>No FM jobs assigned</div>
+                      ) : (
+                        <div style={{display:"flex",flexDirection:"column"}}>
+                          {subJobs.fm.map(j=>{
+                            const stageColors={estimating:"#818CF8",owner_approval:"#FCD34D",do_work:"#60A5FA",bill:"#4ADE80",done:"#9BA3BF",lead:"#60A5FA"};
+                            const sc=stageColors[j.stage]||"#9BA3BF";
+                            return (
+                              <div key={j.id} style={{padding:"12px 16px",borderBottom:"1px solid #F4F6FB",display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}}>
+                                <div style={{flex:1}}>
+                                  <div style={{fontSize:13,fontWeight:600,color:"#1A2240"}}>{j.name||"Unnamed Job"}</div>
+                                  <div style={{fontSize:11,color:"#9BA3BF",marginTop:2}}>{j.storeCode||""} {j.startDate||""}</div>
+                                </div>
+                                <div style={{display:"flex",alignItems:"center",gap:10}}>
+                                  <span style={{fontSize:10,fontWeight:700,background:sc+"18",color:sc,border:"1px solid "+sc+"40",padding:"2px 8px",borderRadius:4,whiteSpace:"nowrap"}}>{j.stage}</span>
+                                  {j.vendorQuotePrice&&<span style={{fontSize:11,color:"#4A5278"}}>${Number(j.vendorQuotePrice).toLocaleString()}</span>}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            }
+
             return (
               <div className="fade-in" style={{ display: "flex", flexDirection: "column", gap: 20 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                   <div>
-                    <div style={{ fontSize: 22, fontWeight: 700, color: "#1A2240", letterSpacing: "-0.01em", textTransform: "uppercase" }}>Vendors</div>
-                    <div style={{ fontSize: 11, color: "#4A5278", marginTop: 3, letterSpacing: "0.06em" }}>{allCount} TOTAL · {mappableSubs.length} GEOCODED</div>
+                    <div style={{ fontSize: 22, fontWeight: 700, color: "#1A2240", letterSpacing: "-0.01em", textTransform: "uppercase" }}>Subcontractors</div>
+                    <div style={{ fontSize: 11, color: "#4A5278", marginTop: 3, letterSpacing: "0.06em" }}>{divisionSubs.length} {activeBU !== "all" ? BUSINESS_UNITS.find(b=>b.id===activeBU)?.label+" · " : ""}TOTAL · {mappableSubs.length} GEOCODED</div>
                   </div>
                   <div style={{ display: "flex", gap: 8 }}>
                     <div style={{ display: "flex", border: "1px solid #CBD1E8", borderRadius: 7, overflow: "hidden" }}>
                       {[{id:"list",lbl:"☰ List"},{id:"map",lbl:"🗺 Map"}].map(v=>(
-                        <button key={v.id} onClick={()=>setSubView(v.id)} style={{padding:"6px 14px",border:"none",background:subView===v.id?"#3B6FE8":"transparent",color:subView===v.id?"#fff":"#4A5278",cursor:"pointer",fontFamily:"inherit",fontSize:12,fontWeight:600}}>{v.lbl}</button>
+                        <button key={v.id} onClick={()=>setSubLocalView(v.id)} style={{padding:"6px 14px",border:"none",background:subLocalView===v.id?"#3B6FE8":"transparent",color:subLocalView===v.id?"#fff":"#4A5278",cursor:"pointer",fontFamily:"inherit",fontSize:12,fontWeight:600}}>{v.lbl}</button>
                       ))}
                     </div>
-                    <button className="btn-primary" onClick={()=>{ setEditSubId(null); setSubForm({name:"",trade:"",phone:"",email:"",address:"",city:"",state:"",msaStatus:"missing",coiExpiry:"",w9:false,notes:"",services:[activeBU==="facility"?"fm":activeBU]}); setShowSubForm(true); }}>+ Add Vendor</button>
+                    <button className="btn-primary" onClick={()=>{ setEditSubId(null); setSubForm({name:"",trade:"",phone:"",email:"",address:"",city:"",state:"",msaStatus:"missing",coiExpiry:"",w9:false,notes:"",services:[divisionKey]}); setShowSubForm(true); }}>+ Add Subcontractor</button>
                   </div>
                 </div>
 
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 12 }}>
                   {[
-                    {label:"Total Vendors", value:allCount, color:buColor.accent},
-                    {label:"MSA Signed",    value:subcontractors.filter(s=>s.msaStatus==="signed").length, color:"#4ADE80"},
-                    {label:"COI Expiring",  value:subcontractors.filter(s=>{if(!s.coiExpiry)return false;const d=new Date(s.coiExpiry);return d>new Date()&&d<=new Date(Date.now()+30*86400000);}).length, color:"#FCD34D"},
-                    {label:"Missing Docs",  value:subcontractors.filter(s=>s.msaStatus!=="signed"||!s.w9||!s.coiExpiry).length, color:"#F87171"},
+                    {label:"Total Subs", value:divisionSubs.length, color:buColor.accent},
+                    {label:"MSA Signed", value:divisionSubs.filter(s=>s.msaStatus==="signed").length, color:"#4ADE80"},
+                    {label:"COI Expiring", value:divisionSubs.filter(s=>{if(!s.coiExpiry)return false;const d=new Date(s.coiExpiry);return d>new Date()&&d<=new Date(Date.now()+30*86400000);}).length, color:"#FCD34D"},
+                    {label:"Missing Docs", value:divisionSubs.filter(s=>s.msaStatus!=="signed"||!s.w9||!s.coiExpiry).length, color:"#F87171"},
                   ].map(s=>(
                     <div key={s.label} className="stat-card" style={{position:"relative",overflow:"hidden",padding:"14px 18px"}}>
                       <div style={{position:"absolute",top:0,left:0,right:0,height:2,background:s.color}}/>
@@ -7873,13 +7650,13 @@ if(bounds.length)map.fitBounds(bounds,{padding:[30,30]});
 
                 <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
                   <span style={{fontSize:11,color:"#4A5278",fontWeight:600,marginRight:2}}>Trade:</span>
-                  <button onClick={()=>setSubTradeFilter(null)} style={{padding:"4px 12px",borderRadius:20,border:"1px solid "+(!subTradeFilter?"#3B6FE8":"#CBD1E8"),background:!subTradeFilter?"#3B6FE8":"transparent",color:!subTradeFilter?"#fff":"#4A5278",fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>
-                    All ({allCount})
+                  <button onClick={()=>setSubLocalTrade(null)} style={{padding:"4px 12px",borderRadius:20,border:"1px solid "+(!subLocalTrade?"#3B6FE8":"#CBD1E8"),background:!subLocalTrade?"#3B6FE8":"transparent",color:!subLocalTrade?"#fff":"#4A5278",fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>
+                    All ({divisionSubs.length})
                   </button>
                   {allTrades.map(t=>{
-                    const ts=getTS(t); const n=subcontractors.filter(s=>s.trade===t).length; const active=subTradeFilter===t;
+                    const ts=getTS(t); const n=divisionSubs.filter(s=>s.trade===t).length; const active=subLocalTrade===t;
                     return (
-                      <button key={t} onClick={()=>setSubTradeFilter(active?null:t)}
+                      <button key={t} onClick={()=>setSubLocalTrade(active?null:t)}
                         style={{padding:"4px 12px",borderRadius:20,border:"1px solid "+(active?ts.color:ts.color+"50"),background:active?ts.color:ts.color+"18",color:active?"#fff":ts.color,fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",gap:5}}>
                         <span>{ts.icon}</span> {t} ({n})
                       </button>
@@ -7887,29 +7664,29 @@ if(bounds.length)map.fitBounds(bounds,{padding:[30,30]});
                   })}
                 </div>
 
-                {subView === "map" && (
+                {subLocalView === "map" && (
                   <div style={{borderRadius:12,overflow:"hidden",border:"1px solid #D4D9EE",boxShadow:"0 2px 16px rgba(0,0,0,0.07)"}}>
                     <div style={{background:"#fff",padding:"10px 16px",borderBottom:"1px solid #F0F2F8",display:"flex",gap:12,flexWrap:"wrap",alignItems:"center"}}>
-                      <span style={{fontSize:11,fontWeight:700,color:"#1A2240"}}>{mapPts.length} vendor{mapPts.length!==1?"s":""} on map</span>
+                      <span style={{fontSize:11,fontWeight:700,color:"#1A2240"}}>{mapPts.length} subcontractor{mapPts.length!==1?"s":""} on map</span>
                       {allTrades.slice(0,10).map(t=>{const ts=getTS(t);const n=mapPts.filter(s=>s.trade===t).length;if(!n)return null;return(<div key={t} style={{display:"flex",alignItems:"center",gap:4}}><span style={{fontSize:14}}>{ts.icon}</span><span style={{fontSize:11,color:"#4A5278"}}>{t} ({n})</span></div>);})}
                     </div>
                     {mapPts.length === 0 ? (
                       <div style={{background:"#F9FAFC",padding:"48px 24px",textAlign:"center",color:"#4A5278"}}>
                         <div style={{fontSize:36,marginBottom:10}}>🗺️</div>
-                        <div style={{fontSize:14,fontWeight:600,color:"#1A2240",marginBottom:6}}>No vendors geocoded yet</div>
-                        <div style={{fontSize:12}}>Add addresses when editing vendors, then run the geocode tool.</div>
+                        <div style={{fontSize:14,fontWeight:600,color:"#1A2240",marginBottom:6}}>No subcontractors geocoded yet</div>
+                        <div style={{fontSize:12}}>Add addresses when editing, then run the geocode tool.</div>
                       </div>
                     ) : (
-                      <iframe key={"sm-"+subTradeFilter+"-"+mapPts.length} style={{width:"100%",height:500,border:"none",display:"block"}} title="Vendor Map"
-                        srcDoc={"<!DOCTYPE html><html><head><meta charset='utf-8'><link rel='stylesheet' href='https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css'/><script src='https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js'><\\/script><style>html,body,#map{margin:0;padding:0;height:100%;width:100%}.leaflet-popup-content-wrapper{border-radius:10px}</style></head><body><div id='map'></div><script>const map=L.map('map',{zoomControl:true,attributionControl:false});L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).addTo(map);L.control.attribution({prefix:'© OSM'}).addTo(map);const pts=" + JSON.stringify(mapPts.map(s=>({lat:s.lat,lng:s.lng,name:s.name,trade:s.trade||"General",phone:s.phone||"",city:s.city||"",state:s.state||""}))) + ";const TM={'HVAC':['❄️','#60A5FA'],'Plumbing':['🔧','#3B82F6'],'Electrical':['⚡','#F59E0B'],'Roofing':['🏠','#8B5CF6'],'Painting':['🎨','#EC4899'],'Concrete':['🪨','#6B7280'],'Landscaping':['🌿','#10B981'],'Snow':['🌨','#A8C4F8'],'General':['🔨','#7BA7F5'],'Fire':['🔥','#EF4444'],'Pest':['🪲','#84CC16'],'Cleaning':['🧹','#14B8A6'],'Security':['🔒','#6366F1'],'Elevator':['🛗','#D97706'],'Carpentry':['🪵','#92400E']};const getI=(t)=>{const m=Object.entries(TM).find(([k])=>t&&t.toLowerCase().includes(k.toLowerCase()));return m?m[1]:['🔧','#7BA7F5'];};const bnds=[];pts.forEach(p=>{const [ic,cl]=getI(p.trade);const icon=L.divIcon({className:'',html:'<div style=\"width:36px;height:36px;border-radius:50%;background:'+cl+';display:flex;align-items:center;justify-content:center;font-size:18px;box-shadow:0 2px 8px rgba(0,0,0,0.4);border:2.5px solid white\">'+ic+'</div>',iconSize:[36,36],iconAnchor:[18,18],popupAnchor:[0,-20]});L.marker([p.lat,p.lng],{icon}).addTo(map).bindPopup('<div style=\"font-family:Inter,sans-serif;line-height:1.6\"><b style=\"font-size:13px\">'+p.name+'</b><br><span style=\"font-size:11px;color:#4A5278\">'+p.trade+'</span>'+(p.city?'<br><span style=\"font-size:11px;color:#9BA3BF\">'+p.city+(p.state?', '+p.state:'')+'</span>':'')+(p.phone?'<br><span style=\"font-size:11px\">📞 '+p.phone+'</span>':'')+'</div>');bnds.push([p.lat,p.lng]);});if(bnds.length)map.fitBounds(bnds,{padding:[40,40]});<\\/script></body></html>"}
+                      <iframe key={"sm-"+subLocalTrade+"-"+mapPts.length} style={{width:"100%",height:500,border:"none",display:"block"}} title="Subcontractor Map"
+                        srcDoc={"<!DOCTYPE html><html><head><meta charset='utf-8'><link rel='stylesheet' href='https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css'/><script src='https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js'><\/script><style>html,body,#map{margin:0;padding:0;height:100%;width:100%}.leaflet-popup-content-wrapper{border-radius:10px}</style></head><body><div id='map'></div><script>const map=L.map('map',{zoomControl:true,attributionControl:false});L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).addTo(map);L.control.attribution({prefix:'© OSM'}).addTo(map);const pts=" + JSON.stringify(mapPts.map(s=>({lat:s.lat,lng:s.lng,name:s.name,trade:s.trade||"General",phone:s.phone||"",city:s.city||"",state:s.state||""}))) + ";const TM={'HVAC':['❄️','#60A5FA'],'Plumbing':['🔧','#3B82F6'],'Electrical':['⚡','#F59E0B'],'Roofing':['🏠','#8B5CF6'],'Painting':['🎨','#EC4899'],'Concrete':['🪨','#6B7280'],'Landscaping':['🌿','#10B981'],'Snow':['🌨','#A8C4F8'],'General':['🔨','#7BA7F5'],'Fire':['🔥','#EF4444'],'Pest':['🪲','#84CC16'],'Cleaning':['🧹','#14B8A6'],'Security':['🔒','#6366F1'],'Elevator':['🛗','#D97706'],'Carpentry':['🪵','#92400E']};const getI=(t)=>{const m=Object.entries(TM).find(([k])=>t&&t.toLowerCase().includes(k.toLowerCase()));return m?m[1]:['🔧','#7BA7F5'];};const bnds=[];pts.forEach(p=>{const [ic,cl]=getI(p.trade);const icon=L.divIcon({className:'',html:'<div style="width:36px;height:36px;border-radius:50%;background:'+cl+';display:flex;align-items:center;justify-content:center;font-size:18px;box-shadow:0 2px 8px rgba(0,0,0,0.4);border:2.5px solid white">'+ic+'</div>',iconSize:[36,36],iconAnchor:[18,18],popupAnchor:[0,-20]});L.marker([p.lat,p.lng],{icon}).addTo(map).bindPopup('<div style="font-family:Inter,sans-serif;line-height:1.6"><b style="font-size:13px">'+p.name+'</b><br><span style="font-size:11px;color:#4A5278">'+p.trade+'</span>'+(p.city?'<br><span style="font-size:11px;color:#9BA3BF">'+p.city+(p.state?', '+p.state:'')+'</span>':'')+(p.phone?'<br><span style="font-size:11px">📞 '+p.phone+'</span>':'')+'</div>');bnds.push([p.lat,p.lng]);});if(bnds.length)map.fitBounds(bnds,{padding:[40,40]});<\/script></body></html>"}
                       />
                     )}
                   </div>
                 )}
 
-                {subView === "list" && (
+                {subLocalView === "list" && (
                   <div style={{display:"flex",flexDirection:"column",gap:8}}>
-                    {visibleSubs.length===0&&<div style={{textAlign:"center",padding:"48px",color:"#3D4570",fontSize:12,background:"#ECEEF8",borderRadius:10,border:"1px solid #CBD1E8"}}>No vendors match this filter</div>}
+                    {visibleSubs.length===0&&<div style={{textAlign:"center",padding:"48px",color:"#3D4570",fontSize:12,background:"#ECEEF8",borderRadius:10,border:"1px solid #CBD1E8"}}>No subcontractors match this filter</div>}
                     {visibleSubs.map(s=>{
                       const ts=getTS(s.trade);
                       const msaColor=s.msaStatus==="signed"?"#4ADE80":s.msaStatus==="expired"?"#F87171":"#FCD34D";
@@ -7921,18 +7698,21 @@ if(bounds.length)map.fitBounds(bounds,{padding:[30,30]});
                       const coiLabel=!coiDate?"COI Missing":coiExpired?"COI Expired":coiSoon?"Expires "+s.coiExpiry:"COI ✓";
                       const assignedJobs=fmJobs.filter(j=>j.subcontractorId===s.id);
                       return (
-                        <div key={s.id} style={{background:"#fff",border:"1px solid #D4D9EE",borderRadius:10,padding:"14px 16px",display:"flex",alignItems:"flex-start",gap:14}}>
+                        <div key={s.id} style={{background:"#fff",border:"1px solid #D4D9EE",borderRadius:10,padding:"14px 16px",display:"flex",alignItems:"flex-start",gap:14,cursor:"pointer",transition:"box-shadow 0.15s"}}
+                          onClick={()=>setSubDetailId(s.id)}
+                          onMouseEnter={e=>e.currentTarget.style.boxShadow="0 4px 16px rgba(59,111,232,0.12)"}
+                          onMouseLeave={e=>e.currentTarget.style.boxShadow="none"}>
                           <div style={{width:46,height:46,borderRadius:10,background:ts.color+"18",border:"1px solid "+ts.color+"40",display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,flexShrink:0}}>{ts.icon}</div>
                           <div style={{flex:1,minWidth:0}}>
                             <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:5,flexWrap:"wrap"}}>
                               <div style={{fontSize:14,fontWeight:700,color:"#1A2240"}}>{s.name}</div>
                               {s.trade&&<span style={{fontSize:10,color:ts.color,background:ts.color+"18",border:"1px solid "+ts.color+"40",padding:"2px 8px",borderRadius:10,fontWeight:600}}>{s.trade}</span>}
-                              {assignedJobs.length>0&&<span style={{fontSize:10,color:"#7BA7F5"}}>🔨 {assignedJobs.length} job{assignedJobs.length!==1?"s":""}</span>}
+                              {assignedJobs.length>0&&<span style={{fontSize:10,color:"#7BA7F5"}}>🔨 {assignedJobs.length} FM job{assignedJobs.length!==1?"s":""}</span>}
                               {s.lat&&<span style={{fontSize:10,color:"#4ADE80",background:"#4ADE8012",border:"1px solid #4ADE8030",borderRadius:4,padding:"1px 6px"}}>📍 Mapped</span>}
                             </div>
                             <div style={{display:"flex",gap:14,flexWrap:"wrap",marginBottom:8}}>
-                              {s.phone&&<a href={"tel:"+s.phone} style={{fontSize:12,color:"#4A5278",textDecoration:"none"}}>📞 {s.phone}</a>}
-                              {s.email&&<a href={"mailto:"+s.email} style={{fontSize:12,color:"#3B6FE8",textDecoration:"none"}}>✉ {s.email}</a>}
+                              {s.phone&&<a href={"tel:"+s.phone} onClick={e=>e.stopPropagation()} style={{fontSize:12,color:"#4A5278",textDecoration:"none"}}>📞 {s.phone}</a>}
+                              {s.email&&<a href={"mailto:"+s.email} onClick={e=>e.stopPropagation()} style={{fontSize:12,color:"#3B6FE8",textDecoration:"none"}}>✉ {s.email}</a>}
                               {(s.city||s.state)&&<span style={{fontSize:12,color:"#9BA3BF"}}>📍 {[s.city,s.state].filter(Boolean).join(", ")}</span>}
                             </div>
                             <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
@@ -7941,7 +7721,7 @@ if(bounds.length)map.fitBounds(bounds,{padding:[30,30]});
                               <span style={{fontSize:10,fontWeight:700,background:s.w9?"#4ADE8018":"#F8717118",color:s.w9?"#4ADE80":"#F87171",border:"1px solid "+(s.w9?"#4ADE8040":"#F8717140"),borderRadius:4,padding:"2px 8px"}}>{s.w9?"W9 ✓":"W9 Missing"}</span>
                             </div>
                           </div>
-                          <div style={{display:"flex",gap:6,flexShrink:0}}>
+                          <div style={{display:"flex",gap:6,flexShrink:0}} onClick={e=>e.stopPropagation()}>
                             <button className="btn-ghost" style={{fontSize:11}} onClick={()=>{setEditSubId(s.id);setSubForm({...s});setShowSubForm(true);}}>✎ Edit</button>
                             <button className="btn-ghost" style={{fontSize:11,color:"#F87171",borderColor:"#F8717120"}} onClick={()=>{if(window.confirm("Delete "+s.name+"?")){setSubcontractors(subcontractors.filter(x=>x.id!==s.id));supa.from("subcontractors").delete().eq("id",s.id);}}}>✕</button>
                           </div>
@@ -7950,8 +7730,6 @@ if(bounds.length)map.fitBounds(bounds,{padding:[30,30]});
                     })}
                   </div>
                 )}
-
-                {/* showSubForm rendered at root level */}
               </div>
             );
           })()}
@@ -8075,10 +7853,6 @@ if(bounds.length)map.fitBounds(bounds,{padding:[30,30]});
               </div>
             );
           })()}
-
-          {activeNav === "vendors" && activeBU === "facility" && (
-            <VendorsPage supa={supa} />
-          )}
 
           {/* -- MP BUDGETING -- */}
           {activeNav === "budgeting" && activeBU === "major" && (() => {
@@ -9606,7 +9380,7 @@ if(bounds.length)map.fitBounds(bounds,{padding:[30,30]});
           })()}
 
           {/* -- COMING SOON (other nav items) -- */}
-          {!["dashboard", "customers", "jobs", "pipeline", "budgeting", "estimating", "mpvendors", "vendors", "finance", "sites", "projects", "team", "subcontractors", "bids", "active-sites", "pricing"].includes(activeNav) && (
+          {!["dashboard", "customers", "jobs", "pipeline", "budgeting", "estimating", "mpvendors", "vendors", "subcontractors", "finance", "sites", "projects", "team", "subcontractors", "bids", "active-sites", "pricing"].includes(activeNav) && (
             <div className="fade-in">
               <div style={{ marginBottom: 28 }}>
                 <div style={{ fontSize: 22, fontWeight: 700, color: "#1A2240", textTransform: "uppercase" }}>{navItems.find(n => n.id === activeNav)?.label}</div>
