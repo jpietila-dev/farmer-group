@@ -2718,6 +2718,9 @@ export default function App() {
   const [showSubForm,       setShowSubForm]       = useState(false);
   const [editSubId,         setEditSubId]         = useState(null);
   const [subForm,           setSubForm]           = useState({ name: "", trade: "", phone: "", email: "", msaStatus: "missing", coiExpiry: "", w9: false, notes: "", services: [], address: "", city: "", state: "", contact_name: "", coverage: "" });
+  const [subLocalView,      setSubLocalView]      = useState("list");
+  const [subLocalTrade,     setSubLocalTrade]     = useState(null);
+  const [subDetailId,       setSubDetailId]       = useState(null);
 
   const navItems = NAV_ITEMS[activeBU] || NAV_ITEMS.all;
   const buColor  = BU_COLORS[activeBU];
@@ -7521,9 +7524,7 @@ if(bounds.length)map.fitBounds(bounds,{padding:[30,30]});
                   const svcs = (s.services||[]).map(x=>x.toLowerCase());
                   return svcs.includes(divisionKey) || svcs.includes(activeBU.toLowerCase());
                 });
-            const [subLocalView, setSubLocalView] = useState("list");
-            const [subLocalTrade, setSubLocalTrade] = useState(null);
-            const [subDetailId, setSubDetailId] = useState(null);
+            // subLocalView, subLocalTrade, subDetailId come from App state
             const allTrades = [...new Set(divisionSubs.map(s => s.trade).filter(Boolean))].sort();
             const visibleSubs = divisionSubs.filter(s => !subLocalTrade || s.trade === subLocalTrade);
             const mappableSubs = divisionSubs.filter(s => s.lat && s.lng);
