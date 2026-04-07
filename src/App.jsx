@@ -2829,7 +2829,7 @@ export default function App() {
   const [pipeline,     setPipeline]     = useState([]);
   const [showForm,     setShowForm]     = useState(false);
   const [editId,       setEditId]       = useState(null);
-  const [form,         setForm]         = useState({ name: "", companyId: "", contactId: "", value: "", stage: "Budgeting", closeDate: "", notes: "", bu: "major", budgetDueDate: "", bidDueDate: "", nextSteps: [], sf:"", buildingType:"", buildingTypes:[], sf_multistory:"", sf_singlestory:"", sf_canopy:"", sf_mezzanine:"" });
+  const [form,         setForm]         = useState({ name: "", companyId: "", contactId: "", value: "", stage: "Budgeting", closeDate: "", notes: "", bu: "major", budgetDueDate: "", bidDueDate: "", nextSteps: [], sf:"", buildingType:"", buildingTypes:[], sf_multistory:"", sf_singlestory:"", sf_canopy:"", sf_mezzanine:"", city:"", state:"" });
   const [pipelineView, setPipelineView] = useState("kanban");
   const [filterBU,     setFilterBU]     = useState("all");
   const [search,       setSearch]       = useState("");
@@ -3208,7 +3208,8 @@ export default function App() {
             id: r.id, name: r.name||"", companyId: r.company_id||"", contactName: r.contact_name||"",
             value: r.value||0, stage: r.stage||"budgeting_lead", notes: r.notes||"",
             bu: "major", closeDate: r.close_date||"", nextSteps: [],
-            pipelineType: "budgeting", budgetDueDate: "", bidDueDate: "", dbId: r.id
+            pipelineType: "budgeting", budgetDueDate: "", bidDueDate: "", dbId: r.id,
+            city: r.city||"", state: r.state||""
           }));
           setPipeline(prev => {
             const existing = prev.filter(p => p.bu !== "major");
@@ -3653,18 +3654,18 @@ Return ONLY valid JSON, no markdown, no extra text:
   // Pipeline helpers
   const openAdd = (defaultStage) => {
     setEditId(null);
-    setForm({ name: "", companyId: "", contactId: "", value: "", stage: defaultStage || "Budgeting", pipelineType: "budgeting", closeDate: "", notes: "", bu: activeBU === "all" ? "major" : activeBU, budgetDueDate: "", bidDueDate: "", nextSteps: [], sf:"", buildingType:"", buildingTypes:[], sf_multistory:"", sf_singlestory:"", sf_canopy:"", sf_mezzanine:"" });
+    setForm({ name: "", companyId: "", contactId: "", value: "", stage: defaultStage || "Budgeting", pipelineType: "budgeting", closeDate: "", notes: "", bu: activeBU === "all" ? "major" : activeBU, budgetDueDate: "", bidDueDate: "", nextSteps: [], sf:"", buildingType:"", buildingTypes:[], sf_multistory:"", sf_singlestory:"", sf_canopy:"", sf_mezzanine:"", city:"", state:"" });
     setShowForm(true);
   };
   const openEdit = (o) => {
     setEditId(o.id);
-    setForm({ ...o, value: String(o.value), nextSteps: o.nextSteps || [], budgetDueDate: o.budgetDueDate || "", bidDueDate: o.bidDueDate || "" });
+    setForm({ ...o, value: String(o.value), nextSteps: o.nextSteps || [], budgetDueDate: o.budgetDueDate || "", bidDueDate: o.bidDueDate || "", city: o.city||"", state: o.state||"" });
     setShowForm(true);
   };
   const saveOpp = () => {
     if (!form.name.trim() || !form.value) return;
     const ct    = contacts.find(p => p.id === form.contactId);
-    const entry = { ...form, value: Number(form.value), contact: ct ? ct.email : "" };
+    const entry = { ...form, value: Number(form.value), contact: ct ? ct.email : "", city: form.city||"", state: form.state||"" };
     if (editId !== null) {
       setPipeline(pipeline.map(o => o.id === editId ? { ...entry, id: editId } : o));
       if (selectedOpp && selectedOpp.id === editId) setSelectedOpp({ ...entry, id: editId });
@@ -5846,7 +5847,7 @@ Return ONLY valid JSON, no markdown, no extra text:
               const entry = { ...fields, id, bu:"major", nextSteps:[] };
               setPipeline(prev=>[...prev, entry]);
               // Persist
-              const row = { id:String(id), name:fields.name, company_id:fields.companyId||null, contact_name:fields.contactName||"", value:parseFloat(fields.value)||0, stage:fields.stage||"budgeting_lead", notes:fields.notes||"", bu:"major", close_date:fields.closeDate||null };
+              const row = { id:String(id), name:fields.name, company_id:fields.companyId||null, contact_name:fields.contactName||"", value:parseFloat(fields.value)||0, stage:fields.stage||"budgeting_lead", notes:fields.notes||"", bu:"major", close_date:fields.closeDate||null, city:fields.city||null, state:fields.state||null };
               try { await fetch(`${SUPA_URL}/rest/v1/mp_pipeline`, { method:"POST", headers:{apikey:SUPA_KEY,Authorization:`Bearer ${SUPA_KEY}`,"Content-Type":"application/json",Prefer:"return=minimal"}, body:JSON.stringify(row) }); } catch(e){}
             };
 
@@ -9349,7 +9350,7 @@ if(bounds.length)map.fitBounds(bounds,{padding:[30,30]});
                               <span style={{fontSize:12,fontWeight:700,color:"#1A2240",flex:1}}>
                                 {wbs.length} Cost Codes · {pkg.vendors.length} Subcontractors · {totalBids} Bids Received
                               </span>
-                              <button onClick={()=>{setActiveBidOpp(activeOppId);setShowAddVendor(true);setAddMode("sub");setSubSearch2("");setPickerTrade("");}} style={{padding:"5px 12px",background:"#3B6FE8",color:"#fff",border:"none",borderRadius:5,cursor:"pointer",fontFamily:"inherit",fontSize:11,fontWeight:700}}>+ Add Sub</button>
+                              <button onClick={()=>{setActiveBidOpp(activeOppId);setShowAddVendor(true);setAddMode("sub");setSubSearch2("");setPickerTrade("");setSubProjectLat(null);setSubProjectLng(null);const _oppCity=(activeOpp?.city||"").trim();const _oppState=(activeOpp?.state||"").trim();if(_oppCity||_oppState){setSubProjectGeocoding(true);fetch("https://nominatim.openstreetmap.org/search?format=json&limit=1&q="+encodeURIComponent([_oppCity,_oppState].filter(Boolean).join(", ")),{headers:{"User-Agent":"FarmerGroupApp/1.0"}}).then(r=>r.json()).then(d=>{if(d&&d[0]){setSubProjectLat(parseFloat(d[0].lat));setSubProjectLng(parseFloat(d[0].lon));}}).catch(()=>{}).finally(()=>setSubProjectGeocoding(false));}}} style={{padding:"5px 12px",background:"#3B6FE8",color:"#fff",border:"none",borderRadius:5,cursor:"pointer",fontFamily:"inherit",fontSize:11,fontWeight:700}}>+ Add Sub</button>
                               <button onClick={()=>{setBidPrintOppId(activeOppId);setShowBidPrintModal(true);}} style={{padding:"5px 10px",background:"#F0F2F8",border:"1px solid #CBD1E8",borderRadius:5,cursor:"pointer",fontFamily:"inherit",fontSize:11,color:"#4A5278"}}>Print PDF</button>
                             </div>
 
@@ -9424,7 +9425,7 @@ if(bounds.length)map.fitBounds(bounds,{padding:[30,30]});
                                         ? <span style={{fontSize:10,color:"#9BA3BF"}}>{item.subItems.length} sub-codes</span>
                                         : <span style={{fontSize:11,fontWeight:700,color:bidsIn>0?coverage:"#9BA3BF"}}>{bidsIn} bid{bidsIn!==1?"s":""}</span>
                                       }
-                                      {!hasSubs&&<button onClick={()=>{setActiveBidOpp(activeOppId);setShowAddVendor(true);setAddMode("sub");setSubSearch2("");setPickerTrade("");}} style={{padding:"2px 8px",background:"#3B6FE815",border:"1px solid #3B6FE830",borderRadius:4,color:"#3B6FE8",fontSize:10,cursor:"pointer",fontFamily:"inherit",fontWeight:600}}>+ Sub</button>}
+                                      {!hasSubs&&<button onClick={()=>{setActiveBidOpp(activeOppId);setShowAddVendor(true);setAddMode("sub");setSubSearch2("");setPickerTrade("");setSubProjectLat(null);setSubProjectLng(null);const _oppCity=(activeOpp?.city||"").trim();const _oppState=(activeOpp?.state||"").trim();if(_oppCity||_oppState){setSubProjectGeocoding(true);fetch("https://nominatim.openstreetmap.org/search?format=json&limit=1&q="+encodeURIComponent([_oppCity,_oppState].filter(Boolean).join(", ")),{headers:{"User-Agent":"FarmerGroupApp/1.0"}}).then(r=>r.json()).then(d=>{if(d&&d[0]){setSubProjectLat(parseFloat(d[0].lat));setSubProjectLng(parseFloat(d[0].lon));}}).catch(()=>{}).finally(()=>setSubProjectGeocoding(false));}}} style={{padding:"2px 8px",background:"#3B6FE815",border:"1px solid #3B6FE830",borderRadius:4,color:"#3B6FE8",fontSize:10,cursor:"pointer",fontFamily:"inherit",fontWeight:600}}>+ Sub</button>}
                                     </div>
 
                                     {/* If no sub-items: show vendors directly under parent */}
@@ -9445,7 +9446,7 @@ if(bounds.length)map.fitBounds(bounds,{padding:[30,30]});
                                             <span style={{fontSize:12,fontWeight:600,color:"#1A2240",flex:1}}>{sub.description||"Sub-item "+(si+1)}</span>
                                             <span style={{fontSize:10,color:"#9BA3BF"}}>{sub.unit||item.unit}</span>
                                             <span style={{fontSize:10,fontWeight:700,color:subBids>0?subCov:"#9BA3BF"}}>{subBids} bid{subBids!==1?"s":""}</span>
-                                            <button onClick={()=>{setActiveBidOpp(activeOppId);setShowAddVendor(true);setAddMode("sub");setSubSearch2("");setPickerTrade("");}} style={{padding:"2px 8px",background:"#3B6FE815",border:"1px solid #3B6FE830",borderRadius:4,color:"#3B6FE8",fontSize:10,cursor:"pointer",fontFamily:"inherit",fontWeight:600}}>+ Sub</button>
+                                            <button onClick={()=>{setActiveBidOpp(activeOppId);setShowAddVendor(true);setAddMode("sub");setSubSearch2("");setPickerTrade("");setSubProjectLat(null);setSubProjectLng(null);const _oppCity=(activeOpp?.city||"").trim();const _oppState=(activeOpp?.state||"").trim();if(_oppCity||_oppState){setSubProjectGeocoding(true);fetch("https://nominatim.openstreetmap.org/search?format=json&limit=1&q="+encodeURIComponent([_oppCity,_oppState].filter(Boolean).join(", ")),{headers:{"User-Agent":"FarmerGroupApp/1.0"}}).then(r=>r.json()).then(d=>{if(d&&d[0]){setSubProjectLat(parseFloat(d[0].lat));setSubProjectLng(parseFloat(d[0].lon));}}).catch(()=>{}).finally(()=>setSubProjectGeocoding(false));}}} style={{padding:"2px 8px",background:"#3B6FE815",border:"1px solid #3B6FE830",borderRadius:4,color:"#3B6FE8",fontSize:10,cursor:"pointer",fontFamily:"inherit",fontWeight:600}}>+ Sub</button>
                                           </div>
                                           <VendorTable vendors={subVendors} itemId={subKey}/>
                                         </div>
@@ -10796,6 +10797,10 @@ if(bounds.length)map.fitBounds(bounds,{padding:[30,30]});
                   )}
                 </div>
               )}
+              <div className="g2">
+                <div><label className="lbl">Project City</label><input className="fi" value={form.city||""} onChange={fp("city")} placeholder="e.g. Detroit" /></div>
+                <div><label className="lbl">Project State</label><input className="fi" value={form.state||""} onChange={fp("state")} placeholder="e.g. MI" maxLength={2} style={{textTransform:"uppercase"}} /></div>
+              </div>
               <div><label className="lbl">Expected Close Date</label><input className="fi" type="date" value={form.closeDate} onChange={fp("closeDate")} /></div>
               <div><label className="lbl">Notes</label><textarea className="fi" rows={3} value={form.notes} onChange={fp("notes")} placeholder="Key details…" style={{ resize: "vertical" }} /></div>
               <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 6 }}>
@@ -11622,24 +11627,48 @@ if(bounds.length)map.fitBounds(bounds,{padding:[30,30]});
         // Already-added company names for dedup check
         const addedNames = new Set(pkg.vendors.map(v=>(v.company||"").toLowerCase()));
 
+        // Haversine distance in miles
+        const haversine = (lat1, lng1, lat2, lng2) => {
+          const R = 3958.8;
+          const dLat = (lat2-lat1)*Math.PI/180;
+          const dLng = (lng2-lng1)*Math.PI/180;
+          const a = Math.sin(dLat/2)*Math.sin(dLat/2) + Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLng/2)*Math.sin(dLng/2);
+          return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        };
+
         // Subcontractors tagged for major division (or untagged = global)
         const majorSubs = subcontractors.filter(s =>
           !s.services || s.services.length === 0 || s.services.includes("major")
         );
 
-        // Trade filter for picker
         const allPickerTrades = [...new Set(majorSubs.map(s=>s.trade).filter(Boolean))].sort();
-        const filteredSubs = majorSubs.filter(s => {
+        const RADIUS_MI = 75;
+        const hasProjectLoc = !!(subProjectLat && subProjectLng);
+
+        // Attach distance to each sub
+        const subsWithDist = majorSubs.map(s => ({
+          ...s,
+          distMi: (hasProjectLoc && s.lat && s.lng)
+            ? Math.round(haversine(subProjectLat, subProjectLng, s.lat, s.lng))
+            : null,
+        }));
+
+        // Filter by search + trade + radius
+        const filteredSubs = subsWithDist.filter(s => {
           const q = subSearch2.toLowerCase();
           const matchSearch = !q || s.name.toLowerCase().includes(q) || (s.trade||"").toLowerCase().includes(q) || (s.contact_name||"").toLowerCase().includes(q) || (s.city||"").toLowerCase().includes(q) || (s.state||"").toLowerCase().includes(q);
           const matchTrade = !pickerTrade || (s.trade||"") === pickerTrade;
-          return matchSearch && matchTrade;
+          const matchRadius = !hasProjectLoc || s.distMi === null || s.distMi <= RADIUS_MI;
+          return matchSearch && matchTrade && matchRadius;
+        }).sort((a,b) => {
+          if (a.distMi !== null && b.distMi !== null) return a.distMi - b.distMi;
+          if (a.distMi !== null) return -1;
+          if (b.distMi !== null) return 1;
+          return a.name.localeCompare(b.name);
         });
 
-        // Group: local (MI/OH/IN/nearby states) vs national
-        const LOCAL_STATES = ["MI","OH","IN","IL","WI","KY","TN","PA","NY","MO"];
-        const localSubs = filteredSubs.filter(s => s.state && LOCAL_STATES.includes(s.state.toUpperCase()));
-        const otherSubs = filteredSubs.filter(s => !s.state || !LOCAL_STATES.includes(s.state.toUpperCase()));
+        const withinRadius = hasProjectLoc ? filteredSubs.filter(s => s.distMi !== null) : [];
+        const noCoords     = hasProjectLoc ? filteredSubs.filter(s => s.distMi === null) : filteredSubs;
 
         const addFromSub = (s) => {
           if (addedNames.has(s.name.toLowerCase())) return;
@@ -11695,31 +11724,42 @@ if(bounds.length)map.fitBounds(bounds,{padding:[30,30]});
               {addMode === "sub" && (
                 <div style={{display:"flex",flexDirection:"column",flex:1,minHeight:0}}>
 
-                  {/* Search + trade filter */}
+                  {/* Geocoding status banner */}
+                  {subProjectGeocoding && (
+                    <div style={{padding:"8px 18px",background:"#EEF3FF",borderBottom:"1px solid #BFDBFE",fontSize:11,color:"#3B6FE8",display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
+                      <span style={{animation:"spin 1s linear infinite",display:"inline-block"}}>⏳</span>
+                      Locating project address for radius filter…
+                    </div>
+                  )}
+                  {hasProjectLoc && !subProjectGeocoding && (
+                    <div style={{padding:"6px 18px",background:"#F0FDF4",borderBottom:"1px solid #BBF7D0",fontSize:10,color:"#16A34A",flexShrink:0}}>
+                      📍 Showing subs within {RADIUS_MI} miles of project · {withinRadius.length} found
+                      {noCoords.length > 0 && <span style={{color:"#9BA3BF",marginLeft:8}}>{noCoords.length} ungeocoated (shown below)</span>}
+                    </div>
+                  )}
+                  {!hasProjectLoc && !subProjectGeocoding && opp && (
+                    <div style={{padding:"6px 18px",background:"#FFF8E7",borderBottom:"1px solid #FDE68A",fontSize:10,color:"#92400E",flexShrink:0}}>
+                      ⚠ Add a City &amp; State to this opportunity to enable 75-mile radius filtering
+                    </div>
+                  )}
+
+                  {/* Search + trade dropdown */}
                   <div style={{padding:"12px 18px",borderBottom:"1px solid #F0F2F8",flexShrink:0,display:"flex",flexDirection:"column",gap:8}}>
-                    <input value={subSearch2} onChange={e=>setSubSearch2(e.target.value)}
-                      placeholder="Search name, trade, city, state…"
-                      style={{...fi,fontSize:12,padding:"7px 10px"}} autoFocus/>
-                    <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
-                      <span style={{fontSize:10,color:"#9BA3BF",fontWeight:600,flexShrink:0}}>Trade:</span>
-                      <button onClick={()=>setPickerTrade("")}
-                        style={{padding:"3px 10px",borderRadius:10,border:"1px solid "+(!pickerTrade?"#3B6FE8":"#D4D9EE"),background:!pickerTrade?"#3B6FE8":"transparent",color:!pickerTrade?"#fff":"#4A5278",fontSize:10,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>
-                        All ({majorSubs.length})
-                      </button>
-                      {allPickerTrades.map(t => {
-                        const n = majorSubs.filter(s2=>s2.trade===t).length;
-                        const active = pickerTrade===t;
-                        return (
-                          <button key={t} onClick={()=>setPickerTrade(active?"":t)}
-                            style={{padding:"3px 10px",borderRadius:10,border:"1px solid "+(active?"#3B6FE8":"#D4D9EE"),background:active?"#3B6FE8":"transparent",color:active?"#fff":"#4A5278",fontSize:10,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>
-                            {t} ({n})
-                          </button>
-                        );
-                      })}
+                    <div style={{display:"flex",gap:8}}>
+                      <input value={subSearch2} onChange={e=>setSubSearch2(e.target.value)}
+                        placeholder="Search name, contact, city…"
+                        style={{...fi,fontSize:12,padding:"7px 10px",flex:1}} autoFocus/>
+                      <select value={pickerTrade} onChange={e=>setPickerTrade(e.target.value)}
+                        style={{padding:"7px 10px",border:"1.5px solid #CBD1E8",borderRadius:7,fontSize:12,fontFamily:"inherit",outline:"none",background:"#fff",color:pickerTrade?"#1A2240":"#9BA3BF",minWidth:160}}>
+                        <option value="">All Trades ({majorSubs.length})</option>
+                        {allPickerTrades.map(t => {
+                          const n = majorSubs.filter(s2=>s2.trade===t).length;
+                          return <option key={t} value={t}>{t} ({n})</option>;
+                        })}
+                      </select>
                     </div>
                     <div style={{fontSize:10,color:"#9BA3BF"}}>
                       {filteredSubs.length} result{filteredSubs.length!==1?"s":""} · {addedNames.size} already on this estimate
-                      {!subSearch2 && !pickerTrade && <span style={{color:"#4ADE80",marginLeft:6}}>· {localSubs.length} local</span>}
                     </div>
                   </div>
 
@@ -11728,24 +11768,19 @@ if(bounds.length)map.fitBounds(bounds,{padding:[30,30]});
                     {filteredSubs.length === 0 && (
                       <div style={{textAlign:"center",padding:"32px",color:"#9BA3BF",fontSize:12}}>
                         <div style={{fontSize:24,marginBottom:8}}>🔍</div>
-                        No subcontractors match
+                        {hasProjectLoc
+                          ? `No subs within ${RADIUS_MI} miles${pickerTrade?" for "+pickerTrade:""}. Try a different trade or enter manually.`
+                          : "No subcontractors match"}
                       </div>
                     )}
 
-                    {/* Local header when not searching */}
-                    {!subSearch2 && !pickerTrade && localSubs.length > 0 && (
-                      <div style={{padding:"6px 18px",background:"#F0FDF4",borderBottom:"1px solid #BBF7D0",fontSize:9,fontWeight:700,color:"#16A34A",textTransform:"uppercase",letterSpacing:"0.08em"}}>
-                        📍 Local / Regional — {localSubs.length} subs
-                      </div>
-                    )}
-
-                    {/* Render rows — local first, then others when not filtering */}
                     {(() => {
                       const TM={"HVAC":["❄️","#60A5FA"],"Plumbing":["🔧","#3B82F6"],"Electrical":["⚡","#F59E0B"],"Roofing":["🏠","#8B5CF6"],"Painting":["🎨","#EC4899"],"Concrete":["🪨","#6B7280"],"Masonry":["🧱","#8B5CF6"],"Landscaping":["🌿","#10B981"],"Asphalt":["🛣️","#6B7280"],"Demo":["💥","#EF4444"],"Carpentry":["🪵","#92400E"],"Fire":["🔥","#EF4444"],"Security":["🔒","#6366F1"],"Elevator":["🛗","#D97706"],"General":["🔨","#7BA7F5"]};
                       const getTS = s => { const t=Object.entries(TM).find(([k])=>s.trade&&s.trade.toLowerCase().includes(k.toLowerCase())); return t?{icon:t[1][0],color:t[1][1]}:{icon:"🔧",color:"#7BA7F5"}; };
                       const renderRow = (s) => {
                         const already = addedNames.has(s.name.toLowerCase());
                         const {icon,color} = getTS(s);
+                        const distColor = s.distMi===null?"#9BA3BF":s.distMi<=25?"#4ADE80":s.distMi<=50?"#FCD34D":"#F97316";
                         return (
                           <div key={s.id}
                             onClick={()=>{ if(!already) addFromSub(s); }}
@@ -11765,28 +11800,38 @@ if(bounds.length)map.fitBounds(bounds,{padding:[30,30]});
                                 {s.contact_name&&<span style={{fontSize:10,color:"#4A5278"}}>👤 {s.contact_name}</span>}
                                 {s.phone&&<span style={{fontSize:10,color:"#4A5278"}}>📞 {s.phone}</span>}
                                 {(s.city||s.state)&&<span style={{fontSize:10,color:"#9BA3BF"}}>📍 {[s.city,s.state].filter(Boolean).join(", ")}</span>}
-                                {s.coverage&&<span style={{fontSize:10,color:"#9BA3BF",fontStyle:"italic"}}>{s.coverage}</span>}
                               </div>
                             </div>
+                            {/* Distance badge */}
+                            {hasProjectLoc && (
+                              <div style={{textAlign:"center",flexShrink:0,minWidth:44}}>
+                                {s.distMi !== null
+                                  ? <><div style={{fontSize:11,fontWeight:800,color:distColor}}>{s.distMi}</div><div style={{fontSize:8,color:"#9BA3BF"}}>mi</div></>
+                                  : <div style={{fontSize:9,color:"#CBD1E8"}}>no<br/>coords</div>
+                                }
+                              </div>
+                            )}
                             {!already&&<div style={{fontSize:11,color:"#3B6FE8",fontWeight:700,flexShrink:0}}>+ Add</div>}
                           </div>
                         );
                       };
 
-                      if (subSearch2 || pickerTrade) {
-                        return filteredSubs.map(renderRow);
+                      if (hasProjectLoc) {
+                        return (
+                          <>
+                            {withinRadius.map(renderRow)}
+                            {noCoords.length > 0 && (
+                              <>
+                                <div style={{padding:"5px 18px",background:"#F4F6FB",borderTop:"1px solid #E0E4F0",fontSize:9,fontWeight:700,color:"#9BA3BF",textTransform:"uppercase",letterSpacing:"0.07em"}}>
+                                  No coordinates — cannot calculate distance ({noCoords.length})
+                                </div>
+                                {noCoords.map(renderRow)}
+                              </>
+                            )}
+                          </>
+                        );
                       }
-                      return (
-                        <>
-                          {localSubs.map(renderRow)}
-                          {otherSubs.length > 0 && (
-                            <div style={{padding:"6px 18px",background:"#F4F6FB",borderBottom:"1px solid #E0E4F0",borderTop:"1px solid #E0E4F0",fontSize:9,fontWeight:700,color:"#4A5278",textTransform:"uppercase",letterSpacing:"0.08em"}}>
-                              🌐 National / Other — {otherSubs.length} subs
-                            </div>
-                          )}
-                          {otherSubs.map(renderRow)}
-                        </>
-                      );
+                      return filteredSubs.map(renderRow);
                     })()}
                   </div>
 
@@ -11796,6 +11841,7 @@ if(bounds.length)map.fitBounds(bounds,{padding:[30,30]});
                   </div>
                 </div>
               )}
+
 
                             {/* Manual entry */}
               {addMode === "manual" && (
