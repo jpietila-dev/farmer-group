@@ -11624,7 +11624,7 @@ if(bounds.length)map.fitBounds(bounds,{padding:[30,30]});
                         All ({majorSubs.length})
                       </button>
                       {allPickerTrades.map(t => {
-                        const n = majorSubs.filter(s=>s.trade===t).length;
+                        const n = majorSubs.filter(s2=>s2.trade===t).length;
                         const active = pickerTrade===t;
                         return (
                           <button key={t} onClick={()=>setPickerTrade(active?"":t)}
@@ -11636,7 +11636,7 @@ if(bounds.length)map.fitBounds(bounds,{padding:[30,30]});
                     </div>
                     <div style={{fontSize:10,color:"#9BA3BF"}}>
                       {filteredSubs.length} result{filteredSubs.length!==1?"s":""} · {addedNames.size} already on this estimate
-                      {localSubs.length > 0 && !subSearch2 && !pickerTrade && <span style={{color:"#4ADE80",marginLeft:6}}>· {localSubs.length} local</span>}
+                      {!subSearch2 && !pickerTrade && <span style={{color:"#4ADE80",marginLeft:6}}>· {localSubs.length} local</span>}
                     </div>
                   </div>
 
@@ -11645,115 +11645,66 @@ if(bounds.length)map.fitBounds(bounds,{padding:[30,30]});
                     {filteredSubs.length === 0 && (
                       <div style={{textAlign:"center",padding:"32px",color:"#9BA3BF",fontSize:12}}>
                         <div style={{fontSize:24,marginBottom:8}}>🔍</div>
-                        No subcontractors match — try a different trade or <button onClick={()=>setAddMode("manual")} style={{background:"none",border:"none",color:"#3B6FE8",cursor:"pointer",fontSize:12,padding:0,fontFamily:"inherit",fontWeight:600}}>enter manually</button>
+                        No subcontractors match
                       </div>
                     )}
 
-                    {/* Local subs — shown first when no search/filter active */}
+                    {/* Local header when not searching */}
                     {!subSearch2 && !pickerTrade && localSubs.length > 0 && (
-                      <>
-                        <div style={{padding:"6px 18px",background:"#F0FDF4",borderBottom:"1px solid #BBF7D0",fontSize:9,fontWeight:700,color:"#16A34A",textTransform:"uppercase",letterSpacing:"0.08em"}}>
-                          📍 Local / Regional — {localSubs.length} subs
-                        </div>
-                        {localSubs.map(s => ((s, already, onAdd) => {
-                          const TM={"HVAC":["❄️","#60A5FA"],"Plumbing":["🔧","#3B82F6"],"Electrical":["⚡","#F59E0B"],"Roofing":["🏠","#8B5CF6"],"Painting":["🎨","#EC4899"],"Concrete":["🪨","#6B7280"],"Masonry":["🧱","#8B5CF6"],"Landscaping":["🌿","#10B981"],"Asphalt":["🛣️","#6B7280"],"Steel":["⚙️","#9CA3AF"],"Demo":["💥","#EF4444"],"Carpentry":["🪵","#92400E"],"Fire":["🔥","#EF4444"],"Security":["🔒","#6366F1"],"Elevator":["🛗","#D97706"],"General":["🔨","#7BA7F5"]};
-                          const ts=Object.entries(TM).find(([k])=>s.trade&&s.trade.toLowerCase().includes(k.toLowerCase()));
-                          const icon=ts?ts[1][0]:"🔧"; const color=ts?ts[1][1]:"#7BA7F5";
-                          return (
-                            <div key={s.id}
-                              onClick={()=>{if(!already)onAdd(s);}}
-                              style={{display:"flex",alignItems:"center",gap:12,padding:"10px 18px",cursor:already?"default":"pointer",borderBottom:"1px solid #F9FAFC"}}
-                              onMouseEnter={e=>{if(!already)e.currentTarget.style.background="#F5F8FF";}}
-                              onMouseLeave={e=>e.currentTarget.style.background=""}>
-                              <div style={{width:36,height:36,borderRadius:8,background:color+"18",border:"1px solid "+color+"40",display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>{icon}</div>
-                              <div style={{flex:1,minWidth:0}}>
-                                <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
-                                  <div style={{fontSize:13,fontWeight:700,color:"#1A2240"}}> {s.name}</div>
-                                  {s.trade&&<span style={{fontSize:9,color:color,background:color+"18",border:"1px solid "+color+"30",padding:"1px 6px",borderRadius:4,fontWeight:700}}>{s.trade}</span>}
-                                  {already&&<span style={{fontSize:9,color:"#4ADE80",background:"#4ADE8015",border:"1px solid #4ADE8030",padding:"1px 6px",borderRadius:4,fontWeight:700}}>✓ Added</span>}
-                                  {s.w9&&<span style={{fontSize:9,color:"#4ADE80",background:"#4ADE8015",border:"1px solid #4ADE8030",padding:"1px 6px",borderRadius:4,fontWeight:700}}>W9</span>}
-                                  {s.coiExpiry&&new Date(s.coiExpiry)>=new Date()&&<span style={{fontSize:9,color:"#4ADE80",background:"#4ADE8015",border:"1px solid #4ADE8030",padding:"1px 6px",borderRadius:4,fontWeight:700}}>COI</span>}
-                                </div>
-                                <div style={{display:"flex",gap:10,marginTop:2,flexWrap:"wrap"}}>
-                                  {s.contact_name&&<span style={{fontSize:10,color:"#4A5278"}}>👤 {s.contact_name}</span>}
-                                  {s.phone&&<span style={{fontSize:10,color:"#4A5278"}}>📞 {s.phone}</span>}
-                                  {(s.city||s.state)&&<span style={{fontSize:10,color:"#9BA3BF"}}>📍 {[s.city,s.state].filter(Boolean).join(", ")}</span>}
-                                  {s.coverage&&<span style={{fontSize:10,color:"#9BA3BF",fontStyle:"italic"}}>{s.coverage}</span>}
-                                </div>
-                              </div>
-                              {!already&&<div style={{fontSize:11,color:"#3B6FE8",fontWeight:700,flexShrink:0}}>+ Add</div>}
-                            </div>
-                          );
-                        })(s, addedNames.has(s.name.toLowerCase()), addFromSub))}
-                        {otherSubs.length > 0 && (
-                          <div style={{padding:"6px 18px",background:"#F4F6FB",borderBottom:"1px solid #E0E4F0",borderTop:"1px solid #E0E4F0",fontSize:9,fontWeight:700,color:"#4A5278",textTransform:"uppercase",letterSpacing:"0.08em"}}>
-                            🌐 National / Other — {otherSubs.length} subs
-                          </div>
-                        )}
-                        {otherSubs.map(s => ((s, already, onAdd) => {
-                          const TM={"HVAC":["❄️","#60A5FA"],"Plumbing":["🔧","#3B82F6"],"Electrical":["⚡","#F59E0B"],"Roofing":["🏠","#8B5CF6"],"Painting":["🎨","#EC4899"],"Concrete":["🪨","#6B7280"],"Masonry":["🧱","#8B5CF6"],"Landscaping":["🌿","#10B981"],"Asphalt":["🛣️","#6B7280"],"Steel":["⚙️","#9CA3AF"],"Demo":["💥","#EF4444"],"Carpentry":["🪵","#92400E"],"Fire":["🔥","#EF4444"],"Security":["🔒","#6366F1"],"Elevator":["🛗","#D97706"],"General":["🔨","#7BA7F5"]};
-                          const ts=Object.entries(TM).find(([k])=>s.trade&&s.trade.toLowerCase().includes(k.toLowerCase()));
-                          const icon=ts?ts[1][0]:"🔧"; const color=ts?ts[1][1]:"#7BA7F5";
-                          return (
-                            <div key={s.id}
-                              onClick={()=>{if(!already)onAdd(s);}}
-                              style={{display:"flex",alignItems:"center",gap:12,padding:"10px 18px",cursor:already?"default":"pointer",borderBottom:"1px solid #F9FAFC"}}
-                              onMouseEnter={e=>{if(!already)e.currentTarget.style.background="#F5F8FF";}}
-                              onMouseLeave={e=>e.currentTarget.style.background=""}>
-                              <div style={{width:36,height:36,borderRadius:8,background:color+"18",border:"1px solid "+color+"40",display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>{icon}</div>
-                              <div style={{flex:1,minWidth:0}}>
-                                <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
-                                  <div style={{fontSize:13,fontWeight:700,color:"#1A2240"}}> {s.name}</div>
-                                  {s.trade&&<span style={{fontSize:9,color:color,background:color+"18",border:"1px solid "+color+"30",padding:"1px 6px",borderRadius:4,fontWeight:700}}>{s.trade}</span>}
-                                  {already&&<span style={{fontSize:9,color:"#4ADE80",background:"#4ADE8015",border:"1px solid #4ADE8030",padding:"1px 6px",borderRadius:4,fontWeight:700}}>✓ Added</span>}
-                                  {s.w9&&<span style={{fontSize:9,color:"#4ADE80",background:"#4ADE8015",border:"1px solid #4ADE8030",padding:"1px 6px",borderRadius:4,fontWeight:700}}>W9</span>}
-                                  {s.coiExpiry&&new Date(s.coiExpiry)>=new Date()&&<span style={{fontSize:9,color:"#4ADE80",background:"#4ADE8015",border:"1px solid #4ADE8030",padding:"1px 6px",borderRadius:4,fontWeight:700}}>COI</span>}
-                                </div>
-                                <div style={{display:"flex",gap:10,marginTop:2,flexWrap:"wrap"}}>
-                                  {s.contact_name&&<span style={{fontSize:10,color:"#4A5278"}}>👤 {s.contact_name}</span>}
-                                  {s.phone&&<span style={{fontSize:10,color:"#4A5278"}}>📞 {s.phone}</span>}
-                                  {(s.city||s.state)&&<span style={{fontSize:10,color:"#9BA3BF"}}>📍 {[s.city,s.state].filter(Boolean).join(", ")}</span>}
-                                  {s.coverage&&<span style={{fontSize:10,color:"#9BA3BF",fontStyle:"italic"}}>{s.coverage}</span>}
-                                </div>
-                              </div>
-                              {!already&&<div style={{fontSize:11,color:"#3B6FE8",fontWeight:700,flexShrink:0}}>+ Add</div>}
-                            </div>
-                          );
-                        })(s, addedNames.has(s.name.toLowerCase()), addFromSub))}
-                      </>
+                      <div style={{padding:"6px 18px",background:"#F0FDF4",borderBottom:"1px solid #BBF7D0",fontSize:9,fontWeight:700,color:"#16A34A",textTransform:"uppercase",letterSpacing:"0.08em"}}>
+                        📍 Local / Regional — {localSubs.length} subs
+                      </div>
                     )}
 
-                    {/* Flat list when searching or filtering */}
-                    {(subSearch2 || pickerTrade) && filteredSubs.map(s => ((s, already, onAdd) => {
-                          const TM={"HVAC":["❄️","#60A5FA"],"Plumbing":["🔧","#3B82F6"],"Electrical":["⚡","#F59E0B"],"Roofing":["🏠","#8B5CF6"],"Painting":["🎨","#EC4899"],"Concrete":["🪨","#6B7280"],"Masonry":["🧱","#8B5CF6"],"Landscaping":["🌿","#10B981"],"Asphalt":["🛣️","#6B7280"],"Steel":["⚙️","#9CA3AF"],"Demo":["💥","#EF4444"],"Carpentry":["🪵","#92400E"],"Fire":["🔥","#EF4444"],"Security":["🔒","#6366F1"],"Elevator":["🛗","#D97706"],"General":["🔨","#7BA7F5"]};
-                          const ts=Object.entries(TM).find(([k])=>s.trade&&s.trade.toLowerCase().includes(k.toLowerCase()));
-                          const icon=ts?ts[1][0]:"🔧"; const color=ts?ts[1][1]:"#7BA7F5";
-                          return (
-                            <div key={s.id}
-                              onClick={()=>{if(!already)onAdd(s);}}
-                              style={{display:"flex",alignItems:"center",gap:12,padding:"10px 18px",cursor:already?"default":"pointer",borderBottom:"1px solid #F9FAFC"}}
-                              onMouseEnter={e=>{if(!already)e.currentTarget.style.background="#F5F8FF";}}
-                              onMouseLeave={e=>e.currentTarget.style.background=""}>
-                              <div style={{width:36,height:36,borderRadius:8,background:color+"18",border:"1px solid "+color+"40",display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>{icon}</div>
-                              <div style={{flex:1,minWidth:0}}>
-                                <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
-                                  <div style={{fontSize:13,fontWeight:700,color:"#1A2240"}}> {s.name}</div>
-                                  {s.trade&&<span style={{fontSize:9,color:color,background:color+"18",border:"1px solid "+color+"30",padding:"1px 6px",borderRadius:4,fontWeight:700}}>{s.trade}</span>}
-                                  {already&&<span style={{fontSize:9,color:"#4ADE80",background:"#4ADE8015",border:"1px solid #4ADE8030",padding:"1px 6px",borderRadius:4,fontWeight:700}}>✓ Added</span>}
-                                  {s.w9&&<span style={{fontSize:9,color:"#4ADE80",background:"#4ADE8015",border:"1px solid #4ADE8030",padding:"1px 6px",borderRadius:4,fontWeight:700}}>W9</span>}
-                                  {s.coiExpiry&&new Date(s.coiExpiry)>=new Date()&&<span style={{fontSize:9,color:"#4ADE80",background:"#4ADE8015",border:"1px solid #4ADE8030",padding:"1px 6px",borderRadius:4,fontWeight:700}}>COI</span>}
-                                </div>
-                                <div style={{display:"flex",gap:10,marginTop:2,flexWrap:"wrap"}}>
-                                  {s.contact_name&&<span style={{fontSize:10,color:"#4A5278"}}>👤 {s.contact_name}</span>}
-                                  {s.phone&&<span style={{fontSize:10,color:"#4A5278"}}>📞 {s.phone}</span>}
-                                  {(s.city||s.state)&&<span style={{fontSize:10,color:"#9BA3BF"}}>📍 {[s.city,s.state].filter(Boolean).join(", ")}</span>}
-                                  {s.coverage&&<span style={{fontSize:10,color:"#9BA3BF",fontStyle:"italic"}}>{s.coverage}</span>}
-                                </div>
+                    {/* Render rows — local first, then others when not filtering */}
+                    {(() => {
+                      const TM={"HVAC":["❄️","#60A5FA"],"Plumbing":["🔧","#3B82F6"],"Electrical":["⚡","#F59E0B"],"Roofing":["🏠","#8B5CF6"],"Painting":["🎨","#EC4899"],"Concrete":["🪨","#6B7280"],"Masonry":["🧱","#8B5CF6"],"Landscaping":["🌿","#10B981"],"Asphalt":["🛣️","#6B7280"],"Demo":["💥","#EF4444"],"Carpentry":["🪵","#92400E"],"Fire":["🔥","#EF4444"],"Security":["🔒","#6366F1"],"Elevator":["🛗","#D97706"],"General":["🔨","#7BA7F5"]};
+                      const getTS = s => { const t=Object.entries(TM).find(([k])=>s.trade&&s.trade.toLowerCase().includes(k.toLowerCase())); return t?{icon:t[1][0],color:t[1][1]}:{icon:"🔧",color:"#7BA7F5"}; };
+                      const renderRow = (s) => {
+                        const already = addedNames.has(s.name.toLowerCase());
+                        const {icon,color} = getTS(s);
+                        return (
+                          <div key={s.id}
+                            onClick={()=>{ if(!already) addFromSub(s); }}
+                            style={{display:"flex",alignItems:"center",gap:12,padding:"10px 18px",cursor:already?"default":"pointer",borderBottom:"1px solid #F9FAFC",background:"#fff"}}
+                            onMouseEnter={e=>{ if(!already) e.currentTarget.style.background="#F5F8FF"; }}
+                            onMouseLeave={e=>{ e.currentTarget.style.background="#fff"; }}>
+                            <div style={{width:36,height:36,borderRadius:8,background:color+"18",border:"1px solid "+color+"40",display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>{icon}</div>
+                            <div style={{flex:1,minWidth:0}}>
+                              <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
+                                <div style={{fontSize:13,fontWeight:700,color:"#1A2240"}}>{s.name}</div>
+                                {s.trade&&<span style={{fontSize:9,color:color,background:color+"18",border:"1px solid "+color+"30",padding:"1px 6px",borderRadius:4,fontWeight:700}}>{s.trade}</span>}
+                                {already&&<span style={{fontSize:9,color:"#4ADE80",background:"#4ADE8015",border:"1px solid #4ADE8030",padding:"1px 6px",borderRadius:4,fontWeight:700}}>✓ Added</span>}
+                                {s.w9&&<span style={{fontSize:9,color:"#4ADE80",background:"#4ADE8015",border:"1px solid #4ADE8030",padding:"1px 6px",borderRadius:4}}>W9 ✓</span>}
+                                {s.coiExpiry&&new Date(s.coiExpiry)>=new Date()&&<span style={{fontSize:9,color:"#4ADE80",background:"#4ADE8015",border:"1px solid #4ADE8030",padding:"1px 6px",borderRadius:4}}>COI ✓</span>}
                               </div>
-                              {!already&&<div style={{fontSize:11,color:"#3B6FE8",fontWeight:700,flexShrink:0}}>+ Add</div>}
+                              <div style={{display:"flex",gap:10,marginTop:2,flexWrap:"wrap"}}>
+                                {s.contact_name&&<span style={{fontSize:10,color:"#4A5278"}}>👤 {s.contact_name}</span>}
+                                {s.phone&&<span style={{fontSize:10,color:"#4A5278"}}>📞 {s.phone}</span>}
+                                {(s.city||s.state)&&<span style={{fontSize:10,color:"#9BA3BF"}}>📍 {[s.city,s.state].filter(Boolean).join(", ")}</span>}
+                                {s.coverage&&<span style={{fontSize:10,color:"#9BA3BF",fontStyle:"italic"}}>{s.coverage}</span>}
+                              </div>
                             </div>
-                          );
-                        })(s, addedNames.has(s.name.toLowerCase()), addFromSub))}
+                            {!already&&<div style={{fontSize:11,color:"#3B6FE8",fontWeight:700,flexShrink:0}}>+ Add</div>}
+                          </div>
+                        );
+                      };
+
+                      if (subSearch2 || pickerTrade) {
+                        return filteredSubs.map(renderRow);
+                      }
+                      return (
+                        <>
+                          {localSubs.map(renderRow)}
+                          {otherSubs.length > 0 && (
+                            <div style={{padding:"6px 18px",background:"#F4F6FB",borderBottom:"1px solid #E0E4F0",borderTop:"1px solid #E0E4F0",fontSize:9,fontWeight:700,color:"#4A5278",textTransform:"uppercase",letterSpacing:"0.08em"}}>
+                              🌐 National / Other — {otherSubs.length} subs
+                            </div>
+                          )}
+                          {otherSubs.map(renderRow)}
+                        </>
+                      );
+                    })()}
                   </div>
 
                   <div style={{padding:"12px 18px",borderTop:"1px solid #E8EBF4",background:"#F9FAFC",display:"flex",gap:8,flexShrink:0}}>
@@ -11763,7 +11714,7 @@ if(bounds.length)map.fitBounds(bounds,{padding:[30,30]});
                 </div>
               )}
 
-              {/* Manual entry */}
+                            {/* Manual entry */}
               {addMode === "manual" && (
                 <>
                   <div style={{padding:"18px 22px",overflowY:"auto",display:"flex",flexDirection:"column",gap:12,flex:1}}>
