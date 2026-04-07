@@ -3056,6 +3056,7 @@ export default function App() {
   const [subGeocoding,      setSubGeocoding]      = useState(false);
   const [subSearch2,        setSubSearch2]        = useState("");
   const [addMode,           setAddMode]           = useState("sub");
+  const [pickerTrade,       setPickerTrade]       = useState("");
   const [subGeocodeProgress,setSubGeocodeProgress]= useState(null);
 
   const navItems = NAV_ITEMS[activeBU] || NAV_ITEMS.all;
@@ -8655,7 +8656,7 @@ if(bounds.length)map.fitBounds(bounds,{padding:[30,30]});
                 {mpVendorDB.length === 0 ? (
                   <div style={{textAlign:"center",padding:"60px 24px",color:"#9BA3BF",border:"2px dashed #E0E4F0",borderRadius:12}}>
                     <div style={{fontSize:40,marginBottom:12}}>🏗</div>
-                    <div style={{fontSize:16,fontWeight:700,color:"#1A2240",marginBottom:6}}>No vendors yet</div>
+                    <div style={{fontSize:16,fontWeight:700,color:"#1A2240",marginBottom:6}}>No MP vendors yet</div>
                     <div style={{fontSize:12,marginBottom:20}}>Build your vendor database to speed up bid collection</div>
                     <button onClick={()=>{setMpVendorForm({company:"",contact:"",phone:"",email:"",trades:[],notes:"",rating:5});setShowMpVendorForm(true);}}
                       style={{padding:"9px 20px",background:"#3B6FE8",border:"none",borderRadius:8,color:"#fff",fontWeight:700,cursor:"pointer",fontFamily:"inherit",fontSize:13}}>
@@ -9327,7 +9328,7 @@ if(bounds.length)map.fitBounds(bounds,{padding:[30,30]});
                                         </div>
                                       ))}
                                     </>}
-                                    {vendors.length===0&&<div style={{padding:"5px 16px",fontSize:10,color:"#CBD1E8",fontStyle:"italic"}}>No vendors yet -- click + Vendor to add</div>}
+                                    {vendors.length===0&&<div style={{padding:"5px 16px",fontSize:10,color:"#CBD1E8",fontStyle:"italic"}}>No subs yet — click + Sub to add</div>}
                                   </div>
                                 );
 
@@ -9344,7 +9345,7 @@ if(bounds.length)map.fitBounds(bounds,{padding:[30,30]});
                                         ? <span style={{fontSize:10,color:"#9BA3BF"}}>{item.subItems.length} sub-codes</span>
                                         : <span style={{fontSize:11,fontWeight:700,color:bidsIn>0?coverage:"#9BA3BF"}}>{bidsIn} bid{bidsIn!==1?"s":""}</span>
                                       }
-                                      {!hasSubs&&<button onClick={()=>{setShowAddVendor(true);setAddMode("sub");setSubSearch2("");}} style={{padding:"2px 8px",background:"#3B6FE815",border:"1px solid #3B6FE830",borderRadius:4,color:"#3B6FE8",fontSize:10,cursor:"pointer",fontFamily:"inherit",fontWeight:600}}>+ Vendor</button>}
+                                      {!hasSubs&&<button onClick={()=>{setShowAddVendor(true);setAddMode("sub");setSubSearch2("");}} style={{padding:"2px 8px",background:"#3B6FE815",border:"1px solid #3B6FE830",borderRadius:4,color:"#3B6FE8",fontSize:10,cursor:"pointer",fontFamily:"inherit",fontWeight:600}}>+ Sub</button>}
                                     </div>
 
                                     {/* If no sub-items: show vendors directly under parent */}
@@ -11546,10 +11547,20 @@ if(bounds.length)map.fitBounds(bounds,{padding:[30,30]});
         const majorSubs = subcontractors.filter(s =>
           !s.services || s.services.length === 0 || s.services.includes("major")
         );
+
+        // Trade filter for picker
+        const allPickerTrades = [...new Set(majorSubs.map(s=>s.trade).filter(Boolean))].sort();
         const filteredSubs = majorSubs.filter(s => {
           const q = subSearch2.toLowerCase();
-          return !q || s.name.toLowerCase().includes(q) || (s.trade||"").toLowerCase().includes(q) || (s.contact_name||"").toLowerCase().includes(q);
+          const matchSearch = !q || s.name.toLowerCase().includes(q) || (s.trade||"").toLowerCase().includes(q) || (s.contact_name||"").toLowerCase().includes(q) || (s.city||"").toLowerCase().includes(q) || (s.state||"").toLowerCase().includes(q);
+          const matchTrade = !pickerTrade || (s.trade||"") === pickerTrade;
+          return matchSearch && matchTrade;
         });
+
+        // Group: local (MI/OH/IN/nearby states) vs national
+        const LOCAL_STATES = ["MI","OH","IN","IL","WI","KY","TN","PA","NY","MO"];
+        const localSubs = filteredSubs.filter(s => s.state && LOCAL_STATES.includes(s.state.toUpperCase()));
+        const otherSubs = filteredSubs.filter(s => !s.state || !LOCAL_STATES.includes(s.state.toUpperCase()));
 
         const addFromSub = (s) => {
           if (addedNames.has(s.name.toLowerCase())) return;
@@ -11600,47 +11611,151 @@ if(bounds.length)map.fitBounds(bounds,{padding:[30,30]});
               {/* From subcontractor list */}
               {addMode === "sub" && (
                 <div style={{display:"flex",flexDirection:"column",flex:1,minHeight:0}}>
-                  <div style={{padding:"12px 18px",borderBottom:"1px solid #F0F2F8",flexShrink:0}}>
+
+                  {/* Search + trade filter */}
+                  <div style={{padding:"12px 18px",borderBottom:"1px solid #F0F2F8",flexShrink:0,display:"flex",flexDirection:"column",gap:8}}>
                     <input value={subSearch2} onChange={e=>setSubSearch2(e.target.value)}
-                      placeholder="Search by name, trade, contact…"
+                      placeholder="Search name, trade, city, state…"
                       style={{...fi,fontSize:12,padding:"7px 10px"}} autoFocus/>
-                    <div style={{fontSize:10,color:"#9BA3BF",marginTop:6}}>
-                      {majorSubs.length} subcontractors · {addedNames.size} already added to this estimate
+                    <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}>
+                      <span style={{fontSize:10,color:"#9BA3BF",fontWeight:600,flexShrink:0}}>Trade:</span>
+                      <button onClick={()=>setPickerTrade("")}
+                        style={{padding:"3px 10px",borderRadius:10,border:"1px solid "+(!pickerTrade?"#3B6FE8":"#D4D9EE"),background:!pickerTrade?"#3B6FE8":"transparent",color:!pickerTrade?"#fff":"#4A5278",fontSize:10,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>
+                        All ({majorSubs.length})
+                      </button>
+                      {allPickerTrades.map(t => {
+                        const n = majorSubs.filter(s=>s.trade===t).length;
+                        const active = pickerTrade===t;
+                        return (
+                          <button key={t} onClick={()=>setPickerTrade(active?"":t)}
+                            style={{padding:"3px 10px",borderRadius:10,border:"1px solid "+(active?"#3B6FE8":"#D4D9EE"),background:active?"#3B6FE8":"transparent",color:active?"#fff":"#4A5278",fontSize:10,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>
+                            {t} ({n})
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <div style={{fontSize:10,color:"#9BA3BF"}}>
+                      {filteredSubs.length} result{filteredSubs.length!==1?"s":""} · {addedNames.size} already on this estimate
+                      {localSubs.length > 0 && !subSearch2 && !pickerTrade && <span style={{color:"#4ADE80",marginLeft:6}}>· {localSubs.length} local</span>}
                     </div>
                   </div>
-                  <div style={{overflowY:"auto",flex:1,padding:"8px 0"}}>
+
+                  {/* Sub list */}
+                  <div style={{overflowY:"auto",flex:1}}>
                     {filteredSubs.length === 0 && (
-                      <div style={{textAlign:"center",padding:"32px",color:"#9BA3BF",fontSize:12}}>No subcontractors match</div>
+                      <div style={{textAlign:"center",padding:"32px",color:"#9BA3BF",fontSize:12}}>
+                        <div style={{fontSize:24,marginBottom:8}}>🔍</div>
+                        No subcontractors match — try a different trade or <button onClick={()=>setAddMode("manual")} style={{background:"none",border:"none",color:"#3B6FE8",cursor:"pointer",fontSize:12,padding:0,fontFamily:"inherit",fontWeight:600}}>enter manually</button>
+                      </div>
                     )}
-                    {filteredSubs.map(s => {
-                      const already = addedNames.has(s.name.toLowerCase());
-                      const TRADE_MAP = {"HVAC":["❄️","#60A5FA"],"Plumbing":["🔧","#3B82F6"],"Electrical":["⚡","#F59E0B"],"Roofing":["🏠","#8B5CF6"],"Painting":["🎨","#EC4899"],"Concrete":["🪨","#6B7280"],"General":["🔨","#7BA7F5"],"Fire":["🔥","#EF4444"]};
-                      const ts = Object.entries(TRADE_MAP).find(([k])=>s.trade&&s.trade.toLowerCase().includes(k.toLowerCase()));
-                      const icon = ts?ts[1][0]:"🔧"; const color = ts?ts[1][1]:"#7BA7F5";
-                      return (
-                        <div key={s.id}
-                          onClick={()=>{ if(!already){ addFromSub(s); } }}
-                          style={{display:"flex",alignItems:"center",gap:12,padding:"10px 18px",cursor:already?"default":"pointer",opacity:already?0.4:1,borderBottom:"1px solid #F9FAFC"}}
-                          onMouseEnter={e=>{ if(!already) e.currentTarget.style.background="#F5F8FF"; }}
-                          onMouseLeave={e=>e.currentTarget.style.background=""}>
-                          <div style={{width:36,height:36,borderRadius:8,background:color+"18",border:"1px solid "+color+"40",display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>{icon}</div>
-                          <div style={{flex:1,minWidth:0}}>
-                            <div style={{display:"flex",alignItems:"center",gap:6}}>
-                              <div style={{fontSize:13,fontWeight:700,color:"#1A2240"}}>{s.name}</div>
-                              {s.trade&&<span style={{fontSize:9,color:color,background:color+"18",border:"1px solid "+color+"30",padding:"1px 6px",borderRadius:4,fontWeight:700}}>{s.trade}</span>}
-                              {already&&<span style={{fontSize:9,color:"#4ADE80",background:"#4ADE8015",border:"1px solid #4ADE8030",padding:"1px 6px",borderRadius:4,fontWeight:700}}>✓ Added</span>}
-                            </div>
-                            <div style={{display:"flex",gap:10,marginTop:2}}>
-                              {s.contact_name&&<span style={{fontSize:10,color:"#4A5278"}}>👤 {s.contact_name}</span>}
-                              {s.phone&&<span style={{fontSize:10,color:"#4A5278"}}>📞 {s.phone}</span>}
-                              {(s.city||s.state)&&<span style={{fontSize:10,color:"#9BA3BF"}}>📍 {[s.city,s.state].filter(Boolean).join(", ")}</span>}
-                            </div>
-                          </div>
-                          {!already && <div style={{fontSize:11,color:"#3B6FE8",fontWeight:700,flexShrink:0}}>+ Add</div>}
+
+                    {/* Local subs — shown first when no search/filter active */}
+                    {!subSearch2 && !pickerTrade && localSubs.length > 0 && (
+                      <>
+                        <div style={{padding:"6px 18px",background:"#F0FDF4",borderBottom:"1px solid #BBF7D0",fontSize:9,fontWeight:700,color:"#16A34A",textTransform:"uppercase",letterSpacing:"0.08em"}}>
+                          📍 Local / Regional — {localSubs.length} subs
                         </div>
-                      );
-                    })}
+                        {localSubs.map(s => ((s, already, onAdd) => {
+                          const TM={"HVAC":["❄️","#60A5FA"],"Plumbing":["🔧","#3B82F6"],"Electrical":["⚡","#F59E0B"],"Roofing":["🏠","#8B5CF6"],"Painting":["🎨","#EC4899"],"Concrete":["🪨","#6B7280"],"Masonry":["🧱","#8B5CF6"],"Landscaping":["🌿","#10B981"],"Asphalt":["🛣️","#6B7280"],"Steel":["⚙️","#9CA3AF"],"Demo":["💥","#EF4444"],"Carpentry":["🪵","#92400E"],"Fire":["🔥","#EF4444"],"Security":["🔒","#6366F1"],"Elevator":["🛗","#D97706"],"General":["🔨","#7BA7F5"]};
+                          const ts=Object.entries(TM).find(([k])=>s.trade&&s.trade.toLowerCase().includes(k.toLowerCase()));
+                          const icon=ts?ts[1][0]:"🔧"; const color=ts?ts[1][1]:"#7BA7F5";
+                          return (
+                            <div key={s.id}
+                              onClick={()=>{if(!already)onAdd(s);}}
+                              style={{display:"flex",alignItems:"center",gap:12,padding:"10px 18px",cursor:already?"default":"pointer",borderBottom:"1px solid #F9FAFC"}}
+                              onMouseEnter={e=>{if(!already)e.currentTarget.style.background="#F5F8FF";}}
+                              onMouseLeave={e=>e.currentTarget.style.background=""}>
+                              <div style={{width:36,height:36,borderRadius:8,background:color+"18",border:"1px solid "+color+"40",display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>{icon}</div>
+                              <div style={{flex:1,minWidth:0}}>
+                                <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
+                                  <div style={{fontSize:13,fontWeight:700,color:"#1A2240"}}> {s.name}</div>
+                                  {s.trade&&<span style={{fontSize:9,color:color,background:color+"18",border:"1px solid "+color+"30",padding:"1px 6px",borderRadius:4,fontWeight:700}}>{s.trade}</span>}
+                                  {already&&<span style={{fontSize:9,color:"#4ADE80",background:"#4ADE8015",border:"1px solid #4ADE8030",padding:"1px 6px",borderRadius:4,fontWeight:700}}>✓ Added</span>}
+                                  {s.w9&&<span style={{fontSize:9,color:"#4ADE80",background:"#4ADE8015",border:"1px solid #4ADE8030",padding:"1px 6px",borderRadius:4,fontWeight:700}}>W9</span>}
+                                  {s.coiExpiry&&new Date(s.coiExpiry)>=new Date()&&<span style={{fontSize:9,color:"#4ADE80",background:"#4ADE8015",border:"1px solid #4ADE8030",padding:"1px 6px",borderRadius:4,fontWeight:700}}>COI</span>}
+                                </div>
+                                <div style={{display:"flex",gap:10,marginTop:2,flexWrap:"wrap"}}>
+                                  {s.contact_name&&<span style={{fontSize:10,color:"#4A5278"}}>👤 {s.contact_name}</span>}
+                                  {s.phone&&<span style={{fontSize:10,color:"#4A5278"}}>📞 {s.phone}</span>}
+                                  {(s.city||s.state)&&<span style={{fontSize:10,color:"#9BA3BF"}}>📍 {[s.city,s.state].filter(Boolean).join(", ")}</span>}
+                                  {s.coverage&&<span style={{fontSize:10,color:"#9BA3BF",fontStyle:"italic"}}>{s.coverage}</span>}
+                                </div>
+                              </div>
+                              {!already&&<div style={{fontSize:11,color:"#3B6FE8",fontWeight:700,flexShrink:0}}>+ Add</div>}
+                            </div>
+                          );
+                        })(s, addedNames.has(s.name.toLowerCase()), addFromSub))}
+                        {otherSubs.length > 0 && (
+                          <div style={{padding:"6px 18px",background:"#F4F6FB",borderBottom:"1px solid #E0E4F0",borderTop:"1px solid #E0E4F0",fontSize:9,fontWeight:700,color:"#4A5278",textTransform:"uppercase",letterSpacing:"0.08em"}}>
+                            🌐 National / Other — {otherSubs.length} subs
+                          </div>
+                        )}
+                        {otherSubs.map(s => ((s, already, onAdd) => {
+                          const TM={"HVAC":["❄️","#60A5FA"],"Plumbing":["🔧","#3B82F6"],"Electrical":["⚡","#F59E0B"],"Roofing":["🏠","#8B5CF6"],"Painting":["🎨","#EC4899"],"Concrete":["🪨","#6B7280"],"Masonry":["🧱","#8B5CF6"],"Landscaping":["🌿","#10B981"],"Asphalt":["🛣️","#6B7280"],"Steel":["⚙️","#9CA3AF"],"Demo":["💥","#EF4444"],"Carpentry":["🪵","#92400E"],"Fire":["🔥","#EF4444"],"Security":["🔒","#6366F1"],"Elevator":["🛗","#D97706"],"General":["🔨","#7BA7F5"]};
+                          const ts=Object.entries(TM).find(([k])=>s.trade&&s.trade.toLowerCase().includes(k.toLowerCase()));
+                          const icon=ts?ts[1][0]:"🔧"; const color=ts?ts[1][1]:"#7BA7F5";
+                          return (
+                            <div key={s.id}
+                              onClick={()=>{if(!already)onAdd(s);}}
+                              style={{display:"flex",alignItems:"center",gap:12,padding:"10px 18px",cursor:already?"default":"pointer",borderBottom:"1px solid #F9FAFC"}}
+                              onMouseEnter={e=>{if(!already)e.currentTarget.style.background="#F5F8FF";}}
+                              onMouseLeave={e=>e.currentTarget.style.background=""}>
+                              <div style={{width:36,height:36,borderRadius:8,background:color+"18",border:"1px solid "+color+"40",display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>{icon}</div>
+                              <div style={{flex:1,minWidth:0}}>
+                                <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
+                                  <div style={{fontSize:13,fontWeight:700,color:"#1A2240"}}> {s.name}</div>
+                                  {s.trade&&<span style={{fontSize:9,color:color,background:color+"18",border:"1px solid "+color+"30",padding:"1px 6px",borderRadius:4,fontWeight:700}}>{s.trade}</span>}
+                                  {already&&<span style={{fontSize:9,color:"#4ADE80",background:"#4ADE8015",border:"1px solid #4ADE8030",padding:"1px 6px",borderRadius:4,fontWeight:700}}>✓ Added</span>}
+                                  {s.w9&&<span style={{fontSize:9,color:"#4ADE80",background:"#4ADE8015",border:"1px solid #4ADE8030",padding:"1px 6px",borderRadius:4,fontWeight:700}}>W9</span>}
+                                  {s.coiExpiry&&new Date(s.coiExpiry)>=new Date()&&<span style={{fontSize:9,color:"#4ADE80",background:"#4ADE8015",border:"1px solid #4ADE8030",padding:"1px 6px",borderRadius:4,fontWeight:700}}>COI</span>}
+                                </div>
+                                <div style={{display:"flex",gap:10,marginTop:2,flexWrap:"wrap"}}>
+                                  {s.contact_name&&<span style={{fontSize:10,color:"#4A5278"}}>👤 {s.contact_name}</span>}
+                                  {s.phone&&<span style={{fontSize:10,color:"#4A5278"}}>📞 {s.phone}</span>}
+                                  {(s.city||s.state)&&<span style={{fontSize:10,color:"#9BA3BF"}}>📍 {[s.city,s.state].filter(Boolean).join(", ")}</span>}
+                                  {s.coverage&&<span style={{fontSize:10,color:"#9BA3BF",fontStyle:"italic"}}>{s.coverage}</span>}
+                                </div>
+                              </div>
+                              {!already&&<div style={{fontSize:11,color:"#3B6FE8",fontWeight:700,flexShrink:0}}>+ Add</div>}
+                            </div>
+                          );
+                        })(s, addedNames.has(s.name.toLowerCase()), addFromSub))}
+                      </>
+                    )}
+
+                    {/* Flat list when searching or filtering */}
+                    {(subSearch2 || pickerTrade) && filteredSubs.map(s => ((s, already, onAdd) => {
+                          const TM={"HVAC":["❄️","#60A5FA"],"Plumbing":["🔧","#3B82F6"],"Electrical":["⚡","#F59E0B"],"Roofing":["🏠","#8B5CF6"],"Painting":["🎨","#EC4899"],"Concrete":["🪨","#6B7280"],"Masonry":["🧱","#8B5CF6"],"Landscaping":["🌿","#10B981"],"Asphalt":["🛣️","#6B7280"],"Steel":["⚙️","#9CA3AF"],"Demo":["💥","#EF4444"],"Carpentry":["🪵","#92400E"],"Fire":["🔥","#EF4444"],"Security":["🔒","#6366F1"],"Elevator":["🛗","#D97706"],"General":["🔨","#7BA7F5"]};
+                          const ts=Object.entries(TM).find(([k])=>s.trade&&s.trade.toLowerCase().includes(k.toLowerCase()));
+                          const icon=ts?ts[1][0]:"🔧"; const color=ts?ts[1][1]:"#7BA7F5";
+                          return (
+                            <div key={s.id}
+                              onClick={()=>{if(!already)onAdd(s);}}
+                              style={{display:"flex",alignItems:"center",gap:12,padding:"10px 18px",cursor:already?"default":"pointer",borderBottom:"1px solid #F9FAFC"}}
+                              onMouseEnter={e=>{if(!already)e.currentTarget.style.background="#F5F8FF";}}
+                              onMouseLeave={e=>e.currentTarget.style.background=""}>
+                              <div style={{width:36,height:36,borderRadius:8,background:color+"18",border:"1px solid "+color+"40",display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>{icon}</div>
+                              <div style={{flex:1,minWidth:0}}>
+                                <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
+                                  <div style={{fontSize:13,fontWeight:700,color:"#1A2240"}}> {s.name}</div>
+                                  {s.trade&&<span style={{fontSize:9,color:color,background:color+"18",border:"1px solid "+color+"30",padding:"1px 6px",borderRadius:4,fontWeight:700}}>{s.trade}</span>}
+                                  {already&&<span style={{fontSize:9,color:"#4ADE80",background:"#4ADE8015",border:"1px solid #4ADE8030",padding:"1px 6px",borderRadius:4,fontWeight:700}}>✓ Added</span>}
+                                  {s.w9&&<span style={{fontSize:9,color:"#4ADE80",background:"#4ADE8015",border:"1px solid #4ADE8030",padding:"1px 6px",borderRadius:4,fontWeight:700}}>W9</span>}
+                                  {s.coiExpiry&&new Date(s.coiExpiry)>=new Date()&&<span style={{fontSize:9,color:"#4ADE80",background:"#4ADE8015",border:"1px solid #4ADE8030",padding:"1px 6px",borderRadius:4,fontWeight:700}}>COI</span>}
+                                </div>
+                                <div style={{display:"flex",gap:10,marginTop:2,flexWrap:"wrap"}}>
+                                  {s.contact_name&&<span style={{fontSize:10,color:"#4A5278"}}>👤 {s.contact_name}</span>}
+                                  {s.phone&&<span style={{fontSize:10,color:"#4A5278"}}>📞 {s.phone}</span>}
+                                  {(s.city||s.state)&&<span style={{fontSize:10,color:"#9BA3BF"}}>📍 {[s.city,s.state].filter(Boolean).join(", ")}</span>}
+                                  {s.coverage&&<span style={{fontSize:10,color:"#9BA3BF",fontStyle:"italic"}}>{s.coverage}</span>}
+                                </div>
+                              </div>
+                              {!already&&<div style={{fontSize:11,color:"#3B6FE8",fontWeight:700,flexShrink:0}}>+ Add</div>}
+                            </div>
+                          );
+                        })(s, addedNames.has(s.name.toLowerCase()), addFromSub))}
                   </div>
+
                   <div style={{padding:"12px 18px",borderTop:"1px solid #E8EBF4",background:"#F9FAFC",display:"flex",gap:8,flexShrink:0}}>
                     <button onClick={()=>setShowAddVendor(false)} style={{flex:1,padding:"9px",background:"#F0F2F8",border:"1px solid #CBD1E8",borderRadius:7,cursor:"pointer",fontFamily:"inherit",fontSize:13,color:"#4A5278"}}>Done</button>
                     <button onClick={()=>setAddMode("manual")} style={{flex:1,padding:"9px",background:"transparent",border:"1px solid #3B6FE8",borderRadius:7,cursor:"pointer",fontFamily:"inherit",fontSize:13,color:"#3B6FE8",fontWeight:600}}>Not listed? Enter manually →</button>
