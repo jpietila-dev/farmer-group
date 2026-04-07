@@ -9405,7 +9405,26 @@ if(bounds.length)map.fitBounds(bounds,{padding:[30,30]});
                                   setTimeout(() => saveEstimateData(activeOppId, wbs, updated, estimatePhase[activeOppId]||"wbs"), 300);
                                 };
                                 const VendorTable = ({vendors, itemId}) => {
-                                  const winner = vendors.find(v => getLineStatus(v.id,"isWinner"));
+                                  // Use passed itemId (supports sub-items with their own key)
+                                  const lineKey = (vid) => vid+"_"+(itemId||item.id);
+                                  const getLS = (vid, key) => { const ls=pkg.lineStatus||{}; return ls[lineKey(vid)]?.[key]??false; };
+                                  const setLS = (vid, key, val) => {
+                                    const ls = pkg.lineStatus||{};
+                                    // If setting isWinner=true, clear all other winners for this itemId first
+                                    let newLs = {...ls};
+                                    if (key==="isWinner" && val===true) {
+                                      vendors.forEach(v2 => {
+                                        const k2 = lineKey(v2.id);
+                                        if (newLs[k2]?.isWinner) newLs[k2] = {...newLs[k2], isWinner:false};
+                                      });
+                                    }
+                                    const lk = lineKey(vid);
+                                    newLs[lk] = {...(newLs[lk]||{}), [key]: val};
+                                    const updated = {...pkg, lineStatus: newLs};
+                                    setBidPackages(prev=>({...prev,[activeOppId]:updated}));
+                                    setTimeout(()=>saveEstimateData(activeOppId,wbs,updated,estimatePhase[activeOppId]||"wbs"),300);
+                                  };
+                                  const winner = vendors.find(v => getLS(v.id,"isWinner"));
                                   return (
                                   <div>
                                     {vendors.length > 0 && (
@@ -9417,7 +9436,7 @@ if(bounds.length)map.fitBounds(bounds,{padding:[30,30]});
                                           ))}
                                         </div>
                                         {vendors.map(v => {
-                                          const isWinner = getLineStatus(v.id,"isWinner");
+                                          const isWinner = getLS(v.id,"isWinner");
                                           const hasBidFile = !!(v.bidFileName || v.bidFileData);
                                           return (
                                             <div key={v.id}
@@ -9428,7 +9447,7 @@ if(bounds.length)map.fitBounds(bounds,{padding:[30,30]});
                                               {/* Winner radio — per line */}
                                               <div style={{display:"flex",justifyContent:"center"}}>
                                                 <div title="Mark as winner for this trade"
-                                                  onClick={()=>updateLineStatus(v.id,"isWinner",!getLineStatus(v.id,"isWinner"))}
+                                                  onClick={()=>setLS(v.id,"isWinner",!getLS(v.id,"isWinner"))}
                                                   style={{width:16,height:16,borderRadius:"50%",border:"2px solid "+(isWinner?"#4ADE80":"#D4D9EE"),background:isWinner?"#4ADE80":"transparent",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
                                                   {isWinner&&<div style={{width:6,height:6,borderRadius:"50%",background:"#fff"}}/>}
                                                 </div>
@@ -9467,7 +9486,7 @@ if(bounds.length)map.fitBounds(bounds,{padding:[30,30]});
                                                       const reader=new FileReader();
                                                       reader.onload=ev=>{
                                                         updateVendor(v.id,{bidFileData:ev.target.result,bidFileName:file.name});
-                                                        updateLineStatus(v.id,"bidReceived",true);
+                                                        setLS(v.id,"bidReceived",true);
                                                       };
                                                       reader.readAsDataURL(file);
                                                       e.target.value="";
@@ -9485,16 +9504,16 @@ if(bounds.length)map.fitBounds(bounds,{padding:[30,30]});
 
                                               {/* Info sent toggle — per line */}
                                               <div style={{display:"flex",justifyContent:"center"}}>
-                                                <div onClick={()=>updateLineStatus(v.id,"infoSent",!getLineStatus(v.id,"infoSent"))}
+                                                <div onClick={()=>setLS(v.id,"infoSent",!getLS(v.id,"infoSent"))}
                                                   title="Info sent to this sub for this trade"
-                                                  style={{width:14,height:14,borderRadius:"50%",background:getLineStatus(v.id,"infoSent")?"#60A5FA":"#E0E4F0",border:getLineStatus(v.id,"infoSent")?"2px solid #60A5FA60":"2px solid #CBD1E8",cursor:"pointer"}}/>
+                                                  style={{width:14,height:14,borderRadius:"50%",background:getLS(v.id,"infoSent")?"#60A5FA":"#E0E4F0",border:getLS(v.id,"infoSent")?"2px solid #60A5FA60":"2px solid #CBD1E8",cursor:"pointer"}}/>
                                               </div>
 
                                               {/* Bidding toggle — per line */}
                                               <div style={{display:"flex",justifyContent:"center"}}>
-                                                <div onClick={()=>updateLineStatus(v.id,"bidding",!getLineStatus(v.id,"bidding"))}
+                                                <div onClick={()=>setLS(v.id,"bidding",!getLS(v.id,"bidding"))}
                                                   title="Bidding this trade"
-                                                  style={{width:14,height:14,borderRadius:"50%",background:getLineStatus(v.id,"bidding")?"#FCD34D":"#E0E4F0",border:getLineStatus(v.id,"bidding")?"2px solid #FCD34D60":"2px solid #CBD1E8",cursor:"pointer"}}/>
+                                                  style={{width:14,height:14,borderRadius:"50%",background:getLS(v.id,"bidding")?"#FCD34D":"#E0E4F0",border:getLS(v.id,"bidding")?"2px solid #FCD34D60":"2px solid #CBD1E8",cursor:"pointer"}}/>
                                               </div>
 
                                               {/* Notes */}
@@ -9587,16 +9606,28 @@ if(bounds.length)map.fitBounds(bounds,{padding:[30,30]});
                           const co = companies.find(c=>c.id===activeOpp?.companyId);
                           const ls = pkg.lineStatus || {};
 
-                          // Build summary: for each WBS item, list all subs + their status/amount/winner
-                          const summaryRows = wbs.map(item => {
-                            const itemVendors = pkg.vendors.filter(v => {
+                          // Build summary rows — parent items AND their sub-items separately
+                          const summaryRows = [];
+                          wbs.forEach(item => {
+                            const hasSubs = (item.subItems||[]).length > 0;
+                            const allVendors = pkg.vendors.filter(v => {
                               const assigned = v.costCodes||v.trades||[];
                               if (assigned.length === 0) return true;
                               return assigned.includes(item.id) || assigned.includes(item.trade);
                             });
-                            const winner = itemVendors.find(v => ls[v.id+"_"+item.id]?.isWinner);
-                            return { item, vendors: itemVendors, winner };
-                          }).filter(r => r.vendors.length > 0);
+                            if (!hasSubs) {
+                              const winner = allVendors.find(v => ls[v.id+"_"+item.id]?.isWinner);
+                              if (allVendors.length > 0) summaryRows.push({key:item.id, label:item.description, code:item.code, trade:item.trade, vendors:allVendors, winner, critical:item.critical});
+                            } else {
+                              // Add each sub-item as its own row
+                              (item.subItems||[]).forEach((sub,si) => {
+                                const subKey = sub.id || (item.id+"_sub"+si);
+                                const subVendors = allVendors; // same pool
+                                const winner = subVendors.find(v => ls[v.id+"_"+subKey]?.isWinner);
+                                summaryRows.push({key:subKey, label:(sub.description||"Sub "+(si+1)), code:sub.code||item.code+"."+(si+1), trade:item.trade, vendors:subVendors, winner, critical:item.critical, isSubItem:true, parentLabel:item.description});
+                              });
+                            }
+                          });
 
                           const totalWinners = summaryRows.filter(r=>r.winner).length;
                           const totalValue = summaryRows.reduce((sum,r) => {
@@ -9645,15 +9676,16 @@ if(bounds.length)map.fitBounds(bounds,{padding:[30,30]});
                                 </div>
 
                                 {/* Per cost-code table */}
-                                {summaryRows.map(({item, vendors, winner}) => (
-                                  <div key={item.id} style={{marginBottom:16}}>
+                                {summaryRows.map((row) => (
+                                  <div key={row.key} style={{marginBottom:16}}>
                                     {/* Cost code header */}
-                                    <div style={{display:"flex",alignItems:"center",gap:8,padding:"6px 10px",background:"#1A2240",borderRadius:"6px 6px 0 0"}}>
-                                      <span style={{fontSize:10,color:"rgba(255,255,255,0.5)",fontFamily:"monospace"}}>{item.code||"—"}</span>
-                                      <span style={{fontSize:12,fontWeight:700,color:"#fff",flex:1}}>{item.description}</span>
-                                      {item.trade&&<span style={{fontSize:9,color:"rgba(255,255,255,0.4)"}}>{item.trade}</span>}
-                                      {winner
-                                        ? <span style={{fontSize:9,fontWeight:700,background:"#4ADE80",color:"#0A1F0A",padding:"2px 8px",borderRadius:3}}>AWARDED: {winner.company} — {winner.bidAmount?"$"+parseFloat(winner.bidAmount).toLocaleString():"TBD"}</span>
+                                    <div style={{display:"flex",alignItems:"center",gap:8,padding:"6px 10px",background:row.isSubItem?"#253260":"#1A2240",borderRadius:"6px 6px 0 0",borderLeft:row.isSubItem?"4px solid #3B6FE8":"none"}}>
+                                      {row.isSubItem&&<span style={{fontSize:9,color:"rgba(255,255,255,0.3)"}}>↳ {row.parentLabel}</span>}
+                                      <span style={{fontSize:10,color:"rgba(255,255,255,0.5)",fontFamily:"monospace"}}>{row.code||"—"}</span>
+                                      <span style={{fontSize:12,fontWeight:700,color:"#fff",flex:1}}>{row.label}</span>
+                                      {row.trade&&<span style={{fontSize:9,color:"rgba(255,255,255,0.4)"}}>{row.trade}</span>}
+                                      {row.winner
+                                        ? <span style={{fontSize:9,fontWeight:700,background:"#4ADE80",color:"#0A1F0A",padding:"2px 8px",borderRadius:3}}>AWARDED: {row.winner.company} — {row.winner.bidAmount?"$"+parseFloat(row.winner.bidAmount).toLocaleString():"TBD"}</span>
                                         : <span style={{fontSize:9,color:"#FCD34D"}}>No winner selected</span>
                                       }
                                     </div>
@@ -9662,16 +9694,16 @@ if(bounds.length)map.fitBounds(bounds,{padding:[30,30]});
                                     <table style={{width:"100%",borderCollapse:"collapse",border:"1px solid #D4D9EE",borderTop:"none"}}>
                                       <thead>
                                         <tr style={{background:"#F9FAFC"}}>
-                                          {["","Company","Contact","Phone","Info","Bidding","Bid File","Amount","Notes"].map((h,i)=>(
-                                            <th key={i} style={{padding:"4px 8px",fontSize:8,color:"#9BA3BF",textAlign:i>=4&&i<=6?"center":"left",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.05em",borderBottom:"1px solid #E8EBF4"}}>{h}</th>
+                                          {["W","Company","Contact","Phone","Info Sent","Bidding","Bid File","Amount","Notes"].map((h,i)=>(
+                                            <th key={i} style={{padding:"4px 8px",fontSize:8,color:"#9BA3BF",textAlign:i===0||i===4||i===5||i===6?"center":"left",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.05em",borderBottom:"1px solid #E8EBF4",width:i===0?24:i===3?80:i===4||i===5?60:i===6?90:i===7?80:"auto"}}>{h}</th>
                                           ))}
                                         </tr>
                                       </thead>
                                       <tbody>
-                                        {vendors.map((v,i)=>{
-                                          const isW = ls[v.id+"_"+item.id]?.isWinner;
-                                          const infoSent = ls[v.id+"_"+item.id]?.infoSent;
-                                          const bidding  = ls[v.id+"_"+item.id]?.bidding;
+                                        {row.vendors.map((v,i)=>{
+                                          const isW = ls[v.id+"_"+row.key]?.isWinner;
+                                          const infoSent = ls[v.id+"_"+row.key]?.infoSent;
+                                          const bidding  = ls[v.id+"_"+row.key]?.bidding;
                                           const hasBid   = !!(v.bidFileData||v.bidFileName||v.bidReceived);
                                           return (
                                             <tr key={v.id} style={{background:isW?"#F0FDF4":i%2===0?"#fff":"#FAFCFF",borderBottom:"1px solid #F0F2F8"}}>
