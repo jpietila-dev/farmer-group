@@ -3053,6 +3053,8 @@ export default function App() {
   const [subTradeFilter,    setSubTradeFilter]    = useState(null);
   const [subSearch,         setSubSearch]         = useState("");
   const [selectedSubProfile,setSelectedSubProfile]= useState(null);
+  const [subGeocoding,      setSubGeocoding]      = useState(false);
+  const [subGeocodeProgress,setSubGeocodeProgress]= useState(null);
 
   const navItems = NAV_ITEMS[activeBU] || NAV_ITEMS.all;
   const buColor  = BU_COLORS[activeBU];
@@ -7966,65 +7968,155 @@ if(bounds.length)map.fitBounds(bounds,{padding:[30,30]});
                   </div>
                 )}
 
-                {subView === "list" && (
-                  <div style={{display:"flex",flexDirection:"column",gap:8}}>
-                    {visibleSubs.length===0&&<div style={{textAlign:"center",padding:"48px",color:"#3D4570",fontSize:12,background:"#ECEEF8",borderRadius:10,border:"1px solid #CBD1E8"}}>No subcontractors match this filter</div>}
-                    {visibleSubs.map(s=>{
-                      const ts=getTS(s.trade);
-                      const coiDate=s.coiExpiry?new Date(s.coiExpiry):null;
-                      const coiExpired=coiDate&&coiDate<new Date();
-                      const coiSoon=coiDate&&!coiExpired&&coiDate<=new Date(Date.now()+30*86400000);
-                      const coiColor=!coiDate?"#F87171":coiExpired?"#F87171":coiSoon?"#FCD34D":"#4ADE80";
-                      const coiLabel=!coiDate?"COI Missing":coiExpired?"COI Expired":coiSoon?"COI Expiring "+s.coiExpiry:"COI ✓";
-                      const msaColor=s.msaStatus==="signed"?"#4ADE80":s.msaStatus==="expired"?"#F87171":"#FCD34D";
-                      const msaLabel=s.msaStatus==="signed"?"MSA ✓":s.msaStatus==="expired"?"MSA Expired":"MSA Missing";
-                      const subJobs=getSubJobs(s.id);
-                      const totalPaid=getSubTotalPaid(s.id);
-                      return (
-                        <div key={s.id} style={{background:"#fff",border:"1px solid #D4D9EE",borderRadius:10,padding:"14px 16px",display:"flex",alignItems:"flex-start",gap:14,cursor:"pointer",transition:"box-shadow 0.15s"}}
-                          onClick={()=>setSelectedSubProfile(s)}
-                          onMouseEnter={e=>e.currentTarget.style.boxShadow="0 2px 12px rgba(59,111,232,0.10)"}
-                          onMouseLeave={e=>e.currentTarget.style.boxShadow=""}>
-                          <div style={{width:46,height:46,borderRadius:10,background:ts.color+"18",border:"1px solid "+ts.color+"40",display:"flex",alignItems:"center",justifyContent:"center",fontSize:22,flexShrink:0}}>{ts.icon}</div>
-                          <div style={{flex:1,minWidth:0}}>
-                            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4,flexWrap:"wrap"}}>
-                              <div style={{fontSize:14,fontWeight:700,color:"#1A2240"}}>{s.name}</div>
-                              {s.trade&&<span style={{fontSize:10,color:ts.color,background:ts.color+"18",border:"1px solid "+ts.color+"40",padding:"2px 8px",borderRadius:10,fontWeight:600}}>{s.trade}</span>}
-                              {subJobs.length>0&&<span style={{fontSize:10,color:"#7BA7F5",background:"#7BA7F515",border:"1px solid #7BA7F540",padding:"2px 8px",borderRadius:4}}>🔨 {subJobs.length} job{subJobs.length!==1?"s":""}</span>}
-                              {totalPaid>0&&<span style={{fontSize:10,color:"#4ADE80",background:"#4ADE8012",border:"1px solid #4ADE8030",padding:"2px 8px",borderRadius:4}}>💰 {fmt(totalPaid)} paid</span>}
-                            </div>
-                            {s.contact_name&&<div style={{fontSize:11,color:"#4A5278",marginBottom:4}}>👤 {s.contact_name}</div>}
-                            <div style={{display:"flex",gap:14,flexWrap:"wrap",marginBottom:6}}>
-                              {s.phone&&<a href={"tel:"+s.phone} onClick={e=>e.stopPropagation()} style={{fontSize:12,color:"#4A5278",textDecoration:"none"}}>📞 {s.phone}</a>}
-                              {s.email&&<a href={"mailto:"+s.email} onClick={e=>e.stopPropagation()} style={{fontSize:12,color:"#3B6FE8",textDecoration:"none"}}>✉ {s.email}</a>}
-                              {(s.city||s.state)&&<span style={{fontSize:12,color:"#9BA3BF"}}>📍 {[s.city,s.state].filter(Boolean).join(", ")}</span>}
-                            </div>
-                            {/* Doc status badges */}
-                            <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:4}}>
-                              <span style={{fontSize:10,fontWeight:700,background:s.w9?"#4ADE8018":"#F8717118",color:s.w9?"#4ADE80":"#F87171",border:"1px solid "+(s.w9?"#4ADE8040":"#F8717140"),borderRadius:4,padding:"2px 8px"}}>{s.w9?"W9 ✓":"W9 Missing"}</span>
-                              <span style={{fontSize:10,fontWeight:700,background:coiColor+"18",color:coiColor,border:"1px solid "+coiColor+"40",borderRadius:4,padding:"2px 8px"}}>{coiLabel}</span>
-                              <span style={{fontSize:10,fontWeight:700,background:msaColor+"18",color:msaColor,border:"1px solid "+msaColor+"40",borderRadius:4,padding:"2px 8px"}}>{msaLabel}</span>
-                            </div>
-                            {/* Division tags */}
-                            {(s.services||[]).length>0&&(
-                              <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
-                                {(s.services||[]).map(div=>{
-                                  const d=DIV_OPTIONS.find(x=>x.id===div);
-                                  if(!d)return null;
-                                  return <span key={div} style={{fontSize:9,fontWeight:700,background:d.color+"18",color:d.color,border:"1px solid "+d.color+"40",borderRadius:4,padding:"1px 6px",textTransform:"uppercase"}}>{d.label}</span>;
-                                })}
-                              </div>
-                            )}
+                {subView === "list" && (() => {
+                  const ungeocoded = visibleSubs.filter(s => !s.lat && (s.city||s.address));
+                  const geocodeAll = async () => {
+                    setSubGeocoding(true);
+                    const toGeo = buFilteredSubs.filter(s => !s.lat && (s.city||s.address));
+                    setSubGeocodeProgress({done:0, total:toGeo.length});
+                    for (let i = 0; i < toGeo.length; i++) {
+                      const s = toGeo[i];
+                      const q = [s.address, s.city, s.state].filter(Boolean).join(", ");
+                      try {
+                        const r = await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(q)}`, {headers:{"User-Agent":"FarmerGroupApp/1.0"}});
+                        const d = await r.json();
+                        if (d?.[0]) {
+                          const lat = parseFloat(d[0].lat), lng = parseFloat(d[0].lon);
+                          const updated = {...s, lat, lng};
+                          setSubcontractors(prev => prev.map(x => x.id===s.id ? updated : x));
+                          try { supa.from("subcontractors").update({lat, lng}).eq("id", s.id); } catch(e) {}
+                        }
+                      } catch(e) {}
+                      setSubGeocodeProgress({done:i+1, total:toGeo.length});
+                      await new Promise(r => setTimeout(r, 1100));
+                    }
+                    setSubGeocoding(false);
+                    setSubGeocodeProgress(null);
+                  };
+
+                  return (
+                    <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                      {/* Geocode banner */}
+                      {ungeocoded.length > 0 && (
+                        <div style={{background:"#FFF8E7",border:"1px solid #FDE68A",borderRadius:8,padding:"10px 14px",display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}}>
+                          <div style={{fontSize:12,color:"#92400E"}}>
+                            {subGeocodeProgress
+                              ? `Geocoding… ${subGeocodeProgress.done} / ${subGeocodeProgress.total}`
+                              : `${ungeocoded.length} subcontractor${ungeocoded.length!==1?"s":""} have addresses but no map coordinates`}
                           </div>
-                          <div style={{display:"flex",gap:6,flexShrink:0}} onClick={e=>e.stopPropagation()}>
-                            <button className="btn-ghost" style={{fontSize:11}} onClick={()=>{setEditSubId(s.id);setSubForm({...s});setShowSubForm(true);}}>✎ Edit</button>
-                            <button className="btn-ghost" style={{fontSize:11,color:"#F87171",borderColor:"#F8717120"}} onClick={()=>{if(window.confirm("Delete "+s.name+"?")){setSubcontractors(subcontractors.filter(x=>x.id!==s.id));supa.from("subcontractors").delete().eq("id",s.id);}}}>✕</button>
-                          </div>
+                          {!subGeocoding && (
+                            <button onClick={geocodeAll} style={{padding:"5px 14px",background:"#D97706",border:"none",borderRadius:6,color:"#fff",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"inherit",whiteSpace:"nowrap"}}>
+                              📍 Geocode All
+                            </button>
+                          )}
                         </div>
-                      );
-                    })}
-                  </div>
-                )}
+                      )}
+
+                      {visibleSubs.length===0 && (
+                        <div style={{textAlign:"center",padding:"48px",color:"#3D4570",fontSize:12,background:"#ECEEF8",borderRadius:10,border:"1px solid #CBD1E8"}}>No subcontractors match this filter</div>
+                      )}
+
+                      {visibleSubs.length > 0 && (
+                        <div style={{background:"#fff",border:"1px solid #D4D9EE",borderRadius:10,overflow:"hidden"}}>
+                          {/* Table header */}
+                          <div style={{display:"grid",gridTemplateColumns:"2fr 1fr 1.5fr 1.2fr 60px 60px 60px 80px 72px",gap:0,background:"#F4F6FB",borderBottom:"2px solid #E0E4F0",padding:"8px 14px",alignItems:"center"}}>
+                            {["Name / Contact","Trade","Location","Phone / Email","W9","COI","MSA","Divisions",""].map((h,i)=>(
+                              <div key={i} style={{fontSize:9,fontWeight:700,color:"#4A5278",textTransform:"uppercase",letterSpacing:"0.07em",textAlign:i>=4&&i<=6?"center":"left"}}>{h}</div>
+                            ))}
+                          </div>
+                          {/* Rows */}
+                          {visibleSubs.map((s,i)=>{
+                            const ts=getTS(s.trade);
+                            const coiDate=s.coiExpiry?new Date(s.coiExpiry):null;
+                            const coiExpired=coiDate&&coiDate<new Date();
+                            const coiSoon=coiDate&&!coiExpired&&coiDate<=new Date(Date.now()+30*86400000);
+                            const coiColor=!coiDate?"#F87171":coiExpired?"#F87171":coiSoon?"#FCD34D":"#4ADE80";
+                            const coiLabel=!coiDate?"✕":coiExpired?"Exp":"✓";
+                            const msaColor=s.msaStatus==="signed"?"#4ADE80":s.msaStatus==="expired"?"#F87171":"#FCD34D";
+                            const msaLabel=s.msaStatus==="signed"?"✓":s.msaStatus==="expired"?"Exp":"✕";
+                            const subJobs=getSubJobs(s.id);
+                            const totalPaid=getSubTotalPaid(s.id);
+                            const location=[s.address,s.city,s.state].filter(Boolean);
+                            return (
+                              <div key={s.id}
+                                style={{display:"grid",gridTemplateColumns:"2fr 1fr 1.5fr 1.2fr 60px 60px 60px 80px 72px",gap:0,padding:"10px 14px",alignItems:"center",borderBottom:i<visibleSubs.length-1?"1px solid #F0F2F8":"none",cursor:"pointer",background:i%2===0?"#fff":"#FAFBFD"}}
+                                onClick={()=>setSelectedSubProfile(s)}
+                                onMouseEnter={e=>e.currentTarget.style.background="#EEF3FF"}
+                                onMouseLeave={e=>e.currentTarget.style.background=i%2===0?"#fff":"#FAFBFD"}>
+
+                                {/* Name / contact */}
+                                <div style={{minWidth:0}}>
+                                  <div style={{fontSize:13,fontWeight:700,color:"#1A2240",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{s.name}</div>
+                                  <div style={{display:"flex",gap:6,alignItems:"center",marginTop:2,flexWrap:"wrap"}}>
+                                    {s.contact_name&&<span style={{fontSize:10,color:"#4A5278"}}>👤 {s.contact_name}</span>}
+                                    {subJobs.length>0&&<span style={{fontSize:9,color:"#7BA7F5"}}>🔨 {subJobs.length} job{subJobs.length!==1?"s":""}</span>}
+                                    {totalPaid>0&&<span style={{fontSize:9,color:"#4ADE80"}}>💰 {fmt(totalPaid)}</span>}
+                                  </div>
+                                </div>
+
+                                {/* Trade */}
+                                <div>
+                                  {s.trade
+                                    ? <span style={{fontSize:10,color:ts.color,background:ts.color+"18",border:"1px solid "+ts.color+"40",padding:"2px 7px",borderRadius:8,fontWeight:600,whiteSpace:"nowrap"}}>{s.trade}</span>
+                                    : <span style={{color:"#CBD1E8",fontSize:11}}>—</span>}
+                                </div>
+
+                                {/* Location */}
+                                <div style={{fontSize:11,color:"#4A5278",minWidth:0}}>
+                                  {location.length > 0
+                                    ? <div>
+                                        {s.address && <div style={{whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",fontSize:11,color:"#1A2240"}}>{s.address}</div>}
+                                        {(s.city||s.state) && <div style={{fontSize:10,color:"#9BA3BF"}}>{[s.city,s.state].filter(Boolean).join(", ")} {!s.lat&&<span style={{color:"#FCD34D",fontSize:9}}>no coords</span>}</div>}
+                                      </div>
+                                    : <span style={{color:"#CBD1E8"}}>—</span>}
+                                </div>
+
+                                {/* Phone / Email */}
+                                <div style={{minWidth:0}}>
+                                  {s.phone&&<a href={"tel:"+s.phone} onClick={e=>e.stopPropagation()} style={{display:"block",fontSize:11,color:"#4A5278",textDecoration:"none",whiteSpace:"nowrap"}}>📞 {s.phone}</a>}
+                                  {s.email&&<a href={"mailto:"+s.email} onClick={e=>e.stopPropagation()} style={{display:"block",fontSize:10,color:"#3B6FE8",textDecoration:"none",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{s.email}</a>}
+                                </div>
+
+                                {/* W9 */}
+                                <div style={{textAlign:"center"}}>
+                                  <span style={{fontSize:11,fontWeight:700,color:s.w9?"#4ADE80":"#F87171"}}>{s.w9?"✓":"✕"}</span>
+                                </div>
+
+                                {/* COI */}
+                                <div style={{textAlign:"center"}}>
+                                  <span style={{fontSize:11,fontWeight:700,color:coiColor}} title={s.coiExpiry||"No date"}>{coiLabel}</span>
+                                  {s.coiExpiry&&<div style={{fontSize:8,color:"#9BA3BF"}}>{s.coiExpiry}</div>}
+                                </div>
+
+                                {/* MSA */}
+                                <div style={{textAlign:"center"}}>
+                                  <span style={{fontSize:11,fontWeight:700,color:msaColor}}>{msaLabel}</span>
+                                </div>
+
+                                {/* Divisions */}
+                                <div style={{display:"flex",gap:3,flexWrap:"wrap"}}>
+                                  {(s.services||[]).length===0
+                                    ? <span style={{fontSize:9,color:"#9BA3BF"}}>All</span>
+                                    : (s.services||[]).map(div=>{
+                                        const d=DIV_OPTIONS.find(x=>x.id===div);
+                                        if(!d)return null;
+                                        return <span key={div} style={{fontSize:8,fontWeight:700,background:d.color+"18",color:d.color,border:"1px solid "+d.color+"40",borderRadius:3,padding:"1px 4px"}}>{d.label.split(" ")[0]}</span>;
+                                      })}
+                                </div>
+
+                                {/* Actions */}
+                                <div style={{display:"flex",gap:4,justifyContent:"flex-end"}} onClick={e=>e.stopPropagation()}>
+                                  <button className="btn-ghost" style={{fontSize:10,padding:"3px 8px"}} onClick={()=>{setEditSubId(s.id);setSubForm({...s});setShowSubForm(true);}}>✎</button>
+                                  <button className="btn-ghost" style={{fontSize:10,padding:"3px 8px",color:"#F87171",borderColor:"#F8717120"}} onClick={()=>{if(window.confirm("Delete "+s.name+"?")){setSubcontractors(subcontractors.filter(x=>x.id!==s.id));supa.from("subcontractors").delete().eq("id",s.id);}}}>✕</button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
 
                 {/* ── Sub Profile Drawer ── */}
                 {selectedSubProfile && (() => {
