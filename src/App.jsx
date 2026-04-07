@@ -3054,6 +3054,8 @@ export default function App() {
   const [subSearch,         setSubSearch]         = useState("");
   const [selectedSubProfile,setSelectedSubProfile]= useState(null);
   const [subGeocoding,      setSubGeocoding]      = useState(false);
+  const [subSearch2,        setSubSearch2]        = useState("");
+  const [addMode,           setAddMode]           = useState("sub");
   const [subGeocodeProgress,setSubGeocodeProgress]= useState(null);
 
   const navItems = NAV_ITEMS[activeBU] || NAV_ITEMS.all;
@@ -9265,9 +9267,9 @@ if(bounds.length)map.fitBounds(bounds,{padding:[30,30]});
                             {/* Actions bar */}
                             <div style={{padding:"8px 16px",background:"#fff",borderBottom:"1px solid #E8EBF4",display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
                               <span style={{fontSize:12,fontWeight:700,color:"#1A2240",flex:1}}>
-                                {wbs.length} Cost Codes · {pkg.vendors.length} Vendors · {totalBids} Bids Received
+                                {wbs.length} Cost Codes · {pkg.vendors.length} Subcontractors · {totalBids} Bids Received
                               </span>
-                              <button onClick={()=>setShowAddVendor(true)} style={{padding:"5px 12px",background:"#3B6FE8",color:"#fff",border:"none",borderRadius:5,cursor:"pointer",fontFamily:"inherit",fontSize:11,fontWeight:700}}>+ Add Vendor</button>
+                              <button onClick={()=>{setShowAddVendor(true);setAddMode("sub");setSubSearch2("");}} style={{padding:"5px 12px",background:"#3B6FE8",color:"#fff",border:"none",borderRadius:5,cursor:"pointer",fontFamily:"inherit",fontSize:11,fontWeight:700}}>+ Add Sub</button>
                               <button onClick={()=>{setBidPrintOppId(activeOppId);setShowBidPrintModal(true);}} style={{padding:"5px 10px",background:"#F0F2F8",border:"1px solid #CBD1E8",borderRadius:5,cursor:"pointer",fontFamily:"inherit",fontSize:11,color:"#4A5278"}}>Print PDF</button>
                             </div>
 
@@ -9342,7 +9344,7 @@ if(bounds.length)map.fitBounds(bounds,{padding:[30,30]});
                                         ? <span style={{fontSize:10,color:"#9BA3BF"}}>{item.subItems.length} sub-codes</span>
                                         : <span style={{fontSize:11,fontWeight:700,color:bidsIn>0?coverage:"#9BA3BF"}}>{bidsIn} bid{bidsIn!==1?"s":""}</span>
                                       }
-                                      {!hasSubs&&<button onClick={()=>setShowAddVendor(true)} style={{padding:"2px 8px",background:"#3B6FE815",border:"1px solid #3B6FE830",borderRadius:4,color:"#3B6FE8",fontSize:10,cursor:"pointer",fontFamily:"inherit",fontWeight:600}}>+ Vendor</button>}
+                                      {!hasSubs&&<button onClick={()=>{setShowAddVendor(true);setAddMode("sub");setSubSearch2("");}} style={{padding:"2px 8px",background:"#3B6FE815",border:"1px solid #3B6FE830",borderRadius:4,color:"#3B6FE8",fontSize:10,cursor:"pointer",fontFamily:"inherit",fontWeight:600}}>+ Vendor</button>}
                                     </div>
 
                                     {/* If no sub-items: show vendors directly under parent */}
@@ -9363,7 +9365,7 @@ if(bounds.length)map.fitBounds(bounds,{padding:[30,30]});
                                             <span style={{fontSize:12,fontWeight:600,color:"#1A2240",flex:1}}>{sub.description||"Sub-item "+(si+1)}</span>
                                             <span style={{fontSize:10,color:"#9BA3BF"}}>{sub.unit||item.unit}</span>
                                             <span style={{fontSize:10,fontWeight:700,color:subBids>0?subCov:"#9BA3BF"}}>{subBids} bid{subBids!==1?"s":""}</span>
-                                            <button onClick={()=>setShowAddVendor(true)} style={{padding:"2px 8px",background:"#3B6FE815",border:"1px solid #3B6FE830",borderRadius:4,color:"#3B6FE8",fontSize:10,cursor:"pointer",fontFamily:"inherit",fontWeight:600}}>+ Vendor</button>
+                                            <button onClick={()=>{setShowAddVendor(true);setAddMode("sub");setSubSearch2("");}} style={{padding:"2px 8px",background:"#3B6FE815",border:"1px solid #3B6FE830",borderRadius:4,color:"#3B6FE8",fontSize:10,cursor:"pointer",fontFamily:"inherit",fontWeight:600}}>+ Sub</button>
                                           </div>
                                           <VendorTable vendors={subVendors} itemId={subKey}/>
                                         </div>
@@ -11537,7 +11539,37 @@ if(bounds.length)map.fitBounds(bounds,{padding:[30,30]});
         const W = vendorForm;
         const setW = (k,v) => setVendorForm(f=>({...f,[k]:v}));
 
-        const save = () => {
+        // Already-added company names for dedup check
+        const addedNames = new Set(pkg.vendors.map(v=>(v.company||"").toLowerCase()));
+
+        // Subcontractors tagged for major division (or untagged = global)
+        const majorSubs = subcontractors.filter(s =>
+          !s.services || s.services.length === 0 || s.services.includes("major")
+        );
+        const filteredSubs = majorSubs.filter(s => {
+          const q = subSearch2.toLowerCase();
+          return !q || s.name.toLowerCase().includes(q) || (s.trade||"").toLowerCase().includes(q) || (s.contact_name||"").toLowerCase().includes(q);
+        });
+
+        const addFromSub = (s) => {
+          if (addedNames.has(s.name.toLowerCase())) return;
+          const newV = {
+            id: "v"+Date.now(), company: s.name, contact: s.contact_name||"",
+            phone: s.phone||"", email: s.email||"",
+            trades: s.trade ? [s.trade] : [],
+            bidding: false, infoSent: false, bidReceived: false, bidAmount: "", notes: "",
+            subcontractorId: s.id,
+          };
+          setBidPackages(prev=>({...prev,[activeBidOpp]:{...pkg,vendors:[...pkg.vendors,newV]}}));
+          // Auto-tag sub as major division
+          if (!(s.services||[]).includes("major")) {
+            const updated = {...s, services:[...(s.services||[]),"major"]};
+            setSubcontractors(prev=>prev.map(x=>x.id===s.id?updated:x));
+            try { supa.from("subcontractors").update(subToDB(updated)).eq("id",s.id); } catch(e) {}
+          }
+        };
+
+        const saveManual = () => {
           if (!W.company.trim()) return;
           const newV = {...W, id:"v"+Date.now()};
           setBidPackages(prev=>({...prev,[activeBidOpp]:{...pkg,vendors:[...pkg.vendors,newV]}}));
@@ -11547,51 +11579,112 @@ if(bounds.length)map.fitBounds(bounds,{padding:[30,30]});
 
         return (
           <div style={{position:"fixed",inset:0,background:"rgba(10,16,36,0.7)",zIndex:2500,display:"flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(3px)",padding:16}}>
-            <div style={{background:"#fff",borderRadius:14,width:"min(540px,100%)",maxHeight:"88vh",display:"flex",flexDirection:"column",boxShadow:"0 12px 60px rgba(0,0,0,0.25)",overflow:"hidden"}}>
-              <div style={{background:"linear-gradient(135deg,#1A2240,#253260)",padding:"16px 22px",display:"flex",alignItems:"center",gap:10}}>
-                <div style={{fontSize:15,fontWeight:800,color:"#fff",flex:1}}>+ Add Vendor{opp?` — ${opp.name}`:""}</div>
+            <div style={{background:"#fff",borderRadius:14,width:"min(580px,100%)",maxHeight:"88vh",display:"flex",flexDirection:"column",boxShadow:"0 12px 60px rgba(0,0,0,0.25)",overflow:"hidden"}}>
+
+              {/* Header */}
+              <div style={{background:"linear-gradient(135deg,#1A2240,#253260)",padding:"16px 22px",display:"flex",alignItems:"center",gap:10,flexShrink:0}}>
+                <div style={{fontSize:15,fontWeight:800,color:"#fff",flex:1}}>+ Add Subcontractor{opp?` — ${opp.name}`:""}</div>
                 <button onClick={()=>setShowAddVendor(false)} style={{background:"rgba(255,255,255,0.12)",border:"none",color:"#fff",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontSize:12,fontFamily:"inherit"}}>✕</button>
               </div>
-              <div style={{padding:"18px 22px",overflowY:"auto",display:"flex",flexDirection:"column",gap:12}}>
-                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-                  <div><div style={{fontSize:10,color:"#9BA3BF",textTransform:"uppercase",marginBottom:3}}>Company Name *</div><input value={W.company} onChange={e=>setW("company",e.target.value)} placeholder="Vendor company…" style={fi}/></div>
-                  <div><div style={{fontSize:10,color:"#9BA3BF",textTransform:"uppercase",marginBottom:3}}>Contact Name</div><input value={W.contact} onChange={e=>setW("contact",e.target.value)} placeholder="Contact…" style={fi}/></div>
-                  <div><div style={{fontSize:10,color:"#9BA3BF",textTransform:"uppercase",marginBottom:3}}>Phone</div><input value={W.phone} onChange={e=>setW("phone",e.target.value)} placeholder="(555) 000-0000" style={fi}/></div>
-                  <div><div style={{fontSize:10,color:"#9BA3BF",textTransform:"uppercase",marginBottom:3}}>Email</div><input value={W.email} onChange={e=>setW("email",e.target.value)} placeholder="email@vendor.com" style={fi}/></div>
-                </div>
 
-                <div>
-                  <div style={{fontSize:10,color:"#9BA3BF",textTransform:"uppercase",marginBottom:6}}>Bid Packages — Select All That Apply</div>
-                  <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
-                    {BID_TRADES.map(t=>{
-                      const sel = (W.trades||[]).includes(t);
+              {/* Mode tabs */}
+              <div style={{display:"flex",borderBottom:"1px solid #E8EBF4",flexShrink:0}}>
+                {[{id:"sub",label:"From Subcontractor List"},{id:"manual",label:"Enter Manually"}].map(m=>(
+                  <button key={m.id} onClick={()=>setAddMode(m.id)}
+                    style={{flex:1,padding:"10px",border:"none",borderBottom:addMode===m.id?"2px solid #3B6FE8":"2px solid transparent",background:addMode===m.id?"#F5F8FF":"#fff",color:addMode===m.id?"#3B6FE8":"#4A5278",fontSize:12,fontWeight:addMode===m.id?700:400,cursor:"pointer",fontFamily:"inherit",marginBottom:-1}}>
+                    {m.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* From subcontractor list */}
+              {addMode === "sub" && (
+                <div style={{display:"flex",flexDirection:"column",flex:1,minHeight:0}}>
+                  <div style={{padding:"12px 18px",borderBottom:"1px solid #F0F2F8",flexShrink:0}}>
+                    <input value={subSearch2} onChange={e=>setSubSearch2(e.target.value)}
+                      placeholder="Search by name, trade, contact…"
+                      style={{...fi,fontSize:12,padding:"7px 10px"}} autoFocus/>
+                    <div style={{fontSize:10,color:"#9BA3BF",marginTop:6}}>
+                      {majorSubs.length} subcontractors · {addedNames.size} already added to this estimate
+                    </div>
+                  </div>
+                  <div style={{overflowY:"auto",flex:1,padding:"8px 0"}}>
+                    {filteredSubs.length === 0 && (
+                      <div style={{textAlign:"center",padding:"32px",color:"#9BA3BF",fontSize:12}}>No subcontractors match</div>
+                    )}
+                    {filteredSubs.map(s => {
+                      const already = addedNames.has(s.name.toLowerCase());
+                      const TRADE_MAP = {"HVAC":["❄️","#60A5FA"],"Plumbing":["🔧","#3B82F6"],"Electrical":["⚡","#F59E0B"],"Roofing":["🏠","#8B5CF6"],"Painting":["🎨","#EC4899"],"Concrete":["🪨","#6B7280"],"General":["🔨","#7BA7F5"],"Fire":["🔥","#EF4444"]};
+                      const ts = Object.entries(TRADE_MAP).find(([k])=>s.trade&&s.trade.toLowerCase().includes(k.toLowerCase()));
+                      const icon = ts?ts[1][0]:"🔧"; const color = ts?ts[1][1]:"#7BA7F5";
                       return (
-                        <button key={t} type="button" onClick={()=>{const cur=W.trades||[];setW("trades",sel?cur.filter(x=>x!==t):[...cur,t]);}}
-                          style={{padding:"4px 10px",borderRadius:5,border:"1.5px solid "+(sel?"#3B6FE8":"#CBD1E8"),background:sel?"#3B6FE8":"#F9FAFC",color:sel?"#fff":"#4A5278",fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>
-                          {t}
-                        </button>
+                        <div key={s.id}
+                          onClick={()=>{ if(!already){ addFromSub(s); } }}
+                          style={{display:"flex",alignItems:"center",gap:12,padding:"10px 18px",cursor:already?"default":"pointer",opacity:already?0.4:1,borderBottom:"1px solid #F9FAFC"}}
+                          onMouseEnter={e=>{ if(!already) e.currentTarget.style.background="#F5F8FF"; }}
+                          onMouseLeave={e=>e.currentTarget.style.background=""}>
+                          <div style={{width:36,height:36,borderRadius:8,background:color+"18",border:"1px solid "+color+"40",display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,flexShrink:0}}>{icon}</div>
+                          <div style={{flex:1,minWidth:0}}>
+                            <div style={{display:"flex",alignItems:"center",gap:6}}>
+                              <div style={{fontSize:13,fontWeight:700,color:"#1A2240"}}>{s.name}</div>
+                              {s.trade&&<span style={{fontSize:9,color:color,background:color+"18",border:"1px solid "+color+"30",padding:"1px 6px",borderRadius:4,fontWeight:700}}>{s.trade}</span>}
+                              {already&&<span style={{fontSize:9,color:"#4ADE80",background:"#4ADE8015",border:"1px solid #4ADE8030",padding:"1px 6px",borderRadius:4,fontWeight:700}}>✓ Added</span>}
+                            </div>
+                            <div style={{display:"flex",gap:10,marginTop:2}}>
+                              {s.contact_name&&<span style={{fontSize:10,color:"#4A5278"}}>👤 {s.contact_name}</span>}
+                              {s.phone&&<span style={{fontSize:10,color:"#4A5278"}}>📞 {s.phone}</span>}
+                              {(s.city||s.state)&&<span style={{fontSize:10,color:"#9BA3BF"}}>📍 {[s.city,s.state].filter(Boolean).join(", ")}</span>}
+                            </div>
+                          </div>
+                          {!already && <div style={{fontSize:11,color:"#3B6FE8",fontWeight:700,flexShrink:0}}>+ Add</div>}
+                        </div>
                       );
                     })}
                   </div>
+                  <div style={{padding:"12px 18px",borderTop:"1px solid #E8EBF4",background:"#F9FAFC",display:"flex",gap:8,flexShrink:0}}>
+                    <button onClick={()=>setShowAddVendor(false)} style={{flex:1,padding:"9px",background:"#F0F2F8",border:"1px solid #CBD1E8",borderRadius:7,cursor:"pointer",fontFamily:"inherit",fontSize:13,color:"#4A5278"}}>Done</button>
+                    <button onClick={()=>setAddMode("manual")} style={{flex:1,padding:"9px",background:"transparent",border:"1px solid #3B6FE8",borderRadius:7,cursor:"pointer",fontFamily:"inherit",fontSize:13,color:"#3B6FE8",fontWeight:600}}>Not listed? Enter manually →</button>
+                  </div>
                 </div>
+              )}
 
-                <div style={{display:"flex",gap:12,alignItems:"center",padding:"10px 12px",background:"#F4F6FB",borderRadius:8}}>
-                  {[{key:"infoSent",label:"Info Sent"},{key:"bidding",label:"Bidding"},{key:"bidReceived",label:"Bid Received"}].map(s=>(
-                    <label key={s.key} style={{display:"flex",alignItems:"center",gap:6,cursor:"pointer",fontSize:12,color:"#1A2240"}}>
-                      <input type="checkbox" checked={!!W[s.key]} onChange={e=>setW(s.key,e.target.checked)}/>
-                      {s.label}
-                    </label>
-                  ))}
-                </div>
+              {/* Manual entry */}
+              {addMode === "manual" && (
+                <>
+                  <div style={{padding:"18px 22px",overflowY:"auto",display:"flex",flexDirection:"column",gap:12,flex:1}}>
+                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+                      <div><div style={{fontSize:10,color:"#9BA3BF",textTransform:"uppercase",marginBottom:3}}>Company Name *</div><input value={W.company} onChange={e=>setW("company",e.target.value)} placeholder="Company name…" style={fi} autoFocus/></div>
+                      <div><div style={{fontSize:10,color:"#9BA3BF",textTransform:"uppercase",marginBottom:3}}>Contact Name</div><input value={W.contact} onChange={e=>setW("contact",e.target.value)} placeholder="Contact…" style={fi}/></div>
+                      <div><div style={{fontSize:10,color:"#9BA3BF",textTransform:"uppercase",marginBottom:3}}>Phone</div><input value={W.phone} onChange={e=>setW("phone",e.target.value)} placeholder="(555) 000-0000" style={fi}/></div>
+                      <div><div style={{fontSize:10,color:"#9BA3BF",textTransform:"uppercase",marginBottom:3}}>Email</div><input value={W.email} onChange={e=>setW("email",e.target.value)} placeholder="email@company.com" style={fi}/></div>
+                    </div>
+                    <div>
+                      <div style={{fontSize:10,color:"#9BA3BF",textTransform:"uppercase",marginBottom:6}}>Bid Packages — Select All That Apply</div>
+                      <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
+                        {BID_TRADES.map(t=>{
+                          const sel=(W.trades||[]).includes(t);
+                          return (
+                            <button key={t} type="button" onClick={()=>{const cur=W.trades||[];setW("trades",sel?cur.filter(x=>x!==t):[...cur,t]);}}
+                              style={{padding:"4px 10px",borderRadius:5,border:"1.5px solid "+(sel?"#3B6FE8":"#CBD1E8"),background:sel?"#3B6FE8":"#F9FAFC",color:sel?"#fff":"#4A5278",fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>
+                              {t}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                    <div style={{fontSize:10,color:"#9BA3BF",padding:"8px 10px",background:"#FFF8E7",borderRadius:6,border:"1px solid #FDE68A"}}>
+                      💡 Tip: To save this subcontractor for future estimates, go to Subcontractors and add them there first.
+                    </div>
+                    <div><div style={{fontSize:10,color:"#9BA3BF",textTransform:"uppercase",marginBottom:3}}>Notes</div>
+                      <textarea value={W.notes} onChange={e=>setW("notes",e.target.value)} rows={2} placeholder="Any notes…" style={{...fi,resize:"vertical"}}/></div>
+                  </div>
+                  <div style={{padding:"12px 22px",borderTop:"1px solid #D4D9EE",display:"flex",gap:8,background:"#F9FAFC",flexShrink:0}}>
+                    <button onClick={()=>setAddMode("sub")} style={{flex:1,padding:"9px",background:"#F0F2F8",border:"1px solid #CBD1E8",borderRadius:7,cursor:"pointer",fontFamily:"inherit",fontSize:13,color:"#4A5278"}}>← Back</button>
+                    <button onClick={saveManual} style={{flex:2,padding:"9px",background:"#3B6FE8",border:"none",borderRadius:7,cursor:"pointer",fontFamily:"inherit",fontSize:13,color:"#fff",fontWeight:700}}>Add to Estimate</button>
+                  </div>
+                </>
+              )}
 
-                <div><div style={{fontSize:10,color:"#9BA3BF",textTransform:"uppercase",marginBottom:3}}>Notes</div>
-                  <textarea value={W.notes} onChange={e=>setW("notes",e.target.value)} rows={2} placeholder="Any notes about this vendor…"
-                    style={{...fi,resize:"vertical"}}/></div>
-              </div>
-              <div style={{padding:"12px 22px",borderTop:"1px solid #D4D9EE",display:"flex",gap:8,background:"#F9FAFC"}}>
-                <button onClick={()=>setShowAddVendor(false)} style={{flex:1,padding:"9px",background:"#F0F2F8",border:"1px solid #CBD1E8",borderRadius:7,cursor:"pointer",fontFamily:"inherit",fontSize:13,color:"#4A5278"}}>Cancel</button>
-                <button onClick={save} style={{flex:2,padding:"9px",background:"#3B6FE8",border:"none",borderRadius:7,cursor:"pointer",fontFamily:"inherit",fontSize:13,color:"#fff",fontWeight:700}}>Add Vendor</button>
-              </div>
             </div>
           </div>
         );
