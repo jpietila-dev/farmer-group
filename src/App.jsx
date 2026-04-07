@@ -1509,6 +1509,15 @@ function PhotoAdder({ onAdd }) {
 }
 
 // ── MP Job mappers ──────────────────────────────────────────────────────────
+const dbToMpVendor = r => ({
+  id: r.id, company: r.company||"", contact: r.contact||"", phone: r.phone||"",
+  email: r.email||"", trades: r.trades||[], notes: r.notes||"", rating: r.rating||5,
+});
+const mpVendorToDB = v => ({
+  id: v.id, company: v.company||"", contact: v.contact||null, phone: v.phone||null,
+  email: v.email||null, trades: v.trades||[], notes: v.notes||null, rating: v.rating||5,
+});
+
 const dbToMpJob = r => ({
   id: r.id, name: r.name||"", client: r.client||"", status: r.status||"active",
   contractValue: r.contract_value||0, startDate: r.start_date||"", endDate: r.end_date||"",
@@ -3125,7 +3134,7 @@ export default function App() {
     const load = async () => {
       setDbLoading(l => ({ ...l, companies: true, sites: true, lawnSites: true, subcontractors: true }));
       try {
-        const [coRes, siteRes, subRes, fmRes, teamRes, crmRes, ctRes, mpPipeRes, mpRes, mpwRes] = await Promise.all([
+        const [coRes, siteRes, subRes, fmRes, teamRes, crmRes, ctRes, mpPipeRes, mpRes, mpwRes, mpVendorRes] = await Promise.all([
           supa.from("companies").select("*"),
           fetch(`${SUPA_URL}/rest/v1/sites?select=*&limit=1000`, {
             headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}` }
@@ -3146,6 +3155,9 @@ export default function App() {
             headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}` }
           }).then(r => r.json()).then(data => ({ data, error: null })).catch(() => ({ data: null, error: null })),
           fetch(`${SUPA_URL}/rest/v1/mp_weekly_reports?select=*&limit=1000`, {
+            headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}` }
+          }).then(r => r.json()).then(data => ({ data, error: null })).catch(() => ({ data: null, error: null })),
+          fetch(`${SUPA_URL}/rest/v1/mp_bid_vendors?select=*&limit=500&order=company.asc`, {
             headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}` }
           }).then(r => r.json()).then(data => ({ data, error: null })).catch(() => ({ data: null, error: null })),
         ]);
@@ -3171,6 +3183,7 @@ export default function App() {
           try { setMpJobs(mpRes.data.map(dbToMpJob)); } catch(e) { console.warn("mpJobs map error:", e); }
         }
         if (Array.isArray(mpwRes.data) && mpwRes.data.length) setMpWeeklyReports(mpwRes.data.map(dbToMpWeekly));
+        if (Array.isArray(mpVendorRes.data) && mpVendorRes.data.length) setMpVendorDB(mpVendorRes.data.map(dbToMpVendor));
         // contacts table — deduplicate by name+company before setting
         if (Array.isArray(ctRes.data) && ctRes.data.length) {
           const seen = new Set();
@@ -11046,12 +11059,17 @@ if(bounds.length)map.fitBounds(bounds,{padding:[30,30]});
         const fi = {width:"100%",padding:"8px 10px",border:"1.5px solid #CBD1E8",borderRadius:7,fontSize:13,fontFamily:"inherit",outline:"none",boxSizing:"border-box"};
         const isEdit = !!W.id;
 
-        const save = () => {
+        const save = async () => {
           if (!W.company.trim()) return;
           if (isEdit) {
-            setMpVendorDB(prev=>prev.map(v=>v.id===W.id?{...W}:v));
+            const updated = {...W};
+            setMpVendorDB(prev=>prev.map(v=>v.id===W.id?updated:v));
+            try { supa.from("mp_bid_vendors").update(mpVendorToDB(updated)).eq("id", updated.id); } catch(e) {}
           } else {
-            setMpVendorDB(prev=>[...prev,{...W,id:"mpv"+Date.now()}]);
+            const newId = "mpv" + Date.now();
+            const entry = {...W, id: newId};
+            setMpVendorDB(prev=>[...prev, entry]);
+            try { supa.from("mp_bid_vendors").insert(mpVendorToDB(entry)); } catch(e) {}
           }
           setShowMpVendorForm(false);
         };
@@ -11089,7 +11107,7 @@ if(bounds.length)map.fitBounds(bounds,{padding:[30,30]});
                     style={{...fi,resize:"vertical"}}/></div>
               </div>
               <div style={{padding:"12px 22px",borderTop:"1px solid #D4D9EE",display:"flex",gap:8,background:"#F9FAFC"}}>
-                {isEdit && <button onClick={()=>{setMpVendorDB(prev=>prev.filter(v=>v.id!==W.id));setShowMpVendorForm(false);}} style={{padding:"9px 14px",background:"#FEE2E2",border:"1px solid #FECACA",borderRadius:7,cursor:"pointer",fontFamily:"inherit",fontSize:12,color:"#DC2626",fontWeight:600}}>Delete</button>}
+                {isEdit && <button onClick={()=>{setMpVendorDB(prev=>prev.filter(v=>v.id!==W.id));try{supa.from("mp_bid_vendors").delete().eq("id",W.id);}catch(e){}setShowMpVendorForm(false);}} style={{padding:"9px 14px",background:"#FEE2E2",border:"1px solid #FECACA",borderRadius:7,cursor:"pointer",fontFamily:"inherit",fontSize:12,color:"#DC2626",fontWeight:600}}>Delete</button>}
                 <button onClick={()=>setShowMpVendorForm(false)} style={{flex:1,padding:"9px",background:"#F0F2F8",border:"1px solid #CBD1E8",borderRadius:7,cursor:"pointer",fontFamily:"inherit",fontSize:13,color:"#4A5278"}}>Cancel</button>
                 <button onClick={save} style={{flex:2,padding:"9px",background:"#3B6FE8",border:"none",borderRadius:7,cursor:"pointer",fontFamily:"inherit",fontSize:13,color:"#fff",fontWeight:700}}>{isEdit?"Save Changes":"Add Vendor"}</button>
               </div>
