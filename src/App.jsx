@@ -9086,9 +9086,10 @@ if(bounds.length)map.fitBounds(bounds,{padding:[30,30]});
             const totalBidding= pkg.vendors.filter(v=>v.bidding).length;
 
             const PHASES = [
-              {id:"wbs",     label:"1. WBS",      icon:"📋", desc:"Cost codes & scope"},
-              {id:"takeoff", label:"2. Takeoff",  icon:"📐", desc:"Field quantities"},
-              {id:"quoting", label:"3. Quoting",  icon:"📧", desc:"Vendor bids per code"},
+              {id:"wbs",        label:"1. WBS",        icon:"📋", desc:"Cost codes & scope"},
+              {id:"takeoff",    label:"2. Takeoff",    icon:"📐", desc:"Field quantities"},
+              {id:"quoting",    label:"3. Quoting",    icon:"📧", desc:"Vendor bids per code"},
+              {id:"bid_summary",label:"4. Bid Summary",icon:"🏆", desc:"PM report — winners"},
             ];
 
             return (
@@ -9366,21 +9367,33 @@ if(bounds.length)map.fitBounds(bounds,{padding:[30,30]});
                                 </div>
                               ) : wbs.map(item=>{
                                 const hasSubs=(item.subItems||[]).length>0;
-                                // Show subs explicitly assigned to this code/trade,
-                                // OR subs with no specific assignment (show under all codes)
+                                // Show all vendors under every cost code (filter by trade match OR unassigned)
                                 const codeVendors = pkg.vendors.filter(v => {
                                   const assigned = v.costCodes||v.trades||[];
                                   const hasAssignment = assigned.length > 0;
-                                  if (!hasAssignment) return true; // unassigned = show everywhere
+                                  if (!hasAssignment) return true;
                                   return assigned.includes(item.id) || assigned.includes(item.trade);
                                 });
-                                const bidsIn=codeVendors.filter(v=>v.bidReceived||v.bidFileData||v.bidFileName).length;
+
+                                // Per-line status: keyed by vendorId_itemId so each line is independent
+                                const getLineStatus = (vid, key) => {
+                                  const ls = pkg.lineStatus || {};
+                                  return ls[vid+"_"+item.id]?.[key] ?? false;
+                                };
+                                const updateLineStatus = (vid, key, val) => {
+                                  const ls = pkg.lineStatus || {};
+                                  const lineKey = vid+"_"+item.id;
+                                  const updated = {...pkg, lineStatus: {...ls, [lineKey]: {...(ls[lineKey]||{}), [key]: val}}};
+                                  setBidPackages(prev => ({...prev, [activeOppId]: updated}));
+                                  setTimeout(() => saveEstimateData(activeOppId, wbs, updated, estimatePhase[activeOppId]||"wbs"), 300);
+                                };
+                                // Bid received = file attached OR line-level bidReceived
+                                const lineBidReceived = (v) => getLineStatus(v.id,"bidReceived") || !!(v.bidFileData||v.bidFileName);
+                                const bidsIn = codeVendors.filter(v => lineBidReceived(v)).length;
                                 const isCrit=item.critical;
                                 const coverage=bidsIn>=2?"#4ADE80":bidsIn>=1?"#FCD34D":"#F87171";
 
-                                // Match vendors to this cost code:
-                                // 1. Explicitly assigned to this item id or trade
-                                // 2. OR unassigned (no costCodes set) — show under all codes
+                                // Update global vendor fields (name, phone, file, amount, notes, winner)
                                 const updateVendor = (vid, patch) => {
                                   const updated = {...pkg, vendors: pkg.vendors.map(x => x.id===vid ? {...x,...patch} : x)};
                                   setBidPackages(prev => ({...prev, [activeOppId]: updated}));
@@ -9391,9 +9404,8 @@ if(bounds.length)map.fitBounds(bounds,{padding:[30,30]});
                                   setBidPackages(prev => ({...prev, [activeOppId]: updated}));
                                   setTimeout(() => saveEstimateData(activeOppId, wbs, updated, estimatePhase[activeOppId]||"wbs"), 300);
                                 };
-
                                 const VendorTable = ({vendors, itemId}) => {
-                                  const winner = vendors.find(v => v.isWinner);
+                                  const winner = vendors.find(v => getLineStatus(v.id,"isWinner"));
                                   return (
                                   <div>
                                     {vendors.length > 0 && (
@@ -9405,7 +9417,7 @@ if(bounds.length)map.fitBounds(bounds,{padding:[30,30]});
                                           ))}
                                         </div>
                                         {vendors.map(v => {
-                                          const isWinner = !!v.isWinner;
+                                          const isWinner = getLineStatus(v.id,"isWinner");
                                           const hasBidFile = !!(v.bidFileName || v.bidFileData);
                                           return (
                                             <div key={v.id}
@@ -9413,10 +9425,10 @@ if(bounds.length)map.fitBounds(bounds,{padding:[30,30]});
                                               onMouseEnter={e=>e.currentTarget.style.background=isWinner?"#E8FAF0":hasBidFile?"#F5FFFD":"#FAFBFF"}
                                               onMouseLeave={e=>e.currentTarget.style.background=isWinner?"#F0FDF4":hasBidFile?"#FAFFFE":"#fff"}>
 
-                                              {/* Winner radio */}
+                                              {/* Winner radio — per line */}
                                               <div style={{display:"flex",justifyContent:"center"}}>
-                                                <div title="Select as winner"
-                                                  onClick={()=>updateVendor(v.id,{isWinner:!isWinner})}
+                                                <div title="Mark as winner for this trade"
+                                                  onClick={()=>updateLineStatus(v.id,"isWinner",!getLineStatus(v.id,"isWinner"))}
                                                   style={{width:16,height:16,borderRadius:"50%",border:"2px solid "+(isWinner?"#4ADE80":"#D4D9EE"),background:isWinner?"#4ADE80":"transparent",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
                                                   {isWinner&&<div style={{width:6,height:6,borderRadius:"50%",background:"#fff"}}/>}
                                                 </div>
@@ -9434,24 +9446,29 @@ if(bounds.length)map.fitBounds(bounds,{padding:[30,30]});
                                               {/* Phone */}
                                               <div style={{fontSize:10,color:"#4A5278"}}>{v.phone||<span style={{color:"#E0E4F0"}}>—</span>}</div>
 
-                                              {/* Bid file upload */}
-                                              <div style={{display:"flex",alignItems:"center",gap:4}}>
+                                              {/* Bid file upload / view / remove */}
+                                              <div style={{display:"flex",alignItems:"center",gap:3,flexWrap:"nowrap"}}>
                                                 {hasBidFile ? (
-                                                  <div style={{display:"flex",alignItems:"center",gap:4}}>
+                                                  <div style={{display:"flex",alignItems:"center",gap:3}}>
                                                     {v.bidFileData
-                                                      ? <a href={v.bidFileData} download={v.bidFileName||"bid"} style={{fontSize:9,color:"#3B6FE8",textDecoration:"none",background:"#EEF3FF",padding:"2px 6px",borderRadius:3,fontWeight:700,whiteSpace:"nowrap"}}>📎 {(v.bidFileName||"file").slice(0,8)}</a>
-                                                      : <span style={{fontSize:9,color:"#4ADE80",fontWeight:700}}>📎 On file</span>
+                                                      ? <a href={v.bidFileData} target="_blank" rel="noreferrer" style={{fontSize:9,color:"#3B6FE8",textDecoration:"none",background:"#EEF3FF",padding:"2px 5px",borderRadius:3,fontWeight:700,whiteSpace:"nowrap",maxWidth:60,overflow:"hidden",textOverflow:"ellipsis",display:"inline-block"}}>👁 {(v.bidFileName||"file").replace(/\.[^/.]+$/,"").slice(0,7)}</a>
+                                                      : <span style={{fontSize:9,color:"#4ADE80",fontWeight:700}}>📎 File</span>
                                                     }
-                                                    <span style={{fontSize:9,background:"#4ADE8020",color:"#16A34A",border:"1px solid #4ADE8040",borderRadius:3,padding:"1px 5px",fontWeight:700}}>BID ✓</span>
+                                                    <span style={{fontSize:9,background:"#4ADE8020",color:"#16A34A",border:"1px solid #4ADE8040",borderRadius:3,padding:"1px 4px",fontWeight:700}}>✓</span>
+                                                    <button onClick={()=>updateVendor(v.id,{bidFileData:null,bidFileName:""})}
+                                                      title="Remove file" style={{background:"none",border:"none",color:"#F87171",cursor:"pointer",fontSize:10,padding:"0 2px",lineHeight:1}}>✕</button>
                                                   </div>
                                                 ) : (
-                                                  <label style={{fontSize:9,color:"#9BA3BF",cursor:"pointer",background:"#F4F6FB",border:"1px dashed #D4D9EE",borderRadius:3,padding:"2px 6px",whiteSpace:"nowrap"}}>
-                                                    + Bid File
+                                                  <label style={{fontSize:9,color:"#9BA3BF",cursor:"pointer",background:"#F4F6FB",border:"1px dashed #D4D9EE",borderRadius:3,padding:"2px 5px",whiteSpace:"nowrap"}}>
+                                                    + File
                                                     <input type="file" accept=".pdf,.jpg,.jpeg,.png,.xlsx,.doc,.docx" style={{display:"none"}} onChange={e=>{
                                                       const file=e.target.files[0];
                                                       if(!file)return;
                                                       const reader=new FileReader();
-                                                      reader.onload=ev=>updateVendor(v.id,{bidFileData:ev.target.result,bidFileName:file.name,bidReceived:true});
+                                                      reader.onload=ev=>{
+                                                        updateVendor(v.id,{bidFileData:ev.target.result,bidFileName:file.name});
+                                                        updateLineStatus(v.id,"bidReceived",true);
+                                                      };
                                                       reader.readAsDataURL(file);
                                                       e.target.value="";
                                                     }}/>
@@ -9466,18 +9483,18 @@ if(bounds.length)map.fitBounds(bounds,{padding:[30,30]});
                                                   style={{padding:"3px 6px",border:"1px solid "+(isWinner?"#4ADE8050":hasBidFile?"#BBF7D0":"#D4D9EE"),borderRadius:4,fontSize:11,fontFamily:"inherit",outline:"none",width:"100%",boxSizing:"border-box",textAlign:"right",background:isWinner?"#F0FDF4":hasBidFile?"#F0FDF4":"#F9FAFC",fontWeight:isWinner?700:400}}/>
                                               </div>
 
-                                              {/* Info sent toggle */}
+                                              {/* Info sent toggle — per line */}
                                               <div style={{display:"flex",justifyContent:"center"}}>
-                                                <div onClick={()=>updateVendor(v.id,{infoSent:!v.infoSent})}
-                                                  title="Info sent"
-                                                  style={{width:14,height:14,borderRadius:"50%",background:v.infoSent?"#60A5FA":"#E0E4F0",border:v.infoSent?"2px solid #60A5FA60":"2px solid #CBD1E8",cursor:"pointer"}}/>
+                                                <div onClick={()=>updateLineStatus(v.id,"infoSent",!getLineStatus(v.id,"infoSent"))}
+                                                  title="Info sent to this sub for this trade"
+                                                  style={{width:14,height:14,borderRadius:"50%",background:getLineStatus(v.id,"infoSent")?"#60A5FA":"#E0E4F0",border:getLineStatus(v.id,"infoSent")?"2px solid #60A5FA60":"2px solid #CBD1E8",cursor:"pointer"}}/>
                                               </div>
 
-                                              {/* Bidding toggle */}
+                                              {/* Bidding toggle — per line */}
                                               <div style={{display:"flex",justifyContent:"center"}}>
-                                                <div onClick={()=>updateVendor(v.id,{bidding:!v.bidding})}
-                                                  title="Bidding"
-                                                  style={{width:14,height:14,borderRadius:"50%",background:v.bidding?"#FCD34D":"#E0E4F0",border:v.bidding?"2px solid #FCD34D60":"2px solid #CBD1E8",cursor:"pointer"}}/>
+                                                <div onClick={()=>updateLineStatus(v.id,"bidding",!getLineStatus(v.id,"bidding"))}
+                                                  title="Bidding this trade"
+                                                  style={{width:14,height:14,borderRadius:"50%",background:getLineStatus(v.id,"bidding")?"#FCD34D":"#E0E4F0",border:getLineStatus(v.id,"bidding")?"2px solid #FCD34D60":"2px solid #CBD1E8",cursor:"pointer"}}/>
                                               </div>
 
                                               {/* Notes */}
@@ -9502,6 +9519,7 @@ if(bounds.length)map.fitBounds(bounds,{padding:[30,30]});
                                             <span style={{fontSize:10,fontWeight:700,color:"#16A34A"}}>🏆 Winner: {winner.company}</span>
                                             {winner.bidAmount&&<span style={{fontSize:11,fontWeight:800,color:"#16A34A"}}>{winner.bidAmount.startsWith("$")?winner.bidAmount:"$"+winner.bidAmount}</span>}
                                             {winner.bidFileName&&<span style={{fontSize:9,color:"#4ADE80"}}>📎 {winner.bidFileName}</span>}
+                                            <span style={{fontSize:9,color:"#9BA3BF",marginLeft:"auto"}}>Click ○ to change winner</span>
                                           </div>
                                         )}
                                       </>
@@ -9562,6 +9580,151 @@ if(bounds.length)map.fitBounds(bounds,{padding:[30,30]});
                             </div>
                           </div>
                         )}
+
+                        {/* ── Phase 4: Bid Summary ── */}
+                        {phase === "bid_summary" && (() => {
+                          const today = new Date().toLocaleDateString("en-US",{year:"numeric",month:"long",day:"numeric"});
+                          const co = companies.find(c=>c.id===activeOpp?.companyId);
+                          const ls = pkg.lineStatus || {};
+
+                          // Build summary: for each WBS item, list all subs + their status/amount/winner
+                          const summaryRows = wbs.map(item => {
+                            const itemVendors = pkg.vendors.filter(v => {
+                              const assigned = v.costCodes||v.trades||[];
+                              if (assigned.length === 0) return true;
+                              return assigned.includes(item.id) || assigned.includes(item.trade);
+                            });
+                            const winner = itemVendors.find(v => ls[v.id+"_"+item.id]?.isWinner);
+                            return { item, vendors: itemVendors, winner };
+                          }).filter(r => r.vendors.length > 0);
+
+                          const totalWinners = summaryRows.filter(r=>r.winner).length;
+                          const totalValue = summaryRows.reduce((sum,r) => {
+                            const amt = parseFloat(r.winner?.bidAmount||0);
+                            return sum + (isNaN(amt)?0:amt);
+                          }, 0);
+
+                          return (
+                            <div style={{overflowY:"auto",flex:1,padding:"24px 28px",background:"#fff",fontFamily:"'Helvetica Neue',Arial,sans-serif"}}>
+                              <style>{`@media print{body>*{display:none!important}#bid-summary-area{display:block!important;position:fixed;inset:0;overflow:visible;padding:28px 36px}}`}</style>
+                              <div id="bid-summary-area">
+
+                                {/* Header */}
+                                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:20,paddingBottom:14,borderBottom:"3px solid #1A2240"}}>
+                                  <div>
+                                    <div style={{fontSize:22,fontWeight:900,color:"#1A2240",letterSpacing:"-0.02em"}}>FARMER GROUP</div>
+                                    <div style={{fontSize:9,color:"#4A5278",letterSpacing:"0.06em"}}>DEVELOPMENT · CONSTRUCTION · MANAGEMENT</div>
+                                  </div>
+                                  <div style={{textAlign:"right"}}>
+                                    <div style={{fontSize:11,fontWeight:700,color:"#1A2240"}}>Bid Summary Report</div>
+                                    <div style={{fontSize:10,color:"#4A5278"}}>{today}</div>
+                                    <div style={{fontSize:9,color:"#9BA3BF",marginTop:2}}>CONFIDENTIAL — For PM Use Only</div>
+                                  </div>
+                                </div>
+
+                                {/* Project info */}
+                                <div style={{marginBottom:16}}>
+                                  <div style={{fontSize:16,fontWeight:800,color:"#1A2240",marginBottom:2}}>{activeOpp?.name}</div>
+                                  {co&&<div style={{fontSize:11,color:"#4A5278"}}>{co.name}{activeOpp?.city?` · ${activeOpp.city}, ${activeOpp.state}`:""}</div>}
+                                </div>
+
+                                {/* Stats bar */}
+                                <div style={{display:"flex",gap:16,marginBottom:20,padding:"10px 14px",background:"#F4F6FB",borderRadius:8,border:"1px solid #E0E4F0"}}>
+                                  {[
+                                    {label:"Cost Codes",  val:wbs.length,           color:"#3B6FE8"},
+                                    {label:"Subs Invited",val:pkg.vendors.length,    color:"#818CF8"},
+                                    {label:"Bids Received",val:pkg.vendors.filter(v=>v.bidFileData||v.bidFileName||v.bidReceived).length, color:"#FCD34D"},
+                                    {label:"Winners Selected",val:totalWinners+" / "+summaryRows.length, color:"#4ADE80"},
+                                    {label:"Est. Buy-out", val:"$"+Math.round(totalValue).toLocaleString(), color:"#4ADE80"},
+                                  ].map(s=>(
+                                    <div key={s.label} style={{textAlign:"center"}}>
+                                      <div style={{fontSize:16,fontWeight:800,color:s.color}}>{s.val}</div>
+                                      <div style={{fontSize:9,color:"#9BA3BF",textTransform:"uppercase",letterSpacing:"0.06em"}}>{s.label}</div>
+                                    </div>
+                                  ))}
+                                </div>
+
+                                {/* Per cost-code table */}
+                                {summaryRows.map(({item, vendors, winner}) => (
+                                  <div key={item.id} style={{marginBottom:16}}>
+                                    {/* Cost code header */}
+                                    <div style={{display:"flex",alignItems:"center",gap:8,padding:"6px 10px",background:"#1A2240",borderRadius:"6px 6px 0 0"}}>
+                                      <span style={{fontSize:10,color:"rgba(255,255,255,0.5)",fontFamily:"monospace"}}>{item.code||"—"}</span>
+                                      <span style={{fontSize:12,fontWeight:700,color:"#fff",flex:1}}>{item.description}</span>
+                                      {item.trade&&<span style={{fontSize:9,color:"rgba(255,255,255,0.4)"}}>{item.trade}</span>}
+                                      {winner
+                                        ? <span style={{fontSize:9,fontWeight:700,background:"#4ADE80",color:"#0A1F0A",padding:"2px 8px",borderRadius:3}}>AWARDED: {winner.company} — {winner.bidAmount?"$"+parseFloat(winner.bidAmount).toLocaleString():"TBD"}</span>
+                                        : <span style={{fontSize:9,color:"#FCD34D"}}>No winner selected</span>
+                                      }
+                                    </div>
+
+                                    {/* Sub rows */}
+                                    <table style={{width:"100%",borderCollapse:"collapse",border:"1px solid #D4D9EE",borderTop:"none"}}>
+                                      <thead>
+                                        <tr style={{background:"#F9FAFC"}}>
+                                          {["","Company","Contact","Phone","Info","Bidding","Bid File","Amount","Notes"].map((h,i)=>(
+                                            <th key={i} style={{padding:"4px 8px",fontSize:8,color:"#9BA3BF",textAlign:i>=4&&i<=6?"center":"left",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.05em",borderBottom:"1px solid #E8EBF4"}}>{h}</th>
+                                          ))}
+                                        </tr>
+                                      </thead>
+                                      <tbody>
+                                        {vendors.map((v,i)=>{
+                                          const isW = ls[v.id+"_"+item.id]?.isWinner;
+                                          const infoSent = ls[v.id+"_"+item.id]?.infoSent;
+                                          const bidding  = ls[v.id+"_"+item.id]?.bidding;
+                                          const hasBid   = !!(v.bidFileData||v.bidFileName||v.bidReceived);
+                                          return (
+                                            <tr key={v.id} style={{background:isW?"#F0FDF4":i%2===0?"#fff":"#FAFCFF",borderBottom:"1px solid #F0F2F8"}}>
+                                              <td style={{padding:"5px 8px",textAlign:"center",width:20}}>
+                                                <span style={{fontSize:14,color:isW?"#4ADE80":"#E0E4F0"}}>{isW?"☑":"☐"}</span>
+                                              </td>
+                                              <td style={{padding:"5px 8px",fontSize:11,fontWeight:isW?700:500,color:isW?"#16A34A":"#1A2240"}}>
+                                                {v.company}{isW&&<span style={{marginLeft:6,fontSize:8,background:"#4ADE80",color:"#fff",padding:"1px 4px",borderRadius:2}}>WINNER</span>}
+                                              </td>
+                                              <td style={{padding:"5px 8px",fontSize:10,color:"#4A5278"}}>{v.contact||"—"}</td>
+                                              <td style={{padding:"5px 8px",fontSize:10,color:"#4A5278"}}>{v.phone||"—"}</td>
+                                              <td style={{padding:"5px 8px",textAlign:"center",fontSize:11,color:infoSent?"#60A5FA":"#CBD1E8"}}>{infoSent?"✓":"—"}</td>
+                                              <td style={{padding:"5px 8px",textAlign:"center",fontSize:11,color:bidding?"#FCD34D":"#CBD1E8"}}>{bidding?"✓":"—"}</td>
+                                              <td style={{padding:"5px 8px",textAlign:"center"}}>
+                                                {hasBid
+                                                  ? <span style={{fontSize:9,background:"#4ADE8020",color:"#16A34A",border:"1px solid #4ADE8040",borderRadius:3,padding:"1px 5px",fontWeight:700}}>✓ {v.bidFileName||"on file"}</span>
+                                                  : <span style={{fontSize:9,color:"#CBD1E8"}}>—</span>
+                                                }
+                                              </td>
+                                              <td style={{padding:"5px 8px",fontSize:11,fontWeight:hasBid?700:400,color:v.bidAmount?isW?"#16A34A":"#1A2240":"#CBD1E8",textAlign:"right"}}>
+                                                {v.bidAmount?"$"+parseFloat(v.bidAmount).toLocaleString():"—"}
+                                              </td>
+                                              <td style={{padding:"5px 8px",fontSize:9,color:"#4A5278"}}>{v.notes||""}</td>
+                                            </tr>
+                                          );
+                                        })}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                ))}
+
+                                {summaryRows.length === 0 && (
+                                  <div style={{textAlign:"center",padding:"48px",color:"#9BA3BF",border:"2px dashed #E0E4F0",borderRadius:10}}>
+                                    <div style={{fontSize:28,marginBottom:8}}>📋</div>
+                                    <div style={{fontSize:13}}>No subs added yet — go to Quoting to add subcontractors</div>
+                                  </div>
+                                )}
+
+                                {/* Footer */}
+                                <div style={{borderTop:"2px solid #1A2240",paddingTop:10,display:"flex",justifyContent:"space-between",marginTop:16}}>
+                                  <div style={{fontSize:8,color:"#9BA3BF"}}>Confidential — Farmer Development Inc. internal use only</div>
+                                  <div style={{fontSize:8,color:"#9BA3BF"}}>Farmer Development Inc. · (810) 844-1544 · farmerdevelopment.com</div>
+                                </div>
+                              </div>
+
+                              {/* Print button */}
+                              <div style={{marginTop:16,display:"flex",justifyContent:"flex-end",gap:8}} className="no-print">
+                                <button onClick={()=>window.print()} style={{padding:"8px 18px",background:"#3B6FE8",color:"#fff",border:"none",borderRadius:7,cursor:"pointer",fontFamily:"inherit",fontSize:12,fontWeight:700}}>🖨 Print / Save PDF</button>
+                              </div>
+                            </div>
+                          );
+                        })()}
+
                       </div>
                     </div>
                   )}
@@ -12057,8 +12220,8 @@ if(bounds.length)map.fitBounds(bounds,{padding:[30,30]});
                       <table style={{width:"100%",borderCollapse:"collapse",border:"1px solid #D4D9EE"}}>
                         <thead>
                           <tr style={{background:"#F4F6FB"}}>
-                            {["Company","Contact","Phone","Email","Info Sent","Bidding","Bid Rec'd","Amount","Notes"].map((h,i)=>(
-                              <th key={i} style={{padding:"5px 8px",fontSize:9,color:"#4A5278",textAlign:i>=4&&i<=6?"center":"left",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.06em",borderBottom:"1px solid #D4D9EE"}}>{h}</th>
+                            {["Company","Contact","Phone","Email","Info Sent","Bidding","Bid Rec'd","Amount","Winner","Notes"].map((h,i)=>(
+                              <th key={i} style={{padding:"5px 8px",fontSize:9,color:"#4A5278",textAlign:i>=4&&i<=7?"center":"left",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.06em",borderBottom:"1px solid #D4D9EE"}}>{h}</th>
                             ))}
                           </tr>
                         </thead>
@@ -12071,8 +12234,9 @@ if(bounds.length)map.fitBounds(bounds,{padding:[30,30]});
                               <td style={{padding:"5px 8px",fontSize:9,color:"#3B6FE8"}}>{v.email||"—"}</td>
                               <td style={{padding:"5px 8px",textAlign:"center",fontSize:12}}>{v.infoSent?"✓":"—"}</td>
                               <td style={{padding:"5px 8px",textAlign:"center",fontSize:12}}>{v.bidding?"✓":"—"}</td>
-                              <td style={{padding:"5px 8px",textAlign:"center",fontSize:12}}>{v.bidReceived?"✓":"—"}</td>
+                              <td style={{padding:"5px 8px",textAlign:"center",fontSize:12}}>{(v.bidReceived||v.bidFileData||v.bidFileName)?"✓":"—"}</td>
                               <td style={{padding:"5px 8px",fontSize:10,fontWeight:700,color:v.bidAmount?"#059669":"#CBD1E8"}}>{v.bidAmount?"$"+parseFloat(v.bidAmount).toLocaleString():"—"}</td>
+                              <td style={{padding:"5px 8px",textAlign:"center",fontSize:14}}>{v.isWinner?"☑":"☐"}</td>
                               <td style={{padding:"5px 8px",fontSize:9,color:"#4A5278"}}>{v.notes||""}</td>
                             </tr>
                           ))}
