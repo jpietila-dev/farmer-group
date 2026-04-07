@@ -50,8 +50,8 @@ const siteToDB = s => ({ id: s.id, company_id: s.companyId||null, contact_ids: s
 const dbToLsSite = r => dbToSite(r); // same structure now
 const lsSiteToDB = s => siteToDB(s);
 
-const dbToSub = r => ({ id: r.id, name: r.name||"", trade: r.trade||"", phone: r.phone||"", email: r.email||"", msaStatus: r.msa_status||"missing", coiExpiry: r.coi_expiry||"", w9: r.w9||false, notes: r.notes||"", services: r.services||[], address: r.address||"", city: r.city||"", state: r.state||"", lat: r.lat||null, lng: r.lng||null, coverage: r.coverage||"", contact_name: r.contact_name||"" });
-const subToDB = s => ({ id: s.id, name: s.name||"", trade: s.trade||"", phone: s.phone||"", email: s.email||"", msa_status: s.msaStatus||s.msa_status||"missing", coi_expiry: s.coiExpiry||s.coi_expiry||null, w9: s.w9||false, notes: s.notes||"", services: s.services||[], address: s.address||null, city: s.city||null, state: s.state||null, lat: s.lat||null, lng: s.lng||null, coverage: s.coverage||null, contact_name: s.contact_name||null });
+const dbToSub = r => ({ id: r.id, name: r.name||"", trade: r.trade||"", phone: r.phone||"", email: r.email||"", msaStatus: r.msa_status||"missing", coiExpiry: r.coi_expiry||"", w9: r.w9||false, notes: r.notes||"", services: r.services||[], address: r.address||"", city: r.city||"", state: r.state||"", lat: r.lat||null, lng: r.lng||null, coverage: r.coverage||"", contact_name: r.contact_name||"", w9FileUrl: r.w9_file_url||"", coiFileUrl: r.coi_file_url||"" });
+const subToDB = s => ({ id: s.id, name: s.name||"", trade: s.trade||"", phone: s.phone||"", email: s.email||"", msa_status: s.msaStatus||s.msa_status||"missing", coi_expiry: s.coiExpiry||s.coi_expiry||null, w9: s.w9||false, notes: s.notes||"", services: s.services||[], address: s.address||null, city: s.city||null, state: s.state||null, lat: s.lat||null, lng: s.lng||null, coverage: s.coverage||null, contact_name: s.contact_name||null, w9_file_url: s.w9FileData||s.w9FileUrl||null, coi_file_url: s.coiFileData||s.coiFileUrl||null });
 const dbToTeamMember = r => ({ id: r.id, name: r.name||"", role: r.role||"", phone: r.phone||"", email: r.email||"",
   // Support both old string "facility" and new array ["facility","major"] formats
   divisions: Array.isArray(r.divisions) ? r.divisions : (r.division ? [r.division] : ["facility"]),
@@ -3048,7 +3048,7 @@ export default function App() {
   const [subcontractors,    setSubcontractors]    = useState([]);
   const [showSubForm,       setShowSubForm]       = useState(false);
   const [editSubId,         setEditSubId]         = useState(null);
-  const [subForm,           setSubForm]           = useState({ name: "", trade: "", phone: "", email: "", msaStatus: "missing", coiExpiry: "", w9: false, notes: "", services: [], address: "", city: "", state: "", contact_name: "", coverage: "" });
+  const [subForm,           setSubForm]           = useState({ name: "", trade: "", phone: "", email: "", msaStatus: "missing", coiExpiry: "", w9: false, notes: "", services: [], address: "", city: "", state: "", contact_name: "", coverage: "", w9FileUrl: "", w9FileData: null, w9FileName: "", coiFileUrl: "", coiFileData: null, coiFileName: "" });
   const [subView,           setSubView]           = useState("list");
   const [subTradeFilter,    setSubTradeFilter]    = useState(null);
   const [subSearch,         setSubSearch]         = useState("");
@@ -3141,7 +3141,7 @@ export default function App() {
           fetch(`${SUPA_URL}/rest/v1/sites?select=*&limit=1000`, {
             headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}` }
           }).then(r => r.json()).then(data => ({ data, error: null })).catch(error => ({ data: null, error })),
-          fetch(`${SUPA_URL}/rest/v1/subcontractors?select=*&limit=500`, {
+          fetch(`${SUPA_URL}/rest/v1/subcontractors?select=*&limit=2000`, {
             headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}` }
           }).then(r => r.json()).then(data => ({ data, error: null })).catch(error => ({ data: null, error })),
           supa.from("fm_jobs").select("*"),
@@ -7933,20 +7933,15 @@ if(bounds.length)map.fitBounds(bounds,{padding:[30,30]});
                 {/* Search + Trade filters */}
                 <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
                   <input value={subSearch} onChange={e=>setSubSearch(e.target.value)} placeholder="Search name, trade, contact…"
-                    style={{padding:"7px 12px",border:"1px solid #CBD1E8",borderRadius:8,fontSize:12,fontFamily:"inherit",outline:"none",minWidth:220}}/>
-                  <span style={{fontSize:11,color:"#4A5278",fontWeight:600}}>Trade:</span>
-                  <button onClick={()=>setSubTradeFilter(null)} style={{padding:"4px 12px",borderRadius:20,border:"1px solid "+(!subTradeFilter?"#3B6FE8":"#CBD1E8"),background:!subTradeFilter?"#3B6FE8":"transparent",color:!subTradeFilter?"#fff":"#4A5278",fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>
-                    All ({allCount})
-                  </button>
-                  {allTrades.map(t=>{
-                    const ts=getTS(t); const n=buFilteredSubs.filter(s=>s.trade===t).length; const active=subTradeFilter===t;
-                    return (
-                      <button key={t} onClick={()=>setSubTradeFilter(active?null:t)}
-                        style={{padding:"4px 12px",borderRadius:20,border:"1px solid "+(active?ts.color:ts.color+"50"),background:active?ts.color:ts.color+"18",color:active?"#fff":ts.color,fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",gap:5}}>
-                        <span>{ts.icon}</span> {t} ({n})
-                      </button>
-                    );
-                  })}
+                    style={{padding:"7px 12px",border:"1px solid #CBD1E8",borderRadius:8,fontSize:12,fontFamily:"inherit",outline:"none",minWidth:220,flex:1}}/>
+                  <select value={subTradeFilter||""} onChange={e=>setSubTradeFilter(e.target.value||null)}
+                    style={{padding:"7px 12px",border:"1px solid #CBD1E8",borderRadius:8,fontSize:12,fontFamily:"inherit",outline:"none",minWidth:180,background:"#fff",color:"#1A2240"}}>
+                    <option value="">All Trades ({allCount})</option>
+                    {allTrades.map(t=>{
+                      const ts=getTS(t); const n=buFilteredSubs.filter(s=>s.trade===t).length;
+                      return <option key={t} value={t}>{ts.icon} {t} ({n})</option>;
+                    })}
+                  </select>
                 </div>
 
                 {subView === "map" && (
@@ -8154,18 +8149,37 @@ if(bounds.length)map.fitBounds(bounds,{padding:[30,30]});
 
                       <div style={{padding:"16px 22px",display:"flex",flexDirection:"column",gap:18}}>
                         {/* Doc status */}
-                        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
-                          {[
-                            {label:"W9",     ok:sp.w9,            detail:sp.w9?"On file":"Missing"},
-                            {label:"COI",    ok:coiDate&&!coiExpired, detail:!coiDate?"Missing":coiExpired?"Expired":sp.coiExpiry},
-                            {label:"MSA",    ok:sp.msaStatus==="signed", detail:sp.msaStatus==="signed"?"Signed":sp.msaStatus==="expired"?"Expired":"Missing"},
-                          ].map(d=>(
-                            <div key={d.label} style={{background:d.ok?"#F0FDF4":"#FFF1F2",border:"1px solid "+(d.ok?"#BBF7D0":"#FECDD3"),borderRadius:8,padding:"8px 10px",textAlign:"center"}}>
-                              <div style={{fontSize:9,color:"#9BA3BF",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:3}}>{d.label}</div>
-                              <div style={{fontSize:11,fontWeight:700,color:d.ok?"#16A34A":"#DC2626"}}>{d.ok?"✓":"✕"}</div>
-                              <div style={{fontSize:9,color:d.ok?"#4ADE80":"#F87171",marginTop:1}}>{d.detail}</div>
+                        <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                          {/* W9 */}
+                          <div style={{background:sp.w9?"#F0FDF4":"#FFF1F2",border:"1px solid "+(sp.w9?"#BBF7D0":"#FECDD3"),borderRadius:8,padding:"10px 12px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                            <div style={{display:"flex",alignItems:"center",gap:8}}>
+                              <span style={{fontSize:14}}>{sp.w9?"✅":"❌"}</span>
+                              <div>
+                                <div style={{fontSize:12,fontWeight:700,color:sp.w9?"#16A34A":"#DC2626"}}>W9</div>
+                                <div style={{fontSize:10,color:"#9BA3BF"}}>{sp.w9?"On file":"Missing"}</div>
+                              </div>
                             </div>
-                          ))}
+                            {sp.w9FileUrl&&<a href={sp.w9FileUrl} target="_blank" rel="noreferrer" style={{fontSize:11,color:"#3B6FE8",textDecoration:"none",background:"#EEF3FF",padding:"4px 10px",borderRadius:5,fontWeight:600}}>📎 View W9</a>}
+                          </div>
+                          {/* COI */}
+                          <div style={{background:coiDate&&!coiExpired?"#F0FDF4":"#FFF1F2",border:"1px solid "+(coiDate&&!coiExpired?"#BBF7D0":"#FECDD3"),borderRadius:8,padding:"10px 12px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                            <div style={{display:"flex",alignItems:"center",gap:8}}>
+                              <span style={{fontSize:14}}>{coiDate&&!coiExpired?"✅":"❌"}</span>
+                              <div>
+                                <div style={{fontSize:12,fontWeight:700,color:coiDate&&!coiExpired?"#16A34A":"#DC2626"}}>Certificate of Insurance</div>
+                                <div style={{fontSize:10,color:"#9BA3BF"}}>{!coiDate?"No date set":coiExpired?"Expired "+sp.coiExpiry:coiSoon?"Expiring "+sp.coiExpiry:"Valid — expires "+sp.coiExpiry}</div>
+                              </div>
+                            </div>
+                            {sp.coiFileUrl&&<a href={sp.coiFileUrl} target="_blank" rel="noreferrer" style={{fontSize:11,color:"#3B6FE8",textDecoration:"none",background:"#EEF3FF",padding:"4px 10px",borderRadius:5,fontWeight:600}}>📎 View COI</a>}
+                          </div>
+                          {/* MSA */}
+                          <div style={{background:sp.msaStatus==="signed"?"#F0FDF4":"#FFF8E7",border:"1px solid "+(sp.msaStatus==="signed"?"#BBF7D0":"#FDE68A"),borderRadius:8,padding:"10px 12px",display:"flex",alignItems:"center",gap:8}}>
+                            <span style={{fontSize:14}}>{sp.msaStatus==="signed"?"✅":"⚠️"}</span>
+                            <div>
+                              <div style={{fontSize:12,fontWeight:700,color:sp.msaStatus==="signed"?"#16A34A":"#D97706"}}>Master Service Agreement</div>
+                              <div style={{fontSize:10,color:"#9BA3BF"}}>{sp.msaStatus==="signed"?"Signed":sp.msaStatus==="expired"?"Expired":"Missing"}</div>
+                            </div>
+                          </div>
                         </div>
 
                         {/* Financials summary */}
@@ -8271,7 +8285,7 @@ if(bounds.length)map.fitBounds(bounds,{padding:[30,30]});
                         )}
 
                         {/* Edit button */}
-                        <button className="btn-primary" style={{width:"100%"}} onClick={()=>{setEditSubId(sp.id);setSubForm({...sp});setShowSubForm(true);setSelectedSubProfile(null);}}>✎ Edit Subcontractor</button>
+                        <button className="btn-primary" style={{width:"100%"}} onClick={()=>{setEditSubId(sp.id);setSubForm({...sp,w9FileData:null,w9FileName:"",coiFileData:null,coiFileName:""});setShowSubForm(true);setSelectedSubProfile(null);}}>✎ Edit Subcontractor</button>
                       </div>
                     </div>
                   );
@@ -13676,37 +13690,105 @@ if(bounds.length)map.fitBounds(bounds,{padding:[30,30]});
               {/* Documents — prominent section */}
               <div style={{ background: "#fff", borderRadius: 10, border: "1px solid #D4D9EE", padding: "14px 16px" }}>
                 <div style={{ fontSize: 11, fontWeight: 700, color: "#1A2240", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 12 }}>📄 Documents on File</div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 12 }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+
                   {/* W9 */}
-                  <div style={{ background: subForm.w9 ? "#F0FDF4" : "#FFF1F2", border: "1px solid " + (subForm.w9 ? "#BBF7D0" : "#FECDD3"), borderRadius: 8, padding: "10px 12px", textAlign: "center", cursor: "pointer" }}
-                    onClick={() => setSubForm({ ...subForm, w9: !subForm.w9 })}>
-                    <div style={{ fontSize: 20, marginBottom: 4 }}>{subForm.w9 ? "✅" : "❌"}</div>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: subForm.w9 ? "#16A34A" : "#DC2626" }}>W9</div>
-                    <div style={{ fontSize: 9, color: "#9BA3BF", marginTop: 2 }}>{subForm.w9 ? "On file" : "Missing"}</div>
-                    <div style={{ fontSize: 9, color: "#3B6FE8", marginTop: 4 }}>Click to toggle</div>
+                  <div style={{ background: subForm.w9 ? "#F0FDF4" : "#FFF1F2", border: "1px solid " + (subForm.w9 ? "#BBF7D0" : "#FECDD3"), borderRadius: 8, padding: "12px 14px" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: subForm.w9 ? 8 : 0 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <span style={{ fontSize: 16 }}>{subForm.w9 ? "✅" : "❌"}</span>
+                        <div>
+                          <div style={{ fontSize: 12, fontWeight: 700, color: subForm.w9 ? "#16A34A" : "#DC2626" }}>W9</div>
+                          <div style={{ fontSize: 10, color: "#9BA3BF" }}>{subForm.w9 ? "On file" : "Not on file"}</div>
+                        </div>
+                      </div>
+                      <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                        {subForm.w9FileUrl && (
+                          <a href={subForm.w9FileUrl} target="_blank" rel="noreferrer" onClick={e=>e.stopPropagation()}
+                            style={{ fontSize: 10, color: "#3B6FE8", textDecoration: "none", background: "#EEF3FF", padding: "3px 8px", borderRadius: 4 }}>
+                            📎 View W9
+                          </a>
+                        )}
+                        <label style={{ fontSize: 10, color: "#3B6FE8", cursor: "pointer", background: "#EEF3FF", padding: "4px 10px", borderRadius: 5, fontWeight: 600 }}>
+                          {subForm.w9FileUrl ? "Replace" : "Upload W9"}
+                          <input type="file" accept=".pdf,.jpg,.jpeg,.png" style={{ display: "none" }} onChange={e => {
+                            const file = e.target.files[0];
+                            if (!file) return;
+                            const reader = new FileReader();
+                            reader.onload = ev => setSubForm(f => ({ ...f, w9: true, w9FileData: ev.target.result, w9FileName: file.name }));
+                            reader.readAsDataURL(file);
+                          }} />
+                        </label>
+                        <button type="button" onClick={() => setSubForm(f => ({ ...f, w9: !f.w9 }))}
+                          style={{ fontSize: 10, padding: "4px 10px", borderRadius: 5, border: "1px solid #CBD1E8", background: "transparent", cursor: "pointer", fontFamily: "inherit", color: "#4A5278" }}>
+                          Toggle
+                        </button>
+                      </div>
+                    </div>
+                    {subForm.w9FileName && <div style={{ fontSize: 10, color: "#4A5278", marginTop: 4 }}>📎 {subForm.w9FileName}</div>}
                   </div>
+
                   {/* COI */}
-                  <div style={{ background: subForm.coiExpiry && new Date(subForm.coiExpiry) >= new Date() ? "#F0FDF4" : "#FFF1F2", border: "1px solid " + (subForm.coiExpiry && new Date(subForm.coiExpiry) >= new Date() ? "#BBF7D0" : "#FECDD3"), borderRadius: 8, padding: "10px 12px" }}>
-                    <div style={{ fontSize: 10, fontWeight: 700, color: subForm.coiExpiry && new Date(subForm.coiExpiry) >= new Date() ? "#16A34A" : "#DC2626", marginBottom: 6 }}>
-                      {subForm.coiExpiry && new Date(subForm.coiExpiry) >= new Date() ? "✅ COI On File" : "❌ COI Missing / Expired"}
-                    </div>
-                    <div style={{ fontSize: 9, color: "#9BA3BF", marginBottom: 4 }}>Expiry Date</div>
-                    <input type="date" className="fi" style={{ width: "100%", boxSizing: "border-box", fontSize: 11, padding: "4px 8px" }}
-                      value={subForm.coiExpiry||""} onChange={e => setSubForm({ ...subForm, coiExpiry: e.target.value })} />
-                  </div>
+                  {(() => {
+                    const coiOk = subForm.coiExpiry && new Date(subForm.coiExpiry) >= new Date();
+                    return (
+                      <div style={{ background: coiOk ? "#F0FDF4" : "#FFF1F2", border: "1px solid " + (coiOk ? "#BBF7D0" : "#FECDD3"), borderRadius: 8, padding: "12px 14px" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            <span style={{ fontSize: 16 }}>{coiOk ? "✅" : "❌"}</span>
+                            <div>
+                              <div style={{ fontSize: 12, fontWeight: 700, color: coiOk ? "#16A34A" : "#DC2626" }}>Certificate of Insurance</div>
+                              <div style={{ fontSize: 10, color: "#9BA3BF" }}>{coiOk ? "Valid — expires " + subForm.coiExpiry : !subForm.coiExpiry ? "No expiry date set" : "Expired " + subForm.coiExpiry}</div>
+                            </div>
+                          </div>
+                          <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                            {subForm.coiFileUrl && (
+                              <a href={subForm.coiFileUrl} target="_blank" rel="noreferrer" onClick={e=>e.stopPropagation()}
+                                style={{ fontSize: 10, color: "#3B6FE8", textDecoration: "none", background: "#EEF3FF", padding: "3px 8px", borderRadius: 4 }}>
+                                📎 View COI
+                              </a>
+                            )}
+                            <label style={{ fontSize: 10, color: "#3B6FE8", cursor: "pointer", background: "#EEF3FF", padding: "4px 10px", borderRadius: 5, fontWeight: 600 }}>
+                              {subForm.coiFileUrl || subForm.coiFileData ? "Replace" : "Upload COI"}
+                              <input type="file" accept=".pdf,.jpg,.jpeg,.png" style={{ display: "none" }} onChange={e => {
+                                const file = e.target.files[0];
+                                if (!file) return;
+                                const reader = new FileReader();
+                                reader.onload = ev => setSubForm(f => ({ ...f, coiFileData: ev.target.result, coiFileName: file.name }));
+                                reader.readAsDataURL(file);
+                              }} />
+                            </label>
+                          </div>
+                        </div>
+                        {subForm.coiFileName && <div style={{ fontSize: 10, color: "#4A5278", marginBottom: 6 }}>📎 {subForm.coiFileName}</div>}
+                        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                          <div style={{ fontSize: 10, color: "#4A5278", flexShrink: 0 }}>Expiry Date:</div>
+                          <input type="date" className="fi" style={{ flex: 1, boxSizing: "border-box", fontSize: 11, padding: "4px 8px" }}
+                            value={subForm.coiExpiry||""} onChange={e => setSubForm({ ...subForm, coiExpiry: e.target.value })} />
+                        </div>
+                      </div>
+                    );
+                  })()}
+
                   {/* MSA */}
-                  <div style={{ background: subForm.msaStatus === "signed" ? "#F0FDF4" : "#FFF8E7", border: "1px solid " + (subForm.msaStatus === "signed" ? "#BBF7D0" : "#FDE68A"), borderRadius: 8, padding: "10px 12px" }}>
-                    <div style={{ fontSize: 10, fontWeight: 700, color: subForm.msaStatus === "signed" ? "#16A34A" : "#D97706", marginBottom: 6 }}>
-                      {subForm.msaStatus === "signed" ? "✅ MSA Signed" : subForm.msaStatus === "expired" ? "⚠️ MSA Expired" : "⚠️ MSA Missing"}
+                  <div style={{ background: subForm.msaStatus === "signed" ? "#F0FDF4" : "#FFF8E7", border: "1px solid " + (subForm.msaStatus === "signed" ? "#BBF7D0" : "#FDE68A"), borderRadius: 8, padding: "12px 14px" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <span style={{ fontSize: 16 }}>{subForm.msaStatus === "signed" ? "✅" : "⚠️"}</span>
+                        <div>
+                          <div style={{ fontSize: 12, fontWeight: 700, color: subForm.msaStatus === "signed" ? "#16A34A" : "#D97706" }}>Master Service Agreement</div>
+                          <div style={{ fontSize: 10, color: "#9BA3BF" }}>{subForm.msaStatus === "signed" ? "Signed" : subForm.msaStatus === "expired" ? "Expired" : "Missing"}</div>
+                        </div>
+                      </div>
+                      <select className="fi" style={{ width: 120, fontSize: 11, padding: "4px 8px" }}
+                        value={subForm.msaStatus||"missing"} onChange={e => setSubForm({ ...subForm, msaStatus: e.target.value })}>
+                        <option value="missing">Missing</option>
+                        <option value="signed">Signed</option>
+                        <option value="expired">Expired</option>
+                      </select>
                     </div>
-                    <div style={{ fontSize: 9, color: "#9BA3BF", marginBottom: 4 }}>Status</div>
-                    <select className="fi" style={{ width: "100%", fontSize: 11, padding: "4px 8px" }}
-                      value={subForm.msaStatus||"missing"} onChange={e => setSubForm({ ...subForm, msaStatus: e.target.value })}>
-                      <option value="missing">Missing</option>
-                      <option value="signed">Signed</option>
-                      <option value="expired">Expired</option>
-                    </select>
                   </div>
+
                 </div>
               </div>
 
