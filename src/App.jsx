@@ -3057,6 +3057,9 @@ export default function App() {
   const [subSearch2,        setSubSearch2]        = useState("");
   const [addMode,           setAddMode]           = useState("sub");
   const [pickerTrade,       setPickerTrade]       = useState("");
+  const [subProjectLat,     setSubProjectLat]     = useState(null);
+  const [subProjectLng,     setSubProjectLng]     = useState(null);
+  const [subProjectGeocoding, setSubProjectGeocoding] = useState(false);
   const [subGeocodeProgress,setSubGeocodeProgress]= useState(null);
 
   // ── Auto-save estimate data to Supabase whenever it changes ──
