@@ -3291,16 +3291,80 @@ export default function App() {
   // CapEx job helpers
   const openAddCapex = () => { setEditCapexId(null); setCapexForm({ name: "", companyId: "", siteId: "", approverContactId: "", contractValue: "", stage: "estimating", startDate: "", endDate: "", pm: "", pct: 0, bidDueDate: "", followUpDate: "", buyoutDate: "", invoiceDate: "", notes: "" }); setShowCapexForm(true); };
   const openEditCapex = (j) => { setEditCapexId(j.id); setCapexForm({ ...j, contractValue: String(j.contractValue) }); setShowCapexForm(true); };
+  // ── CapEx trigger logic ────────────────────────────────────
+  const fireCapexTrigger = (job, newStage) => {
+    const patch = {};
+    // Trigger 1: moved to owner_approval → auto-set follow-up date 3 days out
+    if (newStage === "owner_approval" && !job.followUpDate) {
+      patch.followUpDate = new Date(Date.now() + 3*86400000).toISOString().slice(0,10);
+    }
+    // Trigger 2: moved to buyout (Won) → set buyout date prompt (auto-flag)
+    if (newStage === "buyout" && !job.buyoutDate) {
+      patch.buyoutDate = ""; // signals Brad to fill in
+    }
+    // Trigger 3: moved to bill (100% complete) → flag for Noah satisfaction review
+    if (newStage === "bill") {
+      patch.satisfactionReviewDue = true;
+    }
+    return patch;
+  };
+
+  const updateCapexJobPersist = (id, patch) => {
+    setCapexJobs(prev => prev.map(j => {
+      if (j.id !== id) return j;
+      const updated = { ...j, ...patch };
+      try {
+        const dbRow = {
+          id: updated.id, name: updated.name||"", company_id: updated.companyId||null,
+          site_id: updated.siteId||null, contract_value: updated.contractValue||0,
+          gross_profit: updated.grossProfit||0, stage: updated.stage||"estimating",
+          start_date: updated.startDate||null, end_date: updated.endDate||null,
+          pm: updated.pm||"", pct: updated.pct||0,
+          bid_due_date: updated.bidDueDate||null, follow_up_date: updated.followUpDate||null,
+          buyout_date: updated.buyoutDate||null, invoice_date: updated.invoiceDate||null,
+          notes: updated.notes||"", store_code: updated.storeCode||"",
+          approver_contact_id: updated.approverContactId||null,
+        };
+        supa.from("capex_jobs").update(dbRow).eq("id", id);
+      } catch(e) {}
+      return updated;
+    }));
+  };
+
   const saveCapex = () => {
     if (!capexForm.name.trim()) return;
     const entry = { ...capexForm, contractValue: Number(capexForm.contractValue), pct: Number(capexForm.pct || 0) };
-    if (editCapexId) setCapexJobs(capexJobs.map(j => j.id === editCapexId ? { ...entry, id: editCapexId } : j));
-    else setCapexJobs([...capexJobs, { ...entry, id: "cx" + Date.now() }]);
+    if (editCapexId) {
+      const existing = capexJobs.find(j => j.id === editCapexId) || {};
+      const updated = { ...entry, id: editCapexId };
+      // Fire triggers if stage changed
+      if (existing.stage !== updated.stage) {
+        const triggerPatch = fireCapexTrigger(existing, updated.stage);
+        Object.assign(updated, triggerPatch);
+      }
+      setCapexJobs(capexJobs.map(j => j.id === editCapexId ? updated : j));
+      try { supa.from("capex_jobs").update({ stage: updated.stage, name: updated.name, contract_value: updated.contractValue, pm: updated.pm, pct: updated.pct, follow_up_date: updated.followUpDate||null, buyout_date: updated.buyoutDate||null, invoice_date: updated.invoiceDate||null, notes: updated.notes||"" }).eq("id", editCapexId); } catch(e) {}
+    } else {
+      const newId = "cx" + Date.now();
+      const newJob = { ...entry, id: newId };
+      setCapexJobs([...capexJobs, newJob]);
+      try { supa.from("capex_jobs").insert({ id: newId, name: newJob.name, company_id: newJob.companyId||null, site_id: newJob.siteId||null, contract_value: newJob.contractValue||0, stage: newJob.stage||"estimating", pm: newJob.pm||"", pct: 0, notes: newJob.notes||"" }); } catch(e) {}
+    }
     autoTagCrmContacts(capexForm.companyId, "CapEx");
     setShowCapexForm(false);
   };
-  const deleteCapex = (id) => { setCapexJobs(capexJobs.filter(j => j.id !== id)); setSelectedCapexJob(null); };
-  const moveCapexStage = (id, dir) => setCapexJobs(capexJobs.map(j => { if (j.id !== id) return j; const idx = CAPEX_FM_STAGES.findIndex(s => s.id === j.stage); return { ...j, stage: CAPEX_FM_STAGES[Math.max(0, Math.min(CAPEX_FM_STAGES.length - 1, idx + dir))].id }; }));
+  const deleteCapex = (id) => { setCapexJobs(capexJobs.filter(j => j.id !== id)); setSelectedCapexJob(null); try { supa.from("capex_jobs").delete().eq("id", id); } catch(e) {} };
+  const moveCapexStage = (id, dir) => {
+    setCapexJobs(capexJobs.map(j => {
+      if (j.id !== id) return j;
+      const idx = CAPEX_FM_STAGES.findIndex(s => s.id === j.stage);
+      const newStage = CAPEX_FM_STAGES[Math.max(0, Math.min(CAPEX_FM_STAGES.length - 1, idx + dir))].id;
+      const triggerPatch = newStage !== j.stage ? fireCapexTrigger(j, newStage) : {};
+      const updated = { ...j, stage: newStage, ...triggerPatch };
+      try { supa.from("capex_jobs").update({ stage: newStage, ...Object.fromEntries(Object.entries(triggerPatch).map(([k,v]) => [k.replace(/([A-Z])/g, '_$1').toLowerCase(), v])) }).eq("id", id); } catch(e) {}
+      return updated;
+    }));
+  };
 
   // ── Auto-tag CRM contacts when a job is created/updated ──
   const autoTagCrmContacts = (companyId, division) => {
@@ -4794,7 +4858,242 @@ Return ONLY valid JSON, no markdown, no extra text:
                   </div>
                 );
               })()}
-              {activeBU === "capital" && <GanttSection jobList={capexJobs.filter(j => j.stage === "do_work" && j.startDate && j.endDate).map(j => ({ ...j, client: companies.find(c => c.id === j.companyId)?.name || "", status: "On Schedule" }))} showAddBtn={false} />}
+              {/* ══ CAPEX DASHBOARD ══ */}
+              {activeBU === "capital" && (() => {
+                const now = new Date();
+                const todayStr = now.toISOString().slice(0,10);
+
+                // ── Live stats from capexJobs ──
+                const activeJobs   = capexJobs.filter(j => ["do_work","buyout"].includes(j.stage));
+                const pipelineJobs = capexJobs.filter(j => ["estimating","owner_approval"].includes(j.stage));
+                const billingJobs  = capexJobs.filter(j => j.stage === "bill");
+                const totalActive  = activeJobs.reduce((s,j) => s + (j.contractValue||0), 0);
+                const totalPipeline= pipelineJobs.reduce((s,j) => s + (j.contractValue||0), 0);
+                const totalBilling = billingJobs.reduce((s,j) => s + (j.contractValue||0), 0);
+
+                // ── KPIs ──
+                const wonJobs    = capexJobs.filter(j => j.stage !== "estimating");
+                const allBid     = capexJobs.length;
+                const captureRate= allBid > 0 ? Math.round((wonJobs.length / allBid) * 100) : 0;
+
+                // Bid accuracy: avg % variance between contractValue (Noah estimate) and actual buyout
+                const accuracyJobs = capexJobs.filter(j => j.contractValue > 0 && j.actualBuyout > 0);
+                const avgVariance  = accuracyJobs.length
+                  ? Math.round(accuracyJobs.reduce((s,j) => s + Math.abs((j.actualBuyout - j.contractValue) / j.contractValue * 100), 0) / accuracyJobs.length)
+                  : null;
+
+                // Schedule variance: jobs past end date
+                const behindSchedule = activeJobs.filter(j => j.endDate && j.endDate < todayStr && j.pct < 100);
+
+                // Billing velocity: bill-stage jobs with invoiceDate within 48h of stage change
+                const pendingBilling = billingJobs.filter(j => !j.invoiceDate);
+
+                // ── Workflow stage counts ──
+                const CAPEX_WORKFLOW = [
+                  { id:"estimating",      label:"Estimating",     icon:"📐", owner:"Noah + Adam",  color:"#818CF8", phase:"pipeline" },
+                  { id:"owner_approval",  label:"Owner Approval", icon:"✍️",  owner:"Noah",         color:"#60A5FA", phase:"pipeline" },
+                  { id:"buyout",          label:"Buyout",         icon:"🛒",  owner:"Brad",         color:"#FCD34D", phase:"active"   },
+                  { id:"do_work",         label:"Do Work",        icon:"🔨",  owner:"Brad",         color:"#4ADE80", phase:"active"   },
+                  { id:"bill",            label:"Billing",        icon:"💵",  owner:"Brad → Noah",  color:"#F97316", phase:"active"   },
+                ];
+
+                // ── Hand-off alerts ──
+                const handoffs = [];
+                // Trigger 1: estimating → owner_approval means Noah should present
+                capexJobs.filter(j => j.stage === "owner_approval" && !j.followUpDate).forEach(j => {
+                  handoffs.push({ type:"follow_up", job:j, msg:"Set follow-up date for owner approval", color:"#60A5FA" });
+                });
+                // Trigger 2: won (do_work) — Brad needs buyout date
+                capexJobs.filter(j => j.stage === "buyout" && !j.buyoutDate).forEach(j => {
+                  handoffs.push({ type:"buyout", job:j, msg:"Brad: Set buyout date to begin work", color:"#FCD34D" });
+                });
+                // Trigger 3: bill stage — invoice needs to go out
+                pendingBilling.forEach(j => {
+                  handoffs.push({ type:"invoice", job:j, msg:"Brad: Invoice not yet issued", color:"#F97316" });
+                });
+                // Jobs behind schedule
+                behindSchedule.forEach(j => {
+                  handoffs.push({ type:"overdue", job:j, msg:"Past target end date — "+j.endDate, color:"#F87171" });
+                });
+
+                return (
+                  <div style={{display:"flex",flexDirection:"column",gap:20}}>
+
+                    {/* ── Team header ── */}
+                    <div style={{background:"#fff",borderRadius:12,border:"1px solid #D4D9EE",padding:"18px 20px"}}>
+                      <div style={{fontSize:11,fontWeight:700,color:"#4A5278",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:12}}>CapEx Core Team</div>
+                      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10}}>
+                        {[
+                          { name:"Jared",      role:"Sales Lead",              obj:"Revenue growth & client acquisition", color:"#5B8FF0", icon:"🎯" },
+                          { name:"Noah Bruce", role:"AM & Estimating Lead",    obj:"Pipeline, technical sales, client retention", color:"#8B5CF6", icon:"📋" },
+                          { name:"Brad",       role:"Operations Manager",      obj:"Budget, scheduling, billing & cash flow", color:"#4ADE80", icon:"⚙️" },
+                          { name:"Adam",       role:"Technical Estimator",     obj:"Accuracy & scoping for Major Projects", color:"#F97316", icon:"📐" },
+                        ].map(m => (
+                          <div key={m.name} style={{background:"#F9FAFC",borderRadius:10,border:"1px solid #E8EBF4",padding:"12px 14px",borderTop:"3px solid "+m.color}}>
+                            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
+                              <span style={{fontSize:18}}>{m.icon}</span>
+                              <div>
+                                <div style={{fontSize:13,fontWeight:700,color:"#1A2240"}}>{m.name}</div>
+                                <div style={{fontSize:10,color:m.color,fontWeight:600}}>{m.role}</div>
+                              </div>
+                            </div>
+                            <div style={{fontSize:10,color:"#4A5278",lineHeight:1.5}}>{m.obj}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* ── Live pipeline stats ── */}
+                    <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:12}}>
+                      {[
+                        { label:"Pipeline",       value:fmt(totalPipeline), sub:pipelineJobs.length+" jobs",    color:"#60A5FA" },
+                        { label:"Active",          value:fmt(totalActive),   sub:activeJobs.length+" jobs",     color:"#4ADE80" },
+                        { label:"Ready to Bill",   value:fmt(totalBilling),  sub:billingJobs.length+" jobs",    color:"#F97316" },
+                        { label:"Capture Rate",    value:captureRate+"%",    sub:"target > 25%",                color:captureRate>=25?"#4ADE80":"#F87171" },
+                        { label:"Bid Accuracy",    value:avgVariance!=null?avgVariance+"%":"—", sub:"variance vs buyout · target <5%", color:avgVariance!=null&&avgVariance<=5?"#4ADE80":"#FCD34D" },
+                      ].map(s => (
+                        <div key={s.label} className="stat-card" style={{position:"relative",overflow:"hidden",padding:"14px 16px"}}>
+                          <div style={{position:"absolute",top:0,left:0,right:0,height:3,background:s.color}}/>
+                          <div style={{fontSize:9,letterSpacing:"0.1em",textTransform:"uppercase",color:"#4A5278",marginBottom:6}}>{s.label}</div>
+                          <div style={{fontSize:22,fontWeight:800,color:s.color}}>{s.value}</div>
+                          <div style={{fontSize:10,color:"#9BA3BF",marginTop:3}}>{s.sub}</div>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* ── Workflow pipeline ── */}
+                    <div style={{background:"#fff",borderRadius:12,border:"1px solid #D4D9EE",overflow:"hidden"}}>
+                      <div style={{padding:"14px 18px",borderBottom:"1px solid #F0F2F8",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                        <div style={{fontSize:12,fontWeight:700,color:"#1A2240",textTransform:"uppercase",letterSpacing:"0.06em"}}>Workflow Pipeline</div>
+                        <div style={{display:"flex",gap:12}}>
+                          <span style={{fontSize:10,color:"#9BA3BF"}}>● Pipeline</span>
+                          <span style={{fontSize:10,color:"#4ADE80"}}>● Active</span>
+                        </div>
+                      </div>
+                      <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",borderBottom:"1px solid #F0F2F8"}}>
+                        {CAPEX_WORKFLOW.map((stage,i) => {
+                          const stageJobs = capexJobs.filter(j => j.stage === stage.id);
+                          const stageVal  = stageJobs.reduce((s,j) => s+(j.contractValue||0),0);
+                          return (
+                            <div key={stage.id} style={{padding:"16px",borderRight:i<4?"1px solid #F0F2F8":"none",background:stage.phase==="active"?"#FAFBFD":"#fff"}}>
+                              <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}>
+                                <span style={{fontSize:16}}>{stage.icon}</span>
+                                <div>
+                                  <div style={{fontSize:11,fontWeight:700,color:"#1A2240"}}>{stage.label}</div>
+                                  <div style={{fontSize:9,color:"#9BA3BF"}}>{stage.owner}</div>
+                                </div>
+                              </div>
+                              <div style={{fontSize:18,fontWeight:800,color:stage.color}}>{stageJobs.length}</div>
+                              <div style={{fontSize:10,color:"#4A5278",marginTop:2}}>{fmt(stageVal)}</div>
+                              {stageJobs.slice(0,3).map(j => {
+                                const co = companies.find(c=>c.id===j.companyId);
+                                return (
+                                  <div key={j.id} onClick={()=>setSelectedCapexJob(j)}
+                                    style={{marginTop:6,padding:"5px 7px",background:stage.color+"15",borderRadius:5,cursor:"pointer",border:"1px solid "+stage.color+"30"}}>
+                                    <div style={{fontSize:10,fontWeight:600,color:"#1A2240",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{j.name}</div>
+                                    {co&&<div style={{fontSize:9,color:"#9BA3BF"}}>{co.name}</div>}
+                                    <div style={{fontSize:9,color:stage.color,fontWeight:700}}>{fmt(j.contractValue)}</div>
+                                  </div>
+                                );
+                              })}
+                              {stageJobs.length > 3 && <div style={{fontSize:9,color:"#9BA3BF",marginTop:4,textAlign:"center"}}>+{stageJobs.length-3} more</div>}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* ── Hand-offs & Alerts + KPIs side by side ── */}
+                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
+
+                      {/* Hand-off alerts */}
+                      <div style={{background:"#fff",borderRadius:12,border:"1px solid #D4D9EE",overflow:"hidden"}}>
+                        <div style={{padding:"14px 18px",borderBottom:"1px solid #F0F2F8",fontSize:12,fontWeight:700,color:"#1A2240",textTransform:"uppercase",letterSpacing:"0.06em"}}>
+                          🚦 Hand-offs & Alerts
+                        </div>
+                        <div style={{padding:"12px 16px",display:"flex",flexDirection:"column",gap:8,maxHeight:300,overflowY:"auto"}}>
+                          {handoffs.length === 0 ? (
+                            <div style={{textAlign:"center",padding:"24px",color:"#9BA3BF",fontSize:12}}>
+                              <div style={{fontSize:24,marginBottom:8}}>✅</div>
+                              All hand-offs up to date
+                            </div>
+                          ) : handoffs.map((h,i) => {
+                            const co = companies.find(c=>c.id===h.job.companyId);
+                            return (
+                              <div key={i} onClick={()=>setSelectedCapexJob(h.job)}
+                                style={{background:"#F9FAFC",border:"1px solid #E8EBF4",borderLeft:"3px solid "+h.color,borderRadius:6,padding:"10px 12px",cursor:"pointer"}}
+                                onMouseEnter={e=>e.currentTarget.style.background="#F0F4FF"}
+                                onMouseLeave={e=>e.currentTarget.style.background="#F9FAFC"}>
+                                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
+                                  <div style={{fontSize:11,fontWeight:700,color:"#1A2240"}}>{h.job.name}</div>
+                                  <div style={{fontSize:10,fontWeight:700,color:h.color,flexShrink:0,marginLeft:8}}>{fmt(h.job.contractValue)}</div>
+                                </div>
+                                {co&&<div style={{fontSize:10,color:"#9BA3BF",marginTop:1}}>{co.name}</div>}
+                                <div style={{fontSize:10,color:h.color,marginTop:4,fontWeight:600}}>⚠ {h.msg}</div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      {/* KPI dashboard */}
+                      <div style={{background:"#fff",borderRadius:12,border:"1px solid #D4D9EE",overflow:"hidden"}}>
+                        <div style={{padding:"14px 18px",borderBottom:"1px solid #F0F2F8",fontSize:12,fontWeight:700,color:"#1A2240",textTransform:"uppercase",letterSpacing:"0.06em"}}>
+                          📊 KPIs
+                        </div>
+                        <div style={{padding:"14px 16px",display:"flex",flexDirection:"column",gap:14}}>
+
+                          {/* Noah KPIs */}
+                          <div>
+                            <div style={{fontSize:10,fontWeight:700,color:"#8B5CF6",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:8}}>Noah — Account Management</div>
+                            {[
+                              { label:"Capture Rate",    value:captureRate+"%",     target:"25%",  ok:captureRate>=25,  detail:"Bids won vs submitted" },
+                              { label:"Bid Accuracy",    value:avgVariance!=null?avgVariance+"%":"No data", target:"<5%", ok:avgVariance!=null&&avgVariance<=5, detail:"Estimate vs actual buyout variance" },
+                              { label:"Turnaround",      value:"Track manually",    target:"5 days",ok:null, detail:"Site walk to proposal delivery" },
+                            ].map(k => (
+                              <div key={k.label} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"6px 0",borderBottom:"1px solid #F4F6FB"}}>
+                                <div>
+                                  <div style={{fontSize:11,fontWeight:600,color:"#1A2240"}}>{k.label}</div>
+                                  <div style={{fontSize:9,color:"#9BA3BF"}}>{k.detail}</div>
+                                </div>
+                                <div style={{textAlign:"right"}}>
+                                  <div style={{fontSize:13,fontWeight:800,color:k.ok===null?"#9BA3BF":k.ok?"#4ADE80":"#F87171"}}>{k.value}</div>
+                                  <div style={{fontSize:9,color:"#9BA3BF"}}>target: {k.target}</div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+
+                          {/* Brad KPIs */}
+                          <div>
+                            <div style={{fontSize:10,fontWeight:700,color:"#4ADE80",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:8}}>Brad — Operations</div>
+                            {[
+                              { label:"GP Margin",       value: activeJobs.length ? Math.round(activeJobs.reduce((s,j)=>s+(j.grossProfit||0),0)/Math.max(activeJobs.reduce((s,j)=>s+(j.contractValue||0),0),1)*100)+"%" : "—", target:"Set at bid", ok:null, detail:"Actual vs bid gross profit" },
+                              { label:"Behind Schedule",  value: behindSchedule.length+" jobs", target:"0 jobs", ok:behindSchedule.length===0, detail:"Past target end date" },
+                              { label:"Billing Velocity", value: pendingBilling.length+" unpaid", target:"48h turnaround", ok:pendingBilling.length===0, detail:"Invoices issued after completion" },
+                            ].map(k => (
+                              <div key={k.label} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"6px 0",borderBottom:"1px solid #F4F6FB"}}>
+                                <div>
+                                  <div style={{fontSize:11,fontWeight:600,color:"#1A2240"}}>{k.label}</div>
+                                  <div style={{fontSize:9,color:"#9BA3BF"}}>{k.detail}</div>
+                                </div>
+                                <div style={{textAlign:"right"}}>
+                                  <div style={{fontSize:13,fontWeight:800,color:k.ok===null?"#9BA3BF":k.ok?"#4ADE80":"#F87171"}}>{k.value}</div>
+                                  <div style={{fontSize:9,color:"#9BA3BF"}}>target: {k.target}</div>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* ── Active jobs Gantt ── */}
+                    <GanttSection jobList={capexJobs.filter(j => j.stage === "do_work" && j.startDate && j.endDate).map(j => ({ ...j, client: companies.find(c => c.id === j.companyId)?.name || "", status: "On Schedule" }))} showAddBtn={false} />
+
+                  </div>
+                );
+              })()}
 
               {/* Punch list */}
               <div>
