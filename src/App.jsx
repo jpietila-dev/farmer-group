@@ -3059,6 +3059,34 @@ export default function App() {
   const [pickerTrade,       setPickerTrade]       = useState("");
   const [subGeocodeProgress,setSubGeocodeProgress]= useState(null);
 
+  // ── Auto-save estimate data to Supabase whenever it changes ──
+  const saveEstimateData = useCallback((oppId, wbs, bids, phase) => {
+    if (!oppId) return;
+    try {
+      const estimateBlob = JSON.stringify({ wbs, bids, phase, savedAt: new Date().toISOString() });
+      fetch(`${SUPA_URL}/rest/v1/mp_estimates?opp_id=eq.${encodeURIComponent(oppId)}`, {
+        method: "GET",
+        headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}` }
+      }).then(r => r.json()).then(rows => {
+        if (rows && rows.length > 0) {
+          // Update existing
+          fetch(`${SUPA_URL}/rest/v1/mp_estimates?opp_id=eq.${encodeURIComponent(oppId)}`, {
+            method: "PATCH",
+            headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}`, "Content-Type": "application/json", Prefer: "return=minimal" },
+            body: JSON.stringify({ wbs_data: estimateBlob, updated_at: new Date().toISOString() })
+          });
+        } else {
+          // Insert new
+          fetch(`${SUPA_URL}/rest/v1/mp_estimates`, {
+            method: "POST",
+            headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}`, "Content-Type": "application/json", Prefer: "return=minimal" },
+            body: JSON.stringify({ opp_id: oppId, wbs_data: estimateBlob, created_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+          });
+        }
+      });
+    } catch(e) {}
+  }, []);
+
   const navItems = NAV_ITEMS[activeBU] || NAV_ITEMS.all;
   const buColor  = BU_COLORS[activeBU];
 
@@ -3139,7 +3167,7 @@ export default function App() {
     const load = async () => {
       setDbLoading(l => ({ ...l, companies: true, sites: true, lawnSites: true, subcontractors: true }));
       try {
-        const [coRes, siteRes, subRes, fmRes, teamRes, crmRes, ctRes, mpPipeRes, mpRes, mpwRes, mpVendorRes] = await Promise.all([
+        const [coRes, siteRes, subRes, fmRes, teamRes, crmRes, ctRes, mpPipeRes, mpRes, mpwRes, mpVendorRes, mpEstimateRes] = await Promise.all([
           supa.from("companies").select("*"),
           fetch(`${SUPA_URL}/rest/v1/sites?select=*&limit=1000`, {
             headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}` }
@@ -3163,6 +3191,9 @@ export default function App() {
             headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}` }
           }).then(r => r.json()).then(data => ({ data, error: null })).catch(() => ({ data: null, error: null })),
           fetch(`${SUPA_URL}/rest/v1/mp_bid_vendors?select=*&limit=500&order=company.asc`, {
+            headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}` }
+          }).then(r => r.json()).then(data => ({ data, error: null })).catch(() => ({ data: null, error: null })),
+          fetch(`${SUPA_URL}/rest/v1/mp_estimates?select=*&limit=500`, {
             headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}` }
           }).then(r => r.json()).then(data => ({ data, error: null })).catch(() => ({ data: null, error: null })),
         ]);
@@ -3189,6 +3220,21 @@ export default function App() {
         }
         if (Array.isArray(mpwRes.data) && mpwRes.data.length) setMpWeeklyReports(mpwRes.data.map(dbToMpWeekly));
         if (Array.isArray(mpVendorRes.data) && mpVendorRes.data.length) setMpVendorDB(mpVendorRes.data.map(dbToMpVendor));
+        if (Array.isArray(mpEstimateRes.data) && mpEstimateRes.data.length) {
+          const newWbs = {}, newBids = {}, newPhase = {};
+          mpEstimateRes.data.forEach(row => {
+            if (!row.opp_id || !row.wbs_data) return;
+            try {
+              const parsed = JSON.parse(row.wbs_data);
+              if (parsed.wbs)   newWbs[row.opp_id]   = parsed.wbs;
+              if (parsed.bids)  newBids[row.opp_id]  = parsed.bids;
+              if (parsed.phase) newPhase[row.opp_id] = parsed.phase;
+            } catch(e) {}
+          });
+          if (Object.keys(newWbs).length)   setWbsData(newWbs);
+          if (Object.keys(newBids).length)  setBidPackages(newBids);
+          if (Object.keys(newPhase).length) setEstimatePhase(newPhase);
+        }
         // contacts table — deduplicate by name+company before setting
         if (Array.isArray(ctRes.data) && ctRes.data.length) {
           const seen = new Set();
@@ -6886,11 +6932,38 @@ Return ONLY valid JSON, no markdown, no extra text:
                           {stageOpps.map(o => {
                             const co = companies.find(c => c.id === o.companyId);
                             return (
-                              <div key={o.id} style={{ background: "#ECEEF8", border: "1px solid " + sc.color + "25", borderRadius: 8, padding: 12, cursor: "pointer" }} onClick={() => setSelectedOpp(o)}>
-                                <div style={{ fontSize: 12, color: "#1A2240", fontWeight: 500, lineHeight: 1.35, marginBottom: 4 }}>{o.name}</div>
-                                {co && <div style={{ fontSize: 10, color: "#3B6FE8", marginBottom: 4 }}>🏢 {co.name}</div>}
-                                {o.bidDueDate && <div style={{ fontSize: 10, color: "#FCD34D", marginBottom: 4 }}>📋 Bid: {o.bidDueDate}</div>}
-                                <div style={{ fontSize: 15, fontWeight: 700, color: sc.color, marginBottom: 8 }}>{fmt(o.value)}</div>
+                              <div key={o.id} style={{ background: "#fff", border: "1px solid " + sc.color + "30", borderRadius: 8, padding: 12, cursor: "pointer", borderTop: "3px solid " + sc.color }} onClick={() => setSelectedOpp(o)}
+                                onMouseEnter={e=>e.currentTarget.style.boxShadow="0 2px 12px rgba(59,111,232,0.10)"}
+                                onMouseLeave={e=>e.currentTarget.style.boxShadow=""}>
+                                {/* Name */}
+                                <div style={{ fontSize: 12, color: "#1A2240", fontWeight: 700, lineHeight: 1.35, marginBottom: 5 }}>{o.name}</div>
+                                {/* Company */}
+                                {co && <div style={{ fontSize: 10, color: "#3B6FE8", marginBottom: 3, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>🏢 {co.name}</div>}
+                                {/* Location */}
+                                {co?.address && <div style={{ fontSize: 10, color: "#9BA3BF", marginBottom: 3, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>📍 {co.address}</div>}
+                                {/* Project size */}
+                                {(() => {
+                                  const types = o.buildingTypes||[];
+                                  const totalSF = types.length > 0
+                                    ? types.reduce((s,bt) => s + (parseFloat(o["sf_"+bt]||0)), 0)
+                                    : parseFloat(o.sf||0);
+                                  const typeLabel = types.length > 0
+                                    ? types.map(bt=>({multistory:"Multistory",singlestory:"Single Story",canopy:"Canopy",mezzanine:"Mezzanine"}[bt]||bt)).join(" / ")
+                                    : o.buildingType ? ({multistory:"Multistory",singlestory:"Single Story",canopy:"Canopy",mezzanine:"Mezzanine"}[o.buildingType]||o.buildingType) : null;
+                                  if (!totalSF && !typeLabel) return null;
+                                  return (
+                                    <div style={{ fontSize: 10, color: "#4A5278", marginBottom: 3 }}>
+                                      🏗 {typeLabel||""}{totalSF > 0 ? (typeLabel?" · ":"") + totalSF.toLocaleString() + " SF" : ""}
+                                    </div>
+                                  );
+                                })()}
+                                {/* Value - prominent */}
+                                <div style={{ fontSize: 16, fontWeight: 800, color: sc.color, margin: "6px 0" }}>{fmt(o.value)}</div>
+                                {/* Dates */}
+                                <div style={{ display:"flex", gap:8, marginBottom:6, flexWrap:"wrap" }}>
+                                  {o.bidDueDate && <div style={{ fontSize: 9, color: "#FCD34D", background:"#FCD34D15", border:"1px solid #FCD34D30", borderRadius:3, padding:"1px 6px" }}>Bid {o.bidDueDate}</div>}
+                                  {o.budgetDueDate && <div style={{ fontSize: 9, color: "#A78BFA", background:"#A78BFA15", border:"1px solid #A78BFA30", borderRadius:3, padding:"1px 6px" }}>Budget {o.budgetDueDate}</div>}
+                                </div>
                                 <div style={{ display: "flex", gap: 5 }} onClick={e => e.stopPropagation()}>
                                   <button className="btn-ghost" style={{ flex: 1, fontSize: 11 }} onClick={() => moveStage(o.id, -1)}>←</button>
                                   <button className="btn-ghost" style={{ flex: 1, fontSize: 11 }} onClick={() => moveStage(o.id,  1)}>→</button>
@@ -8966,7 +9039,13 @@ if(bounds.length)map.fitBounds(bounds,{padding:[30,30]});
             const activeOppId = activeBidOpp || allMpOpps[0]?.id;
             const activeOpp   = allMpOpps.find(o => o.id === activeOppId) || null;
             const phase       = estimatePhase[activeOppId] || "wbs";
-            const setPhase    = (p) => setEstimatePhase(prev => ({...prev, [activeOppId]: p}));
+            const setPhase = (p) => {
+              setEstimatePhase(prev => {
+                const next = {...prev, [activeOppId]: p};
+                setTimeout(() => saveEstimateData(activeOppId, wbs, bidPackages[activeOppId]||{vendors:[]}, p), 300);
+                return next;
+              });
+            };
             const pkg         = bidPackages[activeOppId] || {vendors:[]};
             const wbs         = wbsData[activeOppId] || [];
             const takeoff     = takeoffData[activeOppId] || {};
@@ -9270,7 +9349,7 @@ if(bounds.length)map.fitBounds(bounds,{padding:[30,30]});
                               <span style={{fontSize:12,fontWeight:700,color:"#1A2240",flex:1}}>
                                 {wbs.length} Cost Codes · {pkg.vendors.length} Subcontractors · {totalBids} Bids Received
                               </span>
-                              <button onClick={()=>{setShowAddVendor(true);setAddMode("sub");setSubSearch2("");}} style={{padding:"5px 12px",background:"#3B6FE8",color:"#fff",border:"none",borderRadius:5,cursor:"pointer",fontFamily:"inherit",fontSize:11,fontWeight:700}}>+ Add Sub</button>
+                              <button onClick={()=>{setActiveBidOpp(activeOppId);setShowAddVendor(true);setAddMode("sub");setSubSearch2("");setPickerTrade("");}} style={{padding:"5px 12px",background:"#3B6FE8",color:"#fff",border:"none",borderRadius:5,cursor:"pointer",fontFamily:"inherit",fontSize:11,fontWeight:700}}>+ Add Sub</button>
                               <button onClick={()=>{setBidPrintOppId(activeOppId);setShowBidPrintModal(true);}} style={{padding:"5px 10px",background:"#F0F2F8",border:"1px solid #CBD1E8",borderRadius:5,cursor:"pointer",fontFamily:"inherit",fontSize:11,color:"#4A5278"}}>Print PDF</button>
                             </div>
 
@@ -9345,7 +9424,7 @@ if(bounds.length)map.fitBounds(bounds,{padding:[30,30]});
                                         ? <span style={{fontSize:10,color:"#9BA3BF"}}>{item.subItems.length} sub-codes</span>
                                         : <span style={{fontSize:11,fontWeight:700,color:bidsIn>0?coverage:"#9BA3BF"}}>{bidsIn} bid{bidsIn!==1?"s":""}</span>
                                       }
-                                      {!hasSubs&&<button onClick={()=>{setShowAddVendor(true);setAddMode("sub");setSubSearch2("");}} style={{padding:"2px 8px",background:"#3B6FE815",border:"1px solid #3B6FE830",borderRadius:4,color:"#3B6FE8",fontSize:10,cursor:"pointer",fontFamily:"inherit",fontWeight:600}}>+ Sub</button>}
+                                      {!hasSubs&&<button onClick={()=>{setActiveBidOpp(activeOppId);setShowAddVendor(true);setAddMode("sub");setSubSearch2("");setPickerTrade("");}} style={{padding:"2px 8px",background:"#3B6FE815",border:"1px solid #3B6FE830",borderRadius:4,color:"#3B6FE8",fontSize:10,cursor:"pointer",fontFamily:"inherit",fontWeight:600}}>+ Sub</button>}
                                     </div>
 
                                     {/* If no sub-items: show vendors directly under parent */}
@@ -9366,7 +9445,7 @@ if(bounds.length)map.fitBounds(bounds,{padding:[30,30]});
                                             <span style={{fontSize:12,fontWeight:600,color:"#1A2240",flex:1}}>{sub.description||"Sub-item "+(si+1)}</span>
                                             <span style={{fontSize:10,color:"#9BA3BF"}}>{sub.unit||item.unit}</span>
                                             <span style={{fontSize:10,fontWeight:700,color:subBids>0?subCov:"#9BA3BF"}}>{subBids} bid{subBids!==1?"s":""}</span>
-                                            <button onClick={()=>{setShowAddVendor(true);setAddMode("sub");setSubSearch2("");}} style={{padding:"2px 8px",background:"#3B6FE815",border:"1px solid #3B6FE830",borderRadius:4,color:"#3B6FE8",fontSize:10,cursor:"pointer",fontFamily:"inherit",fontWeight:600}}>+ Sub</button>
+                                            <button onClick={()=>{setActiveBidOpp(activeOppId);setShowAddVendor(true);setAddMode("sub");setSubSearch2("");setPickerTrade("");}} style={{padding:"2px 8px",background:"#3B6FE815",border:"1px solid #3B6FE830",borderRadius:4,color:"#3B6FE8",fontSize:10,cursor:"pointer",fontFamily:"inherit",fontWeight:600}}>+ Sub</button>
                                           </div>
                                           <VendorTable vendors={subVendors} itemId={subKey}/>
                                         </div>
@@ -11571,7 +11650,11 @@ if(bounds.length)map.fitBounds(bounds,{padding:[30,30]});
             bidding: false, infoSent: false, bidReceived: false, bidAmount: "", notes: "",
             subcontractorId: s.id,
           };
-          setBidPackages(prev=>({...prev,[activeBidOpp]:{...pkg,vendors:[...pkg.vendors,newV]}}));
+          setBidPackages(prev=>{
+            const updated = {...prev,[activeBidOpp]:{...pkg,vendors:[...pkg.vendors,newV]}};
+            setTimeout(()=>saveEstimateData(activeBidOpp, wbsData[activeBidOpp]||[], updated[activeBidOpp]||{vendors:[]}, estimatePhase[activeBidOpp]||"wbs"), 300);
+            return updated;
+          });
           // Auto-tag sub as major division
           if (!(s.services||[]).includes("major")) {
             const updated = {...s, services:[...(s.services||[]),"major"]};
