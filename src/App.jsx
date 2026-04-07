@@ -9366,54 +9366,150 @@ if(bounds.length)map.fitBounds(bounds,{padding:[30,30]});
                                 </div>
                               ) : wbs.map(item=>{
                                 const hasSubs=(item.subItems||[]).length>0;
-                                const codeVendors=pkg.vendors.filter(v=>(v.costCodes||v.trades||[]).includes(item.id)||(v.costCodes||v.trades||[]).includes(item.trade));
-                                const bidsIn=codeVendors.filter(v=>v.bidReceived).length;
+                                // Show subs explicitly assigned to this code/trade,
+                                // OR subs with no specific assignment (show under all codes)
+                                const codeVendors = pkg.vendors.filter(v => {
+                                  const assigned = v.costCodes||v.trades||[];
+                                  const hasAssignment = assigned.length > 0;
+                                  if (!hasAssignment) return true; // unassigned = show everywhere
+                                  return assigned.includes(item.id) || assigned.includes(item.trade);
+                                });
+                                const bidsIn=codeVendors.filter(v=>v.bidReceived||v.bidFileData||v.bidFileName).length;
                                 const isCrit=item.critical;
                                 const coverage=bidsIn>=2?"#4ADE80":bidsIn>=1?"#FCD34D":"#F87171";
 
-                                const VendorTable = ({vendors, itemId}) => (
+                                // Match vendors to this cost code:
+                                // 1. Explicitly assigned to this item id or trade
+                                // 2. OR unassigned (no costCodes set) — show under all codes
+                                const updateVendor = (vid, patch) => {
+                                  const updated = {...pkg, vendors: pkg.vendors.map(x => x.id===vid ? {...x,...patch} : x)};
+                                  setBidPackages(prev => ({...prev, [activeOppId]: updated}));
+                                  setTimeout(() => saveEstimateData(activeOppId, wbs, updated, estimatePhase[activeOppId]||"wbs"), 300);
+                                };
+                                const removeVendor = (vid) => {
+                                  const updated = {...pkg, vendors: pkg.vendors.filter(x => x.id!==vid)};
+                                  setBidPackages(prev => ({...prev, [activeOppId]: updated}));
+                                  setTimeout(() => saveEstimateData(activeOppId, wbs, updated, estimatePhase[activeOppId]||"wbs"), 300);
+                                };
+
+                                const VendorTable = ({vendors, itemId}) => {
+                                  const winner = vendors.find(v => v.isWinner);
+                                  return (
                                   <div>
-                                    {vendors.length>0 && <>
-                                      <div style={{display:"grid",gridTemplateColumns:"1fr 110px 70px 70px 70px 90px 1fr",background:"#F9FAFC",padding:"3px 16px",gap:8,borderBottom:"1px solid #F0F2F8"}}>
-                                        {["Company / Contact","Phone","Info","Bidding","Bid In","Amount","Notes"].map((h,i)=>(
-                                          <div key={i} style={{fontSize:8,fontWeight:700,color:"#CBD1E8",textTransform:"uppercase",letterSpacing:"0.06em"}}>{h}</div>
-                                        ))}
-                                      </div>
-                                      {vendors.map(v=>(
-                                        <div key={v.id} style={{display:"grid",gridTemplateColumns:"1fr 110px 70px 70px 70px 90px 1fr",padding:"5px 16px",gap:8,alignItems:"center",borderBottom:"1px solid #F9FAFC"}}
-                                          onMouseEnter={e=>e.currentTarget.style.background="#FAFBFF"}
-                                          onMouseLeave={e=>e.currentTarget.style.background=""}>
-                                          <div>
-                                            <div style={{fontSize:12,fontWeight:600,color:"#1A2240"}}>{v.company}</div>
-                                            {v.contact&&<div style={{fontSize:10,color:"#9BA3BF"}}>{v.contact}</div>}
-                                          </div>
-                                          <div style={{fontSize:10,color:"#4A5278"}}>{v.phone||"--"}</div>
-                                          {["infoSent","bidding","bidReceived"].map(key=>(
-                                            <div key={key} style={{display:"flex",justifyContent:"center"}}>
-                                              <div onClick={()=>{
-                                                const updated={...pkg,vendors:pkg.vendors.map(x=>x.id===v.id?{...x,[key]:!v[key]}:x)};
-                                                setBidPackages(prev=>({...prev,[activeOppId]:updated}));
-                                              }} style={{width:14,height:14,borderRadius:"50%",background:v[key]?"#4ADE80":"#E0E4F0",border:v[key]?"2px solid #4ADE8060":"2px solid #CBD1E8",cursor:"pointer",margin:"0 auto"}}/>
-                                            </div>
+                                    {vendors.length > 0 && (
+                                      <>
+                                        {/* Header */}
+                                        <div style={{display:"grid",gridTemplateColumns:"26px 1fr 90px 80px 110px 80px 90px 90px 28px",background:"#F4F6FB",padding:"4px 12px",gap:6,borderBottom:"1px solid #E8EBF4",alignItems:"center"}}>
+                                          {["","Sub / Contact","Phone","Bid File","Amount ($)","Info Sent","Bidding","Notes",""].map((h,i)=>(
+                                            <div key={i} style={{fontSize:8,fontWeight:700,color:"#9BA3BF",textTransform:"uppercase",letterSpacing:"0.06em",textAlign:i===4?"right":"left"}}>{h}</div>
                                           ))}
-                                          <div>
-                                            <input type="text" defaultValue={v.bidAmount||""} onBlur={e=>{
-                                              const updated={...pkg,vendors:pkg.vendors.map(x=>x.id===v.id?{...x,bidAmount:e.target.value}:x)};
-                                              setBidPackages(prev=>({...prev,[activeOppId]:updated}));
-                                            }} placeholder="$0" style={{padding:"3px 6px",border:"1px solid #D4D9EE",borderRadius:4,fontSize:11,fontFamily:"inherit",outline:"none",width:"100%",boxSizing:"border-box",textAlign:"right",background:v.bidReceived?"#F0FDF4":"#F9FAFC"}}/>
-                                          </div>
-                                          <div>
-                                            <input type="text" defaultValue={v.notes||""} onBlur={e=>{
-                                              const updated={...pkg,vendors:pkg.vendors.map(x=>x.id===v.id?{...x,notes:e.target.value}:x)};
-                                              setBidPackages(prev=>({...prev,[activeOppId]:updated}));
-                                            }} placeholder="Notes..." style={{padding:"3px 6px",border:"1px solid #D4D9EE",borderRadius:4,fontSize:11,fontFamily:"inherit",outline:"none",width:"100%",boxSizing:"border-box"}}/>
-                                          </div>
                                         </div>
-                                      ))}
-                                    </>}
-                                    {vendors.length===0&&<div style={{padding:"5px 16px",fontSize:10,color:"#CBD1E8",fontStyle:"italic"}}>No subs yet — click + Sub to add</div>}
+                                        {vendors.map(v => {
+                                          const isWinner = !!v.isWinner;
+                                          const hasBidFile = !!(v.bidFileName || v.bidFileData);
+                                          return (
+                                            <div key={v.id}
+                                              style={{display:"grid",gridTemplateColumns:"26px 1fr 90px 80px 110px 80px 90px 90px 28px",padding:"6px 12px",gap:6,alignItems:"center",borderBottom:"1px solid #F4F6FB",background:isWinner?"#F0FDF4":hasBidFile?"#FAFFFE":"#fff"}}
+                                              onMouseEnter={e=>e.currentTarget.style.background=isWinner?"#E8FAF0":hasBidFile?"#F5FFFD":"#FAFBFF"}
+                                              onMouseLeave={e=>e.currentTarget.style.background=isWinner?"#F0FDF4":hasBidFile?"#FAFFFE":"#fff"}>
+
+                                              {/* Winner radio */}
+                                              <div style={{display:"flex",justifyContent:"center"}}>
+                                                <div title="Select as winner"
+                                                  onClick={()=>updateVendor(v.id,{isWinner:!isWinner})}
+                                                  style={{width:16,height:16,borderRadius:"50%",border:"2px solid "+(isWinner?"#4ADE80":"#D4D9EE"),background:isWinner?"#4ADE80":"transparent",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                                                  {isWinner&&<div style={{width:6,height:6,borderRadius:"50%",background:"#fff"}}/>}
+                                                </div>
+                                              </div>
+
+                                              {/* Name */}
+                                              <div>
+                                                <div style={{fontSize:12,fontWeight:isWinner?700:500,color:isWinner?"#16A34A":"#1A2240",display:"flex",alignItems:"center",gap:5}}>
+                                                  {v.company}
+                                                  {isWinner&&<span style={{fontSize:9,background:"#4ADE80",color:"#fff",padding:"1px 5px",borderRadius:3,fontWeight:700}}>WINNER</span>}
+                                                </div>
+                                                {v.contact&&<div style={{fontSize:9,color:"#9BA3BF"}}>{v.contact}</div>}
+                                              </div>
+
+                                              {/* Phone */}
+                                              <div style={{fontSize:10,color:"#4A5278"}}>{v.phone||<span style={{color:"#E0E4F0"}}>—</span>}</div>
+
+                                              {/* Bid file upload */}
+                                              <div style={{display:"flex",alignItems:"center",gap:4}}>
+                                                {hasBidFile ? (
+                                                  <div style={{display:"flex",alignItems:"center",gap:4}}>
+                                                    {v.bidFileData
+                                                      ? <a href={v.bidFileData} download={v.bidFileName||"bid"} style={{fontSize:9,color:"#3B6FE8",textDecoration:"none",background:"#EEF3FF",padding:"2px 6px",borderRadius:3,fontWeight:700,whiteSpace:"nowrap"}}>📎 {(v.bidFileName||"file").slice(0,8)}</a>
+                                                      : <span style={{fontSize:9,color:"#4ADE80",fontWeight:700}}>📎 On file</span>
+                                                    }
+                                                    <span style={{fontSize:9,background:"#4ADE8020",color:"#16A34A",border:"1px solid #4ADE8040",borderRadius:3,padding:"1px 5px",fontWeight:700}}>BID ✓</span>
+                                                  </div>
+                                                ) : (
+                                                  <label style={{fontSize:9,color:"#9BA3BF",cursor:"pointer",background:"#F4F6FB",border:"1px dashed #D4D9EE",borderRadius:3,padding:"2px 6px",whiteSpace:"nowrap"}}>
+                                                    + Bid File
+                                                    <input type="file" accept=".pdf,.jpg,.jpeg,.png,.xlsx,.doc,.docx" style={{display:"none"}} onChange={e=>{
+                                                      const file=e.target.files[0];
+                                                      if(!file)return;
+                                                      const reader=new FileReader();
+                                                      reader.onload=ev=>updateVendor(v.id,{bidFileData:ev.target.result,bidFileName:file.name,bidReceived:true});
+                                                      reader.readAsDataURL(file);
+                                                      e.target.value="";
+                                                    }}/>
+                                                  </label>
+                                                )}
+                                              </div>
+
+                                              {/* Bid amount */}
+                                              <div>
+                                                <input type="text" defaultValue={v.bidAmount||""} onBlur={e=>updateVendor(v.id,{bidAmount:e.target.value})}
+                                                  placeholder="$0.00"
+                                                  style={{padding:"3px 6px",border:"1px solid "+(isWinner?"#4ADE8050":hasBidFile?"#BBF7D0":"#D4D9EE"),borderRadius:4,fontSize:11,fontFamily:"inherit",outline:"none",width:"100%",boxSizing:"border-box",textAlign:"right",background:isWinner?"#F0FDF4":hasBidFile?"#F0FDF4":"#F9FAFC",fontWeight:isWinner?700:400}}/>
+                                              </div>
+
+                                              {/* Info sent toggle */}
+                                              <div style={{display:"flex",justifyContent:"center"}}>
+                                                <div onClick={()=>updateVendor(v.id,{infoSent:!v.infoSent})}
+                                                  title="Info sent"
+                                                  style={{width:14,height:14,borderRadius:"50%",background:v.infoSent?"#60A5FA":"#E0E4F0",border:v.infoSent?"2px solid #60A5FA60":"2px solid #CBD1E8",cursor:"pointer"}}/>
+                                              </div>
+
+                                              {/* Bidding toggle */}
+                                              <div style={{display:"flex",justifyContent:"center"}}>
+                                                <div onClick={()=>updateVendor(v.id,{bidding:!v.bidding})}
+                                                  title="Bidding"
+                                                  style={{width:14,height:14,borderRadius:"50%",background:v.bidding?"#FCD34D":"#E0E4F0",border:v.bidding?"2px solid #FCD34D60":"2px solid #CBD1E8",cursor:"pointer"}}/>
+                                              </div>
+
+                                              {/* Notes */}
+                                              <div>
+                                                <input type="text" defaultValue={v.notes||""} onBlur={e=>updateVendor(v.id,{notes:e.target.value})}
+                                                  placeholder="Notes…"
+                                                  style={{padding:"3px 6px",border:"1px solid #D4D9EE",borderRadius:4,fontSize:10,fontFamily:"inherit",outline:"none",width:"100%",boxSizing:"border-box"}}/>
+                                              </div>
+
+                                              {/* Remove */}
+                                              <div style={{display:"flex",justifyContent:"center"}}>
+                                                <button onClick={()=>removeVendor(v.id)}
+                                                  style={{background:"none",border:"none",color:"#F87171",cursor:"pointer",fontSize:13,padding:0,lineHeight:1}}>✕</button>
+                                              </div>
+                                            </div>
+                                          );
+                                        })}
+
+                                        {/* Winner summary */}
+                                        {winner && (
+                                          <div style={{display:"flex",alignItems:"center",gap:10,padding:"5px 12px",background:"#F0FDF4",borderTop:"1px solid #BBF7D0"}}>
+                                            <span style={{fontSize:10,fontWeight:700,color:"#16A34A"}}>🏆 Winner: {winner.company}</span>
+                                            {winner.bidAmount&&<span style={{fontSize:11,fontWeight:800,color:"#16A34A"}}>{winner.bidAmount.startsWith("$")?winner.bidAmount:"$"+winner.bidAmount}</span>}
+                                            {winner.bidFileName&&<span style={{fontSize:9,color:"#4ADE80"}}>📎 {winner.bidFileName}</span>}
+                                          </div>
+                                        )}
+                                      </>
+                                    )}
+                                    {vendors.length===0&&<div style={{padding:"7px 16px",fontSize:10,color:"#CBD1E8",fontStyle:"italic"}}>No subs yet — click + Sub to add</div>}
                                   </div>
-                                );
+                                  );
+                                };
 
                                 return (
                                   <div key={item.id} style={{borderBottom:"3px solid #E8EBF4"}}>
@@ -9437,8 +9533,13 @@ if(bounds.length)map.fitBounds(bounds,{padding:[30,30]});
                                     {/* If has sub-items: show each sub as its own section */}
                                     {hasSubs && (item.subItems||[]).map((sub,si)=>{
                                       const subKey = sub.id || (item.id+"_sub"+si);
-                                      const subVendors = pkg.vendors.filter(v=>(v.costCodes||v.trades||[]).includes(subKey)||(v.costCodes||v.trades||[]).includes(item.id)||(v.costCodes||v.trades||[]).includes(item.trade));
-                                      const subBids = subVendors.filter(v=>v.bidReceived).length;
+                                      const subVendors = pkg.vendors.filter(v => {
+                                        const assigned = v.costCodes||v.trades||[];
+                                        const hasAssignment = assigned.length > 0;
+                                        if (!hasAssignment) return true;
+                                        return assigned.includes(subKey) || assigned.includes(item.id) || assigned.includes(item.trade);
+                                      });
+                                      const subBids = subVendors.filter(v=>v.bidReceived||v.bidFileData||v.bidFileName).length;
                                       const subCov = subBids>=2?"#4ADE80":subBids>=1?"#FCD34D":"#F87171";
                                       return (
                                         <div key={subKey} style={{borderBottom:"1px solid #F0F2F8",marginLeft:16,borderLeft:"2px solid #E0E4F0"}}>
