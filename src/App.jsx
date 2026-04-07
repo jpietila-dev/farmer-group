@@ -11842,8 +11842,7 @@ if(bounds.length)map.fitBounds(bounds,{padding:[30,30]});
                 </div>
               )}
 
-
-                            {/* Manual entry */}
+              {/* Manual entry */}
               {addMode === "manual" && (
                 <>
                   <div style={{padding:"18px 22px",overflowY:"auto",display:"flex",flexDirection:"column",gap:12,flex:1}}>
