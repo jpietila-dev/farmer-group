@@ -3040,6 +3040,10 @@ export default function App() {
   const [showSubForm,       setShowSubForm]       = useState(false);
   const [editSubId,         setEditSubId]         = useState(null);
   const [subForm,           setSubForm]           = useState({ name: "", trade: "", phone: "", email: "", msaStatus: "missing", coiExpiry: "", w9: false, notes: "", services: [], address: "", city: "", state: "", contact_name: "", coverage: "" });
+  const [subView,           setSubView]           = useState("list");
+  const [subTradeFilter,    setSubTradeFilter]    = useState(null);
+  const [subSearch,         setSubSearch]         = useState("");
+  const [selectedSubProfile,setSelectedSubProfile]= useState(null);
 
   const navItems = NAV_ITEMS[activeBU] || NAV_ITEMS.all;
   const buColor  = BU_COLORS[activeBU];
@@ -7843,11 +7847,6 @@ if(bounds.length)map.fitBounds(bounds,{padding:[30,30]});
             const buFilteredSubs = activeBU === "all"
               ? subcontractors
               : subcontractors.filter(s => !s.services || s.services.length === 0 || s.services.includes(buDivTag));
-
-            const [subView,        setSubView]        = useState("list");
-            const [subTradeFilter, setSubTradeFilter] = useState(null);
-            const [subSearch,      setSubSearch]      = useState("");
-            const [selectedSubProfile, setSelectedSubProfile] = useState(null);
 
             const allTrades = [...new Set(buFilteredSubs.map(s => s.trade).filter(Boolean))].sort();
             const visibleSubs = buFilteredSubs.filter(s => {
