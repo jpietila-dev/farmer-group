@@ -7979,14 +7979,20 @@ window.addEventListener('message',function(e){
                       setWbsData(prev=>{const next={...prev,[oppId]:resolved};setTimeout(()=>saveEstimateData(oppId,resolved,bidPackages[oppId]||{vendors:[]},estimatePhase[oppId]||"wbs"),300);return next;});
                     };
                     const updateVendorCx = (vid, patch) => {
-                      const updated={...pkg,vendors:pkg.vendors.map(x=>x.id===vid?{...x,...patch}:x)};
-                      setBidPackages(prev=>({...prev,[oppId]:updated}));
-                      setTimeout(()=>saveEstimateData(oppId,wbs,updated,phase),300);
+                      setBidPackages(prev=>{
+                        const cur=prev[oppId]||{vendors:[],lineStatus:{}};
+                        const updated={...cur,vendors:cur.vendors.map(x=>x.id===vid?{...x,...patch}:x)};
+                        setTimeout(()=>saveEstimateData(oppId,wbsData[oppId]||[],updated,estimatePhase[oppId]||"overview"),300);
+                        return {...prev,[oppId]:updated};
+                      });
                     };
                     const removeVendorCx = (vid) => {
-                      const updated={...pkg,vendors:pkg.vendors.filter(x=>x.id!==vid)};
-                      setBidPackages(prev=>({...prev,[oppId]:updated}));
-                      setTimeout(()=>saveEstimateData(oppId,wbs,updated,phase),300);
+                      setBidPackages(prev=>{
+                        const cur=prev[oppId]||{vendors:[],lineStatus:{}};
+                        const updated={...cur,vendors:cur.vendors.filter(x=>x.id!==vid)};
+                        setTimeout(()=>saveEstimateData(oppId,wbsData[oppId]||[],updated,estimatePhase[oppId]||"overview"),300);
+                        return {...prev,[oppId]:updated};
+                      });
                     };
 
                     const PHASES_CX = [
@@ -8253,7 +8259,8 @@ window.addEventListener('message',function(e){
                             {/* Per-trade quoting tracker */}
                             {wbs.length===0&&<div style={{padding:"40px",textAlign:"center",color:"#9BA3BF",fontSize:13}}>Add cost codes in WBS first</div>}
                             {wbs.map(item=>{
-                              const itemVendors=pkg.vendors.filter(v=>{const a=v.costCodes||v.trades||[];return a.length===0||a.includes(item.id)||a.includes(item.trade);});
+                              // Show all subs under every cost code — per-line independence via lineStatus keys
+                              const itemVendors=pkg.vendors;
                               const getLS=(vid,key)=>(pkg.lineStatus||{})[vid+"_"+item.id]?.[key]??false;
                               const setLS=(vid,key,val)=>{
                                 const ls=pkg.lineStatus||{};const lk=vid+"_"+item.id;
