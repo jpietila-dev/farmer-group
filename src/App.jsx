@@ -7192,7 +7192,7 @@ Return ONLY valid JSON, no markdown, no extra text:
 <style>html,body,#map{margin:0;padding:0;height:100%;width:100%}.leaflet-popup-content-wrapper{border-radius:10px;box-shadow:0 4px 20px rgba(0,0,0,0.15)}</style>
 </head><body><div id="map"></div><script>
 var map=L.map('map',{zoomControl:true,attributionControl:false});
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).addTo(map);
+L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{maxZoom:19,attribution:'© OSM © CARTO'}).addTo(map);
 L.control.attribution({prefix:'© OSM'}).addTo(map);
 window.addEventListener('message',function(e){
   if(!e.data||e.data.type!=='loadPts')return;
@@ -8357,7 +8357,7 @@ window.addEventListener('message',function(e){
 <style>html,body,#map{margin:0;padding:0;height:100%;width:100%}.leaflet-popup-content-wrapper{border-radius:10px;box-shadow:0 4px 20px rgba(0,0,0,0.15)}</style>
 </head><body><div id="map"></div><script>
 var map = L.map('map',{zoomControl:true,attributionControl:false});
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).addTo(map);
+L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{maxZoom:19,attribution:'© OSM © CARTO'}).addTo(map);
 L.control.attribution({prefix:'© OSM'}).addTo(map);
 var TM={'HVAC':['❄️','#60A5FA'],'Plumbing':['🔧','#3B82F6'],'Electrical':['⚡','#F59E0B'],'Roofing':['🏠','#8B5CF6'],'Painting':['🎨','#EC4899'],'Concrete':['🪨','#6B7280'],'Landscaping':['🌿','#10B981'],'Snow':['🌨','#A8C4F8'],'General':['🔨','#7BA7F5'],'Fire':['🔥','#EF4444'],'Pest':['🪲','#84CC16'],'Cleaning':['🧹','#14B8A6'],'Security':['🔒','#6366F1'],'Elevator':['🛗','#D97706'],'Carpentry':['🪵','#92400E']};
 function getI(t){var m=Object.entries(TM).find(function(e){return t&&t.toLowerCase().includes(e[0].toLowerCase());});return m?m[1]:['🔧','#7BA7F5'];}
