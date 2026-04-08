@@ -7159,7 +7159,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                         <div style={{ fontSize: 13, color: "#4A5278" }}>Run the <strong>geocode_sites.html</strong> tool to add coordinates — takes ~10 min, does all 599 sites automatically.</div>
                       </div>
                     ) : (
-                      <div style={{ borderRadius: 12, overflow: "hidden", border: "1px solid #D4D9EE", boxShadow: "0 2px 16px rgba(0,0,0,0.07)" }}>
+                      <div style={{ borderRadius: 12, overflow: "hidden", border: "1px solid #D4D9EE", boxShadow: "0 2px 16px rgba(0,0,0,0.07)", height: 520 }}>
                         {/* Legend bar */}
                         <div style={{ background: "#fff", padding: "10px 16px", borderBottom: "1px solid #F0F2F8", display: "flex", gap: 14, flexWrap: "wrap", alignItems: "center" }}>
                           <span style={{ fontSize: 11, fontWeight: 700, color: "#1A2240" }}>{mapSites.length} site{mapSites.length!==1?"s":""} displayed</span>
@@ -7177,7 +7177,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                         <iframe
                           key={mapCompanyFilter + "|" + mapSites.length}
                           sandbox="allow-scripts allow-same-origin"
-                          style={{width:"100%",height:"100%",border:"none",display:"block"}}
+                          style={{width:"100%",height:"100%",border:"none",display:"block",minHeight:460}}
                           srcDoc={`<!DOCTYPE html><html><head>
 <meta charset="utf-8">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
@@ -7396,7 +7396,7 @@ if(bounds.length)map.fitBounds(bounds,{padding:[30,30]});
                     </div>
                   </div>
                   <div style={{ height: 340, position: "relative" }}>
-                    <iframe key={activeBU + currentSites.length} style={{ width: "100%", height: "100%", border: "none" }}
+                    <iframe key={activeBU + currentSites.length} style={{ width: "100%", height: 320, border: "none", display: "block" }}
                       sandbox="allow-scripts allow-same-origin"
                       srcDoc={`<!DOCTYPE html><html><head>
                         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
@@ -7418,7 +7418,7 @@ if(bounds.length)map.fitBounds(bounds,{padding:[30,30]});
                         });
                         if(bounds.length > 1) map.fitBounds(bounds, {padding:[20,20]});
                         if(bounds.length === 0) { var el=document.getElementById('map'); el.innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#4A5278;font-family:sans-serif;font-size:13px">No geocoded sites yet</div>'; }
-                      </script></body></html>`}
+                      <\/script></body></html>`}
                     />
                   </div>
                 </div>
@@ -14399,7 +14399,7 @@ if(bounds.length)map.fitBounds(bounds,{padding:[30,30]});
                           L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 20 }).addTo(map);
                           var icon = L.divIcon({ className: '', html: '<div style="width:14px;height:14px;border-radius:50%;background:#ef4444;border:3px solid white;box-shadow:0 2px 6px rgba(0,0,0,0.6);"></div>', iconSize:[14,14], iconAnchor:[7,7] });
                           L.marker([${site.lat}, ${site.lng}], { icon: icon }).addTo(map);
-                        </script></body></html>`}
+                        <\/script></body></html>`}
                       />
                     ) : (
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 8, height: "100%", color: "#888" }}>
