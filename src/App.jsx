@@ -2851,7 +2851,7 @@ export default function App() {
   const [capexJobs,        setCapexJobs]        = useState(INIT_CAPEX_JOBS);
   const [showCapexForm,    setShowCapexForm]    = useState(false);
   const [editCapexId,      setEditCapexId]      = useState(null);
-  const [capexForm,        setCapexForm]        = useState({ name: "", companyId: "", siteId: "", approverContactId: "", contractValue: "", stage: "estimating", startDate: "", endDate: "", pm: "", pct: 0, bidDueDate: "", followUpDate: "", buyoutDate: "", invoiceDate: "", notes: "", amountBilled: 0, noahApproved: false, bradApproved: false, wonDate: "", lostDate: "", photos: [] });
+  const [capexForm,        setCapexForm]        = useState({ name: "", companyId: "", siteId: "", approverContactId: "", contractValue: "", stage: "estimating", startDate: "", endDate: "", pm: "", pct: 0, bidDueDate: "", followUpDate: "", buyoutDate: "", invoiceDate: "", notes: "", amountBilled: 0, noahApproved: false, bradApproved: false, wonDate: "", lostDate: "", photos: [], subCost: "", ownerCost: "", proposalNumber: "" });
   const [capexDetailTab,   setCapexDetailTab]   = useState("overview");
   const [selectedCapexFull,setSelectedCapexFull]= useState(null); // full-page detail view
   const [showCapexBuyoutGate, setShowCapexBuyoutGate] = useState(false);
@@ -3430,6 +3430,9 @@ export default function App() {
           brad_approved: updated.bradApproved||false,
           won_date: updated.wonDate||null,
           lost_date: updated.lostDate||null,
+          sub_cost: updated.subCost||null,
+          owner_cost: updated.ownerCost||null,
+          proposal_number: updated.proposalNumber||null,
         };
         supa.from("capex_jobs").update(dbRow).eq("id", id);
       } catch(e) {}
@@ -8137,17 +8140,51 @@ window.addEventListener('message',function(e){
                                 </div>
                               </div>
 
-                              {/* Bid due date quick-set */}
-                              <div style={{display:"flex",gap:12,alignItems:"flex-end"}}>
-                                <div style={{flex:1}}>
+                              {/* Estimating fields */}
+                              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+                                <div>
                                   <div style={{fontSize:11,fontWeight:700,color:"#1A2240",marginBottom:5}}>📅 Bid Due Date</div>
                                   <input type="date" value={job.bidDueDate||""} onChange={e=>updateCapex({bidDueDate:e.target.value})}
                                     style={{width:"100%",padding:"8px 10px",border:"1.5px solid #D4D9EE",borderRadius:7,fontSize:12,fontFamily:"inherit",outline:"none",boxSizing:"border-box"}}/>
                                 </div>
-                                <div style={{flex:1}}>
-                                  <div style={{fontSize:11,fontWeight:700,color:"#1A2240",marginBottom:5}}>💰 Estimated Value</div>
-                                  <input type="number" value={job.contractValue||""} onChange={e=>updateCapex({contractValue:parseFloat(e.target.value)||0})}
-                                    style={{width:"100%",padding:"8px 10px",border:"1.5px solid #D4D9EE",borderRadius:7,fontSize:12,fontFamily:"inherit",outline:"none",boxSizing:"border-box"}} placeholder="$0"/>
+                                <div>
+                                  <div style={{fontSize:11,fontWeight:700,color:"#1A2240",marginBottom:5}}>📋 Proposal / Quote #</div>
+                                  <input type="text" value={job.proposalNumber||""} onChange={e=>updateCapex({proposalNumber:e.target.value})}
+                                    placeholder="e.g. WO-2026-0047" style={{width:"100%",padding:"8px 10px",border:"1.5px solid #D4D9EE",borderRadius:7,fontSize:12,fontFamily:"inherit",outline:"none",boxSizing:"border-box"}}/>
+                                </div>
+                              </div>
+
+                              {/* Cost fields */}
+                              <div style={{background:"#F9FAFC",border:"1px solid #E8EBF4",borderRadius:10,padding:"14px"}}>
+                                <div style={{fontSize:10,fontWeight:700,color:"#4A5278",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:12}}>💵 Cost Tracking</div>
+                                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12}}>
+                                  <div>
+                                    <div style={{fontSize:11,fontWeight:700,color:"#1A2240",marginBottom:5}}>Sub Costs <span style={{fontSize:9,color:"#9BA3BF",fontWeight:400}}>(what we pay subs)</span></div>
+                                    <input type="number" value={job.subCost||""} onChange={e=>updateCapex({subCost:e.target.value})}
+                                      placeholder="$0" style={{width:"100%",padding:"8px 10px",border:"1.5px solid #D4D9EE",borderRadius:7,fontSize:12,fontFamily:"inherit",outline:"none",boxSizing:"border-box"}}/>
+                                    {job.subCost&&<div style={{fontSize:10,color:"#9BA3BF",marginTop:3}}>{fmt(parseFloat(job.subCost)||0)}</div>}
+                                  </div>
+                                  <div>
+                                    <div style={{fontSize:11,fontWeight:700,color:"#1A2240",marginBottom:5}}>Owner Cost <span style={{fontSize:9,color:"#9BA3BF",fontWeight:400}}>(gross / what owner pays)</span></div>
+                                    <input type="number" value={job.ownerCost||job.contractValue||""} onChange={e=>updateCapex({ownerCost:e.target.value,contractValue:parseFloat(e.target.value)||0})}
+                                      placeholder="$0" style={{width:"100%",padding:"8px 10px",border:"1.5px solid #D4D9EE",borderRadius:7,fontSize:12,fontFamily:"inherit",outline:"none",boxSizing:"border-box"}}/>
+                                    {(job.ownerCost||job.contractValue)&&<div style={{fontSize:10,color:"#9BA3BF",marginTop:3}}>{fmt(parseFloat(job.ownerCost||job.contractValue)||0)}</div>}
+                                  </div>
+                                  <div>
+                                    <div style={{fontSize:11,fontWeight:700,color:"#1A2240",marginBottom:5}}>Gross Profit</div>
+                                    {(() => {
+                                      const sub=parseFloat(job.subCost||0);
+                                      const own=parseFloat(job.ownerCost||job.contractValue||0);
+                                      const gp=own-sub;
+                                      const margin=own>0?Math.round(gp/own*100):0;
+                                      return (
+                                        <div style={{padding:"8px 10px",background:gp>0?"#F0FDF4":"#FFF1F2",border:"1.5px solid "+(gp>0?"#BBF7D0":"#FECDD3"),borderRadius:7}}>
+                                          <div style={{fontSize:14,fontWeight:800,color:gp>0?"#16A34A":"#DC2626"}}>{gp>=0?"+":"-"}{fmt(Math.abs(gp))}</div>
+                                          <div style={{fontSize:10,color:gp>0?"#16A34A":"#DC2626"}}>{margin}% margin</div>
+                                        </div>
+                                      );
+                                    })()}
+                                  </div>
                                 </div>
                               </div>
 
@@ -8174,6 +8211,7 @@ window.addEventListener('message',function(e){
                                         <div style="font-size:11px;color:#9ba3bf">Bid Solicitation</div>
                                         <div style="font-size:12px;font-weight:600">${new Date().toLocaleDateString("en-US",{year:"numeric",month:"long",day:"numeric"})}</div>
                                         ${job.bidDueDate?`<div style="font-size:11px;color:#F87171;margin-top:4px;font-weight:600">Bid Due: ${job.bidDueDate}</div>`:""}
+                                        ${job.proposalNumber?`<div style="font-size:11px;color:#4A5278;margin-top:2px">Proposal #: ${job.proposalNumber}</div>`:""}
                                       </div>
                                     </div>
                                     ${job.notes?`<h2>Scope Notes</h2><div class="notes-box">${job.notes.split("\n").join("<br>")}</div>`:""}
@@ -8397,7 +8435,9 @@ window.addEventListener('message',function(e){
                                 </div>
                                 <div style={{textAlign:"right"}}>
                                   <div style={{fontSize:10,color:"#9BA3BF"}}>Bid Summary — For Brad</div>
-                                  <div style={{fontSize:15,fontWeight:800,color:"#4ADE80"}}>Est. Buy-out: {fmt(totalBuyout)}</div>
+                                  <div style={{fontSize:15,fontWeight:800,color:"#4ADE80"}}>Est. Sub Buy-out: {fmt(totalBuyout)}</div>
+                                  {job.ownerCost&&<div style={{fontSize:12,color:"#4A5278",marginTop:2}}>Owner Cost: {fmt(parseFloat(job.ownerCost)||0)} · <span style={{color:parseFloat(job.ownerCost)-totalBuyout>=0?"#16A34A":"#DC2626",fontWeight:700}}>GP: {fmt((parseFloat(job.ownerCost)||0)-totalBuyout)}</span></div>}
+                                  {job.proposalNumber&&<div style={{fontSize:11,color:"#9BA3BF",marginTop:2}}>Proposal #: {job.proposalNumber}</div>}
                                 </div>
                               </div>
                               {summaryRows.length===0&&<div style={{textAlign:"center",padding:"32px",color:"#9BA3BF"}}>No subs added to quoting yet</div>}
