@@ -7177,37 +7177,36 @@ Return ONLY valid JSON, no markdown, no extra text:
                         <iframe
                           key={mapCompanyFilter + "|" + mapSites.length}
                           sandbox="allow-scripts"
-                          style={{width:"100%",height:"100%",border:"none",display:"block",minHeight:460}}
-                          srcDoc={`<!DOCTYPE html><html><head>
-<meta charset="utf-8">
+                          style={{width:"100%",height:540,border:"none",display:"block"}}
+                          title="Sites Map"
+                          onLoad={e=>{
+                            e.target.contentWindow.postMessage({type:"loadPts",pts:mapSites.map(s=>({
+                              lat:s.lat,lng:s.lng,store:s.storeNumber,addr:s.address,
+                              co:companies.find(c=>c.id===s.companyId)?.name||"",
+                              color:CO_COLORS[s.companyId]||"#3B6FE8"
+                            }))}, "*");
+                          }}
+                          srcDoc={`<!DOCTYPE html><html><head><meta charset="utf-8">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"><\/script>
-<style>html,body,#map{margin:0;padding:0;height:100%;width:100%}.leaflet-popup-content{margin:10px 14px}.leaflet-popup-content-wrapper{border-radius:10px;box-shadow:0 4px 20px rgba(0,0,0,0.15)}</style>
-</head><body><div id="map"></div>
-<script>
-const map=L.map("map",{zoomControl:true,attributionControl:false});
-L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:19}).addTo(map);
-L.control.attribution({prefix:'© <a href="https://openstreetmap.org">OSM</a>'}).addTo(map);
-const pts=${JSON.stringify(mapSites.map(s=>({
-  lat:s.lat, lng:s.lng,
-  store:s.storeNumber,
-  addr:s.address,
-  co: companies.find(c=>c.id===s.companyId)?.name||"",
-  color: CO_COLORS[s.companyId]||"#3B6FE8"
-})))};
-const bounds=[];
-pts.forEach(p=>{
-  const icon=L.divIcon({className:"",
-    html:'<div style="width:11px;height:11px;border-radius:50%;background:'+p.color+';border:2px solid white;box-shadow:0 1px 5px rgba(0,0,0,0.5)"></div>',
-    iconSize:[11,11],iconAnchor:[5,5],popupAnchor:[0,-6]});
-  L.marker([p.lat,p.lng],{icon}).addTo(map)
-   .bindPopup('<div style="font-family:Inter,sans-serif;line-height:1.5"><b style="font-size:13px">#'+p.store+'</b><br><span style="font-size:11px;color:#555">'+p.addr+'</span><br><span style="font-size:11px;font-weight:600;color:'+p.color+'">'+p.co+'</span></div>');
-  bounds.push([p.lat,p.lng]);
+<style>html,body,#map{margin:0;padding:0;height:100%;width:100%}.leaflet-popup-content-wrapper{border-radius:10px;box-shadow:0 4px 20px rgba(0,0,0,0.15)}</style>
+</head><body><div id="map"></div><script>
+var map=L.map('map',{zoomControl:true,attributionControl:false});
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).addTo(map);
+L.control.attribution({prefix:'© OSM'}).addTo(map);
+window.addEventListener('message',function(e){
+  if(!e.data||e.data.type!=='loadPts')return;
+  var pts=e.data.pts,bounds=[];
+  pts.forEach(function(p){
+    var icon=L.divIcon({className:'',html:'<div style="width:11px;height:11px;border-radius:50%;background:'+p.color+';border:2px solid white;box-shadow:0 1px 5px rgba(0,0,0,0.5)"></div>',iconSize:[11,11],iconAnchor:[5,5],popupAnchor:[0,-6]});
+    L.marker([p.lat,p.lng],{icon:icon}).addTo(map).bindPopup('<div style="font-family:sans-serif;line-height:1.5"><b>#'+p.store+'</b><br><span style="color:#555;font-size:11px">'+p.addr+'</span><br><span style="font-weight:600;color:'+p.color+';font-size:11px">'+p.co+'</span></div>');
+    bounds.push([p.lat,p.lng]);
+  });
+  if(bounds.length>1)map.fitBounds(bounds,{padding:[30,30]});
+  else if(bounds.length===1)map.setView(bounds[0],12);
+  else map.setView([39.5,-98.5],4);
 });
-if(bounds.length)map.fitBounds(bounds,{padding:[30,30]});
 <\/script></body></html>`}
-                          style={{ width: "100%", height: 540, border: "none", display: "block" }}
-                          title="Sites Map"
                         />
                       </div>
                     )}
@@ -7396,29 +7395,34 @@ if(bounds.length)map.fitBounds(bounds,{padding:[30,30]});
                     </div>
                   </div>
                   <div style={{ height: 340, position: "relative" }}>
-                    <iframe key={activeBU + currentSites.length} style={{ width: "100%", height: 320, border: "none", display: "block" }}
+                    <iframe key={activeBU + currentSites.length}
+                      style={{ width: "100%", height: 320, border: "none", display: "block" }}
                       sandbox="allow-scripts"
-                      srcDoc={`<!DOCTYPE html><html><head>
-                        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
-                        <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
-                        <style>html,body,#map{margin:0;padding:0;height:100%;background:#FFFFFF;}</style>
-                      </head><body><div id="map"></div><script>
-                        var map = L.map('map', { zoomControl: true, attributionControl: false }).setView([39.5, -98.5], 4);
-                        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { maxZoom: 19 }).addTo(map);
-                        var sites = ${JSON.stringify(sitesWithCoords.map(s => {
-                          const contracted = isContracted(s);
-                          const co = companies.find(c => c.id === s.companyId);
-                          return { lat: s.lat, lng: s.lng, label: (co?.name||"") + " #" + (s.storeNumber||""), color: contracted ? "#4ADE80" : "#FCD34D" };
-                        }))};
-                        var bounds = [];
-                        sites.forEach(function(s) {
-                          var icon = L.divIcon({ className: '', html: '<div style="width:10px;height:10px;border-radius:50%;background:' + s.color + ';border:2px solid white;box-shadow:0 1px 4px rgba(0,0,0,0.5)"></div>', iconSize:[10,10], iconAnchor:[5,5] });
-                          L.marker([s.lat,s.lng],{icon:icon}).addTo(map).bindPopup(s.label);
-                          bounds.push([s.lat,s.lng]);
-                        });
-                        if(bounds.length > 1) map.fitBounds(bounds, {padding:[20,20]});
-                        if(bounds.length === 0) { var el=document.getElementById('map'); el.innerHTML='<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#4A5278;font-family:sans-serif;font-size:13px">No geocoded sites yet</div>'; }
-                      <\/script></body></html>`}
+                      onLoad={e=>{
+                        e.target.contentWindow.postMessage({type:"loadPts",pts:sitesWithCoords.map(s=>({
+                          lat:s.lat,lng:s.lng,
+                          label:(companies.find(c=>c.id===s.companyId)?.name||"")+" #"+(s.storeNumber||""),
+                          color:isContracted(s)?"#4ADE80":"#FCD34D"
+                        }))}, "*");
+                      }}
+                      srcDoc={`<!DOCTYPE html><html><head><meta charset="utf-8">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"><\/script>
+<style>html,body,#map{margin:0;padding:0;height:100%;}</style>
+</head><body><div id="map"></div><script>
+var map=L.map('map',{zoomControl:true,attributionControl:false}).setView([39.5,-98.5],4);
+L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',{maxZoom:19}).addTo(map);
+window.addEventListener('message',function(e){
+  if(!e.data||e.data.type!=='loadPts')return;
+  var pts=e.data.pts,bounds=[];
+  pts.forEach(function(s){
+    var icon=L.divIcon({className:'',html:'<div style="width:10px;height:10px;border-radius:50%;background:'+s.color+';border:2px solid white;box-shadow:0 1px 4px rgba(0,0,0,0.5)"></div>',iconSize:[10,10],iconAnchor:[5,5]});
+    L.marker([s.lat,s.lng],{icon:icon}).addTo(map).bindPopup(s.label);
+    bounds.push([s.lat,s.lng]);
+  });
+  if(bounds.length>1)map.fitBounds(bounds,{padding:[20,20]});
+});
+<\/script></body></html>`}
                     />
                   </div>
                 </div>
@@ -8338,9 +8342,40 @@ if(bounds.length)map.fitBounds(bounds,{padding:[30,30]});
                         <div style={{fontSize:12}}>Add addresses when editing subcontractors to enable the map.</div>
                       </div>
                     ) : (
-                      <iframe key={"sm-"+subTradeFilter+"-"+mapPts.length} style={{width:"100%",height:500,border:"none",display:"block"}} title="Sub Map"
+                      <iframe
+                        key={"sm-"+subTradeFilter+"-"+mapPts.length}
+                        id="sub-map-iframe"
+                        style={{width:"100%",height:500,border:"none",display:"block"}}
+                        title="Sub Map"
                         sandbox="allow-scripts"
-                        srcDoc={"<!DOCTYPE html><html><head><meta charset='utf-8'><link rel='stylesheet' href='https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css'/><script src='https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js'><\\/script><style>html,body,#map{margin:0;padding:0;height:100%;width:100%}.leaflet-popup-content-wrapper{border-radius:10px}</style></head><body><div id='map'></div><script>const map=L.map('map',{zoomControl:true,attributionControl:false});L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).addTo(map);L.control.attribution({prefix:'© OSM'}).addTo(map);const pts=" + JSON.stringify(mapPts.map(s=>({lat:s.lat,lng:s.lng,name:s.name,trade:s.trade||"General",phone:s.phone||"",city:s.city||"",state:s.state||""}))) + ";const TM={'HVAC':['❄️','#60A5FA'],'Plumbing':['🔧','#3B82F6'],'Electrical':['⚡','#F59E0B'],'Roofing':['🏠','#8B5CF6'],'Painting':['🎨','#EC4899'],'Concrete':['🪨','#6B7280'],'Landscaping':['🌿','#10B981'],'Snow':['🌨','#A8C4F8'],'General':['🔨','#7BA7F5'],'Fire':['🔥','#EF4444'],'Pest':['🪲','#84CC16'],'Cleaning':['🧹','#14B8A6'],'Security':['🔒','#6366F1'],'Elevator':['🛗','#D97706'],'Carpentry':['🪵','#92400E']};const getI=(t)=>{const m=Object.entries(TM).find(([k])=>t&&t.toLowerCase().includes(k.toLowerCase()));return m?m[1]:['🔧','#7BA7F5'];};const bnds=[];pts.forEach(p=>{const [ic,cl]=getI(p.trade);const icon=L.divIcon({className:'',html:'<div style=\"width:36px;height:36px;border-radius:50%;background:'+cl+';display:flex;align-items:center;justify-content:center;font-size:18px;box-shadow:0 2px 8px rgba(0,0,0,0.4);border:2.5px solid white\">'+ic+'</div>',iconSize:[36,36],iconAnchor:[18,18],popupAnchor:[0,-20]});L.marker([p.lat,p.lng],{icon}).addTo(map).bindPopup('<div style=\"font-family:Inter,sans-serif;line-height:1.6\"><b style=\"font-size:13px\">'+p.name+'</b><br><span style=\"font-size:11px;color:#4A5278\">'+p.trade+'</span>'+(p.city?'<br><span style=\"font-size:11px;color:#9BA3BF\">'+p.city+(p.state?', '+p.state:'')+'</span>':'')+(p.phone?'<br><span style=\"font-size:11px\">📞 '+p.phone+'</span>':'')+'</div>');bnds.push([p.lat,p.lng]);});if(bnds.length)map.fitBounds(bnds,{padding:[40,40]});<\\/script></body></html>"}
+                        onLoad={e=>{
+                          e.target.contentWindow.postMessage({type:"loadPts",pts:mapPts.map(s=>({lat:s.lat,lng:s.lng,name:s.name,trade:s.trade||"General",phone:s.phone||"",city:s.city||"",state:s.state||""}))}, "*");
+                        }}
+                        srcDoc={`<!DOCTYPE html><html><head><meta charset="utf-8">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"><\/script>
+<style>html,body,#map{margin:0;padding:0;height:100%;width:100%}.leaflet-popup-content-wrapper{border-radius:10px;box-shadow:0 4px 20px rgba(0,0,0,0.15)}</style>
+</head><body><div id="map"></div><script>
+var map = L.map('map',{zoomControl:true,attributionControl:false});
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).addTo(map);
+L.control.attribution({prefix:'© OSM'}).addTo(map);
+var TM={'HVAC':['❄️','#60A5FA'],'Plumbing':['🔧','#3B82F6'],'Electrical':['⚡','#F59E0B'],'Roofing':['🏠','#8B5CF6'],'Painting':['🎨','#EC4899'],'Concrete':['🪨','#6B7280'],'Landscaping':['🌿','#10B981'],'Snow':['🌨','#A8C4F8'],'General':['🔨','#7BA7F5'],'Fire':['🔥','#EF4444'],'Pest':['🪲','#84CC16'],'Cleaning':['🧹','#14B8A6'],'Security':['🔒','#6366F1'],'Elevator':['🛗','#D97706'],'Carpentry':['🪵','#92400E']};
+function getI(t){var m=Object.entries(TM).find(function(e){return t&&t.toLowerCase().includes(e[0].toLowerCase());});return m?m[1]:['🔧','#7BA7F5'];}
+window.addEventListener('message',function(e){
+  if(!e.data||e.data.type!=='loadPts')return;
+  var pts=e.data.pts, bnds=[];
+  pts.forEach(function(p){
+    var r=getI(p.trade),ic=r[0],cl=r[1];
+    var icon=L.divIcon({className:'',html:'<div style="width:32px;height:32px;border-radius:50%;background:'+cl+';display:flex;align-items:center;justify-content:center;font-size:16px;box-shadow:0 2px 8px rgba(0,0,0,0.4);border:2px solid white">'+ic+'</div>',iconSize:[32,32],iconAnchor:[16,16],popupAnchor:[0,-18]});
+    var popup='<div style="font-family:sans-serif;line-height:1.5"><b>'+p.name+'</b><br><span style="color:#4A5278;font-size:11px">'+p.trade+'</span>'+(p.city?'<br><span style="color:#9BA3BF;font-size:11px">'+p.city+(p.state?', '+p.state:'')+'</span>':'')+(p.phone?'<br>📞 '+p.phone:'')+'</div>';
+    L.marker([p.lat,p.lng],{icon:icon}).addTo(map).bindPopup(popup);
+    bnds.push([p.lat,p.lng]);
+  });
+  if(bnds.length>1)map.fitBounds(bnds,{padding:[40,40]});
+  else if(bnds.length===1)map.setView(bnds[0],10);
+  else map.setView([39.5,-98.5],4);
+});
+<\/script></body></html>`}
                       />
                     )}
                   </div>
