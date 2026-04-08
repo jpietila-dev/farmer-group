@@ -50,8 +50,8 @@ const siteToDB = s => ({ id: s.id, company_id: s.companyId||null, contact_ids: s
 const dbToLsSite = r => dbToSite(r); // same structure now
 const lsSiteToDB = s => siteToDB(s);
 
-const dbToSub = r => ({ id: r.id, name: r.name||"", trade: r.trade||"", phone: r.phone||"", email: r.email||"", msaStatus: r.msa_status||"missing", coiExpiry: r.coi_expiry||"", w9: r.w9||false, notes: r.notes||"", services: r.services||[], address: r.address||"", city: r.city||"", state: r.state||"", lat: r.lat||null, lng: r.lng||null, coverage: r.coverage||"", contact_name: r.contact_name||"", w9FileUrl: r.w9_file_url||"", coiFileUrl: r.coi_file_url||"" });
-const subToDB = s => ({ id: s.id, name: s.name||"", trade: s.trade||"", phone: s.phone||"", email: s.email||"", msa_status: s.msaStatus||s.msa_status||"missing", coi_expiry: s.coiExpiry||s.coi_expiry||null, w9: s.w9||false, notes: s.notes||"", services: s.services||[], address: s.address||null, city: s.city||null, state: s.state||null, lat: s.lat||null, lng: s.lng||null, coverage: s.coverage||null, contact_name: s.contact_name||null, w9_file_url: s.w9FileData||s.w9FileUrl||null, coi_file_url: s.coiFileData||s.coiFileUrl||null });
+const dbToSub = r => ({ id: r.id, name: r.name||"", trade: r.trade||"", phone: r.phone||"", email: r.email||"", msaStatus: r.msa_status||"missing", coiExpiry: r.coi_expiry||"", w9: r.w9||false, notes: r.notes||"", services: r.services||[], address: r.address||"", city: r.city||"", state: r.state||"", lat: r.lat||null, lng: r.lng||null, coverage: r.coverage||"", contact_name: r.contact_name||"", w9FileUrl: r.w9_file_url||"", coiFileUrl: r.coi_file_url||"", archived: r.archived||false });
+const subToDB = s => ({ id: s.id, name: s.name||"", trade: s.trade||"", phone: s.phone||"", email: s.email||"", msa_status: s.msaStatus||s.msa_status||"missing", coi_expiry: s.coiExpiry||s.coi_expiry||null, w9: s.w9||false, notes: s.notes||"", services: s.services||[], address: s.address||null, city: s.city||null, state: s.state||null, lat: s.lat||null, lng: s.lng||null, coverage: s.coverage||null, contact_name: s.contact_name||null, w9_file_url: s.w9FileData||s.w9FileUrl||null, coi_file_url: s.coiFileData||s.coiFileUrl||null, archived: s.archived||false });
 const dbToTeamMember = r => ({ id: r.id, name: r.name||"", role: r.role||"", phone: r.phone||"", email: r.email||"",
   // Support both old string "facility" and new array ["facility","major"] formats
   divisions: Array.isArray(r.divisions) ? r.divisions : (r.division ? [r.division] : ["facility"]),
@@ -3055,6 +3055,7 @@ export default function App() {
   const [selectedSubProfile,setSelectedSubProfile]= useState(null);
   const [subGeocoding,      setSubGeocoding]      = useState(false);
   const [subSearch2,        setSubSearch2]        = useState("");
+  const [showArchivedSubs,  setShowArchivedSubs]  = useState(false);
   const [addMode,           setAddMode]           = useState("sub");
   const [pickerTrade,       setPickerTrade]       = useState("");
   const [subProjectLat,     setSubProjectLat]     = useState(null);
@@ -5905,6 +5906,12 @@ Return ONLY valid JSON, no markdown, no extra text:
                   </div>
                   <div style={{display:"flex",gap:8}}>
                     <button className="btn-ghost" onClick={()=>{setEmailText("");setParsedFields(null);setShowEmailParse(true);}} style={{display:"flex",alignItems:"center",gap:5}}>📧 Parse Email</button>
+                    {archivedCount > 0 && (
+                      <button onClick={()=>setShowArchivedSubs(v=>!v)}
+                        style={{padding:"6px 14px",border:"1px solid "+(showArchivedSubs?"#F87171":"#CBD1E8"),background:showArchivedSubs?"#FFF1F2":"transparent",color:showArchivedSubs?"#F87171":"#4A5278",borderRadius:7,cursor:"pointer",fontFamily:"inherit",fontSize:12,fontWeight:600}}>
+                        {showArchivedSubs ? "← Active Subs" : "📦 "+archivedCount+" Archived"}
+                      </button>
+                    )}
                     <button className="btn-primary" onClick={()=>{setDropStage("lead");setForm({name:"",companyId:"",contactId:"",value:"",stage:"lead",pipelineType:"budgeting",closeDate:"",notes:"",bu:"major",budgetDueDate:"",bidDueDate:"",nextSteps:[]});setShowForm(true);}}>+ Add Opportunity</button>
                   </div>
                 </div>
@@ -8245,9 +8252,12 @@ window.addEventListener('message',function(e){
             const buDivTag = activeBU === "facility" ? "fm" : activeBU === "all" ? null : activeBU; // null = show all
 
             // Filter subs by current BU division (all = show everyone; others = tagged to that division OR untagged = global)
-            const buFilteredSubs = activeBU === "all"
+            // Also filter out archived subs unless showArchivedSubs is on
+            const buFilteredSubs = (activeBU === "all"
               ? subcontractors
-              : subcontractors.filter(s => !s.services || s.services.length === 0 || s.services.includes(buDivTag));
+              : subcontractors.filter(s => !s.services || s.services.length === 0 || s.services.includes(buDivTag))
+            ).filter(s => showArchivedSubs ? s.archived : !s.archived);
+            const archivedCount = subcontractors.filter(s => s.archived).length;
 
             const allTrades = [...new Set(buFilteredSubs.map(s => s.trade).filter(Boolean))].sort();
             const visibleSubs = buFilteredSubs.filter(s => {
@@ -8520,6 +8530,12 @@ window.addEventListener('message',function(e){
                                 {/* Actions */}
                                 <div style={{display:"flex",gap:4,justifyContent:"flex-end"}} onClick={e=>e.stopPropagation()}>
                                   <button className="btn-ghost" style={{fontSize:10,padding:"3px 8px"}} onClick={()=>{setEditSubId(s.id);setSubForm({...s});setShowSubForm(true);}}>✎</button>
+                                  <button className="btn-ghost" style={{fontSize:10,padding:"3px 8px",color:"#F97316",borderColor:"#F9731620"}} onClick={()=>{
+                                    const updated={...s,archived:true};
+                                    setSubcontractors(subcontractors.map(x=>x.id===s.id?updated:x));
+                                    try{supa.from("subcontractors").update({archived:true}).eq("id",s.id);}catch(e){}
+                                    setSelectedSubProfile(null);
+                                  }} title="Archive this subcontractor">📦</button>
                                   <button className="btn-ghost" style={{fontSize:10,padding:"3px 8px",color:"#F87171",borderColor:"#F8717120"}} onClick={()=>{if(window.confirm("Delete "+s.name+"?")){setSubcontractors(subcontractors.filter(x=>x.id!==s.id));supa.from("subcontractors").delete().eq("id",s.id);}}}>✕</button>
                                 </div>
                               </div>
@@ -8557,7 +8573,42 @@ window.addEventListener('message',function(e){
                               {sp.contact_name&&<div style={{fontSize:11,color:"#4A5278"}}>👤 {sp.contact_name}</div>}
                             </div>
                           </div>
-                          <button onClick={()=>setSelectedSubProfile(null)} style={{background:"none",border:"none",fontSize:20,color:"#9BA3BF",cursor:"pointer",padding:"0 4px",lineHeight:1}}>×</button>
+                          <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                            {sp.archived ? (
+                              <button onClick={()=>{
+                                const updated={...sp,archived:false};
+                                setSubcontractors(subcontractors.map(x=>x.id===sp.id?updated:x));
+                                setSelectedSubProfile(updated);
+                                try{supa.from("subcontractors").update({archived:false}).eq("id",sp.id);}catch(e){}
+                              }} style={{padding:"5px 12px",background:"#EEF3FF",border:"1px solid #3B6FE840",borderRadius:6,color:"#3B6FE8",cursor:"pointer",fontFamily:"inherit",fontSize:11,fontWeight:700}}>
+                                ↩ Restore
+                              </button>
+                            ) : (
+                              <button onClick={()=>{
+                                if(!window.confirm("Archive "+sp.name+"? They will be hidden from all lists and maps.")) return;
+                                const updated={...sp,archived:true};
+                                setSubcontractors(subcontractors.map(x=>x.id===sp.id?updated:x));
+                                setSelectedSubProfile(null);
+                                try{supa.from("subcontractors").update({archived:true}).eq("id",sp.id);}catch(e){}
+                              }} style={{padding:"5px 12px",background:"#FFF8F0",border:"1px solid #F9731640",borderRadius:6,color:"#F97316",cursor:"pointer",fontFamily:"inherit",fontSize:11,fontWeight:700}}>
+                                📦 Archive
+                              </button>
+                            )}
+                            <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                              {sp.archived ? (
+                                <button onClick={()=>{const u={...sp,archived:false};setSubcontractors(subcontractors.map(x=>x.id===sp.id?u:x));setSelectedSubProfile(u);try{supa.from("subcontractors").update({archived:false}).eq("id",sp.id);}catch(e){}}}
+                                  style={{padding:"4px 10px",background:"#EEF3FF",border:"1px solid #3B6FE840",borderRadius:6,color:"#3B6FE8",cursor:"pointer",fontFamily:"inherit",fontSize:11,fontWeight:700}}>
+                                  ↩ Restore
+                                </button>
+                              ) : (
+                                <button onClick={()=>{if(!window.confirm("Archive "+sp.name+"? They will be hidden from all lists and maps."))return;const u={...sp,archived:true};setSubcontractors(subcontractors.map(x=>x.id===sp.id?u:x));setSelectedSubProfile(null);try{supa.from("subcontractors").update({archived:true}).eq("id",sp.id);}catch(e){}}}
+                                  style={{padding:"4px 10px",background:"#FFF8F0",border:"1px solid #F9731640",borderRadius:6,color:"#F97316",cursor:"pointer",fontFamily:"inherit",fontSize:11,fontWeight:700}}>
+                                  📦 Archive
+                                </button>
+                              )}
+                              <button onClick={()=>setSelectedSubProfile(null)} style={{background:"none",border:"none",fontSize:20,color:"#9BA3BF",cursor:"pointer",padding:"0 4px",lineHeight:1}}>×</button>
+                            </div>
+                          </div>
                         </div>
                         <div style={{display:"flex",gap:8,marginTop:12,flexWrap:"wrap"}}>
                           {sp.phone&&<a href={"tel:"+sp.phone} style={{fontSize:12,color:"#4A5278",textDecoration:"none",background:"#F4F6FB",borderRadius:6,padding:"4px 10px"}}>📞 {sp.phone}</a>}
@@ -8565,6 +8616,11 @@ window.addEventListener('message',function(e){
                         </div>
                       </div>
 
+                      {sp.archived && (
+                        <div style={{margin:"0 22px",padding:"8px 12px",background:"#FFF8F0",border:"1px solid #FED7AA",borderRadius:6,fontSize:11,color:"#C2410C",display:"flex",alignItems:"center",gap:8}}>
+                          <span>📦</span> This subcontractor is archived and hidden from active lists.
+                        </div>
+                      )}
                       <div style={{padding:"16px 22px",display:"flex",flexDirection:"column",gap:18}}>
                         {/* Doc status */}
                         <div style={{display:"flex",flexDirection:"column",gap:8}}>
