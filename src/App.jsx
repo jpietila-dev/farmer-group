@@ -15,7 +15,7 @@ const supa = {
       return fetch(`${SUPA_URL}/rest/v1/${table}`, {
         method: "POST",
         headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}`, "Content-Type": "application/json", Prefer: "return=representation" },
-        body: JSON.stringify(body)
+        body: JSON.stringify(body) 
       }).then(r => r.json()).then(data => ({ data, error: null })).catch(error => ({ data: null, error }));
     },
     update: function(row) {
@@ -8506,7 +8506,7 @@ if(bounds.length)map.fitBounds(bounds,{padding:[30,30]});
                   const coiSoon=coiDate&&!coiExpired&&coiDate<=new Date(Date.now()+30*86400000);
                   const coiColor=!coiDate?"#F87171":coiExpired?"#F87171":coiSoon?"#FCD34D":"#4ADE80";
                   return (
-                    <div style={{position:"fixed",right:0,top:0,bottom:0,width:420,background:"#fff",borderLeft:"1px solid #D4D9EE",zIndex:200,display:"flex",flexDirection:"column",boxShadow:"-4px 0 24px rgba(0,0,0,0.10)",overflowY:"auto"}}>
+                    <div style={{position:"fixed",right:0,top:52,bottom:0,width:440,background:"#fff",borderLeft:"1px solid #D4D9EE",zIndex:500,display:"flex",flexDirection:"column",boxShadow:"-4px 0 24px rgba(0,0,0,0.10)",overflowY:"auto"}}>
                       {/* Header */}
                       <div style={{padding:"20px 22px 0",borderBottom:"1px solid #F0F2F8",paddingBottom:16}}>
                         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start"}}>
