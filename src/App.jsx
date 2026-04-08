@@ -5881,6 +5881,30 @@ Return ONLY valid JSON, no markdown, no extra text:
               setPipeline(updated);
               const opp = updated.find(o=>o.id===id);
               if (opp?.dbId) supa.from("mp_pipeline").update({stage:newStage}).eq("id",opp.dbId);
+              // Auto-create mp_job when moved to won or closed_won
+              if (newStage === "won" || newStage === "closed_won") {
+                const jobId = String(opp.dbId || opp.id);
+                setMpJobs(prev => {
+                  if (prev.some(j => j.id === jobId || j.name === opp.name)) return prev;
+                  const co = companies.find(c => c.id === opp.companyId);
+                  const newJob = {
+                    id: jobId, name: opp.name, client: co?.name||"", companyId: opp.companyId||"",
+                    status: "active", contractValue: parseFloat(opp.value)||0,
+                    startDate: "", endDate: "", pm: "", pct: 0, daysAhead: null,
+                    completionSchedule: "", changeOrderStatus: "", budgetStatus: "",
+                    billingStatus: "", gpm: 0, longLeadItems: "",
+                    km1: "", km1Date: "", km2: "", km2Date: "", km3: "", km3Date: "",
+                    notes: opp.notes||"", amountBilled: 0,
+                  };
+                  // Persist to Supabase
+                  fetch(`${SUPA_URL}/rest/v1/mp_jobs`, {
+                    method: "POST",
+                    headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}`, "Content-Type": "application/json", Prefer: "return=minimal" },
+                    body: JSON.stringify({ id: jobId, name: newJob.name, client: newJob.client, company_id: newJob.companyId||null, status: "active", contract_value: newJob.contractValue||null, notes: newJob.notes||null })
+                  }).catch(()=>{});
+                  return [...prev, newJob];
+                });
+              }
             };
 
             const saveNewOpp = async (fields) => {
@@ -12491,6 +12515,7 @@ window.addEventListener('message',function(e){
           setShowWonConvert(false);
           setWonConvertOpp(null);
           // Navigate to the new project
+          setActiveBU("major");
           setActiveNav("jobs");
           setSelectedMpJob(jobId);
           setMpDetailTab("gantt");
