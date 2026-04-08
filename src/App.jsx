@@ -2847,7 +2847,9 @@ export default function App() {
   const [capexJobs,        setCapexJobs]        = useState(INIT_CAPEX_JOBS);
   const [showCapexForm,    setShowCapexForm]    = useState(false);
   const [editCapexId,      setEditCapexId]      = useState(null);
-  const [capexForm,        setCapexForm]        = useState({ name: "", companyId: "", siteId: "", approverContactId: "", contractValue: "", stage: "estimating", startDate: "", endDate: "", pm: "", pct: 0, bidDueDate: "", followUpDate: "", buyoutDate: "", invoiceDate: "", notes: "" });
+  const [capexForm,        setCapexForm]        = useState({ name: "", companyId: "", siteId: "", approverContactId: "", contractValue: "", stage: "estimating", startDate: "", endDate: "", pm: "", pct: 0, bidDueDate: "", followUpDate: "", buyoutDate: "", invoiceDate: "", notes: "", amountBilled: 0 });
+  const [capexDetailTab,   setCapexDetailTab]   = useState("overview");
+  const [selectedCapexFull,setSelectedCapexFull]= useState(null); // full-page detail view
   const [selectedCapexJob, setSelectedCapexJob] = useState(null);
   const [capexSearch,      setCapexSearch]      = useState("");
 
@@ -5178,6 +5180,77 @@ Return ONLY valid JSON, no markdown, no extra text:
                         </div>
                       </div>
                     </div>
+
+                    {/* ── Meeting Priority ── */}
+                    {(() => {
+                      const todayMs = Date.now();
+                      const DAY = 86400000;
+                      const priorities = [];
+
+                      capexJobs.forEach(j => {
+                        const co = companies.find(c=>c.id===j.companyId);
+                        const name = j.name + (co?" — "+co.name:"");
+
+                        // In estimating > 3 weeks
+                        if (j.stage === "estimating" && j.createdAt) {
+                          const age = (todayMs - new Date(j.createdAt).getTime()) / DAY;
+                          if (age > 21) priorities.push({job:j, reason:"In estimating for "+Math.round(age)+" days (>3 weeks)", urgency:"high", name});
+                        }
+
+                        // In buyout > 3 days
+                        if (j.stage === "buyout" && j.buyoutDate) {
+                          const age = (todayMs - new Date(j.buyoutDate).getTime()) / DAY;
+                          if (age > 3) priorities.push({job:j, reason:"In buyout for "+Math.round(age)+" days (>3 days)", urgency:"high", name});
+                        }
+
+                        // Starting within 5 days
+                        if (j.startDate) {
+                          const daysUntil = (new Date(j.startDate).getTime() - todayMs) / DAY;
+                          if (daysUntil >= 0 && daysUntil <= 5) priorities.push({job:j, reason:"Starting in "+Math.round(daysUntil)+" day"+(Math.round(daysUntil)!==1?"s":""), urgency:"medium", name});
+                        }
+
+                        // Ending within 5 days
+                        if (j.endDate && j.stage === "do_work") {
+                          const daysUntil = (new Date(j.endDate).getTime() - todayMs) / DAY;
+                          if (daysUntil >= 0 && daysUntil <= 5) priorities.push({job:j, reason:"Target end in "+Math.round(daysUntil)+" day"+(Math.round(daysUntil)!==1?"s":""), urgency:"medium", name});
+                          // Also overdue end date
+                          if (daysUntil < 0) priorities.push({job:j, reason:"Past target end date by "+Math.round(Math.abs(daysUntil))+" days", urgency:"high", name});
+                        }
+
+                        // Do work without dates
+                        if (j.stage === "do_work" && (!j.startDate || !j.endDate)) {
+                          priorities.push({job:j, reason:"In Do Work without "+((!j.startDate&&!j.endDate)?"start & end dates":!j.startDate?"a start date":"an end date"), urgency:"medium", name});
+                        }
+                      });
+
+                      if (priorities.length === 0) return null;
+
+                      return (
+                        <div style={{background:"#fff",borderRadius:12,border:"1px solid #D4D9EE",overflow:"hidden"}}>
+                          <div style={{padding:"14px 18px",borderBottom:"1px solid #F0F2F8",display:"flex",alignItems:"center",gap:10}}>
+                            <div style={{fontSize:12,fontWeight:700,color:"#1A2240",textTransform:"uppercase",letterSpacing:"0.06em",flex:1}}>🚨 Meeting Priority</div>
+                            <div style={{fontSize:10,color:"#9BA3BF"}}>{priorities.length} item{priorities.length!==1?"s":""} need attention</div>
+                          </div>
+                          <div style={{display:"flex",flexDirection:"column",gap:0}}>
+                            {priorities.map((p,i) => (
+                              <div key={i}
+                                onClick={()=>{setSelectedCapexFull(p.job.id);setCapexDetailTab("overview");setActiveNav("jobs");}}
+                                style={{display:"flex",alignItems:"center",gap:12,padding:"10px 18px",borderBottom:i<priorities.length-1?"1px solid #F4F6FB":"none",cursor:"pointer",background:"#fff"}}
+                                onMouseEnter={e=>e.currentTarget.style.background="#F5F8FF"}
+                                onMouseLeave={e=>e.currentTarget.style.background="#fff"}>
+                                <div style={{width:8,height:8,borderRadius:"50%",background:p.urgency==="high"?"#F87171":"#FCD34D",flexShrink:0}}/>
+                                <div style={{flex:1,minWidth:0}}>
+                                  <div style={{fontSize:12,fontWeight:600,color:"#1A2240",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{p.name}</div>
+                                  <div style={{fontSize:10,color:p.urgency==="high"?"#F87171":"#D97706",marginTop:1}}>{p.reason}</div>
+                                </div>
+                                <div style={{fontSize:10,color:"#9BA3BF",flexShrink:0}}>{CAPEX_FM_STAGES.find(s=>s.id===p.job.stage)?.label||p.job.stage}</div>
+                                <div style={{fontSize:10,color:"#3B6FE8",fontWeight:600,flexShrink:0}}>→ View</div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })()}
 
                     {/* ── Active jobs Gantt ── */}
                     <GanttSection jobList={capexJobs.filter(j => j.stage === "do_work" && j.startDate && j.endDate).map(j => ({ ...j, client: companies.find(c => c.id === j.companyId)?.name || "", status: "On Schedule" }))} showAddBtn={false} />
@@ -7608,85 +7681,634 @@ window.addEventListener('message',function(e){
           })()}
 
           {/* -- CAPEX JOBS -- */}
-          {activeNav === "jobs" && activeBU === "capital" && (
-            <div className="fade-in" style={{ display: "flex", flexDirection: "column", gap: 22 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <div>
-                  <div style={{ fontSize: 22, fontWeight: 700, color: "#1A2240", letterSpacing: "-0.01em", textTransform: "uppercase" }}>Capital Improvements — Active Projects</div>
-                  <div style={{ fontSize: 11, color: "#4A5278", marginTop: 3, letterSpacing: "0.06em" }}>{capexJobs.filter(j => j.stage !== "estimating").length} PROJECTS · {fmt(capexJobs.reduce((s,j) => s+j.contractValue,0))} TOTAL</div>
-                </div>
-                <div style={{ display: "flex", gap: 8 }}>
-                  <input className="fi" style={{ width: 180 }} placeholder="Search…" value={capexSearch} onChange={e => setCapexSearch(e.target.value)} />
-                  <button className="btn-primary" onClick={openAddCapex}>+ Add Project</button>
-                </div>
-              </div>
+          {activeNav === "jobs" && activeBU === "capital" && (() => {
+            // Full-page detail view when a job is selected
+            if (selectedCapexFull) {
+              const job = capexJobs.find(j => j.id === selectedCapexFull) || null;
+              if (!job) { setSelectedCapexFull(null); return null; }
+              const st   = CAPEX_FM_STAGES.find(s => s.id === job.stage) || CAPEX_FM_STAGES[0];
+              const co   = companies.find(c => c.id === job.companyId);
+              const site = sites.find(s => s.id === job.siteId);
 
-              {/* Stage stats - exclude estimating */}
-              <div style={{ display: "flex", gap: 8, overflowX: "auto" }}>
-                {CAPEX_FM_STAGES.filter(st => st.id !== "estimating").map(st => {
-                  const cnt = capexJobs.filter(j => j.stage === st.id).length;
-                  const val = capexJobs.filter(j => j.stage === st.id).reduce((s,j) => s+j.contractValue, 0);
+              const updateCapex = (fields) => {
+                const updated = { ...job, ...fields };
+                setCapexJobs(prev => prev.map(j => j.id === job.id ? updated : j));
+                setSelectedCapexFull(job.id); // stay on this job
+                try { supa.from("capex_jobs").update(fields).eq("id", job.id); } catch(e) {}
+              };
+
+              // Estimating data (shared with MP estimating, keyed by job.id)
+              const cxWbs    = wbsData[job.id]    || [];
+              const cxPkg    = bidPackages[job.id] || {vendors:[], lineStatus:{}};
+              const cxPhase  = estimatePhase[job.id] || "wbs";
+              const setCxPhase = (p) => {
+                setEstimatePhase(prev => ({ ...prev, [job.id]: p }));
+                setTimeout(() => saveEstimateData(job.id, wbsData[job.id]||[], bidPackages[job.id]||{vendors:[]}, p), 300);
+              };
+
+              // Billing
+              const contractAmt = job.contractValue || 0;
+              const billedAmt   = job.amountBilled   || 0;
+              const billedPct   = contractAmt > 0 ? Math.min(100, (billedAmt/contractAmt)*100) : 0;
+
+              // For do_work: gantt
+              const today = new Date();
+              const allDates = [job.startDate, job.endDate, today.toISOString().slice(0,10)].filter(Boolean).map(d=>new Date(d));
+              const minD = allDates.length>1?new Date(Math.min(...allDates)):null;
+              const maxD = allDates.length>1?new Date(Math.max(...allDates)):null;
+              if(minD){minD.setDate(1);} if(maxD){maxD.setDate(1);maxD.setMonth(maxD.getMonth()+1);}
+              const months=[];
+              if(minD&&maxD){let cur=new Date(minD);while(cur<=maxD){months.push({y:cur.getFullYear(),m:cur.getMonth()});cur.setMonth(cur.getMonth()+1);}}
+              const tMs=minD&&maxD?maxD-minD:1;
+              const pct=d=>d?Math.max(0,Math.min(100,((new Date(d)-minD)/tMs)*100)):null;
+              const nowPct=minD?Math.max(0,Math.min(100,((today-minD)/tMs)*100)):50;
+              const MON=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+
+              // Bid summary for buyout: winners per wbs item
+              const ls = cxPkg.lineStatus || {};
+              const TABS_BY_STAGE = {
+                estimating:     [{id:"estimating",icon:"📐",label:"Estimate"}],
+                owner_approval: [{id:"overview",icon:"📋",label:"Overview"},{id:"estimating",icon:"📐",label:"Estimate"}],
+                buyout:         [{id:"overview",icon:"📋",label:"Overview"},{id:"buyout",icon:"🛒",label:"Buyout"},{id:"estimating",icon:"📐",label:"Estimate"}],
+                do_work:        [{id:"overview",icon:"📋",label:"Overview"},{id:"schedule",icon:"📊",label:"Schedule"},{id:"todos",icon:"✅",label:"To-Dos"}],
+                bill:           [{id:"overview",icon:"📋",label:"Overview"},{id:"schedule",icon:"📊",label:"Schedule"}],
+              };
+              const tabs = TABS_BY_STAGE[job.stage] || [{id:"overview",icon:"📋",label:"Overview"}];
+              // Auto-set tab if current tab not in list
+              const activeTab = tabs.find(t=>t.id===capexDetailTab) ? capexDetailTab : tabs[0].id;
+
+              return (
+                <div className="fade-in" style={{display:"flex",flexDirection:"column",gap:18}}>
+
+                  {/* Back + header */}
+                  <div style={{display:"flex",alignItems:"center",gap:12}}>
+                    <button onClick={()=>setSelectedCapexFull(null)} style={{background:"#F0F2F8",border:"1px solid #CBD1E8",borderRadius:6,padding:"6px 14px",fontSize:12,color:"#4A5278",cursor:"pointer",fontFamily:"inherit"}}>← All Projects</button>
+                    <div style={{flex:1}}>
+                      <div style={{fontSize:20,fontWeight:800,color:"#1A2240",letterSpacing:"-0.01em"}}>{job.name}</div>
+                      <div style={{fontSize:11,color:"#4A5278",marginTop:2}}>
+                        {co?.name}{job.pm?" · PM: "+job.pm:""}
+                        {site?" · Store #"+site.storeNumber:""}
+                      </div>
+                    </div>
+                    <span style={{padding:"5px 14px",borderRadius:20,background:st.color+"20",color:st.color,fontSize:11,fontWeight:700,border:"1px solid "+st.color+"40"}}>{st.label}</span>
+                    <button onClick={()=>openEditCapex(job)} style={{padding:"6px 14px",background:"#F0F2F8",border:"1px solid #CBD1E8",borderRadius:6,fontSize:12,color:"#4A5278",cursor:"pointer",fontFamily:"inherit"}}>✎ Edit</button>
+                  </div>
+
+                  {/* Stage progress bar */}
+                  <div style={{display:"flex",gap:0,background:"#fff",borderRadius:10,border:"1px solid #D4D9EE",overflow:"hidden"}}>
+                    {CAPEX_FM_STAGES.map((s,i)=>{
+                      const isActive=s.id===job.stage;
+                      const isPast=CAPEX_FM_STAGES.findIndex(x=>x.id===job.stage)>i;
+                      return (
+                        <button key={s.id} onClick={()=>updateCapex({stage:s.id})}
+                          style={{flex:1,padding:"10px 4px",border:"none",borderRight:i<4?"1px solid #F0F2F8":"none",background:isActive?s.color+"20":isPast?"#F0FDF4":"transparent",color:isActive?s.color:isPast?"#16A34A":"#9BA3BF",fontWeight:isActive?700:400,fontSize:10,cursor:"pointer",fontFamily:"inherit",textAlign:"center",transition:"all 0.15s"}}>
+                          {isPast&&!isActive?"✓ ":""}{s.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* Tabs */}
+                  <div style={{display:"flex",gap:0,background:"#F9FAFC",borderRadius:10,border:"1px solid #E8EBF4",overflow:"hidden",flexShrink:0}}>
+                    {tabs.map(t=>(
+                      <button key={t.id} onClick={()=>setCapexDetailTab(t.id)}
+                        style={{flex:1,padding:"10px 4px",border:"none",borderBottom:activeTab===t.id?"3px solid #8B5CF6":"3px solid transparent",background:"transparent",color:activeTab===t.id?"#8B5CF6":"#4A5278",fontWeight:activeTab===t.id?700:400,fontSize:11,cursor:"pointer",fontFamily:"inherit",marginBottom:-1}}>
+                        {t.icon} {t.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* ── OVERVIEW TAB ── */}
+                  {activeTab === "overview" && (
+                    <div style={{display:"flex",flexDirection:"column",gap:16}}>
+                      {/* Key info grid */}
+                      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10}}>
+                        {[
+                          {label:"Contract Value", value:fmt(contractAmt), color:"#8B5CF6"},
+                          {label:"PM",             value:job.pm||"—",      color:"#60A5FA"},
+                          {label:"Start Date",     value:job.startDate||"—",color:"#4ADE80"},
+                          {label:"End Date",       value:job.endDate||"—",  color:"#F97316"},
+                        ].map(k=>(
+                          <div key={k.label} style={{background:"#fff",borderRadius:10,border:"1px solid #D4D9EE",padding:"12px 14px",borderTop:"3px solid "+k.color}}>
+                            <div style={{fontSize:9,color:"#9BA3BF",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:4}}>{k.label}</div>
+                            <div style={{fontSize:14,fontWeight:700,color:"#1A2240"}}>{k.value}</div>
+                          </div>
+                        ))}
+                      </div>
+                      {/* Dates row */}
+                      <div style={{background:"#fff",borderRadius:10,border:"1px solid #D4D9EE",padding:"14px 18px",display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:14}}>
+                        {[
+                          {label:"Bid Due Date",   key:"bidDueDate"},
+                          {label:"Follow-Up Date", key:"followUpDate"},
+                          {label:"Buyout Date",    key:"buyoutDate"},
+                          {label:"Invoice Date",   key:"invoiceDate"},
+                        ].map(f=>{
+                          const val=job[f.key]||"";
+                          const overdue=val&&new Date(val)<today;
+                          return (
+                            <div key={f.key}>
+                              <div style={{fontSize:9,color:"#9BA3BF",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:4}}>{f.label}</div>
+                              <input type="date" value={val} onChange={e=>updateCapex({[f.key]:e.target.value})}
+                                style={{width:"100%",padding:"5px 8px",border:"1px solid "+(overdue?"#F8717150":"#D4D9EE"),borderRadius:5,fontSize:12,fontFamily:"inherit",outline:"none",color:overdue?"#F87171":"#1A2240",background:"transparent",boxSizing:"border-box"}}/>
+                              {overdue&&<div style={{fontSize:9,color:"#F87171",marginTop:2}}>⚠ Overdue</div>}
+                            </div>
+                          );
+                        })}
+                      </div>
+                      {/* Progress for do_work */}
+                      {job.stage==="do_work" && (
+                        <div style={{background:"#fff",borderRadius:10,border:"1px solid #D4D9EE",padding:"14px 18px"}}>
+                          <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}>
+                            <div style={{fontSize:12,fontWeight:700,color:"#1A2240"}}>Completion — {job.pct||0}%</div>
+                            <input type="number" min={0} max={100} value={job.pct||0} onChange={e=>updateCapex({pct:parseInt(e.target.value)||0})}
+                              style={{width:60,padding:"3px 6px",border:"1px solid #D4D9EE",borderRadius:4,fontSize:12,fontFamily:"inherit",outline:"none",textAlign:"right"}}/>
+                          </div>
+                          <div style={{background:"#F0F2F8",borderRadius:6,height:14,overflow:"hidden"}}>
+                            <div style={{height:"100%",width:(job.pct||0)+"%",background:"linear-gradient(90deg,#8B5CF6,#A78BFA)",borderRadius:6,transition:"width 0.4s"}}/>
+                          </div>
+                        </div>
+                      )}
+                      {/* Billing tracker */}
+                      <div style={{background:"#fff",borderRadius:10,border:"1px solid #D4D9EE",padding:"14px 18px"}}>
+                        <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:10}}>
+                          <div style={{fontSize:13,fontWeight:700,color:"#1A2240",flex:1}}>💰 Billing Tracker</div>
+                          <div style={{fontSize:16,fontWeight:800,color:billedPct>=100?"#4ADE80":billedPct>=60?"#60A5FA":"#F97316"}}>{billedPct.toFixed(0)}%</div>
+                        </div>
+                        <div style={{background:"#F0F2F8",borderRadius:6,height:14,overflow:"hidden",marginBottom:10}}>
+                          <div style={{height:"100%",width:billedPct+"%",background:"linear-gradient(90deg,#8B5CF6,#A78BFA)",borderRadius:6,transition:"width 0.4s"}}/>
+                        </div>
+                        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+                          <div>
+                            <div style={{fontSize:9,color:"#9BA3BF",textTransform:"uppercase",marginBottom:3}}>Contract Value</div>
+                            <input type="number" value={contractAmt||""} onChange={e=>updateCapex({contractValue:parseFloat(e.target.value)||0})}
+                              style={{width:"100%",padding:"6px 8px",border:"1px solid #D4D9EE",borderRadius:5,fontSize:12,fontFamily:"inherit",outline:"none",boxSizing:"border-box"}} placeholder="$0"/>
+                          </div>
+                          <div>
+                            <div style={{fontSize:9,color:"#9BA3BF",textTransform:"uppercase",marginBottom:3}}>Amount Billed</div>
+                            <input type="number" value={billedAmt||""} onChange={e=>updateCapex({amountBilled:parseFloat(e.target.value)||0})}
+                              style={{width:"100%",padding:"6px 8px",border:"1px solid #D4D9EE",borderRadius:5,fontSize:12,fontFamily:"inherit",outline:"none",boxSizing:"border-box"}} placeholder="$0"/>
+                          </div>
+                        </div>
+                      </div>
+                      {/* Notes */}
+                      {job.notes && <div style={{background:"#F9FAFC",borderRadius:8,border:"1px solid #E8EBF4",padding:"12px 14px",fontSize:12,color:"#4A5278",lineHeight:1.6}}>{job.notes}</div>}
+                    </div>
+                  )}
+
+                  {/* ── ESTIMATING TAB ── */}
+                  {activeTab === "estimating" && (() => {
+                    const oppId = job.id; // use capex job id as the estimate key
+                    const wbs    = wbsData[oppId]    || [];
+                    const pkg    = bidPackages[oppId] || {vendors:[], lineStatus:{}};
+                    const phase  = estimatePhase[oppId] || "wbs";
+                    const setPhase = (p) => { setEstimatePhase(prev=>({...prev,[oppId]:p})); setTimeout(()=>saveEstimateData(oppId,wbs,pkg,p),300); };
+                    const setWbs = (items) => {
+                      const resolved = typeof items==="function"?items(wbs):items;
+                      setWbsData(prev=>{const next={...prev,[oppId]:resolved};setTimeout(()=>saveEstimateData(oppId,resolved,bidPackages[oppId]||{vendors:[]},estimatePhase[oppId]||"wbs"),300);return next;});
+                    };
+                    const PHASES_CX = [
+                      {id:"wbs",label:"1. WBS",icon:"📋",desc:"Cost codes & scope"},
+                      {id:"quoting",label:"2. Quoting",icon:"📧",desc:"Subs & bids per code"},
+                      {id:"bid_summary",label:"3. Bid Summary",icon:"🏆",desc:"PM report"},
+                    ];
+                    const COST_CODE_LIBRARY = [
+                      {div:"02",code:"02-100",desc:"Demo / Selective Demo",unit:"LS",trade:"Demo"},
+                      {div:"03",code:"03-100",desc:"Concrete",unit:"SF",trade:"Concrete"},
+                      {div:"04",code:"04-100",desc:"Masonry",unit:"SF",trade:"Masonry"},
+                      {div:"06",code:"06-100",desc:"Rough Carpentry",unit:"LS",trade:"Carpentry"},
+                      {div:"07",code:"07-100",desc:"Roofing",unit:"SF",trade:"Roofing"},
+                      {div:"08",code:"08-100",desc:"Doors & Frames",unit:"EA",trade:"Doors"},
+                      {div:"08",code:"08-200",desc:"Roll-Up Doors",unit:"EA",trade:"Doors"},
+                      {div:"09",code:"09-100",desc:"Drywall / Framing",unit:"SF",trade:"Drywall"},
+                      {div:"09",code:"09-200",desc:"Flooring",unit:"SF",trade:"Flooring"},
+                      {div:"09",code:"09-300",desc:"Painting",unit:"SF",trade:"Painting"},
+                      {div:"15",code:"15-100",desc:"Plumbing",unit:"LS",trade:"Plumbing"},
+                      {div:"15",code:"15-200",desc:"HVAC",unit:"LS",trade:"HVAC"},
+                      {div:"16",code:"16-100",desc:"Electrical",unit:"LS",trade:"Electrical"},
+                      {div:"16",code:"16-200",desc:"Lighting",unit:"LS",trade:"Lighting"},
+                      {div:"16",code:"16-300",desc:"Fire Alarm",unit:"LS",trade:"Fire"},
+                      {div:"21",code:"21-100",desc:"Fire Suppression",unit:"LS",trade:"Fire"},
+                      {div:"26",code:"26-100",desc:"Security / Access Control",unit:"LS",trade:"Security"},
+                      {div:"32",code:"32-100",desc:"Earthwork & Site Utilities",unit:"LS",trade:"Civil"},
+                      {div:"32",code:"32-200",desc:"Asphalt / Paving",unit:"SY",trade:"Asphalt"},
+                      {div:"32",code:"32-300",desc:"Fencing & Gates",unit:"LF",trade:"Fencing"},
+                      {div:"32",code:"32-400",desc:"Landscaping",unit:"LS",trade:"Landscaping"},
+                      {div:"99",code:"99-100",desc:"General Conditions",unit:"LS",trade:"General"},
+                      {div:"99",code:"99-200",desc:"Other",unit:"LS",trade:"Other"},
+                    ];
+                    const addWbsItem = (item) => setWbs([...wbs, {...item, id:"cx"+Date.now()+Math.random(), subItems:[]}]);
+                    const updateWbsItem = (id, patch) => setWbs(wbs.map(x=>x.id===id?{...x,...patch}:x));
+                    const removeWbsItem = (id) => setWbs(wbs.filter(x=>x.id!==id));
+
+                    // Quoting helpers — reuse same updateVendor/removeVendor pattern
+                    const updateVendorCx = (vid, patch) => {
+                      const updated={...pkg,vendors:pkg.vendors.map(x=>x.id===vid?{...x,...patch}:x)};
+                      setBidPackages(prev=>({...prev,[oppId]:updated}));
+                      setTimeout(()=>saveEstimateData(oppId,wbs,updated,phase),300);
+                    };
+                    const removeVendorCx = (vid) => {
+                      const updated={...pkg,vendors:pkg.vendors.filter(x=>x.id!==vid)};
+                      setBidPackages(prev=>({...prev,[oppId]:updated}));
+                      setTimeout(()=>saveEstimateData(oppId,wbs,updated,phase),300);
+                    };
+
+                    return (
+                      <div style={{display:"flex",flexDirection:"column",gap:0,height:"calc(100vh - 280px)",minHeight:500}}>
+                        {/* Phase tabs */}
+                        <div style={{display:"flex",background:"#F9FAFC",borderBottom:"2px solid #E8EBF4",flexShrink:0,borderRadius:"10px 10px 0 0",overflow:"hidden"}}>
+                          {PHASES_CX.map(ph=>(
+                            <button key={ph.id} onClick={()=>setPhase(ph.id)}
+                              style={{flex:1,padding:"8px 4px",border:"none",background:"transparent",cursor:"pointer",fontFamily:"inherit",borderBottom:phase===ph.id?"3px solid #8B5CF6":"3px solid transparent",marginBottom:-2}}>
+                              <div style={{fontSize:11,fontWeight:phase===ph.id?700:400,color:phase===ph.id?"#8B5CF6":"#4A5278"}}>{ph.icon} {ph.label}</div>
+                              <div style={{fontSize:9,color:"#9BA3BF"}}>{ph.desc}</div>
+                            </button>
+                          ))}
+                        </div>
+
+                        {/* WBS phase */}
+                        {phase==="wbs" && (
+                          <div style={{flex:1,overflowY:"auto",background:"#fff",border:"1px solid #D4D9EE",borderTop:"none",borderRadius:"0 0 10px 10px"}}>
+                            {/* Quick-add from library */}
+                            <div style={{padding:"10px 16px",borderBottom:"1px solid #F0F2F8",display:"flex",gap:8,alignItems:"center"}}>
+                              <select onChange={e=>{if(!e.target.value)return;const item=COST_CODE_LIBRARY.find(c=>c.code===e.target.value);if(item)addWbsItem({code:item.code,description:item.desc,unit:item.unit,trade:item.trade,qty:0,rate:0,critical:false});e.target.value="";}}
+                                style={{padding:"6px 10px",border:"1px solid #D4D9EE",borderRadius:6,fontSize:12,fontFamily:"inherit",outline:"none",background:"#fff",flex:1}}>
+                                <option value="">+ Add from Cost Code Library…</option>
+                                {COST_CODE_LIBRARY.map(c=><option key={c.code} value={c.code}>{c.code} — {c.desc}</option>)}
+                              </select>
+                              <button onClick={()=>addWbsItem({code:"",description:"",unit:"LS",trade:"Other",qty:0,rate:0,critical:false})}
+                                style={{padding:"6px 14px",background:"#8B5CF6",color:"#fff",border:"none",borderRadius:6,cursor:"pointer",fontFamily:"inherit",fontSize:11,fontWeight:700,whiteSpace:"nowrap"}}>+ Custom</button>
+                            </div>
+                            {wbs.length===0 && <div style={{padding:"40px",textAlign:"center",color:"#9BA3BF",fontSize:13}}>No cost codes yet — add from library or create custom</div>}
+                            {wbs.map((item,i)=>(
+                              <div key={item.id} style={{display:"grid",gridTemplateColumns:"60px 1fr 80px 100px 70px 70px 60px 40px",gap:6,padding:"8px 16px",borderBottom:"1px solid #F4F6FB",alignItems:"center",background:i%2===0?"#fff":"#FAFBFD"}}>
+                                <input value={item.code||""} onChange={e=>updateWbsItem(item.id,{code:e.target.value})} placeholder="Code" style={{padding:"4px 6px",border:"1px solid #D4D9EE",borderRadius:4,fontSize:11,fontFamily:"inherit",outline:"none",width:"100%"}}/>
+                                <input value={item.description||""} onChange={e=>updateWbsItem(item.id,{description:e.target.value})} placeholder="Description" style={{padding:"4px 6px",border:"1px solid #D4D9EE",borderRadius:4,fontSize:11,fontFamily:"inherit",outline:"none",width:"100%"}}/>
+                                <input value={item.trade||""} onChange={e=>updateWbsItem(item.id,{trade:e.target.value})} placeholder="Trade" style={{padding:"4px 6px",border:"1px solid #D4D9EE",borderRadius:4,fontSize:11,fontFamily:"inherit",outline:"none",width:"100%"}}/>
+                                <input value={item.unit||""} onChange={e=>updateWbsItem(item.id,{unit:e.target.value})} placeholder="Unit" style={{padding:"4px 6px",border:"1px solid #D4D9EE",borderRadius:4,fontSize:11,fontFamily:"inherit",outline:"none",width:"100%"}}/>
+                                <input type="number" value={item.qty||""} onChange={e=>updateWbsItem(item.id,{qty:parseFloat(e.target.value)||0})} placeholder="Qty" style={{padding:"4px 6px",border:"1px solid #D4D9EE",borderRadius:4,fontSize:11,fontFamily:"inherit",outline:"none",width:"100%",textAlign:"right"}}/>
+                                <input type="number" value={item.rate||""} onChange={e=>updateWbsItem(item.id,{rate:parseFloat(e.target.value)||0})} placeholder="Rate" style={{padding:"4px 6px",border:"1px solid #D4D9EE",borderRadius:4,fontSize:11,fontFamily:"inherit",outline:"none",width:"100%",textAlign:"right"}}/>
+                                <div style={{fontSize:11,fontWeight:600,color:"#1A2240",textAlign:"right"}}>{item.qty&&item.rate?fmt(item.qty*item.rate):"—"}</div>
+                                <button onClick={()=>removeWbsItem(item.id)} style={{background:"none",border:"none",color:"#F87171",cursor:"pointer",fontSize:13,padding:0}}>✕</button>
+                              </div>
+                            ))}
+                            {wbs.length>0 && (
+                              <div style={{padding:"10px 16px",background:"#F9FAFC",display:"flex",justifyContent:"flex-end",borderTop:"2px solid #E8EBF4"}}>
+                                <div style={{fontSize:13,fontWeight:800,color:"#1A2240"}}>
+                                  Estimated Total: {fmt(wbs.reduce((s,i)=>s+(i.qty||0)*(i.rate||0),0))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
+
+                        {/* Quoting phase */}
+                        {phase==="quoting" && (
+                          <div style={{flex:1,overflowY:"auto",background:"#fff",border:"1px solid #D4D9EE",borderTop:"none",borderRadius:"0 0 10px 10px"}}>
+                            <div style={{padding:"8px 16px",borderBottom:"1px solid #E8EBF4",display:"flex",alignItems:"center",gap:8,flexShrink:0}}>
+                              <span style={{fontSize:12,fontWeight:700,color:"#1A2240",flex:1}}>{wbs.length} Cost Codes · {pkg.vendors.length} Subs</span>
+                              <button onClick={()=>{setActiveBidOpp(oppId);setShowAddVendor(true);setAddMode("sub");setSubSearch2("");setPickerTrade("");setSubProjectLat(null);setSubProjectLng(null);
+                                try{const _oppCity=(job.companyId?companies.find(c=>c.id===job.companyId)?.address||"":"").split(",")[1]?.trim()||"";if(_oppCity){setSubProjectGeocoding(true);fetch("https://nominatim.openstreetmap.org/search?format=json&limit=1&q="+encodeURIComponent(_oppCity),{headers:{"User-Agent":"FarmerGroupApp/1.0"}}).then(r=>r.json()).then(d=>{if(d&&d[0]){setSubProjectLat(parseFloat(d[0].lat));setSubProjectLng(parseFloat(d[0].lon));}}).finally(()=>setSubProjectGeocoding(false));}}catch(e){}
+                              }} style={{padding:"5px 12px",background:"#8B5CF6",color:"#fff",border:"none",borderRadius:5,cursor:"pointer",fontFamily:"inherit",fontSize:11,fontWeight:700}}>+ Add Sub</button>
+                            </div>
+                            {wbs.length===0 && <div style={{padding:"40px",textAlign:"center",color:"#9BA3BF",fontSize:13}}>Add cost codes in WBS first</div>}
+                            {wbs.map(item=>{
+                              const itemVendors = pkg.vendors.filter(v=>{const a=v.costCodes||v.trades||[];return a.length===0||a.includes(item.id)||a.includes(item.trade);});
+                              const getLS=(vid,key)=>(pkg.lineStatus||{})[vid+"_"+item.id]?.[key]??false;
+                              const setLS=(vid,key,val)=>{
+                                const ls=pkg.lineStatus||{};const lk=vid+"_"+item.id;
+                                let newLs={...ls};
+                                if(key==="isWinner"&&val===true)itemVendors.forEach(v2=>{const k2=v2.id+"_"+item.id;if(newLs[k2]?.isWinner)newLs[k2]={...newLs[k2],isWinner:false};});
+                                newLs[lk]={...(newLs[lk]||{}),[key]:val};
+                                const updated={...pkg,lineStatus:newLs};
+                                setBidPackages(prev=>({...prev,[oppId]:updated}));
+                                setTimeout(()=>saveEstimateData(oppId,wbs,updated,phase),300);
+                              };
+                              const winner=itemVendors.find(v=>getLS(v.id,"isWinner"));
+                              const bidsIn=itemVendors.filter(v=>getLS(v.id,"bidReceived")||v.bidFileData||v.bidFileName).length;
+                              const coverage=bidsIn>=2?"#4ADE80":bidsIn>=1?"#FCD34D":"#F87171";
+                              return (
+                                <div key={item.id} style={{borderBottom:"3px solid #E8EBF4"}}>
+                                  <div style={{display:"flex",alignItems:"center",gap:10,padding:"8px 16px",background:"#F0F2F8",borderBottom:"1px solid #E0E4F0"}}>
+                                    <div style={{width:9,height:9,borderRadius:"50%",background:itemVendors.length>0?coverage:"#CBD1E8",flexShrink:0}}/>
+                                    <span style={{fontSize:10,color:"#9BA3BF",fontFamily:"monospace",minWidth:65}}>{item.code||"--"}</span>
+                                    <span style={{fontSize:13,fontWeight:800,color:"#1A2240",flex:1}}>{item.description}</span>
+                                    <span style={{fontSize:10,color:"#9BA3BF"}}>{item.trade}</span>
+                                    <span style={{fontSize:11,fontWeight:700,color:bidsIn>0?coverage:"#9BA3BF"}}>{bidsIn} bid{bidsIn!==1?"s":""}</span>
+                                  </div>
+                                  {/* Vendor rows */}
+                                  {itemVendors.length>0 && (
+                                    <div>
+                                      <div style={{display:"grid",gridTemplateColumns:"26px 1fr 90px 80px 110px 80px 90px 90px 28px",background:"#F4F6FB",padding:"4px 12px",gap:6,borderBottom:"1px solid #E8EBF4",alignItems:"center"}}>
+                                        {["","Sub","Phone","Bid File","Amount","Info","Bidding","Notes",""].map((h,i)=>(
+                                          <div key={i} style={{fontSize:8,fontWeight:700,color:"#9BA3BF",textTransform:"uppercase",letterSpacing:"0.06em"}}>{h}</div>
+                                        ))}
+                                      </div>
+                                      {itemVendors.map(v=>{
+                                        const isW=getLS(v.id,"isWinner");
+                                        const hasBidFile=!!(v.bidFileData||v.bidFileName);
+                                        return (
+                                          <div key={v.id} style={{display:"grid",gridTemplateColumns:"26px 1fr 90px 80px 110px 80px 90px 90px 28px",padding:"6px 12px",gap:6,alignItems:"center",background:isW?"#F0FDF4":"#fff",borderBottom:"1px solid #F4F6FB"}}>
+                                            {/* Winner */}
+                                            <div style={{display:"flex",justifyContent:"center"}}>
+                                              <div onClick={()=>setLS(v.id,"isWinner",!isW)} style={{width:16,height:16,borderRadius:"50%",border:"2px solid "+(isW?"#4ADE80":"#D4D9EE"),background:isW?"#4ADE80":"transparent",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                                                {isW&&<div style={{width:6,height:6,borderRadius:"50%",background:"#fff"}}/>}
+                                              </div>
+                                            </div>
+                                            <div>
+                                              <div style={{fontSize:12,fontWeight:isW?700:500,color:isW?"#16A34A":"#1A2240"}}>{v.company}{isW&&<span style={{marginLeft:6,fontSize:8,background:"#4ADE80",color:"#fff",padding:"1px 4px",borderRadius:2}}>WIN</span>}</div>
+                                              {v.contact&&<div style={{fontSize:9,color:"#9BA3BF"}}>{v.contact}</div>}
+                                            </div>
+                                            <div style={{fontSize:10,color:"#4A5278"}}>{v.phone||"—"}</div>
+                                            {/* Bid file */}
+                                            <div style={{display:"flex",alignItems:"center",gap:3}}>
+                                              {hasBidFile?(
+                                                <div style={{display:"flex",alignItems:"center",gap:3}}>
+                                                  {v.bidFileData&&<a href={v.bidFileData} target="_blank" rel="noreferrer" style={{fontSize:9,color:"#3B6FE8",background:"#EEF3FF",padding:"2px 5px",borderRadius:3,textDecoration:"none",fontWeight:700}}>👁 View</a>}
+                                                  <span style={{fontSize:9,background:"#4ADE8020",color:"#16A34A",border:"1px solid #4ADE8040",borderRadius:3,padding:"1px 4px",fontWeight:700}}>✓</span>
+                                                  <button onClick={()=>updateVendorCx(v.id,{bidFileData:null,bidFileName:""})} style={{background:"none",border:"none",color:"#F87171",cursor:"pointer",fontSize:10,padding:0}}>✕</button>
+                                                </div>
+                                              ):(
+                                                <label style={{fontSize:9,color:"#9BA3BF",cursor:"pointer",background:"#F4F6FB",border:"1px dashed #D4D9EE",borderRadius:3,padding:"2px 5px",whiteSpace:"nowrap"}}>
+                                                  + File
+                                                  <input type="file" accept=".pdf,.jpg,.jpeg,.png,.xlsx" style={{display:"none"}} onChange={e=>{const file=e.target.files[0];if(!file)return;const reader=new FileReader();reader.onload=ev=>{updateVendorCx(v.id,{bidFileData:ev.target.result,bidFileName:file.name});setLS(v.id,"bidReceived",true);};reader.readAsDataURL(file);e.target.value="";}}/>
+                                                </label>
+                                              )}
+                                            </div>
+                                            <input type="text" defaultValue={v.bidAmount||""} onBlur={e=>updateVendorCx(v.id,{bidAmount:e.target.value})} placeholder="$0"
+                                              style={{padding:"3px 6px",border:"1px solid "+(isW?"#4ADE8050":"#D4D9EE"),borderRadius:4,fontSize:11,fontFamily:"inherit",outline:"none",width:"100%",boxSizing:"border-box",textAlign:"right",background:isW?"#F0FDF4":"#F9FAFC",fontWeight:isW?700:400}}/>
+                                            <div style={{display:"flex",justifyContent:"center"}}>
+                                              <div onClick={()=>setLS(v.id,"infoSent",!getLS(v.id,"infoSent"))} style={{width:14,height:14,borderRadius:"50%",background:getLS(v.id,"infoSent")?"#60A5FA":"#E0E4F0",border:getLS(v.id,"infoSent")?"2px solid #60A5FA60":"2px solid #CBD1E8",cursor:"pointer"}}/>
+                                            </div>
+                                            <div style={{display:"flex",justifyContent:"center"}}>
+                                              <div onClick={()=>setLS(v.id,"bidding",!getLS(v.id,"bidding"))} style={{width:14,height:14,borderRadius:"50%",background:getLS(v.id,"bidding")?"#FCD34D":"#E0E4F0",border:getLS(v.id,"bidding")?"2px solid #FCD34D60":"2px solid #CBD1E8",cursor:"pointer"}}/>
+                                            </div>
+                                            <input type="text" defaultValue={v.notes||""} onBlur={e=>updateVendorCx(v.id,{notes:e.target.value})} placeholder="Notes…"
+                                              style={{padding:"3px 6px",border:"1px solid #D4D9EE",borderRadius:4,fontSize:10,fontFamily:"inherit",outline:"none",width:"100%",boxSizing:"border-box"}}/>
+                                            <button onClick={()=>removeVendorCx(v.id)} style={{background:"none",border:"none",color:"#F87171",cursor:"pointer",fontSize:13,padding:0}}>✕</button>
+                                          </div>
+                                        );
+                                      })}
+                                      {winner&&<div style={{display:"flex",alignItems:"center",gap:10,padding:"5px 12px",background:"#F0FDF4",borderTop:"1px solid #BBF7D0"}}><span style={{fontSize:10,fontWeight:700,color:"#16A34A"}}>🏆 Winner: {winner.company}</span>{winner.bidAmount&&<span style={{fontSize:11,fontWeight:800,color:"#16A34A"}}>${parseFloat(winner.bidAmount).toLocaleString()}</span>}</div>}
+                                    </div>
+                                  )}
+                                  {itemVendors.length===0&&<div style={{padding:"7px 16px",fontSize:10,color:"#CBD1E8",fontStyle:"italic"}}>No subs — click + Add Sub above</div>}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+
+                        {/* Bid Summary phase */}
+                        {phase==="bid_summary" && (() => {
+                          const ls2=pkg.lineStatus||{};
+                          const summaryRows=wbs.map(item=>{
+                            const itemV=pkg.vendors.filter(v=>{const a=v.costCodes||v.trades||[];return a.length===0||a.includes(item.id)||a.includes(item.trade);});
+                            const winner=itemV.find(v=>ls2[v.id+"_"+item.id]?.isWinner);
+                            return {item,vendors:itemV,winner};
+                          }).filter(r=>r.vendors.length>0);
+                          const totalBuyout=summaryRows.reduce((s,r)=>{const a=parseFloat(r.winner?.bidAmount||0);return s+(isNaN(a)?0:a);},0);
+                          return (
+                            <div style={{flex:1,overflowY:"auto",background:"#fff",border:"1px solid #D4D9EE",borderTop:"none",borderRadius:"0 0 10px 10px",padding:"20px 24px",fontFamily:"sans-serif"}}>
+                              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16,paddingBottom:12,borderBottom:"2px solid #1A2240"}}>
+                                <div>
+                                  <div style={{fontSize:18,fontWeight:800,color:"#1A2240"}}>{job.name}</div>
+                                  {co&&<div style={{fontSize:12,color:"#4A5278"}}>{co.name}</div>}
+                                </div>
+                                <div style={{textAlign:"right"}}>
+                                  <div style={{fontSize:11,color:"#9BA3BF"}}>Bid Summary — For Brad</div>
+                                  <div style={{fontSize:16,fontWeight:800,color:"#4ADE80"}}>Est. Buy-out: {fmt(totalBuyout)}</div>
+                                </div>
+                              </div>
+                              {summaryRows.length===0&&<div style={{textAlign:"center",padding:"40px",color:"#9BA3BF"}}>No subs added yet</div>}
+                              {summaryRows.map(({item,vendors,winner})=>(
+                                <div key={item.id} style={{marginBottom:14}}>
+                                  <div style={{display:"flex",alignItems:"center",gap:8,padding:"5px 10px",background:"#1A2240",borderRadius:"6px 6px 0 0"}}>
+                                    <span style={{fontSize:10,color:"rgba(255,255,255,0.5)",fontFamily:"monospace"}}>{item.code}</span>
+                                    <span style={{fontSize:12,fontWeight:700,color:"#fff",flex:1}}>{item.description}</span>
+                                    {winner?<span style={{fontSize:9,fontWeight:700,background:"#4ADE80",color:"#0A1F0A",padding:"2px 8px",borderRadius:3}}>AWARDED: {winner.company} — {winner.bidAmount?"$"+parseFloat(winner.bidAmount).toLocaleString():"TBD"}</span>:<span style={{fontSize:9,color:"#FCD34D"}}>No winner</span>}
+                                  </div>
+                                  <table style={{width:"100%",borderCollapse:"collapse",border:"1px solid #D4D9EE",borderTop:"none"}}>
+                                    <thead><tr style={{background:"#F9FAFC"}}>
+                                      {["W","Company","Contact","Phone","Bid File","Amount","Notes"].map((h,i)=>(
+                                        <th key={i} style={{padding:"4px 8px",fontSize:8,color:"#9BA3BF",textAlign:i<=1?"center":"left",fontWeight:700,textTransform:"uppercase",borderBottom:"1px solid #E8EBF4"}}>{h}</th>
+                                      ))}
+                                    </tr></thead>
+                                    <tbody>
+                                      {vendors.map((v,i)=>{
+                                        const isW=ls2[v.id+"_"+item.id]?.isWinner;
+                                        const hasBid=!!(v.bidFileData||v.bidFileName||v.bidReceived);
+                                        return (
+                                          <tr key={v.id} style={{background:isW?"#F0FDF4":i%2===0?"#fff":"#FAFCFF",borderBottom:"1px solid #F0F2F8"}}>
+                                            <td style={{padding:"5px 8px",textAlign:"center",fontSize:14,color:isW?"#4ADE80":"#E0E4F0"}}>{isW?"☑":"☐"}</td>
+                                            <td style={{padding:"5px 8px",fontSize:11,fontWeight:isW?700:400,color:isW?"#16A34A":"#1A2240"}}>{v.company}{isW&&<span style={{marginLeft:5,fontSize:8,background:"#4ADE80",color:"#fff",padding:"1px 4px",borderRadius:2}}>WIN</span>}</td>
+                                            <td style={{padding:"5px 8px",fontSize:10,color:"#4A5278"}}>{v.contact||"—"}</td>
+                                            <td style={{padding:"5px 8px",fontSize:10,color:"#4A5278"}}>{v.phone||"—"}</td>
+                                            <td style={{padding:"5px 8px",textAlign:"center"}}>{hasBid?<span style={{fontSize:9,background:"#4ADE8020",color:"#16A34A",border:"1px solid #4ADE8040",borderRadius:3,padding:"1px 5px",fontWeight:700}}>{v.bidFileName||"✓ On file"}</span>:<span style={{fontSize:9,color:"#CBD1E8"}}>—</span>}</td>
+                                            <td style={{padding:"5px 8px",fontSize:11,fontWeight:hasBid?700:400,color:v.bidAmount?isW?"#16A34A":"#1A2240":"#CBD1E8",textAlign:"right"}}>{v.bidAmount?"$"+parseFloat(v.bidAmount).toLocaleString():"—"}</td>
+                                            <td style={{padding:"5px 8px",fontSize:9,color:"#4A5278"}}>{v.notes||""}</td>
+                                          </tr>
+                                        );
+                                      })}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              ))}
+                              <div style={{marginTop:16,display:"flex",justifyContent:"flex-end"}}>
+                                <button onClick={()=>window.print()} style={{padding:"8px 18px",background:"#8B5CF6",color:"#fff",border:"none",borderRadius:7,cursor:"pointer",fontFamily:"inherit",fontSize:12,fontWeight:700}}>🖨 Print</button>
+                              </div>
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    );
+                  })()}
+
+                  {/* ── SCHEDULE TAB ── */}
+                  {activeTab === "schedule" && (
+                    <div style={{display:"flex",flexDirection:"column",gap:14}}>
+                      {months.length < 2 ? (
+                        <div style={{background:"#fff",borderRadius:12,border:"1px solid #D4D9EE",padding:"40px",textAlign:"center",color:"#9BA3BF"}}>
+                          <div style={{fontSize:28,marginBottom:8}}>📊</div>
+                          <div style={{fontSize:14,fontWeight:600,color:"#1A2240"}}>Set start & end dates to view schedule</div>
+                        </div>
+                      ) : (
+                        <div style={{background:"#fff",borderRadius:12,border:"1px solid #D4D9EE",overflow:"hidden"}}>
+                          {/* Month headers */}
+                          <div style={{display:"flex",background:"#F9FAFC",borderBottom:"1px solid #D4D9EE"}}>
+                            <div style={{width:180,flexShrink:0,padding:"9px 14px",fontSize:10,color:"#9BA3BF",textTransform:"uppercase",letterSpacing:"0.08em",borderRight:"1px solid #D4D9EE"}}>Trade / Item</div>
+                            <div style={{flex:1,display:"grid",gridTemplateColumns:"repeat("+months.length+",1fr)"}}>
+                              {months.map((m,i)=>(
+                                <div key={i} style={{padding:"9px 4px",fontSize:9,textTransform:"uppercase",textAlign:"center",borderRight:i<months.length-1?"1px solid #EEF0F8":"none",fontWeight:m.m===today.getMonth()&&m.y===today.getFullYear()?700:400,color:m.m===today.getMonth()&&m.y===today.getFullYear()?"#8B5CF6":"#9BA3BF"}}>
+                                  {MON[m.m]} '{String(m.y).slice(2)}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                          {/* Overall project bar */}
+                          <div style={{display:"flex",borderBottom:"1px solid #F0F2F8",alignItems:"center",minHeight:48}}>
+                            <div style={{width:180,flexShrink:0,padding:"10px 14px",borderRight:"1px solid #D4D9EE"}}>
+                              <div style={{fontSize:12,fontWeight:700,color:"#1A2240"}}>{job.name}</div>
+                              <div style={{fontSize:10,color:"#9BA3BF"}}>{job.startDate||"—"} → {job.endDate||"—"}</div>
+                            </div>
+                            <div style={{flex:1,position:"relative",height:48,padding:"0 8px"}}>
+                              <div style={{position:"absolute",left:nowPct+"%",top:0,bottom:0,width:2,background:"#F87171",opacity:0.6,zIndex:3}}/>
+                              {job.startDate&&job.endDate&&(
+                                <div style={{position:"absolute",left:"calc("+pct(job.startDate)+"% + 8px)",right:"calc("+(100-pct(job.endDate))+"% + 8px)",top:"50%",transform:"translateY(-50%)",height:16,background:"linear-gradient(90deg,#8B5CF6,#A78BFA)",borderRadius:8,boxShadow:"0 2px 6px rgba(139,92,246,0.3)"}}>
+                                  {(job.pct||0)>0&&<div style={{position:"absolute",left:0,top:0,bottom:0,width:(job.pct||0)+"%",background:"rgba(255,255,255,0.35)",borderRadius:8}}/>}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                          {/* Trade rows from WBS */}
+                          {[...new Set((wbsData[job.id]||[]).map(w=>w.trade))].filter(Boolean).map((trade,ti)=>(
+                            <div key={trade} style={{display:"flex",borderBottom:"1px solid #F4F6FB",alignItems:"center",minHeight:38}}>
+                              <div style={{width:180,flexShrink:0,padding:"8px 14px",borderRight:"1px solid #D4D9EE",fontSize:11,color:"#4A5278"}}>{trade}</div>
+                              <div style={{flex:1,position:"relative",height:38,padding:"0 8px"}}>
+                                <div style={{position:"absolute",left:nowPct+"%",top:0,bottom:0,width:2,background:"#F8717115"}}/>
+                                {job.startDate&&job.endDate&&(
+                                  <div style={{position:"absolute",left:"calc("+pct(job.startDate)+"% + 8px)",right:"calc("+(100-pct(job.endDate))+"% + 8px)",top:"50%",transform:"translateY(-50%)",height:10,background:["#60A5FA","#4ADE80","#FCD34D","#F97316","#A78BFA","#F87171"][ti%6]+"80",borderRadius:5}}/>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                          {/* Today row */}
+                          <div style={{display:"flex",alignItems:"center",background:"#FFF5F5"}}>
+                            <div style={{width:180,flexShrink:0,padding:"8px 14px",borderRight:"1px solid #D4D9EE",fontSize:11,color:"#F87171",fontWeight:600,display:"flex",alignItems:"center",gap:6}}>
+                              <span style={{width:8,height:8,borderRadius:"50%",background:"#F87171",display:"inline-block"}}/>Today
+                            </div>
+                            <div style={{flex:1,position:"relative",height:28,padding:"0 8px"}}>
+                              <div style={{position:"absolute",left:"calc("+nowPct+"% + 8px)",top:0,bottom:0,width:2,background:"#F87171"}}/>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* ── TO-DOS TAB (do_work stage) ── */}
+                  {activeTab === "todos" && (() => {
+                    const todos = [
+                      { id:"subco",   label:"All subcontractors under contract",    done:!!(bidPackages[job.id]?.vendors?.some(v=>(bidPackages[job.id]?.lineStatus||{})[Object.keys(bidPackages[job.id]?.lineStatus||{}).find(k=>k.startsWith(v.id))]?.isWinner)), target:"Buyout complete" },
+                      { id:"sched",   label:"Start & end dates set",                done:!!(job.startDate&&job.endDate),  target:"Before mobilization" },
+                      { id:"ntp",     label:"Notice to Proceed issued",              done:!!(job.ntpDate),                  target:"Before start date" },
+                      { id:"permit",  label:"Permits pulled",                        done:!!(job.permitsDate),              target:"Before construction" },
+                      { id:"pct50",   label:"50% complete milestone",               done:(job.pct||0)>=50,                target:"Mid-project" },
+                      { id:"pct80",   label:"80% complete — invoice 2nd draw",      done:(job.pct||0)>=80,                target:"Draw schedule" },
+                      { id:"pct100",  label:"Punch list complete / 100%",           done:(job.pct||0)>=100,               target:"Final completion" },
+                      { id:"closeout",label:"Final invoice issued",                  done:!!(job.invoiceDate),              target:"Billing" },
+                    ];
+                    const doneCount = todos.filter(t=>t.done).length;
+                    return (
+                      <div style={{display:"flex",flexDirection:"column",gap:12}}>
+                        <div style={{background:"#fff",borderRadius:10,border:"1px solid #D4D9EE",padding:"14px 18px"}}>
+                          <div style={{display:"flex",justifyContent:"space-between",marginBottom:8}}>
+                            <div style={{fontSize:13,fontWeight:700,color:"#1A2240"}}>Project To-Dos</div>
+                            <div style={{fontSize:12,color:"#4A5278"}}>{doneCount}/{todos.length} complete</div>
+                          </div>
+                          <div style={{background:"#F0F2F8",borderRadius:6,height:8,overflow:"hidden",marginBottom:14}}>
+                            <div style={{height:"100%",width:(doneCount/todos.length*100)+"%",background:"linear-gradient(90deg,#8B5CF6,#4ADE80)",borderRadius:6,transition:"width 0.4s"}}/>
+                          </div>
+                          {todos.map(t=>(
+                            <div key={t.id} style={{display:"flex",alignItems:"center",gap:12,padding:"10px 0",borderBottom:"1px solid #F4F6FB"}}>
+                              <div style={{width:22,height:22,borderRadius:6,background:t.done?"#4ADE80":"#F0F2F8",border:"2px solid "+(t.done?"#4ADE80":"#D4D9EE"),display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0}}>
+                                {t.done&&<span style={{fontSize:12,color:"#fff"}}>✓</span>}
+                              </div>
+                              <div style={{flex:1}}>
+                                <div style={{fontSize:12,fontWeight:t.done?400:600,color:t.done?"#9BA3BF":"#1A2240",textDecoration:t.done?"line-through":"none"}}>{t.label}</div>
+                                <div style={{fontSize:10,color:"#9BA3BF"}}>{t.target}</div>
+                              </div>
+                              {!t.done&&<span style={{fontSize:9,background:"#FCD34D20",color:"#92400E",border:"1px solid #FCD34D40",borderRadius:4,padding:"2px 7px",fontWeight:600}}>Pending</span>}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                </div>
+              );
+            }
+
+            // ── LIST VIEW ──
+            return (
+              <div className="fade-in" style={{ display: "flex", flexDirection: "column", gap: 22 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div>
+                    <div style={{ fontSize: 22, fontWeight: 700, color: "#1A2240", letterSpacing: "-0.01em", textTransform: "uppercase" }}>Capital Improvements</div>
+                    <div style={{ fontSize: 11, color: "#4A5278", marginTop: 3, letterSpacing: "0.06em" }}>{capexJobs.length} PROJECTS · {fmt(capexJobs.reduce((s,j) => s+j.contractValue,0))} TOTAL</div>
+                  </div>
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <input className="fi" style={{ width: 180 }} placeholder="Search…" value={capexSearch} onChange={e => setCapexSearch(e.target.value)} />
+                    <button className="btn-primary" onClick={openAddCapex}>+ Add Project</button>
+                  </div>
+                </div>
+
+                {/* Stage stats */}
+                <div style={{ display: "flex", gap: 8, overflowX: "auto" }}>
+                  {CAPEX_FM_STAGES.map(st => {
+                    const cnt = capexJobs.filter(j => j.stage === st.id).length;
+                    const val = capexJobs.filter(j => j.stage === st.id).reduce((s,j) => s+j.contractValue, 0);
+                    return (
+                      <div key={st.id} style={{ flex: "0 0 160px", background: "#ECEEF8", border: "1px solid " + st.color + "30", borderRadius: 8, padding: "12px 14px", position: "relative", overflow: "hidden" }}>
+                        <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: st.color }} />
+                        <div style={{ fontSize: 10, color: st.color, textTransform: "uppercase", letterSpacing: "0.07em", fontWeight: 600, marginBottom: 4 }}>{st.label}</div>
+                        <div style={{ fontSize: 18, fontWeight: 700, color: "#1A2240" }}>{cnt}</div>
+                        <div style={{ fontSize: 11, color: "#4A5278" }}>{fmt(val)}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* List grouped by stage */}
+                {CAPEX_FM_STAGES.map(st => {
+                  const stageJobs = capexJobs.filter(j => j.stage === st.id && (j.name.toLowerCase().includes(capexSearch.toLowerCase()) || !capexSearch));
+                  if (!stageJobs.length) return null;
                   return (
-                    <div key={st.id} style={{ flex: "0 0 160px", background: "#ECEEF8", border: "1px solid " + st.color + "30", borderRadius: 8, padding: "12px 14px", position: "relative", overflow: "hidden" }}>
-                      <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: st.color }} />
-                      <div style={{ fontSize: 10, color: st.color, textTransform: "uppercase", letterSpacing: "0.07em", fontWeight: 600, marginBottom: 4 }}>{st.label}</div>
-                      <div style={{ fontSize: 18, fontWeight: 700, color: "#1A2240" }}>{cnt}</div>
-                      <div style={{ fontSize: 11, color: "#4A5278" }}>{fmt(val)}</div>
+                    <div key={st.id}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+                        <div style={{ width: 8, height: 8, borderRadius: "50%", background: st.color }} />
+                        <span style={{ fontSize: 11, letterSpacing: "0.08em", textTransform: "uppercase", color: st.color, fontWeight: 600 }}>{st.label}</span>
+                        <span style={{ fontSize: 10, color: "#4A5278" }}>({stageJobs.length})</span>
+                      </div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                        {stageJobs.map(job => {
+                          const co   = companies.find(c => c.id === job.companyId);
+                          const site = sites.find(s => s.id === job.siteId);
+                          const actionDate = job[st.actionKey];
+                          const overdue = actionDate && new Date(actionDate) < new Date();
+                          const soon    = actionDate && new Date(actionDate) <= new Date(Date.now() + 7*86400000);
+                          return (
+                            <div key={job.id} className="opp-row" onClick={() => { setSelectedCapexFull(job.id); setCapexDetailTab(job.stage==="estimating"?"estimating":job.stage==="buyout"?"overview":"overview"); }}>
+                              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                  <div style={{ fontSize: 13, color: "#1A2240", fontWeight: 600, marginBottom: 4 }}>{job.name}</div>
+                                  <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
+                                    {co   && <span style={{ fontSize: 11, color: "#3B6FE8" }}>🏢 {co.name}</span>}
+                                    {site && <span style={{ fontSize: 11, color: "#4A5278" }}>📍 Store #{site.storeNumber}</span>}
+                                    {job.pm && <span style={{ fontSize: 11, color: "#353C62" }}>👤 {job.pm}</span>}
+                                    {actionDate && <span style={{ fontSize: 11, color: overdue ? "#F87171" : soon ? "#FCD34D" : "#4A5278" }}>📅 {st.actionLabel}: {actionDate}{overdue ? " ⚠" : ""}</span>}
+                                  </div>
+                                </div>
+                                <div style={{ display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>
+                                  <span style={{ fontSize: 15, fontWeight: 700, color: st.color }}>{fmt(job.contractValue)}</span>
+                                  <div style={{ display: "flex", gap: 5 }} onClick={e => e.stopPropagation()}>
+                                    <button className="btn-ghost" style={{ fontSize: 11 }} onClick={() => moveCapexStage(job.id, -1)}>←</button>
+                                    <button className="btn-ghost" style={{ fontSize: 11 }} onClick={() => moveCapexStage(job.id,  1)}>→</button>
+                                    <button className="btn-ghost" style={{ fontSize: 11 }} onClick={() => openEditCapex(job)}>✎</button>
+                                    <button className="btn-ghost" style={{ fontSize: 11, color: "#F87171", borderColor: "#F8717120" }} onClick={() => deleteCapex(job.id)}>✕</button>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
                   );
                 })}
               </div>
-
-              {/* List grouped by stage - all except estimating */}
-              {CAPEX_FM_STAGES.filter(st => st.id !== "estimating").map(st => {
-                const stageJobs = capexJobs.filter(j => j.stage === st.id && (j.name.toLowerCase().includes(capexSearch.toLowerCase()) || !capexSearch));
-                if (!stageJobs.length) return null;
-                const actionField = st.actionKey;
-                return (
-                  <div key={st.id}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
-                      <div style={{ width: 8, height: 8, borderRadius: "50%", background: st.color }} />
-                      <span style={{ fontSize: 11, letterSpacing: "0.08em", textTransform: "uppercase", color: st.color, fontWeight: 600 }}>{st.label}</span>
-                      <span style={{ fontSize: 10, color: "#4A5278" }}>({stageJobs.length})</span>
-                    </div>
-                    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                      {stageJobs.map(job => {
-                        const co   = companies.find(c => c.id === job.companyId);
-                        const site = sites.find(s => s.id === job.siteId);
-                        const actionDate = job[actionField];
-                        const overdue = actionDate && new Date(actionDate) < new Date();
-                        const soon    = actionDate && new Date(actionDate) <= new Date(Date.now() + 7*86400000);
-                        return (
-                          <div key={job.id} className="opp-row" onClick={() => setSelectedCapexJob(job)}>
-                            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                              <div style={{ flex: 1, minWidth: 0 }}>
-                                <div style={{ fontSize: 13, color: "#1A2240", fontWeight: 600, marginBottom: 4 }}>{job.name}</div>
-                                <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
-                                  {co   && <span style={{ fontSize: 11, color: "#3B6FE8" }}>🏢 {co.name}</span>}
-                                  {site && <span style={{ fontSize: 11, color: "#4A5278" }}>📍 Store #{site.storeNumber}</span>}
-                                  {job.pm && <span style={{ fontSize: 11, color: "#353C62" }}>👤 {job.pm}</span>}
-                                  {actionDate && <span style={{ fontSize: 11, color: overdue ? "#F87171" : soon ? "#FCD34D" : "#4A5278" }}>📅 {st.actionLabel}: {actionDate}{overdue ? " ⚠" : ""}</span>}
-                                </div>
-                              </div>
-                              <div style={{ display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>
-                                <span style={{ fontSize: 15, fontWeight: 700, color: st.color }}>{fmt(job.contractValue)}</span>
-                                <div style={{ display: "flex", gap: 5 }} onClick={e => e.stopPropagation()}>
-                                  <button className="btn-ghost" style={{ fontSize: 11 }} onClick={() => moveCapexStage(job.id, -1)}>←</button>
-                                  <button className="btn-ghost" style={{ fontSize: 11 }} onClick={() => moveCapexStage(job.id,  1)}>→</button>
-                                  <button className="btn-ghost" style={{ fontSize: 11 }} onClick={() => openEditCapex(job)}>✎</button>
-                                  <button className="btn-ghost" style={{ fontSize: 11, color: "#F87171", borderColor: "#F8717120" }} onClick={() => deleteCapex(job.id)}>✕</button>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
+            );
+          })()}
 
           {/* -- FM JOBS -- */}
           {activeNav === "jobs" && activeBU === "facility" && (() => {
