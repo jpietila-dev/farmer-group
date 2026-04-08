@@ -15,7 +15,7 @@ const supa = {
       return fetch(`${SUPA_URL}/rest/v1/${table}`, {
         method: "POST",
         headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}`, "Content-Type": "application/json", Prefer: "return=representation" },
-        body: JSON.stringify(body) 
+        body: JSON.stringify(body)
       }).then(r => r.json()).then(data => ({ data, error: null })).catch(error => ({ data: null, error }));
     },
     update: function(row) {
@@ -7176,6 +7176,8 @@ Return ONLY valid JSON, no markdown, no extra text:
                         </div>
                         <iframe
                           key={mapCompanyFilter + "|" + mapSites.length}
+                          sandbox="allow-scripts allow-same-origin"
+                          style={{width:"100%",height:"100%",border:"none",display:"block"}}
                           srcDoc={`<!DOCTYPE html><html><head>
 <meta charset="utf-8">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
@@ -7395,9 +7397,10 @@ if(bounds.length)map.fitBounds(bounds,{padding:[30,30]});
                   </div>
                   <div style={{ height: 340, position: "relative" }}>
                     <iframe key={activeBU + currentSites.length} style={{ width: "100%", height: "100%", border: "none" }}
+                      sandbox="allow-scripts allow-same-origin"
                       srcDoc={`<!DOCTYPE html><html><head>
-                        <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-                        <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+                        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+                        <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
                         <style>html,body,#map{margin:0;padding:0;height:100%;background:#FFFFFF;}</style>
                       </head><body><div id="map"></div><script>
                         var map = L.map('map', { zoomControl: true, attributionControl: false }).setView([39.5, -98.5], 4);
@@ -8336,6 +8339,7 @@ if(bounds.length)map.fitBounds(bounds,{padding:[30,30]});
                       </div>
                     ) : (
                       <iframe key={"sm-"+subTradeFilter+"-"+mapPts.length} style={{width:"100%",height:500,border:"none",display:"block"}} title="Sub Map"
+                        sandbox="allow-scripts allow-same-origin"
                         srcDoc={"<!DOCTYPE html><html><head><meta charset='utf-8'><link rel='stylesheet' href='https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css'/><script src='https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js'><\\/script><style>html,body,#map{margin:0;padding:0;height:100%;width:100%}.leaflet-popup-content-wrapper{border-radius:10px}</style></head><body><div id='map'></div><script>const map=L.map('map',{zoomControl:true,attributionControl:false});L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}).addTo(map);L.control.attribution({prefix:'© OSM'}).addTo(map);const pts=" + JSON.stringify(mapPts.map(s=>({lat:s.lat,lng:s.lng,name:s.name,trade:s.trade||"General",phone:s.phone||"",city:s.city||"",state:s.state||""}))) + ";const TM={'HVAC':['❄️','#60A5FA'],'Plumbing':['🔧','#3B82F6'],'Electrical':['⚡','#F59E0B'],'Roofing':['🏠','#8B5CF6'],'Painting':['🎨','#EC4899'],'Concrete':['🪨','#6B7280'],'Landscaping':['🌿','#10B981'],'Snow':['🌨','#A8C4F8'],'General':['🔨','#7BA7F5'],'Fire':['🔥','#EF4444'],'Pest':['🪲','#84CC16'],'Cleaning':['🧹','#14B8A6'],'Security':['🔒','#6366F1'],'Elevator':['🛗','#D97706'],'Carpentry':['🪵','#92400E']};const getI=(t)=>{const m=Object.entries(TM).find(([k])=>t&&t.toLowerCase().includes(k.toLowerCase()));return m?m[1]:['🔧','#7BA7F5'];};const bnds=[];pts.forEach(p=>{const [ic,cl]=getI(p.trade);const icon=L.divIcon({className:'',html:'<div style=\"width:36px;height:36px;border-radius:50%;background:'+cl+';display:flex;align-items:center;justify-content:center;font-size:18px;box-shadow:0 2px 8px rgba(0,0,0,0.4);border:2.5px solid white\">'+ic+'</div>',iconSize:[36,36],iconAnchor:[18,18],popupAnchor:[0,-20]});L.marker([p.lat,p.lng],{icon}).addTo(map).bindPopup('<div style=\"font-family:Inter,sans-serif;line-height:1.6\"><b style=\"font-size:13px\">'+p.name+'</b><br><span style=\"font-size:11px;color:#4A5278\">'+p.trade+'</span>'+(p.city?'<br><span style=\"font-size:11px;color:#9BA3BF\">'+p.city+(p.state?', '+p.state:'')+'</span>':'')+(p.phone?'<br><span style=\"font-size:11px\">📞 '+p.phone+'</span>':'')+'</div>');bnds.push([p.lat,p.lng]);});if(bnds.length)map.fitBounds(bnds,{padding:[40,40]});<\\/script></body></html>"}
                       />
                     )}
@@ -14384,10 +14388,11 @@ if(bounds.length)map.fitBounds(bounds,{padding:[30,30]});
                     {site.lat && site.lng ? (
                       <iframe
                         key={site.id + "-aerial"}
+                        sandbox="allow-scripts allow-same-origin"
                         style={{ width: "100%", height: "100%", border: "none", display: "block" }}
                         srcDoc={`<!DOCTYPE html><html><head>
-                          <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-                          <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+                          <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+                          <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
                           <style>html,body,#map{margin:0;padding:0;height:100%;width:100%;}</style>
                         </head><body><div id="map"></div><script>
                           var map = L.map('map', { zoomControl: false, attributionControl: false, dragging: false, scrollWheelZoom: false }).setView([${site.lat}, ${site.lng}], 15);
