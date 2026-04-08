@@ -12401,6 +12401,7 @@ window.addEventListener('message',function(e){
             id: jobId,
             name: opp.name,
             client: co?.name || "",
+            company_id: opp.companyId || null,
             status: "active",
             contract_value: parseFloat(W.contractValue) || null,
             start_date: W.startDate || null,
@@ -12422,9 +12423,10 @@ window.addEventListener('message',function(e){
           };
           // Add to local state
           setMpJobs(prev => [...prev, {
-            id: jobId, name: opp.name, client: co?.name||"", status:"active",
-            contractValue: parseFloat(W.contractValue)||0, startDate: W.startDate||"",
-            endDate: W.endDate||"", pm: W.pm||"", pct:0, daysAhead:null,
+            id: jobId, name: opp.name, client: co?.name||"", companyId: opp.companyId||"",
+            status:"active", contractValue: parseFloat(W.contractValue)||0,
+            startDate: W.startDate||"", endDate: W.endDate||"",
+            pm: W.pm||"", pct:0, daysAhead:null,
             completionSchedule:"", changeOrderStatus:"", budgetStatus:"",
             billingStatus:"", gpm:0, longLeadItems:"",
             km1:"",km1Date:"",km2:"",km2Date:"",km3:"",km3Date:"",
@@ -12443,7 +12445,10 @@ window.addEventListener('message',function(e){
               headers:{ apikey:SUPA_KEY, Authorization:`Bearer ${SUPA_KEY}`, "Content-Type":"application/json", Prefer:"return=minimal" },
               body: JSON.stringify({ stage:"won" })
             });
-          } catch(e) { console.error("Save error:", e); }
+          } catch(e) {
+            console.error("Save error:", e);
+            alert("Job saved locally but failed to save to database. Please check that the mp_jobs table exists in Supabase.");
+          }
 
           setShowWonConvert(false);
           setWonConvertOpp(null);
