@@ -5906,12 +5906,6 @@ Return ONLY valid JSON, no markdown, no extra text:
                   </div>
                   <div style={{display:"flex",gap:8}}>
                     <button className="btn-ghost" onClick={()=>{setEmailText("");setParsedFields(null);setShowEmailParse(true);}} style={{display:"flex",alignItems:"center",gap:5}}>📧 Parse Email</button>
-                    {archivedCount > 0 && (
-                      <button onClick={()=>setShowArchivedSubs(v=>!v)}
-                        style={{padding:"6px 14px",border:"1px solid "+(showArchivedSubs?"#F87171":"#CBD1E8"),background:showArchivedSubs?"#FFF1F2":"transparent",color:showArchivedSubs?"#F87171":"#4A5278",borderRadius:7,cursor:"pointer",fontFamily:"inherit",fontSize:12,fontWeight:600}}>
-                        {showArchivedSubs ? "← Active Subs" : "📦 "+archivedCount+" Archived"}
-                      </button>
-                    )}
                     <button className="btn-primary" onClick={()=>{setDropStage("lead");setForm({name:"",companyId:"",contactId:"",value:"",stage:"lead",pipelineType:"budgeting",closeDate:"",notes:"",bu:"major",budgetDueDate:"",bidDueDate:"",nextSteps:[]});setShowForm(true);}}>+ Add Opportunity</button>
                   </div>
                 </div>
@@ -8300,6 +8294,12 @@ window.addEventListener('message',function(e){
                         <button key={v.id} onClick={()=>setSubView(v.id)} style={{padding:"6px 14px",border:"none",background:subView===v.id?"#3B6FE8":"transparent",color:subView===v.id?"#fff":"#4A5278",cursor:"pointer",fontFamily:"inherit",fontSize:12,fontWeight:600}}>{v.lbl}</button>
                       ))}
                     </div>
+                    {archivedCount > 0 && (
+                      <button onClick={()=>setShowArchivedSubs(v=>!v)}
+                        style={{padding:"6px 14px",border:"1px solid "+(showArchivedSubs?"#F87171":"#CBD1E8"),background:showArchivedSubs?"#FFF1F2":"transparent",color:showArchivedSubs?"#F87171":"#4A5278",borderRadius:7,cursor:"pointer",fontFamily:"inherit",fontSize:12,fontWeight:600}}>
+                        {showArchivedSubs ? "← Active Subs" : "📦 "+archivedCount+" Archived"}
+                      </button>
+                    )}
                     <button className="btn-primary" onClick={()=>{
                       setEditSubId(null);
                       const defaultDiv = activeBU === "facility" ? "fm" : activeBU === "all" ? "" : activeBU;
