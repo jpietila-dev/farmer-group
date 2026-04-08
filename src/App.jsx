@@ -6765,7 +6765,7 @@ Return ONLY valid JSON, no markdown, no extra text:
 
 
           {/* -- PIPELINE -- */}
-          {activeNav === "pipeline" && activeBU !== "major" && (
+          {activeNav === "pipeline" && activeBU !== "major" && activeBU !== "capital" && (
             <div className="fade-in" style={{ display: "flex", flexDirection: "column", gap: 22 }}>
 
               {/* -- FM INBOX (unassigned leads) - FM only -- */}
@@ -7692,7 +7692,107 @@ window.addEventListener('message',function(e){
             );
           })()}
 
-          {/* -- CAPEX JOBS -- */}
+          {/* -- CAPEX PIPELINE (estimating, owner_approval, won, lost) -- */}
+          {activeNav === "pipeline" && activeBU === "capital" && (() => {
+            const pipeStageIds = CAPEX_PIPELINE_STAGES.map(s=>s.id);
+            const pipeJobs = capexJobs.filter(j => pipeStageIds.includes(j.stage));
+
+            if (selectedCapexFull && pipeJobs.find(j=>j.id===selectedCapexFull)) {
+              // Reuse the full detail view logic — just set nav context
+              // Actually redirect to jobs page for the detail
+              setTimeout(()=>setActiveNav("jobs"),0);
+              return null;
+            }
+
+            const wonJobs2  = pipeJobs.filter(j=>j.stage==="won");
+            const lostJobs2 = pipeJobs.filter(j=>j.stage==="lost");
+            const activeP   = pipeJobs.filter(j=>j.stage==="estimating"||j.stage==="owner_approval");
+
+            const PipeRow = ({job}) => {
+              const st=CAPEX_STAGES.find(s=>s.id===job.stage)||CAPEX_STAGES[0];
+              const co=companies.find(c=>c.id===job.companyId);
+              const cxPkgJ=bidPackages[job.id]||{vendors:[]};
+              const sentCount=cxPkgJ.vendors.length;
+              const bidCount=cxPkgJ.vendors.filter(v=>v.bidReceived||v.bidFileData||v.bidFileName).length;
+              const actionDate=job[st.actionKey];
+              const overdue=actionDate&&new Date(actionDate)<new Date();
+              return (
+                <div className="opp-row" onClick={()=>{setSelectedCapexFull(job.id);setCapexDetailTab("estimating");setActiveNav("jobs");}}>
+                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
+                        <div style={{fontSize:13,color:"#1A2240",fontWeight:600}}>{job.name}</div>
+                        <span style={{fontSize:9,padding:"1px 7px",borderRadius:10,background:st.color+"20",color:st.color,fontWeight:700,border:"1px solid "+st.color+"40"}}>{st.label}</span>
+                        {sentCount>0&&<span style={{fontSize:9,color:"#9BA3BF"}}>📤 {sentCount} · 📥 {bidCount}</span>}
+                      </div>
+                      <div style={{display:"flex",gap:14,flexWrap:"wrap"}}>
+                        {co&&<span style={{fontSize:11,color:"#3B6FE8"}}>🏢 {co.name}</span>}
+                        {job.pm&&<span style={{fontSize:11,color:"#353C62"}}>👤 {job.pm}</span>}
+                        {actionDate&&<span style={{fontSize:11,color:overdue?"#F87171":"#4A5278"}}>📅 {st.actionLabel}: {actionDate}{overdue?" ⚠":""}</span>}
+                      </div>
+                    </div>
+                    <span style={{fontSize:15,fontWeight:700,color:st.color}}>{fmt(job.contractValue)}</span>
+                  </div>
+                </div>
+              );
+            };
+
+            return (
+              <div className="fade-in" style={{display:"flex",flexDirection:"column",gap:20}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                  <div>
+                    <div style={{fontSize:22,fontWeight:700,color:"#1A2240",textTransform:"uppercase",letterSpacing:"-0.01em"}}>CI Pipeline</div>
+                    <div style={{fontSize:11,color:"#4A5278",marginTop:3}}>{pipeJobs.length} jobs · {fmt(pipeJobs.reduce((s,j)=>s+j.contractValue,0))}</div>
+                  </div>
+                  <button className="btn-primary" onClick={openAddCapex}>+ Add Project</button>
+                </div>
+
+                {/* Stats strip */}
+                <div style={{display:"flex",gap:8}}>
+                  {CAPEX_PIPELINE_STAGES.filter(s=>s.id!=="lost").map(st=>{
+                    const cnt=capexJobs.filter(j=>j.stage===st.id).length;
+                    const val=capexJobs.filter(j=>j.stage===st.id).reduce((s,j)=>s+j.contractValue,0);
+                    return (
+                      <div key={st.id} style={{flex:1,background:"#ECEEF8",border:"1px solid "+st.color+"30",borderRadius:8,padding:"10px 12px",position:"relative",overflow:"hidden"}}>
+                        <div style={{position:"absolute",top:0,left:0,right:0,height:2,background:st.color}}/>
+                        <div style={{fontSize:9,color:st.color,textTransform:"uppercase",letterSpacing:"0.07em",fontWeight:600,marginBottom:3}}>{st.label}</div>
+                        <div style={{fontSize:16,fontWeight:700,color:"#1A2240"}}>{cnt}</div>
+                        <div style={{fontSize:10,color:"#4A5278"}}>{fmt(val)}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {activeP.length>0 && (
+                  <div>
+                    <div style={{fontSize:11,letterSpacing:"0.1em",textTransform:"uppercase",color:"#818CF8",fontWeight:700,marginBottom:10}}>📋 Estimating & Approval</div>
+                    <div style={{display:"flex",flexDirection:"column",gap:6}}>{activeP.map(j=><PipeRow key={j.id} job={j}/>)}</div>
+                  </div>
+                )}
+                {wonJobs2.length>0 && (
+                  <div>
+                    <div style={{fontSize:11,letterSpacing:"0.1em",textTransform:"uppercase",color:"#4ADE80",fontWeight:700,marginBottom:10}}>🏆 Won — Pending Handoff</div>
+                    <div style={{display:"flex",flexDirection:"column",gap:6}}>{wonJobs2.map(j=><PipeRow key={j.id} job={j}/>)}</div>
+                  </div>
+                )}
+                {lostJobs2.length>0 && (
+                  <div>
+                    <div style={{fontSize:11,letterSpacing:"0.1em",textTransform:"uppercase",color:"#F87171",fontWeight:700,marginBottom:10}}>✗ Lost</div>
+                    <div style={{display:"flex",flexDirection:"column",gap:6}}>{lostJobs2.map(j=><PipeRow key={j.id} job={j}/>)}</div>
+                  </div>
+                )}
+                {pipeJobs.length===0 && (
+                  <div style={{textAlign:"center",padding:"48px",color:"#9BA3BF",background:"#F9FAFC",borderRadius:12,border:"2px dashed #E0E4F0"}}>
+                    <div style={{fontSize:28,marginBottom:8}}>📐</div>
+                    <div style={{fontSize:14,fontWeight:600,color:"#1A2240",marginBottom:4}}>No jobs in pipeline yet</div>
+                    <button className="btn-primary" onClick={openAddCapex} style={{marginTop:8}}>+ Add First Project</button>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+
+          {/* -- CAPEX JOBS (buyout and beyond) -- */}
           {activeNav === "jobs" && activeBU === "capital" && (() => {
             // Full-page detail view when a job is selected
             if (selectedCapexFull) {
@@ -7872,7 +7972,7 @@ window.addEventListener('message',function(e){
                     const oppId = job.id;
                     const wbs   = wbsData[oppId]    || [];
                     const pkg   = bidPackages[oppId] || {vendors:[], lineStatus:{}};
-                    const phase = estimatePhase[oppId] || "wbs";
+                    const phase = estimatePhase[oppId] || "overview";
                     const setPhase = (p) => { setEstimatePhase(prev=>({...prev,[oppId]:p})); setTimeout(()=>saveEstimateData(oppId,wbs,pkg,p),300); };
                     const setWbs = (items) => {
                       const resolved = typeof items==="function"?items(wbs):items;
@@ -7977,7 +8077,7 @@ window.addEventListener('message',function(e){
                         {/* Sub-phase tabs */}
                         <div style={{display:"flex",background:"#F9FAFC",borderBottom:"2px solid #E8EBF4",flexShrink:0,borderRadius:"10px 10px 0 0",overflow:"hidden",marginBottom:0}}>
                           {PHASES_CX.map(ph=>(
-                            <button key={ph.id} onClick={()=>ph.id==="overview"?null:setPhase(ph.id)}
+                            <button key={ph.id} onClick={()=>setPhase(ph.id==="overview"?"overview":ph.id)}
                               style={{flex:1,padding:"8px 4px",border:"none",background:"transparent",cursor:"pointer",fontFamily:"inherit",borderBottom:(ph.id==="overview"?phase==="overview":phase===ph.id)?"3px solid #8B5CF6":"3px solid transparent",marginBottom:-2}}>
                               <div style={{fontSize:11,fontWeight:(ph.id==="overview"?phase==="overview":phase===ph.id)?700:400,color:(ph.id==="overview"?phase==="overview":phase===ph.id)?"#8B5CF6":"#4A5278"}}>{ph.icon} {ph.label}</div>
                               <div style={{fontSize:9,color:"#9BA3BF"}}>{ph.desc}</div>
@@ -7986,7 +8086,7 @@ window.addEventListener('message',function(e){
                         </div>
 
                         {/* ── OVERVIEW: Notes + Photos ── */}
-                        {(phase==="overview"||(!["wbs","quoting","bid_summary"].includes(phase))) && (
+                        {phase==="overview" && (
                           <div style={{background:"#fff",border:"1px solid #D4D9EE",borderTop:"none",borderRadius:"0 0 10px 10px",padding:"18px"}}>
                             <div style={{display:"flex",flexDirection:"column",gap:14}}>
 
@@ -8045,11 +8145,61 @@ window.addEventListener('message',function(e){
                               </div>
 
                               {/* Quick actions */}
-                              <div style={{display:"flex",gap:8}}>
-                                <button onClick={()=>setPhase("wbs")} style={{flex:1,padding:"8px",background:"#F0F2F8",border:"1px solid #CBD1E8",borderRadius:7,cursor:"pointer",fontFamily:"inherit",fontSize:12,color:"#4A5278"}}>📋 Go to WBS</button>
-                                <button onClick={()=>setPhase("quoting")} style={{flex:1,padding:"8px",background:"#EEF3FF",border:"1px solid #3B6FE840",borderRadius:7,cursor:"pointer",fontFamily:"inherit",fontSize:12,color:"#3B6FE8"}}>📧 Go to Quoting</button>
-                                {job.stage==="estimating"&&<button onClick={()=>setCapexWonHandoff({job,noahOk:false,bradOk:false})} style={{flex:1,padding:"8px",background:"#F0FDF4",border:"1px solid #4ADE8040",borderRadius:7,cursor:"pointer",fontFamily:"inherit",fontSize:12,color:"#16A34A",fontWeight:700}}>🏆 Mark Won</button>}
-                                {job.stage==="estimating"&&<button onClick={()=>updateCapex({stage:"lost",lostDate:new Date().toISOString().slice(0,10)})} style={{flex:1,padding:"8px",background:"#FFF1F2",border:"1px solid #F8717140",borderRadius:7,cursor:"pointer",fontFamily:"inherit",fontSize:12,color:"#F87171"}}>✗ Mark Lost</button>}
+                              <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                                <button onClick={()=>setPhase("wbs")} style={{flex:1,padding:"8px",background:"#F0F2F8",border:"1px solid #CBD1E8",borderRadius:7,cursor:"pointer",fontFamily:"inherit",fontSize:12,color:"#4A5278",minWidth:100}}>📋 WBS</button>
+                                <button onClick={()=>setPhase("quoting")} style={{flex:1,padding:"8px",background:"#EEF3FF",border:"1px solid #3B6FE840",borderRadius:7,cursor:"pointer",fontFamily:"inherit",fontSize:12,color:"#3B6FE8",minWidth:100}}>📧 Quoting</button>
+                                <button onClick={()=>{
+                                  const cxWbsJ=wbsData[job.id]||[];
+                                  const printWin=window.open("","_blank","width=800,height=900");
+                                  const coName=co?.name||"";
+                                  const siteAddr=site?("Store #"+site.storeNumber+(site.address?" — "+site.address:"")):"";
+                                  printWin.document.write(`<!DOCTYPE html><html><head><title>Bid Solicitation — ${job.name}</title>
+                                    <style>body{font-family:Arial,sans-serif;margin:40px;color:#1A2240}h1{font-size:22px;margin:0}h2{font-size:13px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:#4A5278;margin:20px 0 8px}table{width:100%;border-collapse:collapse;margin-bottom:20px}th{background:#f4f6fb;padding:7px 10px;font-size:10px;text-align:left;border:1px solid #d4d9ee;text-transform:uppercase;letter-spacing:.05em}td{padding:7px 10px;font-size:12px;border:1px solid #e8ebf4}.header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px;padding-bottom:16px;border-bottom:3px solid #1A2240}.badge{background:#f0f2f8;border:1px solid #cbd1e8;border-radius:4px;padding:3px 10px;font-size:11px}.notes-box{background:#f9fafc;border:1px solid #d4d9ee;border-radius:6px;padding:14px;font-size:12px;line-height:1.7;margin-bottom:20px}.footer{margin-top:32px;padding-top:12px;border-top:2px solid #1A2240;display:flex;justify-content:space-between;font-size:10px;color:#9ba3bf}@media print{body{margin:20px}}</style>
+                                  </head><body>
+                                    <div class="header">
+                                      <div>
+                                        <div style="font-size:11px;color:#9ba3bf;letter-spacing:.07em;text-transform:uppercase;margin-bottom:4px">Farmer Group — Capital Improvements</div>
+                                        <h1>${job.name}</h1>
+                                        ${coName?`<div style="font-size:13px;color:#3B6FE8;margin-top:4px">${coName}</div>`:""}
+                                        ${siteAddr?`<div style="font-size:11px;color:#4A5278;margin-top:2px">📍 ${siteAddr}</div>`:""}
+                                      </div>
+                                      <div style="text-align:right">
+                                        <div style="font-size:11px;color:#9ba3bf">Bid Solicitation</div>
+                                        <div style="font-size:12px;font-weight:600">${new Date().toLocaleDateString("en-US",{year:"numeric",month:"long",day:"numeric"})}</div>
+                                        ${job.bidDueDate?`<div style="font-size:11px;color:#F87171;margin-top:4px;font-weight:600">Bid Due: ${job.bidDueDate}</div>`:""}
+                                      </div>
+                                    </div>
+                                    ${job.notes?`<h2>Scope Notes</h2><div class="notes-box">${job.notes.replace(/
+/g,"<br>")}</div>`:""}
+                                    ${(job.photos||[]).length?`<h2>Site Photos</h2><div style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:20px">${(job.photos||[]).map(p=>`<img src="${p.data||p.url}" style="width:220px;height:150px;object-fit:cover;border-radius:6px;border:1px solid #d4d9ee"/>`).join("")}</div>`:""}
+                                    <h2>Scope of Work — Cost Codes</h2>
+                                    <table>
+                                      <tr><th>Code</th><th>Description</th><th>Trade</th><th>Unit</th><th>Qty</th><th>Notes</th></tr>
+                                      ${cxWbsJ.map(i=>`<tr><td style="font-family:monospace">${i.code||"—"}</td><td>${i.description||"—"}</td><td>${i.trade||"—"}</td><td>${i.unit||"—"}</td><td style="text-align:right">${i.qty||"—"}</td><td></td></tr>`).join("")}
+                                      ${cxWbsJ.length===0?`<tr><td colspan="6" style="text-align:center;color:#9ba3bf;font-style:italic">No cost codes added yet</td></tr>`:""}
+                                    </table>
+                                    <h2>Bid Requirements</h2>
+                                    <div class="notes-box">
+                                      Please provide a detailed breakdown of your bid including:<br>
+                                      • <strong>Labor and material costs broken out separately</strong><br>
+                                      • <strong>Any exclusions clearly listed</strong><br>
+                                      • Proposed schedule and lead times<br>
+                                      • Unit pricing where applicable<br>
+                                      • Certificate of Insurance upon award<br>
+                                      • W-9 on file with Farmer Development Inc.<br><br>
+                                      <strong>Submit bids to:</strong> Noah Bruce — Farmer Development Inc.
+                                    </div>
+                                    <div class="footer">
+                                      <div>Farmer Development Inc. · (810) 844-1544 · farmerdevelopment.com</div>
+                                      <div>This bid package is confidential</div>
+                                    </div>
+                                  </body></html>`);
+                                  printWin.document.close();
+                                  printWin.focus();
+                                  setTimeout(()=>printWin.print(),400);
+                                }} style={{flex:1,padding:"8px",background:"#F0FDF4",border:"1px solid #4ADE8040",borderRadius:7,cursor:"pointer",fontFamily:"inherit",fontSize:12,color:"#16A34A",minWidth:120}}>🖨 Print Bid Package</button>
+                                {job.stage==="estimating"&&<button onClick={()=>setCapexWonHandoff({job,noahOk:false,bradOk:false})} style={{flex:1,padding:"8px",background:"#F0FDF4",border:"1px solid #4ADE8040",borderRadius:7,cursor:"pointer",fontFamily:"inherit",fontSize:12,color:"#16A34A",fontWeight:700,minWidth:100}}>🏆 Mark Won</button>}
+                                {job.stage==="estimating"&&<button onClick={()=>updateCapex({stage:"lost",lostDate:new Date().toISOString().slice(0,10)})} style={{flex:1,padding:"8px",background:"#FFF1F2",border:"1px solid #F8717140",borderRadius:7,cursor:"pointer",fontFamily:"inherit",fontSize:12,color:"#F87171",minWidth:100}}>✗ Mark Lost</button>}
                               </div>
                             </div>
                           </div>
@@ -8445,8 +8595,8 @@ window.addEventListener('message',function(e){
               <div className="fade-in" style={{display:"flex",flexDirection:"column",gap:22}}>
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                   <div>
-                    <div style={{fontSize:22,fontWeight:700,color:"#1A2240",letterSpacing:"-0.01em",textTransform:"uppercase"}}>Capital Improvements</div>
-                    <div style={{fontSize:11,color:"#4A5278",marginTop:3,letterSpacing:"0.06em"}}>{capexJobs.length} PROJECTS · {fmt(capexJobs.reduce((s,j)=>s+j.contractValue,0))} TOTAL</div>
+                    <div style={{fontSize:22,fontWeight:700,color:"#1A2240",letterSpacing:"-0.01em",textTransform:"uppercase"}}>CI Active Projects</div>
+                    <div style={{fontSize:11,color:"#4A5278",marginTop:3,letterSpacing:"0.06em"}}>{capexJobs.filter(j=>CAPEX_ACTIVE_STAGES.some(s=>s.id===j.stage)).length} ACTIVE · {fmt(capexJobs.filter(j=>CAPEX_ACTIVE_STAGES.some(s=>s.id===j.stage)).reduce((s,j)=>s+j.contractValue,0))} TOTAL</div>
                   </div>
                   <div style={{display:"flex",gap:8}}>
                     <input className="fi" style={{width:180}} placeholder="Search…" value={capexSearch} onChange={e=>setCapexSearch(e.target.value)}/>
@@ -8456,7 +8606,7 @@ window.addEventListener('message',function(e){
 
                 {/* Stage stat strip */}
                 <div style={{display:"flex",gap:8,overflowX:"auto"}}>
-                  {CAPEX_STAGES.filter(st=>st.id!=="lost").map(st=>{
+                  {CAPEX_ACTIVE_STAGES.map(st=>{
                     const cnt=capexJobs.filter(j=>j.stage===st.id).length;
                     const val=capexJobs.filter(j=>j.stage===st.id).reduce((s,j)=>s+j.contractValue,0);
                     return (
@@ -8470,47 +8620,27 @@ window.addEventListener('message',function(e){
                   })}
                 </div>
 
-                {/* ── PIPELINE ── */}
-                {pipelineJobs.filter(j=>j.stage!=="won"&&j.stage!=="lost").length>0 && (
-                  <div>
-                    <div style={{fontSize:11,letterSpacing:"0.1em",textTransform:"uppercase",color:"#818CF8",fontWeight:700,marginBottom:12}}>📋 Pipeline — Estimating & Approval</div>
-                    <div style={{display:"flex",flexDirection:"column",gap:6}}>
-                      {CAPEX_PIPELINE_STAGES.filter(s=>s.id!=="won"&&s.id!=="lost").flatMap(st=>
-                        capexJobs.filter(j=>j.stage===st.id&&(j.name.toLowerCase().includes(capexSearch.toLowerCase())||!capexSearch))
-                      ).map(job=><JobRow key={job.id} job={job}/>)}
+                {/* ── ACTIVE JOBS — Buyout and beyond only ── */}
+                {CAPEX_ACTIVE_STAGES.map(st=>{
+                  const stJobs=capexJobs.filter(j=>j.stage===st.id&&(j.name.toLowerCase().includes(capexSearch.toLowerCase())||!capexSearch));
+                  if(!stJobs.length) return null;
+                  return (
+                    <div key={st.id}>
+                      <div style={{fontSize:11,letterSpacing:"0.08em",textTransform:"uppercase",color:st.color,fontWeight:700,marginBottom:10,display:"flex",alignItems:"center",gap:8}}>
+                        <div style={{width:8,height:8,borderRadius:"50%",background:st.color}}/>
+                        {st.label} <span style={{fontSize:10,color:"#9BA3BF",fontWeight:400}}>({stJobs.length})</span>
+                      </div>
+                      <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                        {stJobs.map(job=><JobRow key={job.id} job={job}/>)}
+                      </div>
                     </div>
-                  </div>
-                )}
-
-                {/* ── WON — Pending Handoff ── */}
-                {wonJobs.length>0 && (
-                  <div>
-                    <div style={{fontSize:11,letterSpacing:"0.1em",textTransform:"uppercase",color:"#4ADE80",fontWeight:700,marginBottom:12}}>🏆 Won — Pending Handoff to Buyout</div>
-                    <div style={{display:"flex",flexDirection:"column",gap:6}}>
-                      {wonJobs.filter(j=>j.name.toLowerCase().includes(capexSearch.toLowerCase())||!capexSearch).map(job=><JobRow key={job.id} job={job}/>)}
-                    </div>
-                  </div>
-                )}
-
-                {/* ── ACTIVE ── */}
-                {activeJobsList.length>0 && (
-                  <div>
-                    <div style={{fontSize:11,letterSpacing:"0.1em",textTransform:"uppercase",color:"#4ADE80",fontWeight:700,marginBottom:12}}>⚙️ Active Projects</div>
-                    <div style={{display:"flex",flexDirection:"column",gap:6}}>
-                      {CAPEX_ACTIVE_STAGES.flatMap(st=>
-                        capexJobs.filter(j=>j.stage===st.id&&(j.name.toLowerCase().includes(capexSearch.toLowerCase())||!capexSearch))
-                      ).map(job=><JobRow key={job.id} job={job}/>)}
-                    </div>
-                  </div>
-                )}
-
-                {/* ── LOST ── */}
-                {lostJobs.filter(j=>j.name.toLowerCase().includes(capexSearch.toLowerCase())||!capexSearch).length>0 && (
-                  <div>
-                    <div style={{fontSize:11,letterSpacing:"0.1em",textTransform:"uppercase",color:"#F87171",fontWeight:700,marginBottom:12}}>✗ Lost</div>
-                    <div style={{display:"flex",flexDirection:"column",gap:6}}>
-                      {lostJobs.filter(j=>j.name.toLowerCase().includes(capexSearch.toLowerCase())||!capexSearch).map(job=><JobRow key={job.id} job={job}/>)}
-                    </div>
+                  );
+                })}
+                {activeJobsList.length===0&&(
+                  <div style={{textAlign:"center",padding:"48px",color:"#9BA3BF",background:"#F9FAFC",borderRadius:12,border:"2px dashed #E0E4F0"}}>
+                    <div style={{fontSize:28,marginBottom:8}}>⚙️</div>
+                    <div style={{fontSize:14,fontWeight:600,color:"#1A2240",marginBottom:4}}>No active projects yet</div>
+                    <div style={{fontSize:12}}>Jobs in Buyout, Do Work, and Bill will appear here.</div>
                   </div>
                 )}
               </div>
