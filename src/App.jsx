@@ -2858,6 +2858,7 @@ export default function App() {
   const [capexBuyoutJob,      setCapexBuyoutJob]      = useState(null);
   const [capexBuyoutForm,     setCapexBuyoutForm]     = useState({startDate:"",endDate:"",pm:"",contractValue:""});
   const [capexWonHandoff,     setCapexWonHandoff]     = useState(null); // {job, noahOk, bradOk}
+  const [addSubForItem,       setAddSubForItem]       = useState(null); // {oppId, itemId} — which line we're adding a sub to
   const [selectedCapexJob, setSelectedCapexJob] = useState(null);
   const [capexSearch,      setCapexSearch]      = useState("");
 
@@ -8252,15 +8253,17 @@ window.addEventListener('message',function(e){
                         {phase==="quoting" && (
                           <div style={{background:"#fff",border:"1px solid #D4D9EE",borderTop:"none",borderRadius:"0 0 10px 10px",overflow:"hidden"}}>
                             <div style={{padding:"8px 16px",borderBottom:"1px solid #E8EBF4",display:"flex",alignItems:"center",gap:8}}>
-                              <span style={{fontSize:12,fontWeight:700,color:"#1A2240",flex:1}}>{wbs.length} codes · {pkg.vendors.length} subs invited · {totalBids} bids received</span>
-                              <button onClick={()=>{setActiveBidOpp(oppId);setShowAddVendor(true);setAddMode("sub");setSubSearch2("");setPickerTrade("");setSubProjectLat(null);setSubProjectLng(null);}}
-                                style={{padding:"5px 12px",background:"#8B5CF6",color:"#fff",border:"none",borderRadius:5,cursor:"pointer",fontFamily:"inherit",fontSize:11,fontWeight:700}}>+ Add Sub</button>
+                              <span style={{fontSize:12,fontWeight:700,color:"#1A2240",flex:1}}>{wbs.length} codes · {pkg.vendors.length} subs · {totalBids} bids received</span>
+                              <span style={{fontSize:10,color:"#9BA3BF"}}>Use + Sub on each line to assign subs per cost code</span>
                             </div>
                             {/* Per-trade quoting tracker */}
                             {wbs.length===0&&<div style={{padding:"40px",textAlign:"center",color:"#9BA3BF",fontSize:13}}>Add cost codes in WBS first</div>}
                             {wbs.map(item=>{
-                              // Show all subs under every cost code — per-line independence via lineStatus keys
-                              const itemVendors=pkg.vendors;
+                              // Only show subs explicitly assigned to this cost code item
+                              const itemVendors=pkg.vendors.filter(v=>{
+                                const assigned=v.costCodes||[];
+                                return assigned.includes(item.id);
+                              });
                               const getLS=(vid,key)=>(pkg.lineStatus||{})[vid+"_"+item.id]?.[key]??false;
                               const setLS=(vid,key,val)=>{
                                 const ls=pkg.lineStatus||{};const lk=vid+"_"+item.id;
@@ -8275,6 +8278,17 @@ window.addEventListener('message',function(e){
                               const bidCount2=itemVendors.filter(v=>getLS(v.id,"bidReceived")||v.bidFileData||v.bidFileName).length;
                               const sent2=itemVendors.filter(v=>getLS(v.id,"infoSent")||getLS(v.id,"bidding")).length;
                               const cov=bidCount2>=2?"#4ADE80":bidCount2>=1?"#FCD34D":"#F87171";
+                              // Open sub picker for this specific item
+                              const openSubPicker = () => {
+                                setAddSubForItem({oppId, itemId: item.id});
+                                setActiveBidOpp(oppId);
+                                setShowAddVendor(true);
+                                setAddMode("sub");
+                                setSubSearch2("");
+                                setPickerTrade("");
+                                setSubProjectLat(null);
+                                setSubProjectLng(null);
+                              };
                               return (
                                 <div key={item.id} style={{borderBottom:"3px solid #E8EBF4"}}>
                                   <div style={{display:"flex",alignItems:"center",gap:8,padding:"7px 16px",background:"#F0F2F8",borderBottom:"1px solid #E0E4F0"}}>
@@ -8282,12 +8296,14 @@ window.addEventListener('message',function(e){
                                     <span style={{fontSize:10,color:"#9BA3BF",fontFamily:"monospace",minWidth:60}}>{item.code||"--"}</span>
                                     <span style={{fontSize:13,fontWeight:800,color:"#1A2240",flex:1}}>{item.description}</span>
                                     <span style={{fontSize:9,color:"#9BA3BF"}}>{item.trade}</span>
-                                    {/* Bid counter pill */}
+                                    {/* Bid counter pills */}
                                     <div style={{display:"flex",gap:6,alignItems:"center"}}>
                                       <span style={{fontSize:9,background:"#60A5FA15",color:"#60A5FA",border:"1px solid #60A5FA30",borderRadius:4,padding:"1px 6px",fontWeight:700}}>📤 {sent2}</span>
                                       <span style={{fontSize:9,background:cov+"15",color:cov,border:"1px solid "+cov+"30",borderRadius:4,padding:"1px 6px",fontWeight:700}}>📥 {bidCount2}</span>
                                     </div>
                                     {winner&&<span style={{fontSize:9,background:"#4ADE8020",color:"#16A34A",border:"1px solid #4ADE8040",borderRadius:4,padding:"1px 7px",fontWeight:700}}>🏆 {winner.company}</span>}
+                                    <button onClick={openSubPicker}
+                                      style={{padding:"2px 8px",background:"#8B5CF615",border:"1px solid #8B5CF630",borderRadius:4,color:"#8B5CF6",fontSize:10,cursor:"pointer",fontFamily:"inherit",fontWeight:600,flexShrink:0}}>+ Sub</button>
                                   </div>
                                   {/* Sub rows */}
                                   {itemVendors.length>0 && (
@@ -8358,12 +8374,20 @@ window.addEventListener('message',function(e){
                         {/* ── BID SUMMARY ── */}
                         {phase==="bid_summary" && (() => {
                           const ls2=pkg.lineStatus||{};
+                          // Per-item summary (for internal use)
                           const summaryRows=wbs.map(item=>{
-                            const itemV=pkg.vendors.filter(v=>{const a=v.costCodes||v.trades||[];return a.length===0||a.includes(item.id)||a.includes(item.trade);});
+                            const itemV=pkg.vendors.filter(v=>(v.costCodes||[]).includes(item.id));
                             const winner=itemV.find(v=>ls2[v.id+"_"+item.id]?.isWinner);
                             return {item,vendors:itemV,winner};
                           }).filter(r=>r.vendors.length>0);
                           const totalBuyout=summaryRows.reduce((s,r)=>{const a=parseFloat(r.winner?.bidAmount||0);return s+(isNaN(a)?0:a);},0);
+                          // Per-sub summary (for print — each sub gets one sheet with all their items)
+                          const subMap={};
+                          pkg.vendors.forEach(v=>{
+                            const subItems=wbs.filter(item=>(v.costCodes||[]).includes(item.id));
+                            if(subItems.length>0) subMap[v.id]={...v,items:subItems};
+                          });
+                          const subsForPrint=Object.values(subMap);
                           return (
                             <div style={{background:"#fff",border:"1px solid #D4D9EE",borderTop:"none",borderRadius:"0 0 10px 10px",padding:"20px 24px"}}>
                               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16,paddingBottom:12,borderBottom:"2px solid #1A2240"}}>
@@ -8416,8 +8440,82 @@ window.addEventListener('message',function(e){
                                   </table>
                                 </div>
                               ))}
-                              <div style={{marginTop:12,display:"flex",justifyContent:"flex-end"}}>
-                                <button onClick={()=>window.print()} style={{padding:"7px 16px",background:"#8B5CF6",color:"#fff",border:"none",borderRadius:6,cursor:"pointer",fontFamily:"inherit",fontSize:11,fontWeight:700}}>🖨 Print</button>
+                              <div style={{marginTop:12,display:"flex",gap:8,justifyContent:"flex-end"}}>
+                                <button onClick={()=>window.print()} style={{padding:"7px 16px",background:"#F0F2F8",border:"1px solid #CBD1E8",borderRadius:6,cursor:"pointer",fontFamily:"inherit",fontSize:11,color:"#4A5278"}}>🖨 Print Summary</button>
+                                <button onClick={()=>{
+                                  if(subsForPrint.length===0){alert("No subs assigned to any cost codes yet.");return;}
+                                  const coName=co?.name||"";
+                                  const pw=window.open("","_blank","width=860,height=1000");
+                                  const today=new Date().toLocaleDateString("en-US",{year:"numeric",month:"long",day:"numeric"});
+                                  const pageBreak='<div style="page-break-after:always"></div>';
+                                  const pages=subsForPrint.map((sub,si)=>{
+                                    const rows=sub.items.map(item=>`
+                                      <tr>
+                                        <td style="font-family:monospace;font-size:11px;padding:7px 10px;border:1px solid #e8ebf4">${item.code||"—"}</td>
+                                        <td style="font-size:12px;padding:7px 10px;border:1px solid #e8ebf4">${item.description||"—"}</td>
+                                        <td style="font-size:11px;padding:7px 10px;border:1px solid #e8ebf4;color:#4a5278">${item.trade||"—"}</td>
+                                        <td style="font-size:11px;padding:7px 10px;border:1px solid #e8ebf4;text-align:right">${item.unit||"—"}</td>
+                                        <td style="font-size:11px;padding:7px 10px;border:1px solid #e8ebf4;text-align:right">${item.qty||"—"}</td>
+                                        <td style="padding:7px 10px;border:1px solid #e8ebf4"></td>
+                                        <td style="padding:7px 10px;border:1px solid #e8ebf4"></td>
+                                      </tr>`).join("");
+                                    return `
+                                      <div style="font-family:Arial,sans-serif;padding:36px 44px;color:#1A2240;${si>0?'margin-top:0':''}">
+                                        <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:24px;padding-bottom:14px;border-bottom:3px solid #1A2240">
+                                          <div>
+                                            <div style="font-size:10px;color:#9ba3bf;letter-spacing:.07em;text-transform:uppercase;margin-bottom:4px">Farmer Group — Capital Improvements</div>
+                                            <div style="font-size:20px;font-weight:800">${job.name}</div>
+                                            ${coName?`<div style="font-size:12px;color:#3B6FE8;margin-top:3px">${coName}</div>`:''}
+                                          </div>
+                                          <div style="text-align:right">
+                                            <div style="font-size:10px;color:#9ba3bf">Bid Solicitation</div>
+                                            <div style="font-size:11px;font-weight:600">${today}</div>
+                                            ${job.bidDueDate?`<div style="font-size:11px;color:#F87171;font-weight:600;margin-top:3px">Bid Due: ${job.bidDueDate}</div>`:''}
+                                          </div>
+                                        </div>
+                                        <div style="background:#f4f6fb;border:1px solid #d4d9ee;border-radius:8px;padding:14px 18px;margin-bottom:20px">
+                                          <div style="font-size:13px;font-weight:700;margin-bottom:4px">To: ${sub.company}</div>
+                                          ${sub.contact?`<div style="font-size:11px;color:#4a5278">Attn: ${sub.contact}</div>`:''}
+                                          ${sub.phone?`<div style="font-size:11px;color:#4a5278">📞 ${sub.phone}</div>`:''}
+                                          ${sub.email?`<div style="font-size:11px;color:#3B6FE8">${sub.email}</div>`:''}
+                                        </div>
+                                        ${job.notes?`<div style="margin-bottom:20px"><div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Scope Notes</div><div style="background:#f9fafc;border:1px solid #d4d9ee;border-radius:6px;padding:12px;font-size:12px;line-height:1.7">${job.notes.split("\n").join("<br>")}</div></div>`:''}
+                                        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Your Scope — Please Bid the Following</div>
+                                        <table style="width:100%;border-collapse:collapse;margin-bottom:20px">
+                                          <thead>
+                                            <tr style="background:#1A2240">
+                                              <th style="color:#fff;padding:7px 10px;font-size:10px;text-align:left;text-transform:uppercase;letter-spacing:.05em">Code</th>
+                                              <th style="color:#fff;padding:7px 10px;font-size:10px;text-align:left;text-transform:uppercase;letter-spacing:.05em">Description</th>
+                                              <th style="color:#fff;padding:7px 10px;font-size:10px;text-align:left;text-transform:uppercase;letter-spacing:.05em">Trade</th>
+                                              <th style="color:#fff;padding:7px 10px;font-size:10px;text-align:right;text-transform:uppercase;letter-spacing:.05em">Unit</th>
+                                              <th style="color:#fff;padding:7px 10px;font-size:10px;text-align:right;text-transform:uppercase;letter-spacing:.05em">Qty</th>
+                                              <th style="color:#fff;padding:7px 10px;font-size:10px;text-align:left;text-transform:uppercase;letter-spacing:.05em">Unit Price</th>
+                                              <th style="color:#fff;padding:7px 10px;font-size:10px;text-align:left;text-transform:uppercase;letter-spacing:.05em">Total</th>
+                                            </tr>
+                                          </thead>
+                                          <tbody>${rows}</tbody>
+                                        </table>
+                                        <div style="background:#f9fafc;border:1px solid #d4d9ee;border-radius:6px;padding:14px;font-size:11px;line-height:1.8;margin-bottom:20px">
+                                          <strong>Bid Requirements:</strong><br>
+                                          • Labor and material costs broken out separately<br>
+                                          • Any exclusions clearly listed<br>
+                                          • Proposed schedule and lead times<br>
+                                          • Certificate of Insurance upon award<br>
+                                          • W-9 on file with Farmer Development Inc.<br>
+                                          <br><strong>Submit to:</strong> Noah Bruce — noah@farmerdevelopment.com
+                                        </div>
+                                        <div style="border-top:2px solid #1A2240;padding-top:10px;display:flex;justify-content:space-between;font-size:9px;color:#9ba3bf">
+                                          <span>Farmer Development Inc. · (810) 844-1544</span>
+                                          <span>Page ${si+1} of ${subsForPrint.length} — ${sub.company}</span>
+                                        </div>
+                                      </div>
+                                      ${si<subsForPrint.length-1?pageBreak:''}`;
+                                  }).join("");
+                                  pw.document.write(`<!DOCTYPE html><html><head><title>Bid Packages — ${job.name}</title><style>*{box-sizing:border-box}body{margin:0;padding:0}@media print{@page{margin:0.5in}}</style></head><body>${pages}</body></html>`);
+                                  pw.document.close();
+                                  pw.focus();
+                                  setTimeout(()=>pw.print(),500);
+                                }} style={{padding:"7px 16px",background:"#8B5CF6",color:"#fff",border:"none",borderRadius:6,cursor:"pointer",fontFamily:"inherit",fontSize:11,fontWeight:700}}>🖨 Print Bid Packages ({subsForPrint.length} subs)</button>
                               </div>
                             </div>
                           );
@@ -13092,21 +13190,44 @@ window.addEventListener('message',function(e){
 
         const addFromSub = (s) => {
           if (addedNames.has(s.name.toLowerCase())) return;
+          // If addSubForItem is set, assign sub to that specific cost code item
+          // Otherwise global (for MP estimating)
+          const assignedItem = addSubForItem?.oppId === activeBidOpp ? addSubForItem.itemId : null;
           const newV = {
             id: "v"+Date.now(), company: s.name, contact: s.contact_name||"",
             phone: s.phone||"", email: s.email||"",
             trades: s.trade ? [s.trade] : [],
+            costCodes: assignedItem ? [assignedItem] : [],
             bidding: false, infoSent: false, bidReceived: false, bidAmount: "", notes: "",
             subcontractorId: s.id,
           };
           setBidPackages(prev=>{
-            const updated = {...prev,[activeBidOpp]:{...pkg,vendors:[...pkg.vendors,newV]}};
-            setTimeout(()=>saveEstimateData(activeBidOpp, wbsData[activeBidOpp]||[], updated[activeBidOpp]||{vendors:[]}, estimatePhase[activeBidOpp]||"wbs"), 300);
+            const curPkg = prev[activeBidOpp] || {vendors:[], lineStatus:{}};
+            // Check if this sub is already in the package for this item
+            const alreadyOnItem = assignedItem && curPkg.vendors.some(v=>
+              v.subcontractorId===s.id && (v.costCodes||[]).includes(assignedItem)
+            );
+            if (alreadyOnItem) return prev;
+            // If sub already exists in package (for a different item), add this item to their costCodes
+            const existingIdx = curPkg.vendors.findIndex(v=>v.subcontractorId===s.id);
+            let newVendors;
+            if (existingIdx >= 0 && assignedItem) {
+              // Add this item to existing sub's costCodes
+              newVendors = curPkg.vendors.map((v,i)=>i===existingIdx
+                ? {...v, costCodes:[...(v.costCodes||[]), assignedItem]}
+                : v
+              );
+            } else {
+              newVendors = [...curPkg.vendors, newV];
+            }
+            const updated = {...prev,[activeBidOpp]:{...curPkg,vendors:newVendors}};
+            setTimeout(()=>saveEstimateData(activeBidOpp, wbsData[activeBidOpp]||[], updated[activeBidOpp]||{vendors:[]}, estimatePhase[activeBidOpp]||"overview"), 300);
             return updated;
           });
-          // Auto-tag sub as major division
-          if (!(s.services||[]).includes("major")) {
-            const updated = {...s, services:[...(s.services||[]),"major"]};
+          // Auto-tag sub as major division (for MP) or capital
+          const divTag = (wbsData[activeBidOpp]||[]).length > 0 ? "capital" : "major";
+          if (!(s.services||[]).includes(divTag)) {
+            const updated = {...s, services:[...(s.services||[]),divTag]};
             setSubcontractors(prev=>prev.map(x=>x.id===s.id?updated:x));
             try { supa.from("subcontractors").update(subToDB(updated)).eq("id",s.id); } catch(e) {}
           }
@@ -13127,7 +13248,7 @@ window.addEventListener('message',function(e){
               {/* Header */}
               <div style={{background:"linear-gradient(135deg,#1A2240,#253260)",padding:"16px 22px",display:"flex",alignItems:"center",gap:10,flexShrink:0}}>
                 <div style={{fontSize:15,fontWeight:800,color:"#fff",flex:1}}>+ Add Subcontractor{opp?` — ${opp.name}`:""}</div>
-                <button onClick={()=>setShowAddVendor(false)} style={{background:"rgba(255,255,255,0.12)",border:"none",color:"#fff",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontSize:12,fontFamily:"inherit"}}>✕</button>
+                <button onClick={()=>{setShowAddVendor(false);setAddSubForItem(null);}} style={{background:"rgba(255,255,255,0.12)",border:"none",color:"#fff",borderRadius:6,padding:"4px 10px",cursor:"pointer",fontSize:12,fontFamily:"inherit"}}>✕</button>
               </div>
 
               {/* Mode tabs */}
@@ -13256,7 +13377,7 @@ window.addEventListener('message',function(e){
                   </div>
 
                   <div style={{padding:"12px 18px",borderTop:"1px solid #E8EBF4",background:"#F9FAFC",display:"flex",gap:8,flexShrink:0}}>
-                    <button onClick={()=>setShowAddVendor(false)} style={{flex:1,padding:"9px",background:"#F0F2F8",border:"1px solid #CBD1E8",borderRadius:7,cursor:"pointer",fontFamily:"inherit",fontSize:13,color:"#4A5278"}}>Done</button>
+                    <button onClick={()=>{setShowAddVendor(false);setAddSubForItem(null);}} style={{flex:1,padding:"9px",background:"#F0F2F8",border:"1px solid #CBD1E8",borderRadius:7,cursor:"pointer",fontFamily:"inherit",fontSize:13,color:"#4A5278"}}>Done</button>
                     <button onClick={()=>setAddMode("manual")} style={{flex:1,padding:"9px",background:"transparent",border:"1px solid #3B6FE8",borderRadius:7,cursor:"pointer",fontFamily:"inherit",fontSize:13,color:"#3B6FE8",fontWeight:600}}>Not listed? Enter manually →</button>
                   </div>
                 </div>
