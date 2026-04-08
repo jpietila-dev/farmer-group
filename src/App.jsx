@@ -8169,8 +8169,7 @@ window.addEventListener('message',function(e){
                                         ${job.bidDueDate?`<div style="font-size:11px;color:#F87171;margin-top:4px;font-weight:600">Bid Due: ${job.bidDueDate}</div>`:""}
                                       </div>
                                     </div>
-                                    ${job.notes?`<h2>Scope Notes</h2><div class="notes-box">${job.notes.replace(/
-/g,"<br>")}</div>`:""}
+                                    ${job.notes?`<h2>Scope Notes</h2><div class="notes-box">${job.notes.split("\n").join("<br>")}</div>`:""}
                                     ${(job.photos||[]).length?`<h2>Site Photos</h2><div style="display:flex;flex-wrap:wrap;gap:12px;margin-bottom:20px">${(job.photos||[]).map(p=>`<img src="${p.data||p.url}" style="width:220px;height:150px;object-fit:cover;border-radius:6px;border:1px solid #d4d9ee"/>`).join("")}</div>`:""}
                                     <h2>Scope of Work — Cost Codes</h2>
                                     <table>
