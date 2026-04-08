@@ -3220,8 +3220,45 @@ export default function App() {
             return [...existing, ...pipeLoaded];
           });
         }
+        let loadedMpJobs = [];
         if (Array.isArray(mpRes.data) && mpRes.data.length) {
-          try { setMpJobs(mpRes.data.map(dbToMpJob)); } catch(e) { console.warn("mpJobs map error:", e); }
+          try {
+            loadedMpJobs = mpRes.data.map(dbToMpJob);
+            setMpJobs(loadedMpJobs);
+          } catch(e) { console.warn("mpJobs map error:", e); }
+        }
+
+        // Auto-sync: any pipeline opp with stage "won" or "closed_won" that has no mp_job → create one
+        if (Array.isArray(mpPipeRes.data)) {
+          const wonPipeOpps = mpPipeRes.data.filter(r => r.stage === "won" || r.stage === "Won" || r.stage === "closed_won");
+          const existingJobNames = new Set(loadedMpJobs.map(j => j.name));
+          const existingJobIds   = new Set(loadedMpJobs.map(j => j.id));
+          const toCreate = wonPipeOpps.filter(r => !existingJobNames.has(r.name||"") && !existingJobIds.has(r.id));
+          if (toCreate.length > 0) {
+            const synced = toCreate.map(r => ({
+              id: r.id, name: r.name||"", client: "", status: "active",
+              contractValue: r.value||0, startDate: "", endDate: "",
+              pm: "", pct: 0, daysAhead: null, completionSchedule: "",
+              changeOrderStatus: "", budgetStatus: "", billingStatus: "",
+              gpm: 0, longLeadItems: "", km1: "", km1Date: "", km2: "",
+              km2Date: "", km3: "", km3Date: "", notes: r.notes||"", amountBilled: 0,
+              companyId: r.company_id||"",
+            }));
+            setMpJobs(prev => {
+              const existingIds = new Set(prev.map(j=>j.id));
+              return [...prev, ...synced.filter(j=>!existingIds.has(j.id))];
+            });
+            // Also persist to Supabase
+            synced.forEach(j => {
+              try {
+                fetch(`${SUPA_URL}/rest/v1/mp_jobs`, {
+                  method: "POST",
+                  headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}`, "Content-Type": "application/json", Prefer: "return=minimal,resolution=ignore-duplicates" },
+                  body: JSON.stringify({ id: j.id, name: j.name, client: j.client, status: "active", contract_value: j.contractValue||null, notes: j.notes||null, company_id: j.companyId||null })
+                });
+              } catch(e) {}
+            });
+          }
         }
         if (Array.isArray(mpwRes.data) && mpwRes.data.length) setMpWeeklyReports(mpwRes.data.map(dbToMpWeekly));
         if (Array.isArray(mpVendorRes.data) && mpVendorRes.data.length) setMpVendorDB(mpVendorRes.data.map(dbToMpVendor));
@@ -12396,7 +12433,8 @@ window.addEventListener('message',function(e){
           setPipeline(prev => prev.map(o => o.id===opp.id ? {...o, stage:"won"} : o));
           // 2. Create mp_job
           import("https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm").catch(()=>{});
-          const jobId = "mp" + Date.now();
+          // Use the pipeline opp's id so auto-sync can match on reload
+          const jobId = String(opp.dbId || opp.id || ("mp" + Date.now()));
           const newJob = {
             id: jobId,
             name: opp.name,
