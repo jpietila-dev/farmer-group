@@ -8275,7 +8275,7 @@ window.addEventListener('message',function(e){
                                 setTimeout(()=>saveEstimateData(oppId,wbs,updated,phase),300);
                               };
                               const winner=itemVendors.find(v=>getLS(v.id,"isWinner"));
-                              const bidCount2=itemVendors.filter(v=>getLS(v.id,"bidReceived")||v.bidFileData||v.bidFileName).length;
+                              const bidCount2=itemVendors.filter(v=>getLS(v.id,"bidReceived")||getLS(v.id,"hasBidFile")).length;
                               const sent2=itemVendors.filter(v=>getLS(v.id,"infoSent")||getLS(v.id,"bidding")).length;
                               const cov=bidCount2>=2?"#4ADE80":bidCount2>=1?"#FCD34D":"#F87171";
                               // Open sub picker for this specific item
@@ -8315,7 +8315,7 @@ window.addEventListener('message',function(e){
                                       </div>
                                       {itemVendors.map(v=>{
                                         const isW=getLS(v.id,"isWinner");
-                                        const hasBidFile=!!(v.bidFileData||v.bidFileName);
+                                        const hasBidFile=getLS(v.id,"hasBidFile")||getLS(v.id,"bidReceived");
                                         const infoSent2=getLS(v.id,"infoSent");
                                         const bidding2=getLS(v.id,"bidding");
                                         const bidRec=getLS(v.id,"bidReceived")||hasBidFile;
@@ -8341,7 +8341,7 @@ window.addEventListener('message',function(e){
                                               ):(
                                                 <label style={{fontSize:8,color:"#9BA3BF",cursor:"pointer",background:"#F4F6FB",border:"1px dashed #D4D9EE",borderRadius:3,padding:"1px 4px",whiteSpace:"nowrap"}}>
                                                   + File
-                                                  <input type="file" accept=".pdf,.jpg,.jpeg,.png,.xlsx" style={{display:"none"}} onChange={e=>{const file=e.target.files[0];if(!file)return;const reader=new FileReader();reader.onload=ev=>{updateVendorCx(v.id,{bidFileData:ev.target.result,bidFileName:file.name});setLS(v.id,"bidReceived",true);};reader.readAsDataURL(file);e.target.value="";}}/>
+                                                  <input type="file" accept=".pdf,.jpg,.jpeg,.png,.xlsx" style={{display:"none"}} onChange={e=>{const file=e.target.files[0];if(!file)return;const reader=new FileReader();reader.onload=ev=>{updateVendorCx(v.id,{bidFileData:ev.target.result,bidFileName:file.name});setLS(v.id,"bidReceived",true);setLS(v.id,"hasBidFile",true);};reader.readAsDataURL(file);e.target.value="";}}/>
                                                 </label>
                                               )}
                                             </div>
@@ -13143,7 +13143,14 @@ window.addEventListener('message',function(e){
         const setW = (k,v) => setVendorForm(f=>({...f,[k]:v}));
 
         // Already-added company names for dedup check
-        const addedNames = new Set(pkg.vendors.map(v=>(v.company||"").toLowerCase()));
+        // addedNames: for per-item mode, only subs already on THIS item are "added"
+        // for global mode (MP), all subs in the package are "added"
+        const assignedItemForCheck = addSubForItem?.oppId === activeBidOpp ? addSubForItem.itemId : null;
+        const addedNames = new Set(
+          assignedItemForCheck
+            ? pkg.vendors.filter(v=>(v.costCodes||[]).includes(assignedItemForCheck)).map(v=>(v.company||"").toLowerCase())
+            : pkg.vendors.map(v=>(v.company||"").toLowerCase())
+        );
 
         // Haversine distance in miles
         const haversine = (lat1, lng1, lat2, lng2) => {
@@ -13189,10 +13196,12 @@ window.addEventListener('message',function(e){
         const noCoords     = hasProjectLoc ? filteredSubs.filter(s => s.distMi === null) : filteredSubs;
 
         const addFromSub = (s) => {
-          if (addedNames.has(s.name.toLowerCase())) return;
           // If addSubForItem is set, assign sub to that specific cost code item
           // Otherwise global (for MP estimating)
           const assignedItem = addSubForItem?.oppId === activeBidOpp ? addSubForItem.itemId : null;
+          // For per-item mode: block only if this sub is already on THIS item
+          // For global mode (MP): block if already in the package at all
+          if (!assignedItem && addedNames.has(s.name.toLowerCase())) return;
           const newV = {
             id: "v"+Date.now(), company: s.name, contact: s.contact_name||"",
             phone: s.phone||"", email: s.email||"",
@@ -13300,7 +13309,7 @@ window.addEventListener('message',function(e){
                       </select>
                     </div>
                     <div style={{fontSize:10,color:"#9BA3BF"}}>
-                      {filteredSubs.length} result{filteredSubs.length!==1?"s":""} · {addedNames.size} already on this estimate
+                      {filteredSubs.length} result{filteredSubs.length!==1?"s":""} · {addedNames.size} already on {assignedItemForCheck?"this line":"this estimate"}
                     </div>
                   </div>
 
