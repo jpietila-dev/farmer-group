@@ -3814,18 +3814,48 @@ Return ONLY valid JSON, no markdown, no extra text:
     setForm({ ...o, value: String(o.value), nextSteps: o.nextSteps || [], budgetDueDate: o.budgetDueDate || "", bidDueDate: o.bidDueDate || "", city: o.city||"", state: o.state||"" });
     setShowForm(true);
   };
-  const saveOpp = () => {
-    if (!form.name.trim() || !form.value) return;
+  const saveOpp = async () => {
+    if (!form.name.trim()) return;
     const ct    = contacts.find(p => p.id === form.contactId);
-    const entry = { ...form, value: Number(form.value), contact: ct ? ct.email : "", city: form.city||"", state: form.state||"", address: form.address||"" };
+    const entry = { ...form, value: Number(form.value)||0, contact: ct ? ct.email : "", city: form.city||"", state: form.state||"", address: form.address||"" };
     if (editId !== null) {
-      setPipeline(pipeline.map(o => o.id === editId ? { ...entry, id: editId } : o));
-      if (selectedOpp && selectedOpp.id === editId) setSelectedOpp({ ...entry, id: editId });
+      const updated = { ...entry, id: editId };
+      setPipeline(pipeline.map(o => o.id === editId ? updated : o));
+      if (selectedOpp && selectedOpp.id === editId) setSelectedOpp(updated);
+      // Persist edit to Supabase
+      try {
+        const dbId = pipeline.find(o=>o.id===editId)?.dbId || String(editId);
+        await fetch(`${SUPA_URL}/rest/v1/mp_pipeline?id=eq.${dbId}`, {
+          method: "PATCH",
+          headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}`, "Content-Type": "application/json", Prefer: "return=minimal" },
+          body: JSON.stringify({ name: entry.name, company_id: entry.companyId||null, contact_name: entry.contactName||"", value: entry.value, stage: entry.stage||"budgeting_lead", close_date: entry.closeDate||null, city: entry.city||null, state: entry.state||null, address: entry.address||null })
+        });
+      } catch(e) { console.error("saveOpp edit:", e); }
     } else {
-      setPipeline([...pipeline, { ...entry, id: Date.now() }]);
-      // Auto-tag CRM contacts for this company with the division
+      const newId = Date.now();
+      const newEntry = { ...entry, id: newId, dbId: String(newId), bu: entry.bu||"major" };
+      setPipeline(prev => [...prev, newEntry]);
+      // Auto-tag CRM contacts
       const divTag = form.bu==="major"?"MP":form.bu==="capital"?"CapEx":form.bu==="facility"?"FM":form.bu==="lawn"?"Lawn":form.bu==="snow"?"Snow":null;
       if (divTag) autoTagCrmContacts(form.companyId, divTag);
+      // Persist new opp to Supabase
+      try {
+        const row = { id: String(newId), name: entry.name, company_id: entry.companyId||null, contact_name: entry.contactName||"", value: entry.value, stage: entry.stage||"budgeting_lead", notes: "", bu: entry.bu||"major", close_date: entry.closeDate||null, city: entry.city||null, state: entry.state||null, address: entry.address||null };
+        const res = await fetch(`${SUPA_URL}/rest/v1/mp_pipeline`, {
+          method: "POST",
+          headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}`, "Content-Type": "application/json", Prefer: "return=minimal" },
+          body: JSON.stringify(row)
+        });
+        if (!res.ok) {
+          // Retry without address in case column doesn't exist yet
+          const rowFallback = { id: String(newId), name: entry.name, company_id: entry.companyId||null, contact_name: entry.contactName||"", value: entry.value, stage: entry.stage||"budgeting_lead", notes: "", bu: entry.bu||"major", close_date: entry.closeDate||null, city: entry.city||null, state: entry.state||null };
+          await fetch(`${SUPA_URL}/rest/v1/mp_pipeline`, {
+            method: "POST",
+            headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}`, "Content-Type": "application/json", Prefer: "return=minimal" },
+            body: JSON.stringify(rowFallback)
+          });
+        }
+      } catch(e) { console.error("saveOpp insert:", e); }
     }
     setShowForm(false);
   };
