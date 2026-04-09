@@ -2907,7 +2907,7 @@ export default function App() {
   const [pipeline,     setPipeline]     = useState([]);
   const [showForm,     setShowForm]     = useState(false);
   const [editId,       setEditId]       = useState(null);
-  const [form,         setForm]         = useState({ name: "", companyId: "", contactId: "", value: "", stage: "Budgeting", closeDate: "", notes: "", bu: "major", budgetDueDate: "", bidDueDate: "", nextSteps: [], sf:"", buildingType:"", buildingTypes:[], sf_multistory:"", sf_singlestory:"", sf_canopy:"", sf_mezzanine:"", city:"", state:"" });
+  const [form,         setForm]         = useState({ name: "", companyId: "", contactId: "", value: "", stage: "Budgeting", closeDate: "", notes: "", bu: "major", budgetDueDate: "", bidDueDate: "", nextSteps: [], sf:"", buildingType:"", buildingTypes:[], sf_multistory:"", sf_singlestory:"", sf_canopy:"", sf_mezzanine:"", city:"", state:"", address:"" });
   const [pipelineView, setPipelineView] = useState("kanban");
   const [filterBU,     setFilterBU]     = useState("all");
   const [search,       setSearch]       = useState("");
@@ -2932,6 +2932,7 @@ export default function App() {
   const [capexBuyoutJob,      setCapexBuyoutJob]      = useState(null);
   const [capexBuyoutForm,     setCapexBuyoutForm]     = useState({startDate:"",endDate:"",pm:"",contractValue:""});
   const [capexWonHandoff,     setCapexWonHandoff]     = useState(null); // {job, noahOk, bradOk}
+  const [selectedOppFull,     setSelectedOppFull]     = useState(null); // opp id for full-page deal view
   const [addSubForItem,       setAddSubForItem]       = useState(null); // {oppId, itemId} — which line we're adding a sub to
   const [selectedCapexJob, setSelectedCapexJob] = useState(null);
   const [capexSearch,      setCapexSearch]      = useState("");
@@ -3789,7 +3790,7 @@ Return ONLY valid JSON, no markdown, no extra text:
   // Pipeline helpers
   const openAdd = (defaultStage) => {
     setEditId(null);
-    setForm({ name: "", companyId: "", contactId: "", value: "", stage: defaultStage || "Budgeting", pipelineType: "budgeting", closeDate: "", notes: "", bu: activeBU === "all" ? "major" : activeBU, budgetDueDate: "", bidDueDate: "", nextSteps: [], sf:"", buildingType:"", buildingTypes:[], sf_multistory:"", sf_singlestory:"", sf_canopy:"", sf_mezzanine:"", city:"", state:"" });
+    setForm({ name: "", companyId: "", contactId: "", value: "", stage: defaultStage || "Budgeting", pipelineType: "budgeting", closeDate: "", notes: "", bu: activeBU === "all" ? "major" : activeBU, budgetDueDate: "", bidDueDate: "", nextSteps: [], sf:"", buildingType:"", buildingTypes:[], sf_multistory:"", sf_singlestory:"", sf_canopy:"", sf_mezzanine:"", city:"", state:"", address:"" });
     setShowForm(true);
   };
   const openEdit = (o) => {
@@ -3800,7 +3801,7 @@ Return ONLY valid JSON, no markdown, no extra text:
   const saveOpp = () => {
     if (!form.name.trim() || !form.value) return;
     const ct    = contacts.find(p => p.id === form.contactId);
-    const entry = { ...form, value: Number(form.value), contact: ct ? ct.email : "", city: form.city||"", state: form.state||"" };
+    const entry = { ...form, value: Number(form.value), contact: ct ? ct.email : "", city: form.city||"", state: form.state||"", address: form.address||"" };
     if (editId !== null) {
       setPipeline(pipeline.map(o => o.id === editId ? { ...entry, id: editId } : o));
       if (selectedOpp && selectedOpp.id === editId) setSelectedOpp({ ...entry, id: editId });
@@ -12532,9 +12533,13 @@ window.addEventListener('message',function(e){
                   )}
                 </div>
               )}
-              <div className="g2">
-                <div><label className="lbl">Project City</label><input className="fi" value={form.city||""} onChange={fp("city")} placeholder="e.g. Detroit" /></div>
-                <div><label className="lbl">Project State</label><input className="fi" value={form.state||""} onChange={fp("state")} placeholder="e.g. MI" maxLength={2} style={{textTransform:"uppercase"}} /></div>
+              <div style={{display:"flex",flexDirection:"column",gap:8,background:"#F9FAFC",border:"1px solid #E8EBF4",borderRadius:8,padding:"12px 14px"}}>
+                <div style={{fontSize:10,fontWeight:700,color:"#4A5278",textTransform:"uppercase",letterSpacing:"0.07em"}}>📍 Project Location</div>
+                <div><label className="lbl">Street Address</label><input className="fi" value={form.address||""} onChange={fp("address")} placeholder="1234 Main St" /></div>
+                <div className="g2">
+                  <div><label className="lbl">City</label><input className="fi" value={form.city||""} onChange={fp("city")} placeholder="e.g. Detroit" /></div>
+                  <div><label className="lbl">State</label><input className="fi" value={form.state||""} onChange={fp("state")} placeholder="MI" maxLength={2} style={{textTransform:"uppercase"}} /></div>
+                </div>
               </div>
               <div><label className="lbl">Expected Close Date</label><input className="fi" type="date" value={form.closeDate} onChange={fp("closeDate")} /></div>
               <div><label className="lbl">Notes</label><textarea className="fi" rows={3} value={form.notes} onChange={fp("notes")} placeholder="Key details…" style={{ resize: "vertical" }} /></div>
@@ -12989,6 +12994,202 @@ window.addEventListener('message',function(e){
       })()}
 
       {/* -- PIPELINE OPP DETAIL PANEL -- */}
+      {/* ── FULL DEAL DETAIL PAGE ── */}
+      {selectedOppFull && (() => {
+        const o   = pipeline.find(p=>p.id===selectedOppFull);
+        if (!o) { setSelectedOppFull(null); return null; }
+        const co  = companies.find(c=>c.id===o.companyId);
+        const ct  = contacts.find(p=>p.id===o.contactId);
+        const det = oppDetails[o.id] || {};
+        const setDet = (fields) => saveOppDetail(o.id, fields);
+        const fi  = {width:"100%",padding:"8px 10px",border:"1px solid #D4D9EE",borderRadius:6,fontSize:12,fontFamily:"inherit",outline:"none",boxSizing:"border-box",background:"#fff"};
+        const lbl = (t) => <div style={{fontSize:9,color:"#9BA3BF",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:3}}>{t}</div>;
+        const STAGE_COLORS = {lead:"#A78BFA",budgeting_lead:"#818CF8",proposal_bid:"#60A5FA",negotiation:"#FCD34D",won:"#4ADE80",lost:"#F87171",closed_won:"#059669"};
+        const STAGE_LABELS = {lead:"Lead",budgeting_lead:"Budgeting Lead",proposal_bid:"Proposal / Bid",negotiation:"Negotiation",won:"Won",lost:"Lost",closed_won:"Closed / Won"};
+        const sc = STAGE_COLORS[o.stage]||"#818CF8";
+        // Budget
+        const budgetSrc = (det.budgetItems||[]).length>0 ? det.budgetItems : (activeBudgetOpp===o.id&&budgetItems.length>0?budgetItems:[]);
+        const bOver = (det.budgetItems||[]).length>0 ? (det.budgetOverrides||{gcPct:10,contingency:5,margin:15}) : budgetOverrides;
+        const bd=budgetSrc.reduce((s,i)=>s+(i.qty||0)*(i.rate||0),0);
+        const bg=bd*(bOver.gcPct/100); const bc=(bd+bg)*(bOver.contingency/100);
+        const bSub=bd+bg+bc; const bm=bSub*(bOver.margin/(100-Math.min(bOver.margin,99)));
+        const bTotal=Math.round(bSub+bm);
+        const bGpm=bTotal>0?bm/bTotal:0;
+        const callLog=det.callLog||[];
+        const totalSF=[(o.sf_multistory||0),(o.sf_singlestory||0),(o.sf_canopy||0),(o.sf_mezzanine||0)].map(Number).reduce((a,b)=>a+b,0);
+        // Win score
+        let score=0;
+        if(co)score+=25; if(parseFloat(o.value)>1000000)score+=20; else if(parseFloat(o.value)>500000)score+=10;
+        if(o.contactName)score+=15; if(o.closeDate)score+=10; if(totalSF>0)score+=5;
+        score+=({lead:0,budgeting_lead:5,proposal_bid:15,negotiation:25}[o.stage]||0);
+        const winPct=Math.min(score,100);
+        const winCol=winPct>=70?"#4ADE80":winPct>=40?"#FCD34D":"#F87171";
+
+        return (
+          <div style={{position:"fixed",inset:0,background:"#F4F6FB",zIndex:1500,overflowY:"auto",display:"flex",flexDirection:"column"}}>
+            {/* Top bar */}
+            <div style={{background:"linear-gradient(135deg,#1A2240,#253260)",padding:"14px 24px",display:"flex",alignItems:"center",gap:12,flexShrink:0,position:"sticky",top:0,zIndex:10}}>
+              <button onClick={()=>setSelectedOppFull(null)}
+                style={{background:"rgba(255,255,255,0.12)",border:"none",color:"#fff",borderRadius:6,padding:"6px 14px",cursor:"pointer",fontFamily:"inherit",fontSize:12}}>← Back</button>
+              <div style={{flex:1}}>
+                <div style={{fontSize:18,fontWeight:800,color:"#fff"}}>{o.name}</div>
+                <div style={{fontSize:11,color:"rgba(255,255,255,0.5)",marginTop:1}}>{co?.name||""}{(o.city||o.state)?" · "+[o.city,o.state].filter(Boolean).join(", "):""}</div>
+              </div>
+              <span style={{fontSize:11,fontWeight:700,background:sc+"35",color:sc,border:"1px solid "+sc+"50",borderRadius:4,padding:"3px 10px"}}>{STAGE_LABELS[o.stage]||o.stage}</span>
+              <div style={{fontSize:20,fontWeight:900,color:"#fff"}}>{fmt(parseFloat(o.value)||0)}</div>
+            </div>
+
+            <div style={{padding:"20px 24px",display:"flex",flexDirection:"column",gap:18,maxWidth:1100,margin:"0 auto",width:"100%"}}>
+
+              {/* KPI strip */}
+              <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:12}}>
+                {[
+                  {label:"Est. Value",    value:fmt(parseFloat(o.value)||0),  color:"#60A5FA"},
+                  {label:"Win Score",     value:winPct+"%",                    color:winCol},
+                  {label:"Budget Total",  value:bTotal>0?fmt(bTotal):"—",     color:"#4ADE80"},
+                  {label:"Budget GPM",    value:bTotal>0?(bGpm*100).toFixed(1)+"%":"—", color:"#A78BFA"},
+                  {label:"Total SF",      value:totalSF>0?totalSF.toLocaleString()+" SF":"—", color:"#FCD34D"},
+                ].map(k=>(
+                  <div key={k.label} style={{background:"#fff",borderRadius:10,border:"1px solid #D4D9EE",padding:"12px 14px",borderTop:"3px solid "+k.color}}>
+                    <div style={{fontSize:9,color:"#9BA3BF",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:4}}>{k.label}</div>
+                    <div style={{fontSize:16,fontWeight:800,color:k.color}}>{k.value}</div>
+                  </div>
+                ))}
+              </div>
+
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:18}}>
+
+                {/* Left column */}
+                <div style={{display:"flex",flexDirection:"column",gap:14}}>
+
+                  {/* Deal info */}
+                  <div style={{background:"#fff",borderRadius:12,border:"1px solid #D4D9EE",padding:"16px"}}>
+                    <div style={{fontSize:11,fontWeight:700,color:"#1A2240",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:12}}>Deal Info</div>
+                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+                      <div>{lbl("Stage")}<span style={{fontSize:12,fontWeight:700,color:sc}}>{STAGE_LABELS[o.stage]||o.stage}</span></div>
+                      <div>{lbl("Close Date")}<div style={{fontSize:12,color:"#1A2240"}}>{o.closeDate||"—"}</div></div>
+                      <div>{lbl("Win Probability")}
+                        <div style={{display:"flex",alignItems:"center",gap:6}}>
+                          <div style={{flex:1,height:6,background:"#F0F2F8",borderRadius:3,overflow:"hidden"}}>
+                            <div style={{height:"100%",width:winPct+"%",background:winCol,borderRadius:3}}/>
+                          </div>
+                          <span style={{fontSize:11,fontWeight:700,color:winCol}}>{winPct}%</span>
+                        </div>
+                      </div>
+                      <div>{lbl("Budget Reception")}<div style={{fontSize:12,color:"#1A2240"}}>{det.budgetReception||"—"}</div></div>
+                      {o.bidDueDate&&<div>{lbl("Bid Due")}<div style={{fontSize:12,color:"#F87171",fontWeight:700}}>{o.bidDueDate}</div></div>}
+                      {det.decisionDate&&<div>{lbl("Decision Date")}<div style={{fontSize:12,color:"#FCD34D",fontWeight:700}}>{det.decisionDate}</div></div>}
+                    </div>
+                  </div>
+
+                  {/* Owner / Contact */}
+                  <div style={{background:"#fff",borderRadius:12,border:"1px solid #D4D9EE",padding:"16px"}}>
+                    <div style={{fontSize:11,fontWeight:700,color:"#1A2240",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:12}}>Owner / Contact</div>
+                    {co&&<div style={{fontSize:14,fontWeight:700,color:"#1A2240",marginBottom:4}}>{co.name}</div>}
+                    {ct&&<div><div style={{fontSize:12,color:"#4A5278"}}>{ct.firstName} {ct.lastName}{ct.title?" — "+ct.title:""}</div>{ct.email&&<a href={"mailto:"+ct.email} style={{fontSize:11,color:"#3B6FE8",display:"block",marginTop:2}}>{ct.email}</a>}{ct.phone&&<div style={{fontSize:11,color:"#4A5278",marginTop:2}}>{ct.phone}</div>}</div>}
+                    {(o.address||det.propertyAddress||o.city)&&(
+                      <div style={{marginTop:8,fontSize:11,color:"#4A5278"}}>
+                        📍 {[o.address||det.propertyAddress,o.city,o.state].filter(Boolean).join(", ")}
+                      </div>
+                    )}
+                    {det.ownershipStatus&&<div style={{marginTop:6,fontSize:10,background:"#F0F2F8",borderRadius:4,padding:"3px 8px",display:"inline-block",color:"#4A5278"}}>{det.ownershipStatus}</div>}
+                    {det.propertyNotes&&<div style={{marginTop:8,fontSize:11,color:"#9BA3BF",fontStyle:"italic"}}>{det.propertyNotes}</div>}
+                  </div>
+
+                  {/* Owner Next Steps */}
+                  <div style={{background:"#FFF9E6",borderRadius:12,border:"1px solid #FDE68A",padding:"16px"}}>
+                    <div style={{fontSize:11,fontWeight:700,color:"#B45309",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:8}}>🎯 Owner Next Steps</div>
+                    {det.ownerNextSteps||det.budgetNextSteps
+                      ? <div style={{fontSize:12,color:"#1A2240",lineHeight:1.6}}>{det.ownerNextSteps||det.budgetNextSteps}</div>
+                      : <div style={{fontSize:11,color:"#9BA3BF",fontStyle:"italic"}}>No owner next steps logged</div>}
+                  </div>
+
+                  {/* General Notes */}
+                  {o.notes&&(
+                    <div style={{background:"#fff",borderRadius:12,border:"1px solid #D4D9EE",padding:"16px"}}>
+                      <div style={{fontSize:11,fontWeight:700,color:"#1A2240",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:8}}>Project Notes</div>
+                      <div style={{fontSize:12,color:"#4A5278",lineHeight:1.6,whiteSpace:"pre-wrap"}}>{o.notes}</div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Right column */}
+                <div style={{display:"flex",flexDirection:"column",gap:14}}>
+
+                  {/* Budget summary */}
+                  <div style={{background:"#fff",borderRadius:12,border:"1px solid #D4D9EE",padding:"16px"}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+                      <div style={{fontSize:11,fontWeight:700,color:"#1A2240",textTransform:"uppercase",letterSpacing:"0.07em"}}>Budget</div>
+                      {bTotal>0&&<button onClick={()=>{setActiveBudgetOpp(o.id);setBudgetItems(budgetSrc);setBudgetOverrides(bOver);setActiveNav("budgeting");setSelectedOppFull(null);}}
+                        style={{fontSize:10,padding:"3px 8px",background:"#EEF3FF",border:"1px solid #3B6FE840",borderRadius:4,color:"#3B6FE8",cursor:"pointer",fontFamily:"inherit",fontWeight:600}}>Edit →</button>}
+                    </div>
+                    {bTotal>0 ? (
+                      <>
+                        <div style={{background:"linear-gradient(135deg,#1A2240,#253260)",borderRadius:8,padding:"12px 14px",color:"#fff",marginBottom:10}}>
+                          <div style={{fontSize:9,color:"rgba(255,255,255,0.5)",textTransform:"uppercase",marginBottom:2}}>Total Bid</div>
+                          <div style={{fontSize:22,fontWeight:900}}>{fmt(bTotal)}</div>
+                          <div style={{display:"flex",gap:12,marginTop:6,paddingTop:6,borderTop:"1px solid rgba(255,255,255,0.15)",fontSize:11}}>
+                            <span style={{color:"#4ADE80",fontWeight:700}}>{(bGpm*100).toFixed(1)}% GPM</span>
+                            <span style={{color:"#60A5FA"}}>{fmt(bm)} GP</span>
+                          </div>
+                        </div>
+                        {budgetSrc.slice(0,6).map((item,i)=>(
+                          <div key={i} style={{display:"flex",justifyContent:"space-between",padding:"4px 0",borderBottom:"1px solid #F4F6FB",fontSize:11}}>
+                            <span style={{color:"#4A5278"}}>{item.building?<span style={{color:"#8B5CF6",fontWeight:600}}>{item.building} · </span>:null}{item.label}</span>
+                            <span style={{fontWeight:600,color:"#1A2240"}}>{fmt((item.qty||0)*(item.rate||0))}</span>
+                          </div>
+                        ))}
+                        {budgetSrc.length>6&&<div style={{fontSize:10,color:"#9BA3BF",textAlign:"center",marginTop:6}}>+{budgetSrc.length-6} more items</div>}
+                      </>
+                    ) : (
+                      <div style={{textAlign:"center",padding:"20px",color:"#9BA3BF",fontSize:11}}>No budget saved yet</div>
+                    )}
+                  </div>
+
+                  {/* Call / Meeting Log */}
+                  <div style={{background:"#fff",borderRadius:12,border:"1px solid #D4D9EE",padding:"16px"}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+                      <div style={{fontSize:11,fontWeight:700,color:"#1A2240",textTransform:"uppercase",letterSpacing:"0.07em"}}>Call & Meeting Log</div>
+                      <button onClick={()=>{
+                        const note={id:Date.now(),date:new Date().toISOString().slice(0,10),text:"",author:"Noah"};
+                        setDet({callLog:[note,...callLog]});
+                      }} style={{fontSize:10,padding:"3px 8px",background:"#3B6FE8",border:"none",borderRadius:4,color:"#fff",cursor:"pointer",fontFamily:"inherit",fontWeight:700}}>+ Log Call</button>
+                    </div>
+                    {callLog.length===0&&<div style={{fontSize:11,color:"#9BA3BF",fontStyle:"italic"}}>No calls logged yet</div>}
+                    {callLog.map(note=>(
+                      <div key={note.id} style={{background:"#F9FAFC",border:"1px solid #E8EBF4",borderRadius:7,padding:"10px 12px",marginBottom:8}}>
+                        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
+                          <span style={{fontSize:10,fontWeight:700,color:"#1A2240"}}>{note.date}</span>
+                          <span style={{fontSize:9,color:"#9BA3BF"}}>{note.author}</span>
+                          <button onClick={()=>setDet({callLog:callLog.filter(n=>n.id!==note.id)})} style={{marginLeft:"auto",background:"none",border:"none",color:"#F87171",cursor:"pointer",fontSize:11,padding:0}}>✕</button>
+                        </div>
+                        {note.text
+                          ? <div style={{fontSize:12,color:"#1A2240",lineHeight:1.6,whiteSpace:"pre-wrap"}}>{note.text}</div>
+                          : <textarea defaultValue={note.text} onBlur={e=>setDet({callLog:callLog.map(n=>n.id===note.id?{...n,text:e.target.value}:n)})} rows={3}
+                              placeholder="What was discussed, commitments, next steps…"
+                              style={{width:"100%",padding:"6px 8px",border:"1px solid #D4D9EE",borderRadius:5,fontSize:11,fontFamily:"inherit",outline:"none",resize:"vertical",boxSizing:"border-box"}}/>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Action buttons */}
+              <div style={{display:"flex",gap:10}}>
+                <button onClick={()=>{setSelectedOppFull(null);setSelectedOpp(o);setSelectedOppTab("info");}}
+                  style={{flex:1,padding:"10px",background:"#F0F2F8",border:"1px solid #CBD1E8",borderRadius:8,cursor:"pointer",fontFamily:"inherit",fontSize:12,color:"#4A5278",fontWeight:600}}>✎ Edit in Panel</button>
+                <button onClick={()=>{setActiveBudgetOpp(o.id);if(budgetSrc.length>0){setBudgetItems(budgetSrc);setBudgetOverrides(bOver);}setActiveNav("budgeting");setSelectedOppFull(null);}}
+                  style={{flex:1,padding:"10px",background:"#EEF3FF",border:"1px solid #3B6FE840",borderRadius:8,cursor:"pointer",fontFamily:"inherit",fontSize:12,color:"#3B6FE8",fontWeight:700}}>📊 Budgeting Tool</button>
+                {o.stage!=="won"&&o.stage!=="closed_won"&&o.stage!=="lost"&&(
+                  <button onClick={()=>{setWonConvertOpp(o);setWonConvertForm({startDate:"",endDate:"",contractValue:o.value||"",pm:"",notes:o.notes||""});setShowWonConvert(true);setSelectedOppFull(null);}}
+                    style={{flex:1,padding:"10px",background:"#059669",border:"none",borderRadius:8,cursor:"pointer",fontFamily:"inherit",fontSize:12,color:"#fff",fontWeight:700}}>✓ Mark Won</button>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       {selectedOpp && !selectedCompany && (() => {
         const o    = selectedOpp;
         const co   = companies.find(c => c.id === o.companyId);
@@ -13089,11 +13290,35 @@ window.addEventListener('message',function(e){
                     </div>
                   </div>
 
-                  {/* Property Details */}
+                  {/* Property Details — address unified with form */}
                   <div style={{background:"#F9FAFC",borderRadius:8,border:"1px solid #E8EBF4",padding:"12px 14px"}}>
-                    <div style={{fontSize:10,fontWeight:700,color:"#4A5278",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:10}}>Property Details</div>
+                    <div style={{fontSize:10,fontWeight:700,color:"#4A5278",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:10}}>📍 Property Details</div>
                     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-                      <div>{lbl("Property Address")}<input style={fi} value={det.propertyAddress||""} onChange={e=>setDet({propertyAddress:e.target.value})} placeholder="123 Main St…"/></div>
+                      <div style={{gridColumn:"span 2"}}>
+                        {lbl("Street Address")}
+                        <input style={fi} value={o.address||det.propertyAddress||""}
+                          onChange={e=>{
+                            setPipeline(prev=>prev.map(p=>p.id===o.id?{...p,address:e.target.value}:p));
+                            setSelectedOpp({...o,address:e.target.value});
+                            setDet({propertyAddress:e.target.value});
+                          }} placeholder="1234 Main St…"/>
+                      </div>
+                      <div>
+                        {lbl("City")}
+                        <input style={fi} value={o.city||""}
+                          onChange={e=>{
+                            setPipeline(prev=>prev.map(p=>p.id===o.id?{...p,city:e.target.value}:p));
+                            setSelectedOpp({...o,city:e.target.value});
+                          }} placeholder="Detroit"/>
+                      </div>
+                      <div>
+                        {lbl("State")}
+                        <input style={fi} value={o.state||""} maxLength={2}
+                          onChange={e=>{
+                            setPipeline(prev=>prev.map(p=>p.id===o.id?{...p,state:e.target.value.toUpperCase()}:p));
+                            setSelectedOpp({...o,state:e.target.value.toUpperCase()});
+                          }} placeholder="MI" style={{...fi,textTransform:"uppercase"}}/>
+                      </div>
                       <div>
                         {lbl("Ownership Status")}
                         <select style={fi} value={det.ownershipStatus||""} onChange={e=>setDet({ownershipStatus:e.target.value})}>
@@ -13106,7 +13331,6 @@ window.addEventListener('message',function(e){
                           <option>Unknown</option>
                         </select>
                       </div>
-                      <div>{lbl("Owner Name")}<input style={fi} value={det.ownerName||""} onChange={e=>setDet({ownerName:e.target.value})} placeholder="Property owner…"/></div>
                       <div>{lbl("Owner Phone")}<input style={fi} value={det.ownerPhone||""} onChange={e=>setDet({ownerPhone:e.target.value})} placeholder="(555) 000-0000"/></div>
                       <div style={{gridColumn:"span 2"}}>{lbl("Owner Email")}<input style={fi} value={det.ownerEmail||""} onChange={e=>setDet({ownerEmail:e.target.value})} placeholder="owner@example.com"/></div>
                       <div style={{gridColumn:"span 2"}}>{lbl("Property Notes")}<textarea style={{...fi,resize:"vertical"}} rows={2} value={det.propertyNotes||""} onChange={e=>setDet({propertyNotes:e.target.value})} placeholder="Zoning, site conditions, access…"/></div>
@@ -13157,48 +13381,95 @@ window.addEventListener('message',function(e){
               )}
 
               {/* -- BUDGET TAB -- */}
-              {activeTab==="budget" && (
-                <div style={{display:"flex",flexDirection:"column",gap:10}}>
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                    <div style={{fontSize:12,fontWeight:700,color:"#1A2240"}}>Budget Estimate</div>
-                    <div style={{display:"flex",gap:8}}>
-                      {oppBudgetItems.length>0 && (
-                        <button onClick={()=>{ setBudgetPrintOpp(o); setBudgetAttachment(det.attachmentUrl||""); setShowBudgetPrint(true); }}
-                          style={{padding:"5px 10px",background:"#F0F2F8",border:"1px solid #CBD1E8",borderRadius:5,cursor:"pointer",fontFamily:"inherit",fontSize:11,color:"#4A5278"}}>
-                          🖨 Print PDF
+              {activeTab==="budget" && (() => {
+                // Pull budget from oppDetails, or from the main budgeting tool if active
+                const budgetSrc = oppBudgetItems.length>0 ? oppBudgetItems
+                  : (activeBudgetOpp===o.id && budgetItems.length>0 ? budgetItems : []);
+                const overrideSrc = oppBudgetItems.length>0 ? oppOverrides
+                  : (activeBudgetOpp===o.id ? budgetOverrides : oppOverrides);
+
+                // Budget summary calc
+                const W=overrideSrc;
+                const d=budgetSrc.reduce((s,i)=>s+(i.qty||0)*(i.rate||0),0);
+                const g=d*(W.gcPct/100); const c2=(d+g)*(W.contingency/100);
+                const sub=d+g+c2; const m=sub*(W.margin/(100-Math.min(W.margin,99)));
+                const total=Math.round(sub+m);
+                const gpm=total>0?m/total:0;
+
+                return (
+                  <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                    {/* Budget Summary Card */}
+                    {budgetSrc.length>0 ? (
+                      <>
+                        <div style={{background:"linear-gradient(135deg,#1A2240,#253260)",borderRadius:10,padding:"14px 16px",color:"#fff"}}>
+                          <div style={{fontSize:9,color:"rgba(255,255,255,0.5)",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:4}}>Budget Estimate</div>
+                          <div style={{fontSize:26,fontWeight:900}}>{fmt(total)}</div>
+                          <div style={{display:"flex",gap:14,marginTop:8,paddingTop:8,borderTop:"1px solid rgba(255,255,255,0.15)"}}>
+                            <div><div style={{fontSize:13,fontWeight:700,color:"#4ADE80"}}>{(gpm*100).toFixed(1)}%</div><div style={{fontSize:9,color:"rgba(255,255,255,0.4)"}}>GPM</div></div>
+                            <div><div style={{fontSize:13,fontWeight:700,color:"#60A5FA"}}>{fmt(m)}</div><div style={{fontSize:9,color:"rgba(255,255,255,0.4)"}}>Gross Profit</div></div>
+                            <div><div style={{fontSize:13,fontWeight:700,color:"#FCD34D"}}>{budgetSrc.length}</div><div style={{fontSize:9,color:"rgba(255,255,255,0.4)"}}>Line Items</div></div>
+                          </div>
+                        </div>
+                        {/* Line items summary table */}
+                        <div style={{background:"#fff",borderRadius:8,border:"1px solid #D4D9EE",overflow:"hidden"}}>
+                          <table style={{width:"100%",borderCollapse:"collapse"}}>
+                            <thead><tr style={{background:"#F9FAFC",borderBottom:"1px solid #E8EBF4"}}>
+                              {["Bldg","Trade","SF/Qty","Total"].map((h,i)=>(
+                                <th key={i} style={{padding:"5px 8px",fontSize:9,color:"#9BA3BF",textTransform:"uppercase",textAlign:i>=2?"right":"left",fontWeight:700}}>{h}</th>
+                              ))}
+                            </tr></thead>
+                            <tbody>
+                              {budgetSrc.map((item,i)=>{
+                                const lineTotal=(item.qty||0)*(item.rate||0);
+                                return (
+                                  <tr key={item.id||i} style={{borderBottom:"1px solid #F4F6FB",background:i%2?"#FAFBFD":"#fff"}}>
+                                    <td style={{padding:"5px 8px",fontSize:10,color:"#8B5CF6",fontWeight:600}}>{item.building||"—"}</td>
+                                    <td style={{padding:"5px 8px",fontSize:11,fontWeight:500,color:"#1A2240"}}>{item.label}</td>
+                                    <td style={{padding:"5px 8px",fontSize:10,textAlign:"right",color:"#4A5278"}}>{(item.qty||0).toLocaleString()} {item.unit}</td>
+                                    <td style={{padding:"5px 8px",fontSize:11,fontWeight:700,textAlign:"right",color:lineTotal>0?"#1A2240":"#CBD1E8"}}>{lineTotal>0?fmt(lineTotal):"—"}</td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                            <tfoot><tr style={{background:"#F4F6FB",borderTop:"2px solid #D4D9EE"}}>
+                              <td colSpan={3} style={{padding:"6px 8px",fontSize:11,fontWeight:700,color:"#4A5278"}}>Direct Costs</td>
+                              <td style={{padding:"6px 8px",textAlign:"right",fontSize:12,fontWeight:800,color:"#1A2240"}}>{fmt(d)}</td>
+                            </tr></tfoot>
+                          </table>
+                        </div>
+                        <div style={{display:"flex",gap:8}}>
+                          <button onClick={()=>{ setActiveBudgetOpp(o.id); setBudgetItems(budgetSrc); setBudgetOverrides(overrideSrc); setActiveNav("budgeting"); setSelectedOpp(null); }}
+                            style={{flex:1,padding:"8px",background:"#EEF3FF",border:"1px solid #3B6FE840",borderRadius:6,cursor:"pointer",fontFamily:"inherit",fontSize:11,color:"#3B6FE8",fontWeight:600}}>
+                            ✏️ Edit in Budgeting Tool
+                          </button>
+                          <button onClick={()=>{ setBudgetPrintOpp(o); setBudgetItems(budgetSrc); setBudgetOverrides(overrideSrc); setBudgetAttachment(det.attachmentUrl||""); setShowBudgetPrint(true); }}
+                            style={{flex:1,padding:"8px",background:"#F0F2F8",border:"1px solid #CBD1E8",borderRadius:6,cursor:"pointer",fontFamily:"inherit",fontSize:11,color:"#4A5278",fontWeight:600}}>
+                            🖨 Print PDF
+                          </button>
+                        </div>
+                        <button onClick={async()=>{
+                          setPipeline(prev=>prev.map(p=>p.id===o.id?{...p,value:total}:p));
+                          setSelectedOpp({...o,value:total});
+                          try{await fetch(`${SUPA_URL}/rest/v1/mp_pipeline?id=eq.${String(o.id)}`,{method:"PATCH",headers:{apikey:SUPA_KEY,Authorization:`Bearer ${SUPA_KEY}`,"Content-Type":"application/json",Prefer:"return=minimal"},body:JSON.stringify({value:total})});}catch(e){}
+                        }}
+                          style={{padding:"9px",background:"#3B6FE8",border:"none",borderRadius:7,color:"#fff",fontWeight:700,cursor:"pointer",fontFamily:"inherit",fontSize:12}}>
+                          💾 Sync to Deal Value — {fmt(total)}
                         </button>
-                      )}
-                    </div>
+                      </>
+                    ) : (
+                      <div style={{textAlign:"center",padding:"36px 20px",color:"#9BA3BF",border:"2px dashed #E0E4F0",borderRadius:10}}>
+                        <div style={{fontSize:28,marginBottom:8}}>📊</div>
+                        <div style={{fontSize:13,fontWeight:600,color:"#1A2240",marginBottom:4}}>No budget yet</div>
+                        <div style={{fontSize:11,marginBottom:14}}>Go to the Budgeting tab to build a cost estimate</div>
+                        <button onClick={()=>{ setActiveBudgetOpp(o.id); setActiveNav("budgeting"); setSelectedOpp(null); }}
+                          style={{padding:"8px 18px",background:"#3B6FE8",border:"none",borderRadius:6,color:"#fff",fontWeight:700,cursor:"pointer",fontFamily:"inherit",fontSize:12}}>
+                          Go to Budgeting Tool →
+                        </button>
+                      </div>
+                    )}
                   </div>
-                  <div style={{border:"1px solid #D4D9EE",borderRadius:10,overflow:"hidden",flex:1,display:"flex",flexDirection:"column"}}>
-                    <MpBudgetTool
-                      opp={o} company={co}
-                      items={oppBudgetItems}
-                      setItems={items=>setOppBudget(typeof items==="function"?items(oppBudgetItems):items)}
-                      overrides={oppOverrides}
-                      setOverrides={setOppOverrides}
-                    />
-                  </div>
-                  {/* Save budget value to opp */}
-                  {oppBudgetItems.length>0 && (() => {
-                    const W=oppOverrides;
-                    const d=oppBudgetItems.reduce((s,i)=>s+(i.qty||0)*(i.rate||0),0);
-                    const g=d*(W.gcPct/100); const c2=(d+g)*(W.contingency/100);
-                    const sub=d+g+c2; const m=sub*(W.margin/(100-Math.min(W.margin,99)));
-                    const total=Math.round(sub+m);
-                    return (
-                      <button onClick={async()=>{
-                        setPipeline(prev=>prev.map(p=>p.id===o.id?{...p,value:total}:p));
-                        setSelectedOpp({...o,value:total});
-                        try{await fetch(`${SUPA_URL}/rest/v1/mp_pipeline?id=eq.${String(o.id)}`,{method:"PATCH",headers:{apikey:SUPA_KEY,Authorization:`Bearer ${SUPA_KEY}`,"Content-Type":"application/json",Prefer:"return=minimal"},body:JSON.stringify({value:total})});}catch(e){}
-                      }}
-                        style={{padding:"9px",background:"#3B6FE8",border:"none",borderRadius:7,color:"#fff",fontWeight:700,cursor:"pointer",fontFamily:"inherit",fontSize:13}}>
-                        💾 Save Budget — Update Est. Value to {fmt(total)}
-                      </button>
-                    );
-                  })()}
-                </div>
-              )}
+                );
+              })()}
 
               {/* -- ESTIMATING TAB -- */}
               {activeTab==="estimating" && (
@@ -13255,37 +13526,79 @@ window.addEventListener('message',function(e){
               )}
 
               {/* -- NOTES TAB -- */}
-              {activeTab==="notes" && (
-                <div style={{display:"flex",flexDirection:"column",gap:10}}>
-                  <div>
-                    {lbl("General Notes")}
-                    <textarea style={{...fi,resize:"vertical",minHeight:120}} value={o.notes||""} rows={5}
-                      onChange={e=>{
-                        setPipeline(prev=>prev.map(p=>p.id===o.id?{...p,notes:e.target.value}:p));
-                        setSelectedOpp({...o,notes:e.target.value});
-                      }} placeholder="Project notes, context, history…"/>
+              {activeTab==="notes" && (() => {
+                const callLog = det.callLog || [];
+                const addCallNote = () => {
+                  const note = {id:Date.now(),date:new Date().toISOString().slice(0,10),text:"",author:"Noah"};
+                  setDet({callLog:[note,...callLog]});
+                };
+                const updateNote = (id,text) => setDet({callLog:callLog.map(n=>n.id===id?{...n,text}:n)});
+                const deleteNote = (id) => setDet({callLog:callLog.filter(n=>n.id!==id)});
+                return (
+                  <div style={{display:"flex",flexDirection:"column",gap:12}}>
+                    {/* Owner Next Steps */}
+                    <div style={{background:"#FFF9E6",borderRadius:8,border:"1px solid #FCD34D30",padding:"12px 14px"}}>
+                      <div style={{fontSize:10,fontWeight:700,color:"#B45309",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:8}}>🎯 Owner Next Steps</div>
+                      <textarea style={{...fi,resize:"vertical"}} rows={2} value={det.ownerNextSteps||det.budgetNextSteps||""}
+                        onChange={e=>setDet({ownerNextSteps:e.target.value,budgetNextSteps:e.target.value})}
+                        placeholder="What is the owner doing next? Follow-up date? Decision timeline?"/>
+                      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginTop:8}}>
+                        <div>{lbl("Budget Reception")}<select style={fi} value={det.budgetReception||""} onChange={e=>setDet({budgetReception:e.target.value})}><option value="">Select…</option><option>Accepted — Moving to Bid</option><option>Under Review</option><option>Too High — Revising</option><option>Rejected</option><option>Pending Submission</option></select></div>
+                        <div>{lbl("Decision Date")}<input style={fi} value={det.decisionDate||""} type="date" onChange={e=>setDet({decisionDate:e.target.value})}/></div>
+                      </div>
+                    </div>
+                    {/* General Notes */}
+                    <div>
+                      {lbl("Project Notes / Context")}
+                      <textarea style={{...fi,resize:"vertical",minHeight:80}} value={o.notes||""} rows={3}
+                        onChange={e=>{
+                          setPipeline(prev=>prev.map(p=>p.id===o.id?{...p,notes:e.target.value}:p));
+                          setSelectedOpp({...o,notes:e.target.value});
+                        }} placeholder="Project overview, site context, relationship history…"/>
+                    </div>
+                    {/* Call / Meeting Log */}
+                    <div>
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+                        {lbl("Call & Meeting Log")}
+                        <button onClick={addCallNote}
+                          style={{padding:"3px 10px",background:"#3B6FE8",color:"#fff",border:"none",borderRadius:4,cursor:"pointer",fontFamily:"inherit",fontSize:10,fontWeight:700}}>+ Log Call</button>
+                      </div>
+                      {callLog.length===0 && <div style={{fontSize:11,color:"#9BA3BF",fontStyle:"italic",padding:"8px 0"}}>No calls logged yet — click + Log Call after each weekly meeting</div>}
+                      {callLog.map(note=>(
+                        <div key={note.id} style={{background:"#F9FAFC",border:"1px solid #E8EBF4",borderRadius:7,padding:"10px 12px",marginBottom:8}}>
+                          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
+                            <input type="date" value={note.date} onChange={e=>setDet({callLog:callLog.map(n=>n.id===note.id?{...n,date:e.target.value}:n)})}
+                              style={{fontSize:10,fontWeight:700,color:"#1A2240",border:"none",background:"transparent",fontFamily:"inherit",outline:"none",padding:0}}/>
+                            <span style={{fontSize:9,color:"#9BA3BF"}}>{note.author}</span>
+                            <button onClick={()=>deleteNote(note.id)} style={{marginLeft:"auto",background:"none",border:"none",color:"#F87171",cursor:"pointer",fontSize:12,padding:0}}>✕</button>
+                          </div>
+                          <textarea value={note.text} onChange={e=>updateNote(note.id,e.target.value)} rows={3}
+                            placeholder="Summary of call/meeting, what was discussed, commitments made, owner next steps…"
+                            style={{...fi,resize:"vertical",fontSize:11,background:"#fff"}}/>
+                        </div>
+                      ))}
+                    </div>
+                    {/* Attachment */}
+                    <div>
+                      {lbl("Attachment / Drawing URL")}
+                      <input style={fi} value={det.attachmentUrl||""} onChange={e=>setDet({attachmentUrl:e.target.value})} placeholder="Paste URL to drawing or document…"/>
+                    </div>
                   </div>
-                  <div>
-                    {lbl("Attachment / Drawing URL")}
-                    <input style={fi} value={det.attachmentUrl||""} onChange={e=>setDet({attachmentUrl:e.target.value})} placeholder="Paste URL to conceptual drawing or document…"/>
-                    {det.attachmentUrl && /\\.(jpg|jpeg|png|gif|webp)$/i.test(det.attachmentUrl) && (
-                      <img src={det.attachmentUrl} alt="Attachment" style={{maxWidth:"100%",borderRadius:6,marginTop:8,border:"1px solid #D4D9EE"}}/>
-                    )}
-                  </div>
-                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-                    <div>{lbl("Budget Reception")}<select style={fi} value={det.budgetReception||""} onChange={e=>setDet({budgetReception:e.target.value})}><option value="">Select…</option><option>Accepted — Moving to Bid</option><option>Under Review</option><option>Too High — Revising</option><option>Rejected</option><option>Pending Submission</option></select></div>
-                    <div>{lbl("Next Steps")}<input style={fi} value={det.budgetNextSteps||""} onChange={e=>setDet({budgetNextSteps:e.target.value})} placeholder="Action items…"/></div>
-                  </div>
-                </div>
-              )}
+                );
+              })()}
+
 
             </div>
 
             {/* Footer */}
-            <div style={{padding:"10px 20px",borderTop:"1px solid #D4D9EE",display:"flex",gap:8,background:"#F9FAFC",flexShrink:0}}>
-              <button className="btn-ghost" style={{flex:1,fontSize:11}} onClick={()=>{openEdit(o);setSelectedOpp(null);}}>✎ Edit Opp</button>
+            <div style={{padding:"10px 20px",borderTop:"1px solid #D4D9EE",display:"flex",gap:8,background:"#F9FAFC",flexShrink:0,flexWrap:"wrap"}}>
+              <button onClick={()=>{ setSelectedOppFull(o.id); setSelectedOpp(null); }}
+                style={{width:"100%",padding:"9px",background:"linear-gradient(135deg,#1A2240,#253260)",border:"none",borderRadius:7,color:"#fff",fontWeight:700,cursor:"pointer",fontFamily:"inherit",fontSize:12,marginBottom:2}}>
+                🔍 See Full Deal Details
+              </button>
+              <button className="btn-ghost" style={{flex:1,fontSize:11}} onClick={()=>{openEdit(o);setSelectedOpp(null);}}>✎ Edit</button>
               {isMp && <button style={{flex:1,padding:"7px",background:"#3B6FE8",border:"none",borderRadius:6,color:"#fff",fontWeight:700,cursor:"pointer",fontFamily:"inherit",fontSize:11}}
-                onClick={()=>{ setActiveNav("budgeting"); setActiveBudgetOpp(o.id); setSelectedOpp(null); }}>📊 Budgeting Tab</button>}
+                onClick={()=>{ setActiveNav("budgeting"); setActiveBudgetOpp(o.id); setSelectedOpp(null); }}>📊 Budget</button>}
               {o.stage!=="closed_won"&&o.stage!=="won"&&o.stage!=="lost" && isMp && (
                 <button style={{flex:1,padding:"7px",background:"#059669",border:"none",borderRadius:6,color:"#fff",fontWeight:700,cursor:"pointer",fontFamily:"inherit",fontSize:11}}
                   onClick={()=>{ setWonConvertOpp(o); setWonConvertForm({startDate:"",endDate:"",contractValue:o.value||"",pm:"",notes:o.notes||""}); setShowWonConvert(true); setSelectedOpp(null); }}>✓ Won</button>
