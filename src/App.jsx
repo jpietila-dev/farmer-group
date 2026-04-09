@@ -2024,21 +2024,34 @@ const TRADE_DEFAULTS = [
   {id:"misc",       label:"Miscellaneous",          unit:"LS",  rate:0},
 ];
 
-// ── Single budget line row ───────────────────────────────────────────────────
-function MpBudgetLine({ item, onUpdate, onRemove }) {
+// ── Single budget line row (with building label + live $/SF) ────────────────
+function MpBudgetLine({ item, onUpdate, onRemove, totalSF, gcPct, contingencyPct }) {
   const [qty,  setQty]  = useState(String(item.qty||""));
   const [rate, setRate] = useState(String(item.rate||""));
+  const [bldg, setBldg] = useState(item.building||"");
   const [desc, setDesc] = useState(item.desc||"");
   useEffect(()=>setQty(String(item.qty||"")),[item.qty]);
   useEffect(()=>setRate(String(item.rate||"")),[item.rate]);
+  useEffect(()=>setBldg(item.building||""),[item.building]);
   useEffect(()=>setDesc(item.desc||""),[item.desc]);
-  const total = (parseFloat(qty)||0)*(parseFloat(rate)||0);
+  const q = parseFloat(qty)||0;
+  const r = parseFloat(rate)||0;
+  const lineTotal = q * r;
+  // Spread GC + contingency invisibly into each line for $/SF display
+  const gcMult  = 1 + (gcPct||0)/100;
+  const conMult = 1 + (contingencyPct||0)/100;
+  const grossedRate = r * gcMult * conMult;
+  const sfRate = totalSF > 0 && item.unit==="SF" ? grossedRate : null;
   const fi = {padding:"5px 7px",border:"1px solid #D4D9EE",borderRadius:5,fontSize:12,fontFamily:"inherit",outline:"none",background:"#fff",width:"100%",boxSizing:"border-box"};
   return (
     <tr style={{borderBottom:"1px solid #F4F6FB"}}>
-      <td style={{padding:"6px 8px",fontSize:12,color:"#1A2240",fontWeight:500}}>{item.label}</td>
-      <td style={{padding:"4px 6px",minWidth:160}}>
-        <input value={desc} onChange={e=>{setDesc(e.target.value);onUpdate({...item,desc:e.target.value});}} placeholder="Scope notes…" style={fi}/>
+      <td style={{padding:"4px 6px",width:70}}>
+        <input value={bldg} onChange={e=>{setBldg(e.target.value);onUpdate({...item,building:e.target.value});}}
+          placeholder="Bldg A" style={{...fi,fontSize:11,fontWeight:600,color:"#8B5CF6",borderColor:"#E8EBF4"}}/>
+      </td>
+      <td style={{padding:"6px 8px",fontSize:12,color:"#1A2240",fontWeight:500,whiteSpace:"nowrap"}}>{item.label}</td>
+      <td style={{padding:"4px 6px",minWidth:120}}>
+        <input value={desc} onChange={e=>{setDesc(e.target.value);onUpdate({...item,desc:e.target.value});}} placeholder="Notes…" style={fi}/>
       </td>
       <td style={{padding:"4px 6px",width:50,textAlign:"center",fontSize:11,color:"#9BA3BF"}}>{item.unit}</td>
       <td style={{padding:"4px 6px",width:80}}>
@@ -2047,8 +2060,11 @@ function MpBudgetLine({ item, onUpdate, onRemove }) {
       <td style={{padding:"4px 6px",width:90}}>
         <input type="number" value={rate} onChange={e=>{setRate(e.target.value);onUpdate({...item,rate:parseFloat(e.target.value)||0});}} placeholder="0.00" style={{...fi,textAlign:"right"}}/>
       </td>
-      <td style={{padding:"6px 8px",textAlign:"right",fontSize:13,fontWeight:700,color:total>0?"#1A2240":"#CBD1E8",whiteSpace:"nowrap"}}>
-        {total>0?"$"+Math.round(total).toLocaleString():"—"}
+      <td style={{padding:"6px 8px",textAlign:"right",fontSize:13,fontWeight:700,color:lineTotal>0?"#1A2240":"#CBD1E8",whiteSpace:"nowrap"}}>
+        {lineTotal>0?"$"+Math.round(lineTotal).toLocaleString():"—"}
+      </td>
+      <td style={{padding:"6px 8px",textAlign:"right",fontSize:10,color:"#9BA3BF",whiteSpace:"nowrap"}}>
+        {sfRate!==null ? <span style={{color:sfRate>0?"#8B5CF6":"#CBD1E8",fontWeight:600}}>${sfRate.toFixed(2)}/SF</span> : "—"}
       </td>
       <td style={{padding:"4px 4px",textAlign:"center",width:28}}>
         <button onClick={onRemove} style={{background:"none",border:"none",color:"#F87171",cursor:"pointer",fontSize:14,padding:0,lineHeight:1}}>✕</button>
@@ -2062,7 +2078,11 @@ function MpBudgetTool({ opp, company, items, setItems, overrides, setOverrides }
   const W = {gcPct:10,contingency:5,margin:15,...overrides};
   const setW = (k,v) => setOverrides(p=>({...p,[k]:v}));
   const [showAdd, setShowAdd] = useState(false);
-  const [sfInput, setSfInput] = useState("");
+
+  // SF auto-detect from line items, but adjustable
+  const autoSF = items.filter(i=>i.unit==="SF").reduce((s,i)=>s+(i.qty||0),0);
+  const [sfOverride, setSfOverride] = useState("");
+  const totalSF = parseFloat(sfOverride)||autoSF;
 
   const direct      = items.reduce((s,i)=>s+(i.qty||0)*(i.rate||0),0);
   const gcAmt       = direct * (W.gcPct/100);
@@ -2072,36 +2092,62 @@ function MpBudgetTool({ opp, company, items, setItems, overrides, setOverrides }
   const totalBid    = subtotal+marginAmt;
   const gpm         = totalBid>0 ? marginAmt/totalBid : 0;
   const fmtC = n => "$"+Math.round(n).toLocaleString();
-  const pctSty = {width:70,padding:"5px 8px",border:"1.5px solid #CBD1E8",borderRadius:6,fontSize:13,fontFamily:"inherit",outline:"none",textAlign:"right"};
+  const pctSty = {width:68,padding:"5px 8px",border:"1.5px solid #CBD1E8",borderRadius:6,fontSize:13,fontFamily:"inherit",outline:"none",textAlign:"right"};
 
-  const addTrade = (t) => { setItems(prev=>[...prev,{...t,qty:0,rate:t.rate,desc:""}]); }; // keep picker open
+  // Building tiles — clickable to add a duplicate building-type line
+  const BLDG_TYPES = TRADE_DEFAULTS.filter(t=>t.isBldg);
+  const addTrade = (t, bldgLabel) => {
+    setItems(prev=>[...prev,{...t, id:t.id+"-"+Date.now(), qty:0, rate:t.rate, desc:"", building:bldgLabel||""}]);
+  };
   const updateItem = (id,u) => setItems(prev=>prev.map(i=>i.id===id?u:i));
   const removeItem = (id)   => setItems(prev=>prev.filter(i=>i.id!==id));
 
-  return (
-    <div style={{display:"grid",gridTemplateColumns:"1fr 320px",gap:0,flex:1,minHeight:0,overflow:"hidden"}}>
-      {/* Left - line items */}
-      <div style={{overflowY:"auto",padding:"18px 20px",display:"flex",flexDirection:"column",gap:14}}>
-        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-          <div style={{fontSize:13,fontWeight:700,color:"#1A2240"}}>
-            {opp ? <span>📋 {opp.name} <span style={{fontSize:11,color:"#9BA3BF",fontWeight:400}}>— {company?.name||""}</span></span> : "Select a project to budget"}
-          </div>
-          {opp && <button onClick={()=>setShowAdd(v=>!v)} style={{padding:"6px 14px",background:"#3B6FE8",color:"#fff",border:"none",borderRadius:7,cursor:"pointer",fontFamily:"inherit",fontSize:12,fontWeight:700}}>+ Add Trade</button>}
-        </div>
+  // Group items by building for visual grouping
+  const buildings = [...new Set(items.map(i=>i.building||""))];
 
-        {/* Trade picker */}
+  return (
+    <div style={{display:"grid",gridTemplateColumns:"1fr 300px",gap:0,flex:1,minHeight:0,overflow:"hidden"}}>
+      {/* Left - line items */}
+      <div style={{overflowY:"auto",padding:"16px 18px",display:"flex",flexDirection:"column",gap:12}}>
+
+        {/* Building type quick-add tiles */}
+        {opp && (
+          <div>
+            <div style={{fontSize:10,fontWeight:700,color:"#9BA3BF",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:8}}>Add Building / Structure</div>
+            <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:4}}>
+              {BLDG_TYPES.map(t=>(
+                <button key={t.id} onClick={()=>{
+                  const existing = items.filter(i=>i.id===t.id||i.id.startsWith(t.id+"-"));
+                  const letter = String.fromCharCode(65+existing.length); // A, B, C...
+                  addTrade(t,"Bldg "+letter);
+                }}
+                  style={{padding:"6px 14px",borderRadius:20,border:"1.5px solid #CBD1E8",background:"#F9FAFC",color:"#1A2240",fontSize:11,cursor:"pointer",fontFamily:"inherit",fontWeight:600,display:"flex",alignItems:"center",gap:5}}>
+                  <span style={{width:8,height:8,borderRadius:"50%",background:"#8B5CF6",display:"inline-block"}}/>
+                  {t.label}
+                  <span style={{fontSize:9,color:"#9BA3BF"}}>${t.rate}/SF</span>
+                </button>
+              ))}
+              <button onClick={()=>setShowAdd(v=>!v)}
+                style={{padding:"6px 14px",borderRadius:20,border:"1.5px solid #3B6FE840",background:"#EEF3FF",color:"#3B6FE8",fontSize:11,cursor:"pointer",fontFamily:"inherit",fontWeight:600}}>
+                + Other Trade
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Other trade picker */}
         {showAdd && (
-          <div style={{background:"#fff",borderRadius:10,border:"1px solid #D4D9EE",padding:"14px 16px"}}>
-            <div style={{fontSize:11,fontWeight:700,color:"#4A5278",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:10}}>Select trade to add</div>
-            <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
-              {TRADE_DEFAULTS.filter(t=>!items.find(i=>i.id===t.id)).map(t=>(
-                <button key={t.id} onClick={()=>addTrade(t)}
-                  style={{padding:"5px 12px",borderRadius:6,border:"1px solid #CBD1E8",background:"#F9FAFC",color:"#1A2240",fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>
+          <div style={{background:"#fff",borderRadius:10,border:"1px solid #D4D9EE",padding:"12px 14px"}}>
+            <div style={{fontSize:10,fontWeight:700,color:"#4A5278",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:8}}>Select trade</div>
+            <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
+              {TRADE_DEFAULTS.filter(t=>!t.isBldg).map(t=>(
+                <button key={t.id} onClick={()=>{addTrade(t,"");setShowAdd(false);}}
+                  style={{padding:"4px 10px",borderRadius:5,border:"1px solid #CBD1E8",background:"#F9FAFC",color:"#1A2240",fontSize:11,cursor:"pointer",fontFamily:"inherit"}}>
                   {t.label}
                 </button>
               ))}
             </div>
-            <button onClick={()=>setShowAdd(false)} style={{marginTop:10,background:"none",border:"none",color:"#9BA3BF",cursor:"pointer",fontSize:12,fontFamily:"inherit"}}>Cancel</button>
+            <button onClick={()=>setShowAdd(false)} style={{marginTop:8,background:"none",border:"none",color:"#9BA3BF",cursor:"pointer",fontSize:11,fontFamily:"inherit"}}>Cancel</button>
           </div>
         )}
 
@@ -2109,15 +2155,15 @@ function MpBudgetTool({ opp, company, items, setItems, overrides, setOverrides }
           <div style={{textAlign:"center",padding:"60px 24px",color:"#9BA3BF",border:"2px dashed #E0E4F0",borderRadius:12}}>
             <div style={{fontSize:36,marginBottom:10}}>📊</div>
             <div style={{fontSize:15,fontWeight:600,color:"#1A2240",marginBottom:6}}>Select a project from the left</div>
-            <div style={{fontSize:12}}>Choose any Budgeting Lead opportunity to start building your estimate</div>
+            <div style={{fontSize:12}}>Choose any opportunity to start building your estimate</div>
           </div>
         )}
 
         {opp && items.length===0 && !showAdd && (
-          <div style={{textAlign:"center",padding:"48px 24px",color:"#9BA3BF",border:"2px dashed #E0E4F0",borderRadius:10}}>
-            <div style={{fontSize:28,marginBottom:8}}>📋</div>
-            <div style={{fontSize:14,fontWeight:600,color:"#1A2240",marginBottom:4}}>No line items yet</div>
-            <div style={{fontSize:12}}>Click "+ Add Trade" to begin estimating</div>
+          <div style={{textAlign:"center",padding:"40px 24px",color:"#9BA3BF",border:"2px dashed #E0E4F0",borderRadius:10}}>
+            <div style={{fontSize:28,marginBottom:8}}>🏗️</div>
+            <div style={{fontSize:13,fontWeight:600,color:"#1A2240",marginBottom:4}}>Click a building type above to start</div>
+            <div style={{fontSize:11}}>Each click adds a new building (A, B, C…) with its own SF and rate</div>
           </div>
         )}
 
@@ -2126,20 +2172,29 @@ function MpBudgetTool({ opp, company, items, setItems, overrides, setOverrides }
             <table style={{width:"100%",borderCollapse:"collapse"}}>
               <thead>
                 <tr style={{background:"#F9FAFC",borderBottom:"2px solid #D4D9EE"}}>
-                  {["Trade","Scope / Notes","Unit","Qty","Unit Rate ($)","Total",""].map((h,i)=>(
-                    <th key={i} style={{padding:"7px 8px",fontSize:9,color:"#9BA3BF",textTransform:"uppercase",letterSpacing:"0.07em",textAlign:i>=3&&i<=5?"right":"left",fontWeight:700}}>{h}</th>
+                  {["Bldg","Trade","Notes","Unit","SF / Qty","$/Unit","Total","$/SF (w/GC)",""].map((h,i)=>(
+                    <th key={i} style={{padding:"6px 8px",fontSize:8,color:"#9BA3BF",textTransform:"uppercase",letterSpacing:"0.07em",textAlign:i>=4&&i<=7?"right":"left",fontWeight:700,whiteSpace:"nowrap"}}>{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {items.map(item=>(
-                  <MpBudgetLine key={item.id} item={item} onUpdate={u=>updateItem(item.id,u)} onRemove={()=>removeItem(item.id)}/>
+                  <MpBudgetLine key={item.id} item={item}
+                    onUpdate={u=>updateItem(item.id,u)}
+                    onRemove={()=>removeItem(item.id)}
+                    totalSF={totalSF}
+                    gcPct={W.gcPct}
+                    contingencyPct={W.contingency}
+                  />
                 ))}
               </tbody>
               <tfoot>
                 <tr style={{background:"#F4F6FB",borderTop:"2px solid #D4D9EE"}}>
-                  <td colSpan={5} style={{padding:"8px 8px",fontSize:12,fontWeight:700,color:"#4A5278"}}>Direct Cost Subtotal</td>
-                  <td style={{padding:"8px 8px",textAlign:"right",fontSize:14,fontWeight:800,color:"#1A2240"}}>{fmtC(direct)}</td>
+                  <td colSpan={6} style={{padding:"7px 8px",fontSize:11,fontWeight:700,color:"#4A5278"}}>Direct Cost Subtotal</td>
+                  <td style={{padding:"7px 8px",textAlign:"right",fontSize:14,fontWeight:800,color:"#1A2240"}}>{fmtC(direct)}</td>
+                  <td style={{padding:"7px 8px",textAlign:"right",fontSize:10,color:"#9BA3BF"}}>
+                    {totalSF>0?<span style={{fontWeight:700,color:"#8B5CF6"}}>${(totalBid/totalSF).toFixed(2)}/SF all-in</span>:""}
+                  </td>
                   <td/>
                 </tr>
               </tfoot>
@@ -2148,20 +2203,21 @@ function MpBudgetTool({ opp, company, items, setItems, overrides, setOverrides }
         )}
       </div>
 
-      {/* Right - summary */}
-      <div style={{background:"#F4F6FB",borderLeft:"1px solid #D4D9EE",overflowY:"auto",padding:"16px 18px",display:"flex",flexDirection:"column",gap:12}}>
-        {/* Assumptions */}
-        <div style={{background:"#fff",borderRadius:10,border:"1px solid #D4D9EE",padding:"14px 16px"}}>
-          <div style={{fontSize:11,fontWeight:700,color:"#4A5278",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:12}}>Cost Assumptions</div>
+      {/* Right - summary panel */}
+      <div style={{background:"#F4F6FB",borderLeft:"1px solid #D4D9EE",overflowY:"auto",padding:"14px 16px",display:"flex",flexDirection:"column",gap:10}}>
+
+        {/* Assumptions - GC & contingency hidden from print, spread into line items */}
+        <div style={{background:"#fff",borderRadius:10,border:"1px solid #D4D9EE",padding:"12px 14px"}}>
+          <div style={{fontSize:10,fontWeight:700,color:"#4A5278",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:10}}>Cost Assumptions</div>
           {[
-            {label:"General Conditions %", key:"gcPct",       hint:"GC costs as % of direct cost"},
-            {label:"Contingency %",        key:"contingency", hint:"Risk / unknown allowance"},
-            {label:"Margin %",             key:"margin",      hint:"Target gross profit margin"},
+            {label:"GC %", key:"gcPct",      hint:"Spread across line items"},
+            {label:"Contingency %", key:"contingency", hint:"Spread across line items"},
+            {label:"Margin %", key:"margin", hint:"Target gross profit"},
           ].map(f=>(
-            <div key={f.key} style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+            <div key={f.key} style={{display:"flex",alignItems:"center",gap:6,marginBottom:7}}>
               <div style={{flex:1}}>
-                <div style={{fontSize:12,fontWeight:600,color:"#1A2240"}}>{f.label}</div>
-                <div style={{fontSize:10,color:"#9BA3BF"}}>{f.hint}</div>
+                <div style={{fontSize:11,fontWeight:600,color:"#1A2240"}}>{f.label}</div>
+                <div style={{fontSize:9,color:"#9BA3BF"}}>{f.hint}</div>
               </div>
               <input type="number" value={W[f.key]} onChange={e=>setW(f.key,parseFloat(e.target.value)||0)} style={pctSty}/>
               <span style={{fontSize:11,color:"#4A5278"}}>%</span>
@@ -2169,65 +2225,83 @@ function MpBudgetTool({ opp, company, items, setItems, overrides, setOverrides }
           ))}
         </div>
 
-        {/* Cost breakdown */}
-        <div style={{background:"#fff",borderRadius:10,border:"1px solid #D4D9EE",padding:"14px 16px"}}>
-          <div style={{fontSize:11,fontWeight:700,color:"#4A5278",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:10}}>Cost Breakdown</div>
-          {[
-            {label:"Direct Costs",                        value:direct,       bold:false, color:"#1A2240"},
-            {label:`  + General Conditions (${W.gcPct}%)`,value:gcAmt,        bold:false, color:"#4A5278",indent:true},
-            {label:`  + Contingency (${W.contingency}%)`, value:contingency,  bold:false, color:"#4A5278",indent:true},
-            {label:"Cost Subtotal",                       value:subtotal,     bold:true,  color:"#1A2240"},
-            {label:`  + Margin (${W.margin}%)`,           value:marginAmt,    bold:false, color:"#4ADE80"},
-          ].map((r,i)=>(
-            <div key={i} style={{display:"flex",justifyContent:"space-between",padding:"4px 0",borderTop:r.bold?"1px solid #E0E4F0":"none",marginTop:r.bold?6:0}}>
-              <span style={{fontSize:11,color:r.color,fontWeight:r.bold?700:400,paddingLeft:r.indent?8:0}}>{r.label}</span>
-              <span style={{fontSize:11,fontWeight:r.bold?800:600,color:r.color}}>{fmtC(r.value)}</span>
-            </div>
-          ))}
-        </div>
-
-        {/* Total bid */}
-        <div style={{background:"linear-gradient(135deg,#1A2240,#253260)",borderRadius:12,padding:"16px 16px",color:"#fff"}}>
-          <div style={{fontSize:9,color:"rgba(255,255,255,0.5)",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:4}}>Total Bid Price</div>
-          <div style={{fontSize:28,fontWeight:900,letterSpacing:"-0.02em",marginBottom:10}}>{fmtC(totalBid)}</div>
-          <div style={{display:"flex",gap:14,paddingTop:10,borderTop:"1px solid rgba(255,255,255,0.15)"}}>
-            <div style={{textAlign:"center"}}>
-              <div style={{fontSize:16,fontWeight:800,color:"#4ADE80"}}>{(gpm*100).toFixed(1)}%</div>
-              <div style={{fontSize:8,color:"rgba(255,255,255,0.4)",textTransform:"uppercase",letterSpacing:"0.06em"}}>GPM</div>
-            </div>
-            <div style={{textAlign:"center"}}>
-              <div style={{fontSize:16,fontWeight:800,color:"#60A5FA"}}>{fmtC(marginAmt)}</div>
-              <div style={{fontSize:8,color:"rgba(255,255,255,0.4)",textTransform:"uppercase",letterSpacing:"0.06em"}}>Gross Profit $</div>
-            </div>
+        {/* SF Sanity Check — auto-pulls from SF lines but overrideable */}
+        <div style={{background:"#fff",borderRadius:10,border:"1px solid #D4D9EE",padding:"12px 14px"}}>
+          <div style={{fontSize:10,fontWeight:700,color:"#4A5278",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:8}}>$/SF Sanity Check</div>
+          <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}>
+            <input type="number" value={sfOverride||autoSF||""} onChange={e=>setSfOverride(e.target.value)}
+              placeholder={autoSF>0?autoSF.toLocaleString()+" SF (auto)":"Total SF"}
+              style={{flex:1,padding:"6px 8px",border:"1px solid #CBD1E8",borderRadius:6,fontSize:12,fontFamily:"inherit",outline:"none"}}/>
+            <span style={{fontSize:10,color:"#9BA3BF",whiteSpace:"nowrap"}}>SF total</span>
           </div>
-        </div>
-
-        {/* $/SF checker */}
-        <div style={{background:"#fff",borderRadius:10,border:"1px solid #D4D9EE",padding:"14px 16px"}}>
-          <div style={{fontSize:11,fontWeight:700,color:"#4A5278",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:8}}>$/SF Sanity Check</div>
-          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
-            <input type="number" value={sfInput} onChange={e=>setSfInput(e.target.value)} placeholder="Project SF"
-              style={{flex:1,padding:"7px 10px",border:"1px solid #CBD1E8",borderRadius:6,fontSize:13,fontFamily:"inherit",outline:"none"}}/>
-            <span style={{fontSize:11,color:"#9BA3BF",whiteSpace:"nowrap"}}>total SF</span>
-          </div>
-          {(parseFloat(sfInput)||0)>0 && (
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6}}>
+          {autoSF>0 && !sfOverride && <div style={{fontSize:9,color:"#9BA3BF",marginBottom:6}}>Auto-detected from SF line items</div>}
+          {totalSF>0 && (
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:5}}>
               {[
-                {label:"Direct $/SF",  value:(direct/parseFloat(sfInput)).toFixed(2)},
-                {label:"Bid $/SF",     value:(totalBid/parseFloat(sfInput)).toFixed(2)},
+                {label:"Direct $/SF",value:(direct/totalSF).toFixed(2),color:"#4A5278"},
+                {label:"Bid $/SF",   value:(totalBid/totalSF).toFixed(2),color:"#8B5CF6"},
               ].map(r=>(
                 <div key={r.label} style={{background:"#F4F6FB",borderRadius:6,padding:"6px 8px",textAlign:"center"}}>
-                  <div style={{fontSize:11,fontWeight:700,color:"#1A2240"}}>${r.value}</div>
+                  <div style={{fontSize:13,fontWeight:800,color:r.color}}>${r.value}</div>
                   <div style={{fontSize:9,color:"#9BA3BF"}}>{r.label}</div>
                 </div>
               ))}
             </div>
           )}
         </div>
+
+        {/* Cost breakdown */}
+        <div style={{background:"#fff",borderRadius:10,border:"1px solid #D4D9EE",padding:"12px 14px"}}>
+          <div style={{fontSize:10,fontWeight:700,color:"#4A5278",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:8}}>Cost Breakdown</div>
+          {[
+            {label:"Direct Costs",                       value:direct,      color:"#1A2240",bold:false},
+            {label:`+ GC (${W.gcPct}%)`,                 value:gcAmt,       color:"#9BA3BF",indent:true},
+            {label:`+ Contingency (${W.contingency}%)`,  value:contingency, color:"#9BA3BF",indent:true},
+            {label:"Cost Subtotal",                      value:subtotal,    color:"#1A2240",bold:true},
+            {label:`+ Margin (${W.margin}%)`,            value:marginAmt,   color:"#4ADE80"},
+          ].map((r,i)=>(
+            <div key={i} style={{display:"flex",justifyContent:"space-between",padding:"3px 0",borderTop:r.bold?"1px solid #E0E4F0":"none",marginTop:r.bold?4:0}}>
+              <span style={{fontSize:10,color:r.color,fontWeight:r.bold?700:400,paddingLeft:r.indent?10:0}}>{r.label}</span>
+              <span style={{fontSize:10,fontWeight:r.bold?800:600,color:r.color}}>{fmtC(r.value)}</span>
+            </div>
+          ))}
+        </div>
+
+        {/* Total bid */}
+        <div style={{background:"linear-gradient(135deg,#1A2240,#253260)",borderRadius:12,padding:"14px",color:"#fff"}}>
+          <div style={{fontSize:8,color:"rgba(255,255,255,0.5)",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:4}}>Total Bid Price</div>
+          <div style={{fontSize:26,fontWeight:900,letterSpacing:"-0.02em",marginBottom:8}}>{fmtC(totalBid)}</div>
+          <div style={{display:"flex",gap:12,paddingTop:8,borderTop:"1px solid rgba(255,255,255,0.15)"}}>
+            <div><div style={{fontSize:15,fontWeight:800,color:"#4ADE80"}}>{(gpm*100).toFixed(1)}%</div><div style={{fontSize:7,color:"rgba(255,255,255,0.4)",textTransform:"uppercase"}}>GPM</div></div>
+            <div><div style={{fontSize:15,fontWeight:800,color:"#60A5FA"}}>{fmtC(marginAmt)}</div><div style={{fontSize:7,color:"rgba(255,255,255,0.4)",textTransform:"uppercase"}}>Gross Profit</div></div>
+          </div>
+        </div>
+
+        {/* Per-building summary */}
+        {buildings.filter(b=>b).length>0 && (
+          <div style={{background:"#fff",borderRadius:10,border:"1px solid #D4D9EE",padding:"12px 14px"}}>
+            <div style={{fontSize:10,fontWeight:700,color:"#4A5278",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:8}}>By Building</div>
+            {buildings.filter(b=>b).map(bldg=>{
+              const bItems=items.filter(i=>(i.building||"")===(bldg||""));
+              const bTotal=bItems.reduce((s,i)=>s+(i.qty||0)*(i.rate||0),0);
+              const bSF=bItems.filter(i=>i.unit==="SF").reduce((s,i)=>s+(i.qty||0),0);
+              return (
+                <div key={bldg} style={{display:"flex",justifyContent:"space-between",padding:"4px 0",borderBottom:"1px solid #F4F6FB"}}>
+                  <span style={{fontSize:11,fontWeight:700,color:"#8B5CF6"}}>{bldg}</span>
+                  <div style={{textAlign:"right"}}>
+                    <div style={{fontSize:11,fontWeight:700,color:"#1A2240"}}>{fmtC(bTotal)}</div>
+                    {bSF>0&&<div style={{fontSize:9,color:"#9BA3BF"}}>{bSF.toLocaleString()} SF · ${(bTotal/bSF).toFixed(2)}/SF direct</div>}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
     </div>
   );
 }
+
 
 // ── Vendor Row for bid tracker ───────────────────────────────────────────────
 function VendorRow({ v, BID_TRADES, onUpdate, onRemove }) {
@@ -6164,12 +6238,50 @@ Return ONLY valid JSON, no markdown, no extra text:
                               onMouseLeave={e=>e.currentTarget.style.boxShadow="0 1px 4px rgba(0,0,0,0.04)"}>
                               <div style={{height:3,background:stageObj.color}}/>
                               <div style={{padding:"12px 14px"}}>
-                                <div style={{fontSize:13,fontWeight:700,color:"#1A2240",marginBottom:4,lineHeight:1.3}}>{o.name}</div>
-                                {co && <div style={{fontSize:11,color:"#3B6FE8",marginBottom:6,fontWeight:500}}>{co.name}</div>}
-                                {o.contactName && <div style={{fontSize:11,color:"#4A5278",marginBottom:4}}>👤 {o.contactName}</div>}
-                                {(parseFloat(o.value)||0)>0 && <div style={{fontSize:14,fontWeight:800,color:"#1A2240",marginBottom:6}}>{fmt(parseFloat(o.value))}</div>}
-                                {o.notes && <div style={{fontSize:11,color:"#4A5278",marginBottom:8,lineHeight:1.5,borderLeft:"2px solid #E0E4F0",paddingLeft:8}}>{o.notes}</div>}
-                                {o.closeDate && <div style={{fontSize:10,color:"#9BA3BF",marginBottom:8}}>📅 Close: {o.closeDate}</div>}
+                                {/* Win score */}
+                                {(() => {
+                                  let score = 0;
+                                  const reasons = [];
+                                  // Relationship (existing customer = +25)
+                                  if (co) { score+=25; reasons.push("Known client"); }
+                                  // Project size (+10 for >$500k, +20 for >$1M)
+                                  const val = parseFloat(o.value)||0;
+                                  if (val>1000000) { score+=20; reasons.push(">$1M"); }
+                                  else if (val>500000) { score+=10; reasons.push(">$500k"); }
+                                  // Has contact person (+15)
+                                  if (o.contactName) { score+=15; reasons.push("Contact known"); }
+                                  // Stage maturity (+10 per stage beyond lead)
+                                  const stageBonus = {lead:0,budgeting_lead:5,proposal_bid:15,negotiation:25}[getStage(o)]||0;
+                                  score+=stageBonus;
+                                  if (stageBonus>0) reasons.push("Advanced stage");
+                                  // Has close date (+10)
+                                  if (o.closeDate) { score+=10; reasons.push("Close date set"); }
+                                  // Has SF data (+5)
+                                  const totalSF = [(o.sf_multistory||0),(o.sf_singlestory||0),(o.sf_canopy||0),(o.sf_mezzanine||0)].map(Number).reduce((a,b)=>a+b,0);
+                                  if (totalSF>0) { score+=5; reasons.push("SF defined"); }
+                                  const pct = Math.min(score, 100);
+                                  const col = pct>=70?"#4ADE80":pct>=40?"#FCD34D":"#F87171";
+                                  return (
+                                    <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}>
+                                      <div style={{flex:1,height:5,background:"#F0F2F8",borderRadius:3,overflow:"hidden"}}>
+                                        <div style={{height:"100%",width:pct+"%",background:col,borderRadius:3,transition:"width 0.4s"}}/>
+                                      </div>
+                                      <div style={{fontSize:10,fontWeight:800,color:col,minWidth:32,textAlign:"right"}}>{pct}%</div>
+                                    </div>
+                                  );
+                                })()}
+                                <div style={{fontSize:13,fontWeight:700,color:"#1A2240",marginBottom:3,lineHeight:1.3}}>{o.name}</div>
+                                {co && <div style={{fontSize:11,color:"#3B6FE8",marginBottom:4,fontWeight:500}}>{co.name}</div>}
+                                {/* Location */}
+                                {(o.city||o.state) && <div style={{fontSize:10,color:"#9BA3BF",marginBottom:3}}>📍 {[o.city,o.state].filter(Boolean).join(", ")}</div>}
+                                {/* SF total */}
+                                {(() => {
+                                  const totalSF = [(o.sf_multistory||0),(o.sf_singlestory||0),(o.sf_canopy||0),(o.sf_mezzanine||0)].map(Number).reduce((a,b)=>a+b,0);
+                                  return totalSF>0 ? <div style={{fontSize:10,color:"#9BA3BF",marginBottom:3}}>📐 {totalSF.toLocaleString()} SF</div> : null;
+                                })()}
+                                {o.contactName && <div style={{fontSize:10,color:"#4A5278",marginBottom:4}}>👤 {o.contactName}</div>}
+                                {(parseFloat(o.value)||0)>0 && <div style={{fontSize:14,fontWeight:800,color:"#1A2240",marginBottom:4}}>{fmt(parseFloat(o.value))}</div>}
+                                {o.closeDate && <div style={{fontSize:10,color:"#9BA3BF",marginBottom:6}}>📅 Close: {o.closeDate}</div>}
                                 {/* Stage move + actions */}
                                 <div style={{display:"flex",gap:5,flexWrap:"wrap",paddingTop:8,borderTop:"1px solid #F0F2F8"}} onClick={e=>e.stopPropagation()}>
                                   {ACTIVE_STAGES.filter(s=>s.id!==getStage(o)).map(s=>(
@@ -12774,52 +12886,70 @@ window.addEventListener('message',function(e){
                 </div>
 
                 {/* Project info */}
-                <div style={{marginBottom:28}}>
-                  <div style={{fontSize:20,fontWeight:800,color:"#1A2240",marginBottom:4}}>{opp.name}</div>
-                  {co && <div style={{fontSize:13,color:"#4A5278",marginBottom:2}}>{co.name}</div>}
-                  {opp.notes && <div style={{fontSize:12,color:"#9BA3BF",marginTop:4,fontStyle:"italic"}}>{opp.notes}</div>}
+                <div style={{marginBottom:28,display:"grid",gridTemplateColumns:"1fr 1fr",gap:20}}>
+                  <div>
+                    <div style={{fontSize:9,color:"#9BA3BF",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:4}}>Project</div>
+                    <div style={{fontSize:20,fontWeight:800,color:"#1A2240",marginBottom:4}}>{opp.name}</div>
+                    {(opp.city||opp.state)&&<div style={{fontSize:12,color:"#4A5278",marginBottom:2}}>📍 {[opp.city,opp.state].filter(Boolean).join(", ")}</div>}
+                    {opp.notes&&<div style={{fontSize:11,color:"#9BA3BF",marginTop:4,fontStyle:"italic"}}>{opp.notes}</div>}
+                  </div>
+                  <div>
+                    <div style={{fontSize:9,color:"#9BA3BF",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:4}}>Owner / Client</div>
+                    {co&&<div style={{fontSize:14,fontWeight:700,color:"#1A2240",marginBottom:4}}>{co.name}</div>}
+                    {(() => {
+                      const contact = contacts.find(c=>c.id===opp.contactId)||crmContacts.find(c=>c.id===opp.contactId);
+                      return contact?(<>
+                        <div style={{fontSize:12,color:"#4A5278"}}>{contact.firstName} {contact.lastName}{contact.title?" — "+contact.title:""}</div>
+                        {contact.email&&<div style={{fontSize:11,color:"#9BA3BF"}}>{contact.email}</div>}
+                        {contact.phone&&<div style={{fontSize:11,color:"#9BA3BF"}}>{contact.phone}</div>}
+                      </>):null;
+                    })()}
+                    {(() => {
+                      const sfTotal = budgetItems.filter(i=>i.unit==="SF").reduce((s,i)=>s+(i.qty||0),0);
+                      return sfTotal>0?<div style={{fontSize:11,color:"#9BA3BF",marginTop:6}}>Total SF: {sfTotal.toLocaleString()}</div>:null;
+                    })()}
+                  </div>
                 </div>
 
                 {/* Line items table */}
                 <table style={{width:"100%",borderCollapse:"collapse",marginBottom:24}}>
                   <thead>
                     <tr style={{background:"#1A2240"}}>
-                      {["Trade / Scope","Description","Unit","Qty","Unit Rate","Total"].map((h,i)=>(
-                        <th key={i} style={{padding:"8px 10px",fontSize:10,color:"#fff",textAlign:i>=3?"right":"left",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.06em"}}>{h}</th>
+                      {["Bldg","Trade / Scope","Description","Unit","Qty","Unit Rate","Total"].map((h,i)=>(
+                        <th key={i} style={{padding:"8px 10px",fontSize:10,color:"#fff",textAlign:i>=4?"right":"left",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.06em"}}>{h}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
                     {budgetItems.map((item,i)=>{
-                      const total=(item.qty||0)*(item.rate||0);
+                      // Spread GC + contingency invisibly into each line item
+                      const gcMult   = 1 + W.gcPct/100;
+                      const conMult  = 1 + W.contingency/100;
+                      const grossed  = (item.rate||0) * gcMult * conMult;
+                      const lineTotal= (item.qty||0) * grossed;
                       return (
                         <tr key={item.id} style={{borderBottom:"1px solid #E8EBF4",background:i%2===0?"#fff":"#F9FAFC"}}>
+                          {item.building&&<td style={{padding:"7px 10px",fontSize:10,fontWeight:700,color:"#8B5CF6",whiteSpace:"nowrap"}}>{item.building}</td>}
+                          {!item.building&&<td style={{padding:"7px 10px",fontSize:10,color:"#CBD1E8"}}>—</td>}
                           <td style={{padding:"7px 10px",fontSize:11,fontWeight:600,color:"#1A2240"}}>{item.label}</td>
                           <td style={{padding:"7px 10px",fontSize:11,color:"#4A5278"}}>{item.desc||"—"}</td>
                           <td style={{padding:"7px 10px",fontSize:11,color:"#9BA3BF",textAlign:"center"}}>{item.unit}</td>
                           <td style={{padding:"7px 10px",fontSize:11,textAlign:"right",color:"#1A2240"}}>{(item.qty||0).toLocaleString()}</td>
-                          <td style={{padding:"7px 10px",fontSize:11,textAlign:"right",color:"#1A2240"}}>{item.rate?fmtC(item.rate):"—"}</td>
-                          <td style={{padding:"7px 10px",fontSize:12,textAlign:"right",fontWeight:700,color:total>0?"#1A2240":"#CBD1E8"}}>{total>0?fmtC(total):"—"}</td>
+                          <td style={{padding:"7px 10px",fontSize:11,textAlign:"right",color:"#1A2240"}}>{grossed?fmtC(grossed):"—"}</td>
+                          <td style={{padding:"7px 10px",fontSize:12,textAlign:"right",fontWeight:700,color:lineTotal>0?"#1A2240":"#CBD1E8"}}>{lineTotal>0?fmtC(lineTotal):"—"}</td>
                         </tr>
                       );
                     })}
                   </tbody>
                 </table>
 
-                {/* Cost summary */}
+                {/* Cost summary - GC/contingency already spread into line items above */}
                 <div style={{display:"flex",justifyContent:"flex-end",marginBottom:28}}>
                   <div style={{width:320}}>
-                    {[
-                      {label:"Direct Costs",              value:direct,     light:false},
-                      {label:`General Conditions (${W.gcPct}%)`, value:gcAmt,      light:true},
-                      {label:`Contingency (${W.contingency}%)`,  value:contingency,light:true},
-                      {label:"Cost Subtotal",              value:subtotal,   bold:true},
-                    ].map((r,i)=>(
-                      <div key={i} style={{display:"flex",justifyContent:"space-between",padding:"5px 0",borderTop:r.bold?"2px solid #1A2240":"none",marginTop:r.bold?4:0}}>
-                        <span style={{fontSize:11,color:r.light?"#9BA3BF":"#1A2240",fontWeight:r.bold?700:400,paddingLeft:r.light?12:0}}>{r.label}</span>
-                        <span style={{fontSize:11,fontWeight:r.bold?800:500,color:"#1A2240"}}>{fmtC(r.value)}</span>
-                      </div>
-                    ))}
+                    <div style={{display:"flex",justifyContent:"space-between",padding:"5px 0",borderBottom:"1px solid #E0E4F0"}}>
+                      <span style={{fontSize:11,color:"#1A2240"}}>Line Item Total (incl. GC &amp; Contingency)</span>
+                      <span style={{fontSize:11,fontWeight:700,color:"#1A2240"}}>{fmtC(subtotal)}</span>
+                    </div>
                     {/* Total bid highlight */}
                     <div style={{marginTop:8,background:"#1A2240",borderRadius:6,padding:"12px 14px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                       <div>
