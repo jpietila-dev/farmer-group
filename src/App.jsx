@@ -3296,15 +3296,31 @@ export default function App() {
         if (Array.isArray(mpPipeRes.data) && mpPipeRes.data.length) {
           const pipeLoaded = mpPipeRes.data.map(r => ({
             id: r.id, name: r.name||"", companyId: r.company_id||"", contactName: r.contact_name||"",
-            value: r.value||0, stage: r.stage||"budgeting_lead", notes: r.notes||"",
+            value: r.value||0, stage: r.stage||"budgeting_lead",
+            // notes may be plain text OR JSON (oppDetails stored as JSON)
+            notes: (() => { try { const p=JSON.parse(r.notes||""); return typeof p==="object"?"":r.notes||""; } catch(e){ return r.notes||""; } })(),
             bu: "major", closeDate: r.close_date||"", nextSteps: [],
             pipelineType: "budgeting", budgetDueDate: "", bidDueDate: "", dbId: r.id,
-            city: r.city||"", state: r.state||""
+            city: r.city||"", state: r.state||"", address: r.address||""
           }));
           setPipeline(prev => {
             const existing = prev.filter(p => p.bu !== "major");
             return [...existing, ...pipeLoaded];
           });
+          // Parse oppDetails from notes JSON where present
+          const detailsFromDB = {};
+          mpPipeRes.data.forEach(r => {
+            if (!r.notes) return;
+            try {
+              const parsed = JSON.parse(r.notes);
+              if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+                detailsFromDB[r.id] = parsed;
+              }
+            } catch(e) {}
+          });
+          if (Object.keys(detailsFromDB).length > 0) {
+            setOppDetails(prev => ({...detailsFromDB, ...prev})); // existing in-memory takes precedence
+          }
         }
         let loadedMpJobs = [];
         if (Array.isArray(mpRes.data) && mpRes.data.length) {
@@ -3817,12 +3833,14 @@ Return ONLY valid JSON, no markdown, no extra text:
   const saveOppDetail = (oppId, fields) => {
     setOppDetails(prev => {
       const updated = {...prev, [oppId]: {...(prev[oppId]||{}), ...fields}};
-      // Persist to Supabase notes field as JSON
+      // Persist to Supabase — store oppDetails as JSON in notes column
       try {
         const row = pipeline.find(o=>o.id===oppId);
-        if (row?.dbId || String(oppId).length > 8) {
-          const id = row?.dbId || String(oppId);
-          supa.from("mp_pipeline").update({notes: JSON.stringify(updated[oppId])}).eq("id", id);
+        const dbId = row?.dbId || (String(oppId).length > 8 ? String(oppId) : null);
+        if (dbId) {
+          // Store ALL oppDetails for this opp as JSON
+          const detJson = JSON.stringify(updated[oppId]);
+          supa.from("mp_pipeline").update({notes: detJson}).eq("id", dbId);
         }
       } catch(e) {}
       return updated;
@@ -10351,9 +10369,14 @@ window.addEventListener('message',function(e){
                           const total = Math.round(sub+mAmt);
                           return (
                             <button onClick={async ()=>{
-                              // Update local pipeline state
+                              // Save budget items to oppDetails so they appear in quick panel
+                              saveOppDetail(activeOpp.id, {
+                                budgetItems: budgetItems,
+                                budgetOverrides: budgetOverrides,
+                              });
+                              // Update local pipeline state value
                               setPipeline(prev=>prev.map(o=>o.id===activeOpp.id?{...o,value:total}:o));
-                              // Persist to Supabase
+                              // Persist value to Supabase
                               try {
                                 await fetch(`${SUPA_URL}/rest/v1/mp_pipeline?id=eq.${String(activeOpp.id)}`,{
                                   method:"PATCH",
@@ -10361,8 +10384,7 @@ window.addEventListener('message',function(e){
                                   body:JSON.stringify({value:total})
                                 });
                               } catch(e){}
-                              // Flash feedback
-                              alert("Budget saved! Estimated value updated to $"+total.toLocaleString());
+                              alert("Budget saved! Est. value updated to $"+total.toLocaleString());
                             }}
                               style={{padding:"6px 14px",background:"#3B6FE8",border:"none",borderRadius:6,color:"#fff",fontWeight:700,fontSize:11,cursor:"pointer",fontFamily:"inherit",display:"flex",alignItems:"center",gap:5}}>
                               💾 Save Budget · ${(total/1000).toFixed(0)}k
@@ -13323,16 +13345,25 @@ window.addEventListener('message',function(e){
                         {lbl("Ownership Status")}
                         <select style={fi} value={det.ownershipStatus||""} onChange={e=>setDet({ownershipStatus:e.target.value})}>
                           <option value="">Select…</option>
-                          <option>Owned — Free & Clear</option>
-                          <option>Owned — Mortgage</option>
+                          <option>Owned</option>
                           <option>Under Contract</option>
-                          <option>Leased</option>
-                          <option>Site Control</option>
-                          <option>Unknown</option>
+                          <option>LOI</option>
+                          <option>Identified</option>
                         </select>
                       </div>
-                      <div>{lbl("Owner Phone")}<input style={fi} value={det.ownerPhone||""} onChange={e=>setDet({ownerPhone:e.target.value})} placeholder="(555) 000-0000"/></div>
-                      <div style={{gridColumn:"span 2"}}>{lbl("Owner Email")}<input style={fi} value={det.ownerEmail||""} onChange={e=>setDet({ownerEmail:e.target.value})} placeholder="owner@example.com"/></div>
+                      {/* Contact info pulled from the customer on the opp */}
+                      <div>
+                        {lbl("Contact Phone")}
+                        {ct?.phone
+                          ? <a href={"tel:"+ct.phone} style={{fontSize:12,color:"#3B6FE8",textDecoration:"none",display:"block",paddingTop:2}}>{ct.phone}</a>
+                          : <div style={{fontSize:11,color:"#9BA3BF",fontStyle:"italic"}}>Set on customer record</div>}
+                      </div>
+                      <div style={{gridColumn:"span 2"}}>
+                        {lbl("Contact Email")}
+                        {ct?.email
+                          ? <a href={"mailto:"+ct.email} style={{fontSize:12,color:"#3B6FE8",textDecoration:"none",display:"block",paddingTop:2}}>{ct.email}</a>
+                          : <div style={{fontSize:11,color:"#9BA3BF",fontStyle:"italic"}}>Set on customer record</div>}
+                      </div>
                       <div style={{gridColumn:"span 2"}}>{lbl("Property Notes")}<textarea style={{...fi,resize:"vertical"}} rows={2} value={det.propertyNotes||""} onChange={e=>setDet({propertyNotes:e.target.value})} placeholder="Zoning, site conditions, access…"/></div>
                     </div>
                   </div>
