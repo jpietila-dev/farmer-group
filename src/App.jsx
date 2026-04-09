@@ -2851,7 +2851,7 @@ export default function App() {
   const [capexJobs,        setCapexJobs]        = useState(INIT_CAPEX_JOBS);
   const [showCapexForm,    setShowCapexForm]    = useState(false);
   const [editCapexId,      setEditCapexId]      = useState(null);
-  const [capexForm,        setCapexForm]        = useState({ name: "", companyId: "", siteId: "", approverContactId: "", contractValue: "", stage: "estimating", startDate: "", endDate: "", pm: "", pct: 0, bidDueDate: "", followUpDate: "", buyoutDate: "", invoiceDate: "", notes: "", amountBilled: 0, noahApproved: false, bradApproved: false, wonDate: "", lostDate: "", photos: [], subCost: "", ownerCost: "", proposalNumber: "" });
+  const [capexForm,        setCapexForm]        = useState({ name: "", companyId: "", siteId: "", approverContactId: "", contractValue: "", stage: "estimating", startDate: "", endDate: "", pm: "", pct: 0, bidDueDate: "", followUpDate: "", buyoutDate: "", invoiceDate: "", notes: "", amountBilled: 0, noahApproved: false, bradApproved: false, wonDate: "", lostDate: "", photos: [], subCost: "", ownerCost: "", proposalNumber: "", bradReviewed: false, assignedTo: "" });
   const [capexDetailTab,   setCapexDetailTab]   = useState("overview");
   const [selectedCapexFull,setSelectedCapexFull]= useState(null); // full-page detail view
   const [showCapexBuyoutGate, setShowCapexBuyoutGate] = useState(false);
@@ -3433,6 +3433,8 @@ export default function App() {
           sub_cost: updated.subCost||null,
           owner_cost: updated.ownerCost||null,
           proposal_number: updated.proposalNumber||null,
+          brad_reviewed: updated.bradReviewed||false,
+          assigned_to: updated.assignedTo||null,
         };
         supa.from("capex_jobs").update(dbRow).eq("id", id);
       } catch(e) {}
@@ -5008,25 +5010,58 @@ Return ONLY valid JSON, no markdown, no extra text:
 
                 // ── Hand-off alerts ──
                 const handoffs = [];
-                // Trigger 1: estimating → owner_approval means Noah should present
+                const nowMs = Date.now();
+                const DAY   = 86400000;
+
+                // Rule: Estimating must be reviewed by Brad or qualified team member
+                capexJobs.filter(j => j.stage === "estimating" && !j.bradReviewed).forEach(j => {
+                  handoffs.push({ type:"review", job:j, msg:"Brad: Estimate needs review before sending to owner", color:"#818CF8", owner:"Brad" });
+                });
+                // Rule: Owner approval — set follow-up date (Noah responsible)
                 capexJobs.filter(j => j.stage === "owner_approval" && !j.followUpDate).forEach(j => {
-                  handoffs.push({ type:"follow_up", job:j, msg:"Set follow-up date for owner approval", color:"#60A5FA" });
+                  handoffs.push({ type:"follow_up", job:j, msg:"Noah: Set follow-up date with owner", color:"#60A5FA", owner:"Noah" });
                 });
-                // Trigger 2: won (do_work) — Brad needs buyout date
-                capexJobs.filter(j => j.stage === "buyout" && !j.buyoutDate).forEach(j => {
-                  handoffs.push({ type:"buyout", job:j, msg:"Brad: Set buyout date to begin work", color:"#FCD34D" });
+                // Rule: Won jobs — Noah+Brad handoff approval pending
+                capexJobs.filter(j => j.stage === "won" && !(j.noahApproved && j.bradApproved)).forEach(j => {
+                  const missing = [!j.noahApproved&&"Noah", !j.bradApproved&&"Brad"].filter(Boolean).join(" + ");
+                  handoffs.push({ type:"won_approval", job:j, msg:`${missing}: Approve handoff to move to Buyout`, color:"#4ADE80", owner:missing });
                 });
-                // Trigger 3: bill stage — invoice needs to go out
+                // Rule: Brad must complete buyout within 3 days of award
+                capexJobs.filter(j => j.stage === "buyout").forEach(j => {
+                  if (!j.startDate || !j.endDate || !j.pm) {
+                    handoffs.push({ type:"buyout_setup", job:j, msg:"Brad: Set schedule dates & PM — Buyout due within 3 days of award", color:"#FCD34D", owner:"Brad" });
+                  } else if (j.buyoutDate) {
+                    const daysSince = (nowMs - new Date(j.buyoutDate).getTime()) / DAY;
+                    if (daysSince > 3) handoffs.push({ type:"buyout_overdue", job:j, msg:`Brad: Buyout open ${Math.round(daysSince)} days — target is 3 days`, color:"#F87171", owner:"Brad" });
+                  }
+                });
+                // Rule: Do Work — Brad responsible for schedule and communication
+                capexJobs.filter(j => j.stage === "do_work").forEach(j => {
+                  if (!j.startDate || !j.endDate) handoffs.push({ type:"no_schedule", job:j, msg:"Brad: Establish project schedule (Prepared — stay ahead)", color:"#4ADE80", owner:"Brad" });
+                  if (j.endDate && new Date(j.endDate).getTime() < nowMs) handoffs.push({ type:"overdue", job:j, msg:"Brad: Past target end date — "+j.endDate+" (Accountable)", color:"#F87171", owner:"Brad" });
+                });
+                // Rule: Bill stage — Brad revenue oversight
                 pendingBilling.forEach(j => {
-                  handoffs.push({ type:"invoice", job:j, msg:"Brad: Invoice not yet issued", color:"#F97316" });
-                });
-                // Jobs behind schedule
-                behindSchedule.forEach(j => {
-                  handoffs.push({ type:"overdue", job:j, msg:"Past target end date — "+j.endDate, color:"#F87171" });
+                  handoffs.push({ type:"invoice", job:j, msg:"Brad: Invoice not issued — Revenue oversight required", color:"#F97316", owner:"Brad" });
                 });
 
                 return (
                   <div style={{display:"flex",flexDirection:"column",gap:20}}>
+
+                    {/* Core Values Banner */}
+                    <div style={{background:"linear-gradient(135deg,#1A2240,#253260)",borderRadius:12,padding:"14px 20px",display:"flex",alignItems:"center",gap:20}}>
+                      <div style={{fontSize:10,color:"rgba(255,255,255,0.5)",textTransform:"uppercase",letterSpacing:"0.1em",flexShrink:0}}>Core Values</div>
+                      {[["🔥","Driven","Never say die"],["💎","Authentic","Be the real deal"],["📋","Prepared","Stay ahead"],["✅","Accountable","Own every call"]].map(([icon,val,desc])=>(
+                        <div key={val} style={{display:"flex",alignItems:"center",gap:7,flex:1}}>
+                          <span style={{fontSize:16}}>{icon}</span>
+                          <div>
+                            <div style={{fontSize:11,fontWeight:700,color:"#fff"}}>{val}</div>
+                            <div style={{fontSize:9,color:"rgba(255,255,255,0.5)"}}>{desc}</div>
+                          </div>
+                        </div>
+                      ))}
+                      <div style={{fontSize:9,color:"rgba(255,255,255,0.35)",flexShrink:0,textAlign:"right",lineHeight:1.5}}>Building Value<br/>through Relationships</div>
+                    </div>
 
                     {/* ── Team header ── */}
                     <div style={{background:"#fff",borderRadius:12,border:"1px solid #D4D9EE",padding:"18px 20px"}}>
@@ -5138,7 +5173,10 @@ Return ONLY valid JSON, no markdown, no extra text:
                                   <div style={{fontSize:10,fontWeight:700,color:h.color,flexShrink:0,marginLeft:8}}>{fmt(h.job.contractValue)}</div>
                                 </div>
                                 {co&&<div style={{fontSize:10,color:"#9BA3BF",marginTop:1}}>{co.name}</div>}
-                                <div style={{fontSize:10,color:h.color,marginTop:4,fontWeight:600}}>⚠ {h.msg}</div>
+                                <div style={{display:"flex",alignItems:"center",gap:6,marginTop:4}}>
+                                  <div style={{fontSize:10,color:h.color,fontWeight:600,flex:1}}>⚠ {h.msg}</div>
+                                  {h.owner&&<span style={{fontSize:8,background:h.color+"20",color:h.color,border:"1px solid "+h.color+"40",borderRadius:3,padding:"1px 6px",fontWeight:700,flexShrink:0}}>{h.owner}</span>}
+                                </div>
                               </div>
                             );
                           })}
@@ -8110,6 +8148,33 @@ window.addEventListener('message',function(e){
                                   placeholder="Scope notes, site observations, special conditions, owner requirements…"
                                   style={{width:"100%",padding:"10px 12px",border:"1.5px solid #D4D9EE",borderRadius:8,fontSize:12,fontFamily:"inherit",outline:"none",resize:"vertical",boxSizing:"border-box",lineHeight:1.6}}
                                 />
+                              </div>
+
+                              {/* Brad Review + Task Assignment */}
+                              <div style={{background:job.bradReviewed?"#F0FDF4":"#FFF8E7",border:"1px solid "+(job.bradReviewed?"#BBF7D0":"#FDE68A"),borderRadius:10,padding:"12px 14px"}}>
+                                <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:job.bradReviewed?0:10}}>
+                                  <div onClick={()=>updateCapex({bradReviewed:!job.bradReviewed})}
+                                    style={{width:22,height:22,borderRadius:6,background:job.bradReviewed?"#4ADE80":"#fff",border:"2px solid "+(job.bradReviewed?"#4ADE80":"#FCD34D"),display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0}}>
+                                    {job.bradReviewed&&<span style={{fontSize:13,color:"#fff",fontWeight:700}}>✓</span>}
+                                  </div>
+                                  <div style={{flex:1}}>
+                                    <div style={{fontSize:12,fontWeight:700,color:"#1A2240"}}>Brad Review</div>
+                                    <div style={{fontSize:10,color:"#9BA3BF"}}>All CI estimates must be reviewed by Brad or a qualified team member before sending to owner</div>
+                                  </div>
+                                  {!job.bradReviewed&&<span style={{fontSize:9,background:"#FCD34D20",color:"#92400E",border:"1px solid #FCD34D60",borderRadius:4,padding:"2px 8px",fontWeight:700,flexShrink:0}}>REQUIRED</span>}
+                                </div>
+                                {!job.bradReviewed&&(
+                                  <div style={{marginTop:8,fontSize:10,color:"#92400E",background:"#FEF9C3",borderRadius:5,padding:"6px 10px",lineHeight:1.5}}>
+                                    📋 <strong>Prepared:</strong> Stay ahead — get Brad's sign-off before owner presentation
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* Task Assignment (Noah can assign to multiple people) */}
+                              <div>
+                                <div style={{fontSize:11,fontWeight:700,color:"#1A2240",marginBottom:5}}>👥 Assigned To <span style={{fontSize:9,color:"#9BA3BF",fontWeight:400}}>(Noah can assign to multiple team members)</span></div>
+                                <input type="text" value={job.assignedTo||""} onChange={e=>updateCapex({assignedTo:e.target.value})}
+                                  placeholder="e.g. Noah, Adam, Brad" style={{width:"100%",padding:"8px 10px",border:"1.5px solid #D4D9EE",borderRadius:7,fontSize:12,fontFamily:"inherit",outline:"none",boxSizing:"border-box"}}/>
                               </div>
 
                               {/* Photo upload */}
@@ -13609,7 +13674,17 @@ window.addEventListener('message',function(e){
                 {co&&<div style={{fontSize:12,color:"rgba(255,255,255,0.7)",marginTop:2}}>{co.name}</div>}
                 <div style={{fontSize:14,fontWeight:700,marginTop:4}}>{fmt(job.contractValue)}</div>
               </div>
-              <div style={{padding:"20px 24px",display:"flex",flexDirection:"column",gap:16}}>
+              <div style={{padding:"20px 24px",display:"flex",flexDirection:"column",gap:14}}>
+                {/* Review requirement warning */}
+                {!job.bradReviewed && (
+                  <div style={{background:"#FFF8E7",border:"1px solid #FDE68A",borderRadius:8,padding:"10px 12px",display:"flex",gap:10,alignItems:"flex-start"}}>
+                    <span style={{fontSize:16,flexShrink:0}}>⚠️</span>
+                    <div>
+                      <div style={{fontSize:11,fontWeight:700,color:"#92400E"}}>Estimate not yet reviewed by Brad</div>
+                      <div style={{fontSize:10,color:"#92400E",marginTop:2}}>All CI estimates must be reviewed by Brad or a qualified team member before award. Mark the Brad Review checkbox in the Estimating tab first.</div>
+                    </div>
+                  </div>
+                )}
                 <div style={{fontSize:12,color:"#4A5278"}}>Both Noah and Brad must approve before this project moves to Buyout.</div>
                 {/* Approval cards */}
                 <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
@@ -13633,6 +13708,18 @@ window.addEventListener('message',function(e){
                     ✅ Both approved — ready to move to Buyout!
                   </div>
                 )}
+                {/* Core values reminder */}
+                <div style={{background:"#F9FAFC",border:"1px solid #E8EBF4",borderRadius:8,padding:"10px 12px"}}>
+                  <div style={{fontSize:9,fontWeight:700,color:"#9BA3BF",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:6}}>Core Values — Building Value through Relationships</div>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:4}}>
+                    {[["🔥","Driven","Never say die — always move forward"],["💎","Authentic","Be the real deal, true to our spirit"],["📋","Prepared","Stay ahead, ready for every transition"],["✅","Accountable","Own every call and responsibility"]].map(([icon,val,desc])=>(
+                      <div key={val} style={{display:"flex",gap:6,alignItems:"flex-start"}}>
+                        <span style={{fontSize:12,flexShrink:0}}>{icon}</span>
+                        <div><div style={{fontSize:10,fontWeight:700,color:"#1A2240"}}>{val}</div><div style={{fontSize:9,color:"#9BA3BF",lineHeight:1.3}}>{desc}</div></div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
                 <div style={{display:"flex",gap:8}}>
                   <button onClick={()=>setCapexWonHandoff(null)} style={{flex:1,padding:"9px",background:"#F0F2F8",border:"1px solid #CBD1E8",borderRadius:7,cursor:"pointer",fontFamily:"inherit",fontSize:13,color:"#4A5278"}}>Cancel</button>
                   {job.stage!=="won" && <button onClick={moveToWon} style={{flex:1,padding:"9px",background:"#4ADE80",border:"none",borderRadius:7,cursor:"pointer",fontFamily:"inherit",fontSize:13,color:"#fff",fontWeight:700}}>Mark as Won</button>}
@@ -13671,7 +13758,17 @@ window.addEventListener('message',function(e){
                 {co&&<div style={{fontSize:12,color:"rgba(255,255,255,0.7)",marginTop:2}}>{co.name}</div>}
               </div>
               <div style={{padding:"20px 24px",display:"flex",flexDirection:"column",gap:14}}>
-                <div style={{fontSize:12,color:"#4A5278",background:"#FFF8E7",border:"1px solid #FDE68A",borderRadius:6,padding:"10px 12px"}}>
+                <div style={{background:"#FFF8E7",border:"1px solid #FDE68A",borderRadius:8,padding:"12px 14px"}}>
+                  <div style={{fontSize:11,fontWeight:700,color:"#92400E",marginBottom:4}}>📋 Brad's Buyout Responsibilities</div>
+                  <div style={{display:"flex",flexDirection:"column",gap:3}}>
+                    {[["⏱","Complete buyout within 3 days of project award"],["📅","Establish the official project schedule now"],["💰","Verify contract value for revenue oversight"],["🤝","Ensure clear communication with all stakeholders"]].map(([icon,txt])=>(
+                      <div key={txt} style={{display:"flex",gap:6,alignItems:"flex-start",fontSize:10,color:"#92400E"}}>
+                        <span style={{flexShrink:0}}>{icon}</span><span>{txt}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                <div style={{fontSize:11,color:"#4A5278",background:"#F9FAFC",border:"1px solid #E8EBF4",borderRadius:6,padding:"8px 10px"}}>
                   ⚠ All fields below are required before moving to Buyout.
                 </div>
                 <div>
@@ -13702,6 +13799,9 @@ window.addEventListener('message',function(e){
                   <button onClick={confirm} disabled={!valid} style={{flex:2,padding:"9px",background:valid?"#FCD34D":"#F0F2F8",border:"none",borderRadius:7,cursor:valid?"pointer":"default",fontFamily:"inherit",fontSize:13,color:valid?"#1A2240":"#9BA3BF",fontWeight:700,opacity:valid?1:0.6}}>
                     {valid?"✓ Confirm & Move to Buyout":"Fill all required fields"}
                   </button>
+                </div>
+                <div style={{fontSize:9,color:"#9BA3BF",textAlign:"center",paddingTop:4}}>
+                  <strong style={{color:"#1A2240"}}>Prepared</strong> — Stay ahead of the game · <strong style={{color:"#1A2240"}}>Accountable</strong> — Own every responsibility
                 </div>
               </div>
             </div>
