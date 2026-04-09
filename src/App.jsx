@@ -12879,10 +12879,7 @@ window.addEventListener('message',function(e){
               <div className="no-print" style={{background:"#F4F6FB",padding:"12px 20px",display:"flex",gap:10,alignItems:"center",borderBottom:"1px solid #D4D9EE",flexShrink:0}}>
                 <div style={{fontSize:13,fontWeight:700,color:"#1A2240",flex:1}}>🖨 Budget PDF Preview</div>
                 <div style={{display:"flex",alignItems:"center",gap:8}}>
-                  <span style={{fontSize:12,color:"#4A5278"}}>Attachment URL:</span>
-                  <input value={budgetAttachment} onChange={e=>setBudgetAttachment(e.target.value)}
-                    placeholder="Paste drawing/attachment URL…"
-                    style={{padding:"6px 10px",border:"1px solid #CBD1E8",borderRadius:6,fontSize:12,fontFamily:"inherit",width:280,outline:"none"}}/>
+                  <span style={{fontSize:11,color:"#4A5278"}}>Attachments from deal are included in print automatically</span>
                 </div>
                 <button onClick={()=>window.print()} style={{padding:"7px 18px",background:"#3B6FE8",color:"#fff",border:"none",borderRadius:7,cursor:"pointer",fontFamily:"inherit",fontSize:13,fontWeight:700}}>🖨 Print / Save PDF</button>
                 <button onClick={()=>setShowBudgetPrint(false)} style={{padding:"7px 14px",background:"#F0F2F8",color:"#4A5278",border:"1px solid #CBD1E8",borderRadius:7,cursor:"pointer",fontFamily:"inherit",fontSize:13}}>✕ Close</button>
@@ -13195,6 +13192,38 @@ window.addEventListener('message',function(e){
                   </div>
                 </div>
               </div>
+
+              {/* Attachments in full view */}
+              {(det.attachments||[]).length>0&&(
+                <div style={{background:"#fff",borderRadius:12,border:"1px solid #D4D9EE",padding:"16px"}}>
+                  <div style={{fontSize:11,fontWeight:700,color:"#1A2240",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:10}}>📎 Attachments ({(det.attachments||[]).length})</div>
+                  <div style={{display:"flex",flexWrap:"wrap",gap:8}}>
+                    {(det.attachments||[]).map((f,i)=>{
+                      const isImg=/image/.test(f.type||"");
+                      const isPdf=/pdf/.test(f.type||"");
+                      const icon=isPdf?"📄":isImg?"🖼️":"📎";
+                      return (
+                        <div key={i} style={{display:"flex",alignItems:"center",gap:8,padding:"7px 10px",background:"#F9FAFC",borderRadius:7,border:"1px solid #E8EBF4",minWidth:200,flex:"0 0 auto"}}>
+                          <span style={{fontSize:16}}>{icon}</span>
+                          <div style={{flex:1,minWidth:0}}>
+                            <div style={{fontSize:11,fontWeight:600,color:"#1A2240",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{f.name}</div>
+                            <div style={{fontSize:9,color:"#9BA3BF"}}>{f.uploadedAt||""}</div>
+                          </div>
+                          {f.data&&<a href={f.data} download={f.name} style={{fontSize:10,padding:"2px 7px",background:"#EEF3FF",color:"#3B6FE8",borderRadius:3,textDecoration:"none",fontWeight:600,flexShrink:0}}>↓</a>}
+                          {isImg&&f.data&&<a href={f.data} target="_blank" rel="noreferrer" style={{fontSize:10,padding:"2px 7px",background:"#F0FDF4",color:"#16A34A",borderRadius:3,textDecoration:"none",fontWeight:600,flexShrink:0}}>👁</a>}
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {(det.attachments||[]).filter(f=>/image/.test(f.type||"")).length>0&&(
+                    <div style={{display:"flex",flexWrap:"wrap",gap:8,marginTop:10}}>
+                      {(det.attachments||[]).filter(f=>/image/.test(f.type||"")).map((f,i)=>(
+                        <img key={i} src={f.data} alt={f.name} style={{height:120,borderRadius:6,border:"1px solid #D4D9EE",cursor:"pointer",objectFit:"cover"}} onClick={()=>window.open(f.data,"_blank")}/>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Action buttons */}
               <div style={{display:"flex",gap:10}}>
@@ -13609,10 +13638,65 @@ window.addEventListener('message',function(e){
                         </div>
                       ))}
                     </div>
-                    {/* Attachment */}
+                    {/* Attachments — file upload, stored in oppDetails */}
                     <div>
-                      {lbl("Attachment / Drawing URL")}
-                      <input style={fi} value={det.attachmentUrl||""} onChange={e=>setDet({attachmentUrl:e.target.value})} placeholder="Paste URL to drawing or document…"/>
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
+                        {lbl("Attachments")}
+                        <label style={{padding:"3px 10px",background:"#3B6FE8",color:"#fff",border:"none",borderRadius:4,cursor:"pointer",fontFamily:"inherit",fontSize:10,fontWeight:700}}>
+                          + Attach File
+                          <input type="file" multiple accept=".pdf,.jpg,.jpeg,.png,.xlsx,.xls,.docx,.doc,.dwg,.dxf" style={{display:"none"}} onChange={e=>{
+                            const files=Array.from(e.target.files);
+                            if(!files.length) return;
+                            const existing=det.attachments||[];
+                            let loaded=0;
+                            files.forEach(file=>{
+                              const reader=new FileReader();
+                              reader.onload=ev=>{
+                                const newFile={id:Date.now()+Math.random(),name:file.name,size:file.size,type:file.type,data:ev.target.result,uploadedAt:new Date().toISOString().slice(0,10)};
+                                setDet({attachments:[...existing,...(loaded===0?[]:[]),...[newFile]]});
+                                loaded++;
+                              };
+                              reader.readAsDataURL(file);
+                            });
+                            e.target.value="";
+                          }}/>
+                        </label>
+                      </div>
+                      {(det.attachments||[]).length===0 && <div style={{fontSize:11,color:"#9BA3BF",fontStyle:"italic"}}>No files attached</div>}
+                      <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                        {(det.attachments||[]).map((f,i)=>{
+                          const isImg=/image/.test(f.type||"");
+                          const isPdf=/pdf/.test(f.type||"");
+                          const kb=Math.round((f.size||0)/1024);
+                          const icon=isPdf?"📄":isImg?"🖼️":"📎";
+                          return (
+                            <div key={f.id||i} style={{background:"#F9FAFC",border:"1px solid #E8EBF4",borderRadius:6,padding:"8px 10px",display:"flex",alignItems:"center",gap:8}}>
+                              <span style={{fontSize:16,flexShrink:0}}>{icon}</span>
+                              <div style={{flex:1,minWidth:0}}>
+                                <div style={{fontSize:11,fontWeight:600,color:"#1A2240",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{f.name}</div>
+                                <div style={{fontSize:9,color:"#9BA3BF"}}>{kb>0?kb+"KB · ":""}{f.uploadedAt||""}</div>
+                              </div>
+                              <div style={{display:"flex",gap:6,flexShrink:0}}>
+                                {f.data&&<a href={f.data} download={f.name}
+                                  style={{fontSize:10,padding:"2px 7px",background:"#EEF3FF",color:"#3B6FE8",borderRadius:3,textDecoration:"none",fontWeight:600,border:"1px solid #3B6FE840"}}>↓ Download</a>}
+                                {isImg&&f.data&&<a href={f.data} target="_blank" rel="noreferrer"
+                                  style={{fontSize:10,padding:"2px 7px",background:"#F0FDF4",color:"#16A34A",borderRadius:3,textDecoration:"none",fontWeight:600,border:"1px solid #4ADE8040"}}>👁 View</a>}
+                                <button onClick={()=>setDet({attachments:(det.attachments||[]).filter((_,j)=>j!==i)})}
+                                  style={{background:"none",border:"none",color:"#F87171",cursor:"pointer",fontSize:13,padding:"0 2px"}}>✕</button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      {/* Image previews */}
+                      {(det.attachments||[]).filter(f=>/image/.test(f.type||"")).length>0&&(
+                        <div style={{display:"flex",flexWrap:"wrap",gap:8,marginTop:8}}>
+                          {(det.attachments||[]).filter(f=>/image/.test(f.type||"")).map((f,i)=>(
+                            <img key={i} src={f.data} alt={f.name} style={{width:100,height:70,objectFit:"cover",borderRadius:5,border:"1px solid #D4D9EE",cursor:"pointer"}}
+                              onClick={()=>window.open(f.data,"_blank")}/>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </div>
                 );
