@@ -3142,6 +3142,7 @@ export default function App() {
   const [subGeocoding,      setSubGeocoding]      = useState(false);
   const [subSearch2,        setSubSearch2]        = useState("");
   const [showArchivedSubs,  setShowArchivedSubs]  = useState(false);
+  const [showArchivedMpJobs, setShowArchivedMpJobs] = useState(false);
   const [addMode,           setAddMode]           = useState("sub");
   const [pickerTrade,       setPickerTrade]       = useState("");
   const [subProjectLat,     setSubProjectLat]     = useState(null);
@@ -6503,8 +6504,10 @@ Return ONLY valid JSON, no markdown, no extra text:
           {activeNav === "jobs" && activeBU !== "capital" && activeBU !== "facility" && (() => {
             // Use Supabase mp_jobs if loaded, fall back to hardcoded majorJobs
             const allMpJobs = mpJobs.length > 0 ? mpJobs : majorJobs;
-            const activeJobs   = allMpJobs.filter(j => j.status !== "Closeout" && j.status !== "completed");
-            const closeoutJobs = allMpJobs.filter(j => j.status === "Closeout" || j.status === "completed");
+            const archivedMpJobs = allMpJobs.filter(j => j.status === "archived");
+            const visibleMpJobs  = showArchivedMpJobs ? archivedMpJobs : allMpJobs.filter(j => j.status !== "archived");
+            const activeJobs   = visibleMpJobs.filter(j => j.status !== "Closeout" && j.status !== "completed" && j.status !== "archived");
+            const closeoutJobs = visibleMpJobs.filter(j => j.status === "Closeout" || j.status === "completed");
 
             const STATUS_STYLE = {
               "active":    { color:"#4ADE80", bg:"#4ADE8015" },
@@ -6549,9 +6552,40 @@ Return ONLY valid JSON, no markdown, no extra text:
                     <button onClick={()=>setSelectedMpJob(null)} style={{background:"#F0F2F8",border:"1px solid #CBD1E8",borderRadius:6,padding:"6px 14px",fontSize:12,color:"#4A5278",cursor:"pointer",fontFamily:"inherit"}}>← All Projects</button>
                     <div style={{flex:1}}>
                       <div style={{fontSize:20,fontWeight:800,color:"#1A2240",letterSpacing:"-0.01em"}}>{job.name}</div>
-                      <div style={{fontSize:11,color:"#4A5278",marginTop:2}}>{job.client}{job.pm?" · PM: "+job.pm:""}</div>
+                      <div style={{fontSize:11,color:"#4A5278",marginTop:2}}>{job.client}{job.pm?" · PM: "+job.pm:""}{job.status==="archived"&&<span style={{marginLeft:8,background:"#F87171",color:"#fff",borderRadius:4,padding:"1px 6px",fontSize:9,fontWeight:700,letterSpacing:"0.05em"}}>ARCHIVED</span>}</div>
                     </div>
-                    <div style={{display:"flex",gap:8}}>
+                    <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                      {/* Archive / Unarchive */}
+                      {job.status === "archived" ? (
+                        <button onClick={async()=>{
+                          const updated={...job,status:"active"};
+                          setMpJobs(prev=>prev.map(j=>j.id===job.id?updated:j));
+                          setShowArchivedMpJobs(false);
+                          setSelectedMpJob(null);
+                          try{await fetch(`${SUPA_URL}/rest/v1/mp_jobs?id=eq.${encodeURIComponent(job.id)}`,{method:"PATCH",headers:{apikey:SUPA_KEY,Authorization:`Bearer ${SUPA_KEY}`,"Content-Type":"application/json",Prefer:"return=minimal"},body:JSON.stringify({status:"active"})});}catch(e){}
+                        }} style={{padding:"6px 14px",border:"1px solid #4ADE80",background:"#F0FFF4",color:"#16a34a",borderRadius:7,cursor:"pointer",fontFamily:"inherit",fontSize:12,fontWeight:600}}>
+                          ✅ Restore
+                        </button>
+                      ) : (
+                        <button onClick={async()=>{
+                          if(!window.confirm("Archive \""+job.name+"\"? It will be hidden from the active list but can be restored anytime."))return;
+                          const updated={...job,status:"archived"};
+                          setMpJobs(prev=>prev.map(j=>j.id===job.id?updated:j));
+                          setSelectedMpJob(null);
+                          try{await fetch(`${SUPA_URL}/rest/v1/mp_jobs?id=eq.${encodeURIComponent(job.id)}`,{method:"PATCH",headers:{apikey:SUPA_KEY,Authorization:`Bearer ${SUPA_KEY}`,"Content-Type":"application/json",Prefer:"return=minimal"},body:JSON.stringify({status:"archived"})});}catch(e){}
+                        }} style={{padding:"6px 14px",border:"1px solid #CBD1E8",background:"transparent",color:"#4A5278",borderRadius:7,cursor:"pointer",fontFamily:"inherit",fontSize:12,fontWeight:600}}>
+                          📦 Archive
+                        </button>
+                      )}
+                      {/* Delete */}
+                      <button onClick={async()=>{
+                        if(!window.confirm("Permanently delete \""+job.name+"\"? This cannot be undone."))return;
+                        setMpJobs(prev=>prev.filter(j=>j.id!==job.id));
+                        setSelectedMpJob(null);
+                        try{await fetch(`${SUPA_URL}/rest/v1/mp_jobs?id=eq.${encodeURIComponent(job.id)}`,{method:"DELETE",headers:{apikey:SUPA_KEY,Authorization:`Bearer ${SUPA_KEY}`}});}catch(e){}
+                      }} style={{padding:"6px 14px",border:"1px solid #F8717150",background:"transparent",color:"#F87171",borderRadius:7,cursor:"pointer",fontFamily:"inherit",fontSize:12,fontWeight:600}}>
+                        🗑 Delete
+                      </button>
                       {[{id:"gantt",icon:"📊",label:"Gantt"},{id:"weekly",icon:"📋",label:"Weekly Report"},{id:"history",icon:"📅",label:"History"}].map(t=>(
                         <button key={t.id} onClick={()=>setMpDetailTab(t.id)}
                           style={{padding:"7px 14px",border:"1px solid "+(mpDetailTab===t.id?"#3B6FE8":"#CBD1E8"),background:mpDetailTab===t.id?"#3B6FE8":"#fff",color:mpDetailTab===t.id?"#fff":"#4A5278",borderRadius:8,cursor:"pointer",fontFamily:"inherit",fontSize:12,fontWeight:600,display:"flex",alignItems:"center",gap:5}}>
@@ -6844,11 +6878,22 @@ Return ONLY valid JSON, no markdown, no extra text:
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
                   <div>
                     <div style={{fontSize:22,fontWeight:700,color:"#1A2240",letterSpacing:"-0.01em",textTransform:"uppercase"}}>Major Projects</div>
-                    <div style={{fontSize:11,color:"#4A5278",marginTop:3,letterSpacing:"0.06em"}}>{activeJobs.length} ACTIVE · {closeoutJobs.length} IN CLOSEOUT</div>
+                    <div style={{fontSize:11,color:"#4A5278",marginTop:3,letterSpacing:"0.06em"}}>
+                      {showArchivedMpJobs
+                        ? archivedMpJobs.length + " ARCHIVED"
+                        : activeJobs.length + " ACTIVE · " + closeoutJobs.length + " IN CLOSEOUT"}
+                    </div>
                   </div>
                   <div style={{display:"flex",gap:8}}>
-                    <button className="btn-ghost" onClick={()=>{setWeeklyForm(f=>({...f,project_id:"",report_date:new Date().toISOString().slice(0,10)}));setShowWeeklyForm(true);}}>📋 Log Weekly Report</button>
-                    <button className="btn-primary" onClick={()=>{ setJobForm({name:"",companyId:"",client:"",approverContactId:"",contractValue:"",startDate:"",endDate:"",pm:"",pct:0,status:"active",notes:"",bu:"major"}); setShowJobForm(true); }}>+ Add Project</button>
+                    <button
+                      onClick={()=>setShowArchivedMpJobs(v=>!v)}
+                      style={{padding:"6px 14px",border:"1px solid "+(showArchivedMpJobs?"#F87171":"#CBD1E8"),background:showArchivedMpJobs?"#FFF1F2":"transparent",color:showArchivedMpJobs?"#F87171":"#4A5278",borderRadius:7,cursor:"pointer",fontFamily:"inherit",fontSize:12,fontWeight:600}}>
+                      {showArchivedMpJobs ? "← Active Projects" : "📦 "+archivedMpJobs.length+" Archived"}
+                    </button>
+                    {!showArchivedMpJobs && <>
+                      <button className="btn-ghost" onClick={()=>{setWeeklyForm(f=>({...f,project_id:"",report_date:new Date().toISOString().slice(0,10)}));setShowWeeklyForm(true);}}>📋 Log Weekly Report</button>
+                      <button className="btn-primary" onClick={()=>{ setJobForm({name:"",companyId:"",client:"",approverContactId:"",contractValue:"",startDate:"",endDate:"",pm:"",pct:0,status:"active",notes:"",bu:"major"}); setShowJobForm(true); }}>+ Add Project</button>
+                    </>}
                   </div>
                 </div>
 
@@ -6856,9 +6901,9 @@ Return ONLY valid JSON, no markdown, no extra text:
                 <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12}}>
                   {[
                     {label:"Active Projects",  value:activeJobs.length,    color:"#3B6FE8"},
-                    {label:"Total Value",       value:fmt(allMpJobs.reduce((s,j)=>s+(j.contractValue||0),0)), color:"#4ADE80"},
-                    {label:"Behind Schedule",  value:allMpJobs.filter(j=>(j.daysAhead??0)<-7).length,  color:"#F87171"},
-                    {label:"Avg GPM",          value:(() => { const v=allMpJobs.filter(j=>j.gpm); return v.length ? (v.reduce((s,j)=>s+j.gpm,0)/v.length*100).toFixed(1)+"%" : "—"; })(), color:"#A78BFA"},
+                    {label:"Total Value",       value:fmt(visibleMpJobs.reduce((s,j)=>s+(j.contractValue||0),0)), color:"#4ADE80"},
+                    {label:"Behind Schedule",  value:visibleMpJobs.filter(j=>(j.daysAhead??0)<-7).length,  color:"#F87171"},
+                    {label:"Avg GPM",          value:(() => { const v=visibleMpJobs.filter(j=>j.gpm); return v.length ? (v.reduce((s,j)=>s+j.gpm,0)/v.length*100).toFixed(1)+"%" : "—"; })(), color:"#A78BFA"},
                   ].map(s=>(
                     <div key={s.label} className="stat-card" style={{position:"relative",overflow:"hidden",padding:"14px 18px"}}>
                       <div style={{position:"absolute",top:0,left:0,right:0,height:3,background:s.color}}/>
@@ -6873,11 +6918,11 @@ Return ONLY valid JSON, no markdown, no extra text:
                   const today = new Date();
                   // Build unified month grid across all jobs
                   const allDates = [];
-                  allMpJobs.forEach(j => {
+                  visibleMpJobs.forEach(j => {
                     [j.startDate,j.endDate,j.km1Date,j.km2Date,j.km3Date].filter(Boolean).forEach(d=>allDates.push(new Date(d)));
                   });
                   allDates.push(today);
-                  if (!allMpJobs.length || allDates.length < 2) return (
+                  if (!visibleMpJobs.length || allDates.length < 2) return (
                     <div style={{background:"#fff",borderRadius:12,border:"1px solid #D4D9EE",padding:"40px",textAlign:"center",color:"#9BA3BF"}}>
                       <div style={{fontSize:28,marginBottom:8}}>📊</div>
                       <div style={{fontSize:14,fontWeight:600,color:"#1A2240",marginBottom:4}}>No projects yet</div>
@@ -6919,7 +6964,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                         </div>
                       </div>
                       {/* Project rows */}
-                      {allMpJobs.map(job=>{
+                      {visibleMpJobs.map(job=>{
                         const rpts = mpWeeklyReports.filter(r=>r.projectId===job.id).sort((a,b)=>b.reportDate.localeCompare(a.reportDate));
                         const latest = rpts[0];
                         const da = latest?.daysAhead ?? job.daysAhead;
