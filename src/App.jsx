@@ -3764,14 +3764,44 @@ Return ONLY valid JSON, no markdown, no extra text:
     setContactForm({ companyId: "", firstName: "", lastName: "", title: "", email: "", phone: "" });
   };
 
-  const addInlineCompany = () => {
+  const addInlineCompany = async () => {
     if (!inlineCompany.name.trim()) return;
     const newId = "c" + Date.now();
-    setCompanies([...companies, { ...inlineCompany, id: newId }]);
+    const newCompany = { ...inlineCompany, id: newId };
+    setCompanies(prev => [...prev, newCompany]);
     setForm(f => ({ ...f, companyId: newId, contactId: "" }));
     setJobForm(f => ({ ...f, companyId: newId, client: inlineCompany.name }));
     setShowInlineCompany(false);
     setInlineCompany({ name: "", website: "", address: "", logo: "", notes: "" });
+    // Persist company to Supabase
+    try {
+      await fetch(`${SUPA_URL}/rest/v1/companies`, {
+        method: "POST",
+        headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}`, "Content-Type": "application/json", Prefer: "return=minimal" },
+        body: JSON.stringify(companyToDB(newCompany))
+      });
+    } catch(e) { console.error("addInlineCompany insert:", e); }
+    // If an address was entered, auto-create a linked site
+    if (inlineCompany.address.trim()) {
+      const siteId = "s" + Date.now();
+      const newSite = {
+        id: siteId, companyId: newId, contactIds: [],
+        storeNumber: "", address: inlineCompany.address.trim(),
+        phone: "", accessCode: "", notes: "",
+        lat: null, lng: null, businessUnits: [],
+        unitCount: null, propertyType: "", gateCode: "",
+        managerName: "", managerPhone: "", managerEmail: "",
+        photos: [], backflow: {}, hvac: [], siteDetails: {}
+      };
+      setSites(prev => [...prev, newSite]);
+      try {
+        await fetch(`${SUPA_URL}/rest/v1/sites`, {
+          method: "POST",
+          headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}`, "Content-Type": "application/json", Prefer: "return=minimal" },
+          body: JSON.stringify(siteToDB(newSite))
+        });
+      } catch(e) { console.error("addInlineCompany site insert:", e); }
+    }
   };
 
   const addInlineContact = () => {
@@ -3880,6 +3910,31 @@ Return ONLY valid JSON, no markdown, no extra text:
           });
         }
       } catch(e) { console.error("saveOpp insert:", e); }
+      // Auto-create a site if address entered and no existing site for this company+address
+      if (entry.address && entry.companyId) {
+        const addressNorm = entry.address.trim().toLowerCase();
+        const alreadyExists = sites.some(s => s.companyId === entry.companyId && s.address.trim().toLowerCase() === addressNorm);
+        if (!alreadyExists) {
+          const siteId = "s" + Date.now();
+          const newSite = {
+            id: siteId, companyId: entry.companyId, contactIds: form.contactId ? [form.contactId] : [],
+            storeNumber: "", address: entry.address.trim(),
+            phone: "", accessCode: "", notes: "",
+            lat: null, lng: null, businessUnits: [entry.bu||"major"],
+            unitCount: null, propertyType: "", gateCode: "",
+            managerName: "", managerPhone: "", managerEmail: "",
+            photos: [], backflow: {}, hvac: [], siteDetails: {}
+          };
+          setSites(prev => [...prev, newSite]);
+          try {
+            await fetch(`${SUPA_URL}/rest/v1/sites`, {
+              method: "POST",
+              headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}`, "Content-Type": "application/json", Prefer: "return=minimal" },
+              body: JSON.stringify(siteToDB(newSite))
+            });
+          } catch(e) { console.error("saveOpp site insert:", e); }
+        }
+      }
     }
     setShowForm(false);
   };
