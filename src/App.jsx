@@ -3793,12 +3793,35 @@ Return ONLY valid JSON, no markdown, no extra text:
     setShowJobForm(true);
   };
   const openEditJob = (j) => { setEditJobId(j.id); setJobForm({ ...j, contractValue: String(j.contractValue) }); setShowJobForm(true); };
-  const saveJob = () => {
+  const saveJob = async () => {
     if (!jobForm.name.trim()) return;
     const co    = companies.find(c => c.id === jobForm.companyId);
     const entry = { ...jobForm, contractValue: Number(jobForm.contractValue), pct: Number(jobForm.pct), client: co ? co.name : jobForm.client };
-    if (editJobId !== null) setJobs(jobs.map(j => j.id === editJobId ? { ...entry, id: editJobId } : j));
-    else setJobs([...jobs, { ...entry, id: Date.now() }]);
+    if (editJobId !== null) {
+      const updated = { ...entry, id: editJobId };
+      setMpJobs(prev => prev.map(j => j.id === editJobId ? updated : j));
+      try {
+        await fetch(`${SUPA_URL}/rest/v1/mp_jobs?id=eq.${encodeURIComponent(editJobId)}`, {
+          method: "PATCH",
+          headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}`, "Content-Type": "application/json", Prefer: "return=minimal" },
+          body: JSON.stringify({ name: updated.name, client: updated.client, company_id: updated.companyId||null, status: updated.status||"active", contract_value: updated.contractValue||null, start_date: updated.startDate||null, end_date: updated.endDate||null, pm: updated.pm||null, pct: updated.pct||0, notes: updated.notes||null })
+        });
+      } catch(e) { console.error("saveJob edit:", e); }
+    } else {
+      const jobId = String(Date.now());
+      const newJob = { ...entry, id: jobId };
+      setMpJobs(prev => [...prev, newJob]);
+      try {
+        await fetch(`${SUPA_URL}/rest/v1/mp_jobs`, {
+          method: "POST",
+          headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}`, "Content-Type": "application/json", Prefer: "return=minimal" },
+          body: JSON.stringify({ id: jobId, name: newJob.name, client: newJob.client, company_id: newJob.companyId||null, status: newJob.status||"active", contract_value: newJob.contractValue||null, start_date: newJob.startDate||null, end_date: newJob.endDate||null, pm: newJob.pm||null, pct: newJob.pct||0, notes: newJob.notes||null })
+        });
+      } catch(e) {
+        console.error("saveJob insert:", e);
+        alert("Job saved locally but failed to save to database.");
+      }
+    }
     setShowJobForm(false);
   };
   const deleteJob = (id) => { setJobs(jobs.filter(j => j.id !== id)); setSelectedJob(null); };
