@@ -5739,12 +5739,12 @@ Return ONLY valid JSON, no markdown, no extra text:
                           setManualPunchItems(updated);
                           // If linked to a job, also save to mp_jobs.punch_items
                           if (item.jobId) {
-                            const linkedJob = mpJobs.find(j=>j.id===item.jobId);
+                            const linkedJob = mpJobs.find(j=>String(j.id)===String(item.jobId));
                             if (linkedJob) {
                               // Merge stored + manual items, then toggle
                               const merged = [
                                 ...(linkedJob.punchItems||[]),
-                                ...manualPunchItems.filter(p=>p.jobId===linkedJob.id&&!(linkedJob.punchItems||[]).some(x=>x.id===p.id))
+                                ...manualPunchItems.filter(p=>String(p.jobId)===String(linkedJob.id)&&!(linkedJob.punchItems||[]).some(x=>x.id===p.id))
                               ].map(p=>p.id===item.id?{...p,done:!p.done}:p);
                               setMpJobs(prev=>prev.map(j=>j.id===linkedJob.id?{...j,punchItems:merged}:j));
                               try { const r=await fetch(`${SUPA_URL}/rest/v1/mp_jobs?id=eq.${linkedJob.id}`,{method:"PATCH",headers:{apikey:SUPA_KEY,Authorization:`Bearer ${SUPA_KEY}`,"Content-Type":"application/json","Prefer":"return=minimal"},body:JSON.stringify({punch_items:merged})}); if(!r.ok)console.error("dash toggle:",await r.text()); } catch(e){console.error(e);}
@@ -5786,14 +5786,14 @@ Return ONLY valid JSON, no markdown, no extra text:
                       <div>
                         <label className="lbl">Assign to Job (optional)</label>
                         <select className="fi" value={punchForm.jobId} onChange={e=>{
-                          const job = mpJobs.find(j=>j.id===e.target.value);
+                          const job = mpJobs.find(j=>String(j.id)===e.target.value);
                           setPunchForm(f=>({...f, jobId:e.target.value, assignedTo: job?job.pm:"" }));
                         }}>
                           <option value="">— No specific job —</option>
-                          {mpJobs.filter(j=>j.status!=="archived").map(j=><option key={j.id} value={j.id}>{j.name}{j.pm?" (PM: "+j.pm+")":""}</option>)}
+                          {mpJobs.filter(j=>j.status!=="archived").map(j=><option key={j.id} value={String(j.id)}>{j.name}{j.pm?" (PM: "+j.pm+")":""}</option>)}
                         </select>
-                        {punchForm.jobId && mpJobs.find(j=>j.id===punchForm.jobId)?.pm && (
-                          <div style={{fontSize:10,color:"#3B6FE8",marginTop:3}}>→ Responsible: {mpJobs.find(j=>j.id===punchForm.jobId).pm}</div>
+                        {punchForm.jobId && mpJobs.find(j=>String(j.id)===punchForm.jobId)?.pm && (
+                          <div style={{fontSize:10,color:"#3B6FE8",marginTop:3}}>→ Responsible: {mpJobs.find(j=>String(j.id)===punchForm.jobId).pm}</div>
                         )}
                       </div>
                       <div className="g2">
@@ -5813,7 +5813,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                         <button className="btn-ghost" onClick={()=>setShowAddPunch(false)}>Cancel</button>
                         <button className="btn-primary" onClick={()=>{
                           if (!punchForm.text.trim()) return;
-                          const linkedJob = punchForm.jobId ? mpJobs.find(j=>j.id===punchForm.jobId) : null;
+                          const linkedJob = punchForm.jobId ? mpJobs.find(j=>String(j.id)===String(punchForm.jobId)) : null;
                           const newItem = {
                             id: "punch_"+Date.now(),
                             text: punchForm.text.trim(),
@@ -5831,7 +5831,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                             const extraManual = manualPunchItems.filter(p=>p.jobId===linkedJob.id&&!stored.some(x=>x.id===p.id));
                             const jobItems = [...stored, ...extraManual, newItem];
                             setMpJobs(prev=>prev.map(j=>j.id===linkedJob.id?{...j,punchItems:jobItems}:j));
-                            setManualPunchItems(prev=>prev.filter(p=>p.jobId!==linkedJob.id));
+                            setManualPunchItems(prev=>prev.filter(p=>String(p.jobId)!==String(linkedJob.id)));
                             fetch(`${SUPA_URL}/rest/v1/mp_jobs?id=eq.${linkedJob.id}`,{method:"PATCH",headers:{apikey:SUPA_KEY,Authorization:`Bearer ${SUPA_KEY}`,"Content-Type":"application/json","Prefer":"return=minimal"},body:JSON.stringify({punch_items:jobItems})}).catch(e=>console.error("add task save:",e));
                           } else {
                             setManualPunchItems(prev=>[newItem,...prev]);
@@ -6942,13 +6942,13 @@ Return ONLY valid JSON, no markdown, no extra text:
 
               // Shared helper: read live mpJobs, merge manual items, save to DB
               const getJobItems = () => {
-                const liveJob = mpJobs.find(j=>j.id===job.id)||job;
+                const liveJob = mpJobs.find(j=>String(j.id)===String(job.id))||job;
                 const stored = liveJob.punchItems||[];
-                const manual = manualPunchItems.filter(p=>p.jobId===job.id&&!stored.some(x=>x.id===p.id));
+                const manual = manualPunchItems.filter(p=>String(p.jobId)===String(job.id)&&!stored.some(x=>x.id===p.id));
                 return [...stored, ...manual];
               };
               const saveTaskItems = async (items) => {
-                const liveJob = mpJobs.find(j=>j.id===job.id)||job;
+                const liveJob = mpJobs.find(j=>String(j.id)===String(job.id))||job;
                 console.log("[TaskList] saveTaskItems - job.id:", liveJob.id, "items:", items.length, items.map(i=>({id:i.id,done:i.done,text:i.text?.slice(0,20)})));
                 // Write merged list into mpJobs state
                 setMpJobs(prev=>prev.map(j=>j.id===liveJob.id?{...j,punchItems:items}:j));
