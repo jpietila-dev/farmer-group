@@ -6757,15 +6757,14 @@ Return ONLY valid JSON, no markdown, no extra text:
 
               return (
                 <div className="fade-in" style={{display:"flex",flexDirection:"column",gap:18}}>
-                  {/* Back + header */}
+                  {/* Row 1: Back + job name + action buttons */}
                   <div style={{display:"flex",alignItems:"center",gap:12}}>
-                    <button onClick={()=>setSelectedMpJob(null)} style={{background:"#F0F2F8",border:"1px solid #CBD1E8",borderRadius:6,padding:"6px 14px",fontSize:12,color:"#4A5278",cursor:"pointer",fontFamily:"inherit"}}>← All Projects</button>
-                    <div style={{flex:1}}>
-                      <div style={{fontSize:20,fontWeight:800,color:"#1A2240",letterSpacing:"-0.01em"}}>{job.name}</div>
+                    <button onClick={()=>setSelectedMpJob(null)} style={{background:"#F0F2F8",border:"1px solid #CBD1E8",borderRadius:6,padding:"6px 14px",fontSize:12,color:"#4A5278",cursor:"pointer",fontFamily:"inherit",flexShrink:0}}>← All Projects</button>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontSize:20,fontWeight:800,color:"#1A2240",letterSpacing:"-0.01em",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{job.name}</div>
                       <div style={{fontSize:11,color:"#4A5278",marginTop:2}}>{job.client}{job.pm?" · PM: "+job.pm:""}{job.status==="archived"&&<span style={{marginLeft:8,background:"#F87171",color:"#fff",borderRadius:4,padding:"1px 6px",fontSize:9,fontWeight:700,letterSpacing:"0.05em"}}>ARCHIVED</span>}</div>
                     </div>
-                    <div style={{display:"flex",gap:8,alignItems:"center"}}>
-                      {/* Archive / Unarchive */}
+                    <div style={{display:"flex",gap:8,alignItems:"center",flexShrink:0}}>
                       {job.status === "archived" ? (
                         <button onClick={async()=>{
                           const updated={...job,status:"active"};
@@ -6787,7 +6786,6 @@ Return ONLY valid JSON, no markdown, no extra text:
                           📦 Archive
                         </button>
                       )}
-                      {/* Delete */}
                       <button onClick={async()=>{
                         if(!window.confirm("Permanently delete \""+job.name+"\"? This cannot be undone."))return;
                         setMpJobs(prev=>prev.filter(j=>j.id!==job.id));
@@ -6796,17 +6794,20 @@ Return ONLY valid JSON, no markdown, no extra text:
                       }} style={{padding:"6px 14px",border:"1px solid #F8717150",background:"transparent",color:"#F87171",borderRadius:7,cursor:"pointer",fontFamily:"inherit",fontSize:12,fontWeight:600}}>
                         🗑 Delete
                       </button>
-                      {[{id:"precon",icon:"🏗",label:"Preconstruction"},{id:"construction",icon:"📋",label:"Construction"},{id:"closeout",icon:"✅",label:"Closeout"}].map(t=>{
-                        const isActive = mpDetailTab===t.id;
-                        const tabColor = t.id==="closeout"?"#818CF8":t.id==="precon"?"#F59E0B":"#3B6FE8";
-                        return (
-                          <button key={t.id} onClick={()=>setMpDetailTab(t.id)}
-                            style={{padding:"7px 14px",border:"1px solid "+(isActive?tabColor:"#CBD1E8"),background:isActive?tabColor:"#fff",color:isActive?"#fff":"#4A5278",borderRadius:8,cursor:"pointer",fontFamily:"inherit",fontSize:12,fontWeight:600,display:"flex",alignItems:"center",gap:5}}>
-                            {t.icon} {t.label}
-                          </button>
-                        );
-                      })}
                     </div>
+                  </div>
+
+                  {/* Row 2: Tab bar */}
+                  <div style={{display:"flex",gap:0,borderBottom:"2px solid #E8ECFC",marginBottom:-8}}>
+                    {[{id:"precon",icon:"🏗",label:"Preconstruction",color:"#F59E0B"},{id:"construction",icon:"📋",label:"Construction",color:"#3B6FE8"},{id:"closeout",icon:"✅",label:"Closeout",color:"#818CF8"}].map(t=>{
+                      const isActive = mpDetailTab===t.id;
+                      return (
+                        <button key={t.id} onClick={()=>setMpDetailTab(t.id)}
+                          style={{padding:"10px 22px",border:"none",borderBottom:isActive?"3px solid "+t.color:"3px solid transparent",background:"transparent",color:isActive?t.color:"#9BA3BF",cursor:"pointer",fontFamily:"inherit",fontSize:13,fontWeight:isActive?700:500,display:"flex",alignItems:"center",gap:6,marginBottom:-2,transition:"all 0.15s"}}>
+                          <span>{t.icon}</span> {t.label}
+                        </button>
+                      );
+                    })}
                   </div>
 
                   {/* Editable project fields */}
