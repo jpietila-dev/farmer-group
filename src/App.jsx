@@ -1575,7 +1575,7 @@ const dbToMpJob = r => ({
   amountBilled: (r.amount_billed != null ? Number(r.amount_billed) : 0),
   closeoutChecklist: r.closeout_checklist ? (typeof r.closeout_checklist === 'object' ? r.closeout_checklist : JSON.parse(r.closeout_checklist)) : {},
   closeoutStartDate: r.closeout_start_date||"",
-  punchItems: r.punch_items ? (typeof r.punch_items === 'object' ? r.punch_items : JSON.parse(r.punch_items)) : [],
+  punchItems: (()=>{ const pi = r.punch_items ? (typeof r.punch_items === 'object' ? r.punch_items : JSON.parse(r.punch_items)) : []; if(pi.length) console.log("[DB] job",r.id,"loaded",pi.length,"punch_items"); return pi; })(),
 });
 const mpJobToDB = j => ({
   id: j.id, name: j.name||"", client: j.client||"", status: j.status||"active",
@@ -5747,7 +5747,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                                 ...manualPunchItems.filter(p=>p.jobId===linkedJob.id&&!(linkedJob.punchItems||[]).some(x=>x.id===p.id))
                               ].map(p=>p.id===item.id?{...p,done:!p.done}:p);
                               setMpJobs(prev=>prev.map(j=>j.id===linkedJob.id?{...j,punchItems:merged}:j));
-                              try { await fetch(`${SUPA_URL}/rest/v1/mp_jobs?id=eq.${encodeURIComponent(linkedJob.id)}`,{method:"PATCH",headers:{apikey:SUPA_KEY,Authorization:`Bearer ${SUPA_KEY}`,"Content-Type":"application/json",Prefer:"return=minimal"},body:JSON.stringify({punch_items:merged})}); } catch(e){}
+                              try { const r=await fetch(`${SUPA_URL}/rest/v1/mp_jobs?id=eq.${linkedJob.id}`,{method:"PATCH",headers:{apikey:SUPA_KEY,Authorization:`Bearer ${SUPA_KEY}`,"Content-Type":"application/json","Prefer":"return=minimal"},body:JSON.stringify({punch_items:merged})}); if(!r.ok)console.error("dash toggle:",await r.text()); } catch(e){console.error(e);}
                             }
                           }
                         }}
@@ -5832,7 +5832,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                             const jobItems = [...stored, ...extraManual, newItem];
                             setMpJobs(prev=>prev.map(j=>j.id===linkedJob.id?{...j,punchItems:jobItems}:j));
                             setManualPunchItems(prev=>prev.filter(p=>p.jobId!==linkedJob.id));
-                            fetch(`${SUPA_URL}/rest/v1/mp_jobs?id=eq.${encodeURIComponent(linkedJob.id)}`,{method:"PATCH",headers:{apikey:SUPA_KEY,Authorization:`Bearer ${SUPA_KEY}`,"Content-Type":"application/json",Prefer:"return=minimal"},body:JSON.stringify({punch_items:jobItems})}).catch(()=>{});
+                            fetch(`${SUPA_URL}/rest/v1/mp_jobs?id=eq.${linkedJob.id}`,{method:"PATCH",headers:{apikey:SUPA_KEY,Authorization:`Bearer ${SUPA_KEY}`,"Content-Type":"application/json","Prefer":"return=minimal"},body:JSON.stringify({punch_items:jobItems})}).catch(e=>console.error("add task save:",e));
                           } else {
                             setManualPunchItems(prev=>[newItem,...prev]);
                           }
@@ -6948,20 +6948,28 @@ Return ONLY valid JSON, no markdown, no extra text:
                 return [...stored, ...manual];
               };
               const saveTaskItems = async (items) => {
+                const liveJob = mpJobs.find(j=>j.id===job.id)||job;
+                console.log("[TaskList] saveTaskItems - job.id:", liveJob.id, "items:", items.length, items.map(i=>({id:i.id,done:i.done,text:i.text?.slice(0,20)})));
                 // Write merged list into mpJobs state
-                setMpJobs(prev=>prev.map(j=>j.id===job.id?{...j,punchItems:items}:j));
-                // Sync done state back to manualPunchItems (don't filter them out - just update)
+                setMpJobs(prev=>prev.map(j=>j.id===liveJob.id?{...j,punchItems:items}:j));
+                // Sync done state back to manualPunchItems
                 setManualPunchItems(prev=>prev.map(p=>{
                   const found=items.find(x=>x.id===p.id);
                   return found?{...p,done:found.done}:p;
                 }));
                 try{
-                  await fetch(`${SUPA_URL}/rest/v1/mp_jobs?id=eq.${encodeURIComponent(job.id)}`,{
+                  const res = await fetch(`${SUPA_URL}/rest/v1/mp_jobs?id=eq.${liveJob.id}`,{
                     method:"PATCH",
-                    headers:{apikey:SUPA_KEY,Authorization:`Bearer ${SUPA_KEY}`,"Content-Type":"application/json",Prefer:"return=minimal"},
+                    headers:{apikey:SUPA_KEY,Authorization:`Bearer ${SUPA_KEY}`,"Content-Type":"application/json","Prefer":"return=minimal"},
                     body:JSON.stringify({punch_items:items})
                   });
-                }catch(e){}
+                  if(!res.ok){
+                    const txt=await res.text();
+                    console.error("[TaskList] PATCH failed:",res.status,txt);
+                  } else {
+                    console.log("[TaskList] PATCH success - status:", res.status);
+                  }
+                }catch(e){console.error("[TaskList] saveTaskItems error:",e);}
               };
               const toggleTask = async (itemId) => {
                 const items = getJobItems().map(p=>p.id===itemId?{...p,done:!p.done}:p);
