@@ -5633,15 +5633,17 @@ Return ONLY valid JSON, no markdown, no extra text:
                         const isDone = !!item.done;
                         const toggleDone = async () => {
                           if(item.auto||!linkedJob) return;
-                          const newItems = (linkedJob.punchItems||[]).map(p=>p.id===item.id?{...p,done:!p.done}:p);
+                          const newItems = (linkedJob.punchItems||[]).map(p=>String(p.id)===String(item.id)?{...p,done:!p.done}:p);
                           setMpJobs(prev=>prev.map(j=>String(j.id)===item.jobId?{...j,punchItems:newItems}:j));
-                          try{ await supa.from("mp_jobs").update({punch_items:newItems}).eq("id",linkedJob.id); }catch(e){console.error(e);}
+                          const {error} = await supa.from("mp_jobs").update({punch_items:newItems}).eq("id",linkedJob.id);
+                          if(error) console.error("toggle failed:",error.message);
                         };
                         const removeItem = async () => {
                           if(item.auto||!linkedJob) return;
-                          const newItems = (linkedJob.punchItems||[]).filter(p=>p.id!==item.id);
+                          const newItems = (linkedJob.punchItems||[]).filter(p=>String(p.id)!==String(item.id));
                           setMpJobs(prev=>prev.map(j=>String(j.id)===item.jobId?{...j,punchItems:newItems}:j));
-                          try{ await supa.from("mp_jobs").update({punch_items:newItems}).eq("id",linkedJob.id); }catch(e){console.error(e);}
+                          const {error} = await supa.from("mp_jobs").update({punch_items:newItems}).eq("id",linkedJob.id);
+                          if(error) console.error("remove failed:",error.message);
                         };
                         return (
                           <div key={item.id} className="punch-item" style={{opacity:isDone?0.6:1,background:isDone?"#F9FFFE":"#fff"}}>
@@ -5721,7 +5723,8 @@ Return ONLY valid JSON, no markdown, no extra text:
                           if(linkedJob){
                             const jobItems=[...(linkedJob.punchItems||[]),newItem];
                             setMpJobs(prev=>prev.map(j=>String(j.id)===String(linkedJob.id)?{...j,punchItems:jobItems}:j));
-                            try{ await supa.from("mp_jobs").update({punch_items:jobItems}).eq("id",linkedJob.id); }catch(e){console.error("add task:",e);}
+                            const {error:addErr} = await supa.from("mp_jobs").update({punch_items:jobItems}).eq("id",linkedJob.id);
+                            if(addErr) console.error("add task failed - run in Supabase SQL editor: ALTER TABLE mp_jobs ADD COLUMN IF NOT EXISTS punch_items JSONB;", addErr.message);
                           }
                           setShowAddPunch(false);
                         }}>Add Task</button>
@@ -6830,14 +6833,16 @@ Return ONLY valid JSON, no markdown, no extra text:
               // Task list helpers - use saveMpField for reliable persistence
               const getJobItems = () => {
                 const liveJob = mpJobs.find(j=>String(j.id)===String(job.id))||job;
-                return liveJob.punchItems||[];
+                const items = liveJob.punchItems||[];
+                return items;
               };
               const saveTaskItems = async (items) => {
                 const liveJob = mpJobs.find(j=>String(j.id)===String(job.id))||job;
+                // Update state immediately
                 setMpJobs(prev=>prev.map(j=>String(j.id)===String(liveJob.id)?{...j,punchItems:items}:j));
-                try{
-                  await supa.from("mp_jobs").update({punch_items: items}).eq("id", liveJob.id);
-                }catch(e){ console.error("saveTaskItems:", e); }
+                // Save to Supabase - punch_items must exist: ALTER TABLE mp_jobs ADD COLUMN IF NOT EXISTS punch_items JSONB;
+                const { error } = await supa.from("mp_jobs").update({ punch_items: items }).eq("id", liveJob.id);
+                if(error) console.error("saveTaskItems failed - run: ALTER TABLE mp_jobs ADD COLUMN IF NOT EXISTS punch_items JSONB;", error);
               };
               const toggleTask = async (itemId) => {
                 const items = getJobItems().map(p=>p.id===itemId?{...p,done:!p.done}:p);
