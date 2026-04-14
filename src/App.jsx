@@ -5604,45 +5604,63 @@ Return ONLY valid JSON, no markdown, no extra text:
                   const today = new Date(); today.setHours(0,0,0,0);
                   const in3  = new Date(today.getTime()+3*86400000);
                   const in20 = new Date(today.getTime()+20*86400000);
-                  // Build auto items from milestones + bid dues
+                  // All tasks from all jobs (todo first, then done)
+                  const jobTasks = mpJobs.filter(j=>j.status!=="archived").flatMap(j=>
+                    (j.punchItems||[]).map(p=>({...p, jobId:String(j.id), jobName:j.name, pm:j.pm||""}))
+                  );
+                  // Auto-generated milestone + bid alerts (read-only reminders)
                   const autoItems = [];
                   mpJobs.filter(j=>j.status!=="archived").forEach(j=>{
-                    const pm=j.pm||"";
                     [{d:j.km1Date,label:j.km1||"Milestone 1"},{d:j.km2Date,label:j.km2||"Milestone 2"},{d:j.km3Date,label:j.km3||"Milestone 3"}].forEach((m,i)=>{
                       if(!m.d) return;
                       const md=new Date(m.d);
-                      if(md<=in3){ const over=md<today; autoItems.push({id:"km-"+j.id+"-"+i,text:m.label+": "+j.name,assignedTo:pm,dueDate:m.d,priority:over?"high":"medium",tag:over?"OVERDUE":"UPCOMING",jobId:j.id}); }
+                      if(md<=in3){ const over=md<today; autoItems.push({id:"km-"+j.id+"-"+i,text:m.label+": "+j.name,assignedTo:j.pm||"",dueDate:m.d,priority:over?"high":"medium",tag:over?"OVERDUE":"UPCOMING",jobId:String(j.id),jobName:j.name,auto:true}); }
                     });
+                    if(j.bidDueDate){ const d=new Date(j.bidDueDate); if(d>=today&&d<=in20){ autoItems.push({id:"bid-"+j.id,text:"Bid due: "+j.name,dueDate:j.bidDueDate,priority:Math.ceil((d-today)/86400000)<=3?"high":"medium",tag:"BID DUE",jobId:String(j.id),jobName:j.name,auto:true}); }}
                   });
                   pipeline.forEach(o=>{
-                    if(o.bidDueDate){ const d=new Date(o.bidDueDate); if(d>=today&&d<=in20){ const days=Math.ceil((d-today)/(86400000)); autoItems.push({id:"bid-"+o.id,text:"Bid due: "+o.name,dueDate:o.bidDueDate,priority:days<=3?"high":"medium",tag:"BID DUE"}); }}
+                    if(o.bidDueDate){ const d=new Date(o.bidDueDate); if(d>=today&&d<=in20){ autoItems.push({id:"bid-opp-"+o.id,text:"Bid due: "+o.name,dueDate:o.bidDueDate,priority:Math.ceil((d-today)/86400000)<=3?"high":"medium",tag:"BID DUE",auto:true}); }}
                   });
-                  // Job-linked manual tasks (not done, from mpJobs.punchItems)
-                  const jobTasks = mpJobs.filter(j=>j.status!=="archived"&&(j.punchItems||[]).length>0).flatMap(j=>
-                    (j.punchItems||[]).filter(p=>!p.done).map(p=>({...p,jobName:j.name}))
-                  );
-                  const allItems = [...autoItems, ...jobTasks].sort((a,b)=>{
-                    if(!a.dueDate&&!b.dueDate) return 0; if(!a.dueDate) return 1; if(!b.dueDate) return -1;
-                    return new Date(a.dueDate)-new Date(b.dueDate);
-                  });
+                  const todo = jobTasks.filter(p=>!p.done).sort((a,b)=>{ if(!a.dueDate&&!b.dueDate)return 0; if(!a.dueDate)return 1; if(!b.dueDate)return -1; return new Date(a.dueDate)-new Date(b.dueDate); });
+                  const done = jobTasks.filter(p=>p.done);
+                  const allItems = [...autoItems, ...todo, ...done];
                   const filtered = activeBU==="all" ? allItems : allItems.filter(p=>!p.bu||p.bu===activeBU||p.bu==="major");
-                  if(filtered.length===0) return <div style={{textAlign:"center",padding:"24px",color:"#3D4570",fontSize:12}}>No open tasks.</div>;
+                  if(filtered.length===0) return <div style={{textAlign:"center",padding:"24px",color:"#3D4570",fontSize:12}}>No tasks — add one above.</div>;
                   return (
-                    <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                    <div style={{display:"flex",flexDirection:"column",gap:6}}>
                       {filtered.map(item=>{
-                        const isAuto = item.id.startsWith("km-")||item.id.startsWith("bid-");
-                        const linkedJob = item.jobId ? mpJobs.find(j=>String(j.id)===String(item.jobId)) : null;
+                        const linkedJob = item.jobId ? mpJobs.find(j=>String(j.id)===item.jobId) : null;
+                        const isDone = !!item.done;
+                        const toggleDone = async () => {
+                          if(item.auto||!linkedJob) return;
+                          const newItems = (linkedJob.punchItems||[]).map(p=>p.id===item.id?{...p,done:!p.done}:p);
+                          setMpJobs(prev=>prev.map(j=>String(j.id)===item.jobId?{...j,punchItems:newItems}:j));
+                          try{ await supa.from("mp_jobs").update({punch_items:newItems}).eq("id",linkedJob.id); }catch(e){console.error(e);}
+                        };
+                        const removeItem = async () => {
+                          if(item.auto||!linkedJob) return;
+                          const newItems = (linkedJob.punchItems||[]).filter(p=>p.id!==item.id);
+                          setMpJobs(prev=>prev.map(j=>String(j.id)===item.jobId?{...j,punchItems:newItems}:j));
+                          try{ await supa.from("mp_jobs").update({punch_items:newItems}).eq("id",linkedJob.id); }catch(e){console.error(e);}
+                        };
                         return (
-                          <div key={item.id} className="punch-item">
-                            <div style={{width:8,height:8,borderRadius:"50%",background:item.priority==="high"?"#F87171":"#FCD34D",flexShrink:0}}/>
+                          <div key={item.id} className="punch-item" style={{opacity:isDone?0.6:1,background:isDone?"#F9FFFE":"#fff"}}>
+                            {!item.auto ? (
+                              <div onClick={toggleDone} style={{width:17,height:17,borderRadius:3,border:"2px solid "+(isDone?"#4ADE80":"#CBD1E8"),background:isDone?"#4ADE80":"#fff",cursor:"pointer",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",transition:"all 0.12s"}}>
+                                {isDone&&<span style={{color:"#fff",fontSize:10,fontWeight:700}}>&#10003;</span>}
+                              </div>
+                            ) : (
+                              <div style={{width:8,height:8,borderRadius:"50%",background:item.priority==="high"?"#F87171":"#FCD34D",flexShrink:0,marginRight:4}}/>
+                            )}
                             <div style={{flex:1,minWidth:0}}>
-                              <div style={{fontSize:13,color:"#252E52"}}>{item.text}</div>
-                              {(item.assignedTo||item.jobName) && <div style={{fontSize:10,color:"#9BA3BF"}}>{item.jobName?item.jobName+" → ":""}{item.assignedTo||""}</div>}
+                              <div style={{fontSize:13,color:"#252E52",textDecoration:isDone?"line-through":"none"}}>{item.text}</div>
+                              <div style={{fontSize:10,color:"#9BA3BF"}}>{item.jobName}{(item.assignedTo||item.pm)?" → "+(item.assignedTo||item.pm):""}</div>
                             </div>
-                            {item.tag && <span style={{fontSize:10,color:"#3B6FE8",background:"#3B6FE820",padding:"2px 8px",borderRadius:10,letterSpacing:"0.06em",textTransform:"uppercase"}}>{item.tag}</span>}
-                            {item.dueDate && <span style={{fontSize:10,color:"#4A5278"}}>{item.dueDate}</span>}
-                            {linkedJob && <button onClick={()=>{setActiveNav("jobs");setSelectedMpJob(linkedJob.id);setMpDetailTab("construction");}}
-                              style={{fontSize:10,background:"none",border:"1px solid #CBD1E8",borderRadius:4,padding:"1px 6px",cursor:"pointer",color:"#4A5278",fontFamily:"inherit"}}>Open</button>}
+                            {item.tag && <span style={{fontSize:10,color:"#3B6FE8",background:"#3B6FE820",padding:"2px 6px",borderRadius:8,letterSpacing:"0.05em",textTransform:"uppercase"}}>{item.tag}</span>}
+                            {item.dueDate && <span style={{fontSize:10,color:item.priority==="high"&&!isDone?"#F87171":"#9BA3BF"}}>{item.dueDate}</span>}
+                            {linkedJob && <button onClick={()=>{setActiveNav("jobs");setSelectedMpJob(linkedJob.id);const st=linkedJob.status||"";setMpDetailTab(st==="Preconstruction"?"precon":st==="Closeout"?"closeout":"construction");}}
+                              style={{fontSize:10,background:"none",border:"1px solid #CBD1E8",borderRadius:4,padding:"1px 6px",cursor:"pointer",color:"#4A5278",fontFamily:"inherit",flexShrink:0}}>Open</button>}
+                            {!item.auto && <button onClick={removeItem} style={{background:"none",border:"none",color:"#CBD1E8",cursor:"pointer",fontSize:12,padding:"0 2px",lineHeight:1}}>&#10005;</button>}
                           </div>
                         );
                       })}
@@ -5662,7 +5680,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                         <input className="fi" value={punchForm.text} onChange={e=>setPunchForm(f=>({...f,text:e.target.value}))} placeholder="e.g. Follow up on change order approval" autoFocus/>
                       </div>
                       <div>
-                        <label className="lbl">Assign to Job</label>
+                        <label className="lbl">Project (required)</label>
                         <select className="fi" value={punchForm.jobId} onChange={e=>{
                           const j=mpJobs.find(x=>String(x.id)===e.target.value);
                           setPunchForm(f=>({...f,jobId:e.target.value,assignedTo:j?j.pm||"":""}));
@@ -5691,6 +5709,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                         <button className="btn-ghost" onClick={()=>setShowAddPunch(false)}>Cancel</button>
                         <button className="btn-primary" onClick={async()=>{
                           if(!punchForm.text.trim()) return;
+                          if(!punchForm.jobId){ alert("Please select a project for this task."); return; }
                           const linkedJob=punchForm.jobId?mpJobs.find(j=>String(j.id)===String(punchForm.jobId)):null;
                           const newItem={
                             id:"punch_"+Date.now(), text:punchForm.text.trim(),
@@ -6814,8 +6833,11 @@ Return ONLY valid JSON, no markdown, no extra text:
                 return liveJob.punchItems||[];
               };
               const saveTaskItems = async (items) => {
-                // Use saveMpField - same proven path as dates/status/PM
-                await saveMpField("punchItems", items);
+                const liveJob = mpJobs.find(j=>String(j.id)===String(job.id))||job;
+                setMpJobs(prev=>prev.map(j=>String(j.id)===String(liveJob.id)?{...j,punchItems:items}:j));
+                try{
+                  await supa.from("mp_jobs").update({punch_items: items}).eq("id", liveJob.id);
+                }catch(e){ console.error("saveTaskItems:", e); }
               };
               const toggleTask = async (itemId) => {
                 const items = getJobItems().map(p=>p.id===itemId?{...p,done:!p.done}:p);
