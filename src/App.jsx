@@ -256,6 +256,9 @@ const STATUS_CONFIG = {
   "On Schedule":     { color: "#4ADE80", bg: "#4ADE8015" },
   "Behind Schedule": { color: "#F97316", bg: "#F9731615" },
   "At Risk":         { color: "#F87171", bg: "#F8717115" },
+  "Hold":            { color: "#FCD34D", bg: "#FCD34D15" },
+  "Preconstruction": { color: "#F59E0B", bg: "#F59E0B15" },
+  "Closeout":        { color: "#818CF8", bg: "#818CF815" },
 };
 
 const BU_COLORS = {
@@ -5113,12 +5116,10 @@ Return ONLY valid JSON, no markdown, no extra text:
                         closeout:   { label:"Closeout",        bar:"#818CF855", border:"#818CF880", dot:"#818CF8" },
                       };
                       const getGroup = job => {
-                        const rpts = mpWeeklyReports.filter(r=>r.projectId===job.id).sort((a,b)=>b.reportDate.localeCompare(a.reportDate));
-                        const da = (rpts[0]?.daysAhead ?? job.daysAhead);
                         const st = job.status||"";
                         if (st==="Closeout"||st==="completed") return "closeout";
-                        if (!job.startDate && !job.endDate) return "precon";
-                        if (da!==null && da<-7) return "behind";
+                        if (st==="Preconstruction") return "precon";
+                        if (st==="Behind Schedule"||st==="At Risk"||(()=>{const rpts=mpWeeklyReports.filter(r=>r.projectId===job.id).sort((a,b)=>b.reportDate.localeCompare(a.reportDate));const da=rpts[0]?.daysAhead??job.daysAhead;return da!==null&&da<-7;})()) return "behind";
                         return "onschedule";
                       };
                       const ORDER = ["behind","onschedule","precon","closeout"];
@@ -6587,12 +6588,13 @@ Return ONLY valid JSON, no markdown, no extra text:
             const closeoutJobs = visibleMpJobs.filter(j => j.status === "Closeout" || j.status === "completed");
 
             const STATUS_STYLE = {
-              "active":    { color:"#4ADE80", bg:"#4ADE8015" },
-              "On Schedule":{ color:"#4ADE80", bg:"#4ADE8015" },
-              "Behind Schedule":{ color:"#F87171", bg:"#F8717115" },
-              "At Risk":   { color:"#F97316", bg:"#F9731615" },
-              "Hold":      { color:"#FCD34D", bg:"#FCD34D15" },
-              "Closeout":  { color:"#818CF8", bg:"#818CF815" },
+              "active":           { color:"#4ADE80", bg:"#4ADE8015" },
+              "On Schedule":      { color:"#4ADE80", bg:"#4ADE8015" },
+              "Behind Schedule":  { color:"#F87171", bg:"#F8717115" },
+              "At Risk":          { color:"#F97316", bg:"#F9731615" },
+              "Hold":             { color:"#FCD34D", bg:"#FCD34D15" },
+              "Preconstruction":  { color:"#F59E0B", bg:"#F59E0B15" },
+              "Closeout":         { color:"#818CF8", bg:"#818CF815" },
             };
 
             // If a job is selected, show detail view
@@ -6693,12 +6695,21 @@ Return ONLY valid JSON, no markdown, no extra text:
                     {[
                       {label:"Start Date", field:"startDate", value:job.startDate, type:"date"},
                       {label:"End Date",   field:"endDate",   value:job.endDate,   type:"date"},
-                      {label:"Status",     field:"status",    value:job.status,    type:"text"},
                     ].map((f,i)=>(
                       <div key={f.field} style={{borderRight:"1px solid #F0F2F8"}}>
                         <HvacField label={f.label} value={f.value||""} type={f.type} onSave={val=>saveMpField(f.field,val)} />
                       </div>
                     ))}
+                    {/* Status dropdown */}
+                    <div style={{borderRight:"1px solid #F0F2F8",padding:"8px 10px"}}>
+                      <div style={{fontSize:9,color:"#9BA3BF",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:4}}>Status</div>
+                      <select value={job.status||""} onChange={e=>saveMpField("status",e.target.value)}
+                        style={{width:"100%",padding:"4px 6px",border:"1px solid #D4D9EE",borderRadius:5,fontSize:12,fontFamily:"inherit",background:"#F9FAFC",color:STATUS_STYLE[job.status]?.color||"#1A2240",fontWeight:600,outline:"none"}}>
+                        {["Preconstruction","On Schedule","Behind Schedule","At Risk","Hold","Closeout"].map(s=>(
+                          <option key={s} value={s}>{s}</option>
+                        ))}
+                      </select>
+                    </div>
                     {/* PM dropdown */}
                     <div style={{borderRight:"1px solid #F0F2F8",padding:"8px 10px"}}>
                       <div style={{fontSize:9,color:"#9BA3BF",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:4}}>Project Manager</div>
@@ -12611,7 +12622,7 @@ window.addEventListener('message',function(e){
               </div>
               <div><label className="lbl">Status</label>
                 <select className="fi" value={jobForm.status} onChange={fj("status")}>
-                  {["On Schedule", "Behind Schedule", "At Risk"].map(s => <option key={s}>{s}</option>)}
+                  {["Preconstruction","On Schedule","Behind Schedule","At Risk","Hold","Closeout"].map(s => <option key={s}>{s}</option>)}
                 </select>
               </div>
               <div><label className="lbl">% Complete — {jobForm.pct}%</label><input type="range" min="0" max="100" value={jobForm.pct} onChange={fj("pct")} /></div>
