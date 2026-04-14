@@ -283,12 +283,12 @@ const getMpJobSchedule = (job, latestReport) => {
     if (ms < 0) daysAhead = Math.round(ms / (1000 * 60 * 60 * 24));
   }
 
-  // Auto-derive status only for non-manual statuses
+  // Auto-derive status — any day behind contract = Behind Schedule
   const manualStatuses = ["Preconstruction","Closeout","Hold"];
   let autoStatus = job.status;
   if (!manualStatuses.includes(job.status)) {
-    if (daysAhead !== null && daysAhead < -7) autoStatus = "Behind Schedule";
-    else if (daysAhead !== null && daysAhead >= -7) autoStatus = job.status === "Behind Schedule" ? "On Schedule" : job.status;
+    if (daysAhead !== null && daysAhead < 0) autoStatus = "Behind Schedule";
+    else if (daysAhead !== null && daysAhead >= 0 && job.status === "Behind Schedule") autoStatus = "On Schedule";
   }
 
   return { daysAhead, autoStatus };
@@ -1682,14 +1682,23 @@ function MpWeeklyForm({ mpJobs, mpWeeklyReports, weeklyForm, setWeeklyForm, onCl
       km2: W.km2, km2_date: W.km2_date||null,
       km3: W.km3, km3_date: W.km3_date||null,
     };
-    const res = await fetch(`${supaUrl}/rest/v1/mp_weekly_reports`, {
-      method:"POST",
-      headers:{apikey:supaKey, Authorization:`Bearer ${supaKey}`, "Content-Type":"application/json", Prefer:"resolution=merge-duplicates,return=minimal"},
-      body: JSON.stringify(row)
+    const headers = {apikey:supaKey, Authorization:`Bearer ${supaKey}`, "Content-Type":"application/json", Prefer:"resolution=merge-duplicates,return=minimal"};
+    let res = await fetch(`${supaUrl}/rest/v1/mp_weekly_reports`, {
+      method:"POST", headers, body: JSON.stringify(row)
     });
+    // If failed (likely missing forecast_end column), retry without it
+    if (!res.ok && res.status !== 201 && res.status !== 204) {
+      const errText = await res.text();
+      if (errText.includes("forecast_end") || errText.includes("column")) {
+        const { forecast_end: _fe, ...rowFallback } = row;
+        res = await fetch(`${supaUrl}/rest/v1/mp_weekly_reports`, {
+          method:"POST", headers, body: JSON.stringify(rowFallback)
+        });
+      }
+    }
     setSaving(false);
     if (res.ok || res.status===201 || res.status===204) {
-      // If forecast_end changed, update the job record too
+      // Update job forecast_end regardless of whether column exists in reports table
       if (W.forecast_end && onUpdateJobForecast) {
         onUpdateJobForecast(W.project_id, W.forecast_end);
       }
@@ -14837,13 +14846,20 @@ window.addEventListener('message',function(e){
             setShowWeeklyForm(false);
             setWeeklyForm(f=>({...f,forecast_end:"",current_week:"",next_week:"",critical_path:"",change_order_status:"",long_lead_items:"",billing_status:"",gpm:"",completion_schedule:"",daily_reports:"",site_safety:"",support_needed:"",owner_comms:"",km1:"",km1_date:"",km2:"",km2_date:"",km3:"",km3_date:""}));
           }}
-          onUpdateJobForecast={(jobId, forecastEnd) => {
+          onUpdateJobForecast={async (jobId, forecastEnd) => {
             const job = mpJobs.find(j=>j.id===jobId);
             if (!job) return;
             const { daysAhead, autoStatus } = getMpJobSchedule({...job, forecastEnd}, null);
             const updated = {...job, forecastEnd, daysAhead, status: autoStatus};
             setMpJobs(prev=>prev.map(j=>j.id===jobId?updated:j));
-            fetch(`${SUPA_URL}/rest/v1/mp_jobs?id=eq.${encodeURIComponent(jobId)}`,{method:"PATCH",headers:{apikey:SUPA_KEY,Authorization:`Bearer ${SUPA_KEY}`,"Content-Type":"application/json",Prefer:"return=minimal"},body:JSON.stringify({forecast_end:forecastEnd,status:autoStatus,days_ahead:daysAhead})}).catch(()=>{});
+            const patchHeaders = {apikey:SUPA_KEY, Authorization:`Bearer ${SUPA_KEY}`, "Content-Type":"application/json", Prefer:"return=minimal"};
+            const patchUrl = `${SUPA_URL}/rest/v1/mp_jobs?id=eq.${encodeURIComponent(jobId)}`;
+            let r = await fetch(patchUrl, {method:"PATCH", headers:patchHeaders, body:JSON.stringify({forecast_end:forecastEnd, status:autoStatus, days_ahead:daysAhead})});
+            if (!r.ok) {
+              console.error("forecast PATCH failed, retrying without forecast_end:", await r.text());
+              // Column may not exist yet — still save status and days_ahead
+              fetch(patchUrl, {method:"PATCH", headers:patchHeaders, body:JSON.stringify({status:autoStatus, days_ahead:daysAhead})});
+            }
           }}
           supaUrl={SUPA_URL}
           supaKey={SUPA_KEY}
