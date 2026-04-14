@@ -1594,6 +1594,7 @@ const dbToMpWeekly = r => ({
   id: r.id, projectId: r.project_id, reportDate: r.report_date||"",
   currentWeek: r.current_week||"", nextWeek: r.next_week||"",
   criticalPath: r.critical_path||"", daysAhead: r.days_ahead,
+  forecastEnd: r.forecast_end||"",
   completionSchedule: r.completion_schedule||"",
   changeOrderStatus: r.change_order_status||"",
   budgetStatus: r.budget_status||"",
@@ -1617,11 +1618,27 @@ const WEEK_ACTIVITIES = [
   "Punchlist / Change Order Items","Other"
 ];
 
-function MpWeeklyForm({ mpJobs, weeklyForm, setWeeklyForm, onClose, onSave, supaUrl, supaKey }) {
+function MpWeeklyForm({ mpJobs, mpWeeklyReports, weeklyForm, setWeeklyForm, onClose, onSave, onUpdateJobForecast, supaUrl, supaKey }) {
   const W = weeklyForm;
   const setW = (k,v) => setWeeklyForm(f=>({...f,[k]:v}));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+
+  // Auto-fill forecast_end when project changes
+  const handleProjectChange = (jobId) => {
+    setW("project_id", jobId);
+    if (!jobId) return;
+    const job = mpJobs.find(j => j.id === jobId);
+    if (!job) return;
+    // Find most recent report for this job that has a forecast_end
+    const reports = (mpWeeklyReports||[])
+      .filter(r => r.projectId === jobId && r.forecastEnd)
+      .sort((a,b) => (b.reportDate||"").localeCompare(a.reportDate||""));
+    const lastForecast = reports[0]?.forecastEnd;
+    // Priority: last report forecast → job forecastEnd → contractual endDate
+    const autoFill = lastForecast || job.forecastEnd || job.endDate || "";
+    setWeeklyForm(f => ({...f, project_id: jobId, forecast_end: autoFill}));
+  };
 
   const YES_NO  = ["Yes","No","Hold","N/A"];
   const SAFETY  = [
@@ -1648,6 +1665,7 @@ function MpWeeklyForm({ mpJobs, weeklyForm, setWeeklyForm, onClose, onSave, supa
       id,
       project_id: W.project_id,
       report_date: W.report_date || new Date().toISOString().slice(0,10),
+      forecast_end: W.forecast_end||null,
       current_week: W.current_week,
       next_week: W.next_week,
       critical_path: W.critical_path,
@@ -1671,6 +1689,10 @@ function MpWeeklyForm({ mpJobs, weeklyForm, setWeeklyForm, onClose, onSave, supa
     });
     setSaving(false);
     if (res.ok || res.status===201 || res.status===204) {
+      // If forecast_end changed, update the job record too
+      if (W.forecast_end && onUpdateJobForecast) {
+        onUpdateJobForecast(W.project_id, W.forecast_end);
+      }
       onSave(row);
     } else {
       const txt = await res.text();
@@ -1699,19 +1721,47 @@ function MpWeeklyForm({ mpJobs, weeklyForm, setWeeklyForm, onClose, onSave, supa
         {/* Scrollable body */}
         <div style={{overflowY:"auto",flex:1,padding:"22px 24px",display:"flex",flexDirection:"column",gap:16}}>
 
-          {/* Project + Date */}
+          {/* Project + Date + Forecast End */}
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
             <div>
               <div style={{fontSize:12,fontWeight:700,color:"#1A2240",marginBottom:5}}>Project Name <span style={{color:"#F87171"}}>*</span></div>
-              <select value={W.project_id} onChange={e=>setW("project_id",e.target.value)} style={selStyle}>
+              <select value={W.project_id} onChange={e=>handleProjectChange(e.target.value)} style={selStyle}>
                 <option value="">Select project…</option>
                 {mpJobs.map(j=><option key={j.id} value={j.id}>{j.name}</option>)}
               </select>
             </div>
             <div>
-              <div style={{fontSize:12,fontWeight:700,color:"#1A2240",marginBottom:5}}>Target Completion Date</div>
+              <div style={{fontSize:12,fontWeight:700,color:"#1A2240",marginBottom:5}}>Report Date</div>
               <input type="date" value={W.report_date||""} onChange={e=>setW("report_date",e.target.value)} style={inputStyle}/>
             </div>
+          </div>
+
+          {/* Forecast Completion Date — prominent at top */}
+          <div style={{background:"#FFF7ED",border:"1.5px solid #F59E0B50",borderRadius:10,padding:"14px 16px"}}>
+            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+              <span style={{fontSize:16}}>📅</span>
+              <div style={{fontSize:13,fontWeight:700,color:"#92400E"}}>Forecasted Completion Date</div>
+              {(() => {
+                const job = mpJobs.find(j=>j.id===W.project_id);
+                if (!job?.endDate || !W.forecast_end) return null;
+                const contractEnd = new Date(job.endDate);
+                const forecastEnd = new Date(W.forecast_end);
+                const days = Math.round((contractEnd - forecastEnd) / (1000*60*60*24));
+                const behind = days < 0;
+                return (
+                  <span style={{marginLeft:"auto",fontSize:11,fontWeight:700,color:behind?"#F87171":"#4ADE80",background:behind?"#FFF1F2":"#F0FFF4",border:"1px solid "+(behind?"#F8717150":"#4ADE8050"),borderRadius:5,padding:"2px 8px"}}>
+                    {behind ? `${Math.abs(days)}d behind contract` : `${days}d ahead of contract`}
+                  </span>
+                );
+              })()}
+            </div>
+            <input type="date" value={W.forecast_end||""} onChange={e=>setW("forecast_end",e.target.value)}
+              style={{...inputStyle, border:"1.5px solid #F59E0B80", background:"#fff", fontSize:14, fontWeight:600}}/>
+            {mpJobs.find(j=>j.id===W.project_id)?.endDate && (
+              <div style={{fontSize:10,color:"#92400E",marginTop:5,opacity:0.7}}>
+                Contract end: {mpJobs.find(j=>j.id===W.project_id)?.endDate}
+              </div>
+            )}
           </div>
 
           <div style={{height:1,background:"#E0E4F0"}}/>
@@ -2995,6 +3045,7 @@ export default function App() {
   const [weeklyFormJob,    setWeeklyFormJob]    = useState(null); // pre-selected job id
   const [weeklyForm,       setWeeklyForm]       = useState({
     project_id:"", report_date: new Date().toISOString().slice(0,10),
+    forecast_end:"",
     current_week:"", next_week:"", critical_path:"",
     change_order_status:"", long_lead_items:"", long_lead_status:"",
     billing_status:"", gpm:"", completion_schedule:"", daily_reports:"",
@@ -14770,6 +14821,7 @@ window.addEventListener('message',function(e){
       {showWeeklyForm && (
         <MpWeeklyForm
           mpJobs={mpJobs}
+          mpWeeklyReports={mpWeeklyReports}
           weeklyForm={weeklyForm}
           setWeeklyForm={setWeeklyForm}
           onClose={()=>setShowWeeklyForm(false)}
@@ -14777,12 +14829,21 @@ window.addEventListener('message',function(e){
             setMpWeeklyReports(prev=>[dbToMpWeekly(row),...prev.filter(r=>r.id!==row.id)]);
             const job=mpJobs.find(j=>j.id===row.project_id);
             if(job){
-              const updated={...job,gpm:row.gpm??job.gpm,km1:row.km1||job.km1,km1Date:row.km1_date||job.km1Date,km2:row.km2||job.km2,km2Date:row.km2_date||job.km2Date,km3:row.km3||job.km3,km3Date:row.km3_date||job.km3Date};
+              const { daysAhead, autoStatus } = getMpJobSchedule({...job, forecastEnd: row.forecast_end||job.forecastEnd}, dbToMpWeekly(row));
+              const updated={...job, forecastEnd: row.forecast_end||job.forecastEnd, daysAhead, status: autoStatus, gpm:row.gpm??job.gpm,km1:row.km1||job.km1,km1Date:row.km1_date||job.km1Date,km2:row.km2||job.km2,km2Date:row.km2_date||job.km2Date,km3:row.km3||job.km3,km3Date:row.km3_date||job.km3Date};
               setMpJobs(prev=>prev.map(j=>j.id===row.project_id?updated:j));
               supa.from("mp_jobs").update(mpJobToDB(updated)).eq("id",row.project_id);
             }
             setShowWeeklyForm(false);
-            setWeeklyForm(f=>({...f,current_week:"",next_week:"",critical_path:"",change_order_status:"",long_lead_items:"",billing_status:"",gpm:"",completion_schedule:"",daily_reports:"",site_safety:"",support_needed:"",owner_comms:"",km1:"",km1_date:"",km2:"",km2_date:"",km3:"",km3_date:""}));
+            setWeeklyForm(f=>({...f,forecast_end:"",current_week:"",next_week:"",critical_path:"",change_order_status:"",long_lead_items:"",billing_status:"",gpm:"",completion_schedule:"",daily_reports:"",site_safety:"",support_needed:"",owner_comms:"",km1:"",km1_date:"",km2:"",km2_date:"",km3:"",km3_date:""}));
+          }}
+          onUpdateJobForecast={(jobId, forecastEnd) => {
+            const job = mpJobs.find(j=>j.id===jobId);
+            if (!job) return;
+            const { daysAhead, autoStatus } = getMpJobSchedule({...job, forecastEnd}, null);
+            const updated = {...job, forecastEnd, daysAhead, status: autoStatus};
+            setMpJobs(prev=>prev.map(j=>j.id===jobId?updated:j));
+            fetch(`${SUPA_URL}/rest/v1/mp_jobs?id=eq.${encodeURIComponent(jobId)}`,{method:"PATCH",headers:{apikey:SUPA_KEY,Authorization:`Bearer ${SUPA_KEY}`,"Content-Type":"application/json",Prefer:"return=minimal"},body:JSON.stringify({forecast_end:forecastEnd,status:autoStatus,days_ahead:daysAhead})}).catch(()=>{});
           }}
           supaUrl={SUPA_URL}
           supaKey={SUPA_KEY}
