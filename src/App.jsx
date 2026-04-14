@@ -7046,9 +7046,9 @@ Return ONLY valid JSON, no markdown, no extra text:
                       <div style={{padding:"12px 16px",borderBottom:"1px solid #D4D9EE",background:"#F9FAFC",display:"flex",alignItems:"center",gap:10}}>
                         <span style={{fontSize:12,fontWeight:700,color:"#1A2240",flex:1}}>📊 Gantt — click any row to open</span>
                         <div style={{display:"flex",gap:12,alignItems:"center"}}>
-                          {[{c:"#4ADE80",l:"Ahead"},{c:"#FCD34D",l:"On Track"},{c:"#F87171",l:"Behind"}].map(l=>(
-                            <div key={l.l} style={{display:"flex",alignItems:"center",gap:4,fontSize:10,color:"#4A5278"}}>
-                              <span style={{width:7,height:7,borderRadius:"50%",background:l.c,display:"inline-block"}}/>
+                          {[{c:"#F87171",l:"Behind"},{c:"#4ADE80",l:"On Schedule"},{c:"#F59E0B",l:"Precon"},{c:"#818CF8",l:"Closeout"}].map(l=>(
+                            <div key={l.l} style={{display:"flex",alignItems:"center",gap:5,fontSize:10,color:"#4A5278"}}>
+                              <span style={{width:18,height:8,borderRadius:4,background:l.c+"55",border:"1px solid "+l.c+"80",display:"inline-block"}}/>
                               {l.l}
                             </div>
                           ))}
@@ -7073,7 +7073,17 @@ Return ONLY valid JSON, no markdown, no extra text:
                         const latest = rpts[0];
                         const da = latest?.daysAhead ?? job.daysAhead;
                         const gpm = latest?.gpm ?? job.gpm;
-                        const sc = da===null?"#9BA3BF":da>7?"#4ADE80":da<-7?"#F87171":"#FCD34D";
+                        const st = job.status||"";
+                        // Bar/dot color based on status
+                        const BAR_COLOR = {
+                          "Preconstruction":  { dot:"#F59E0B", bar:"#F59E0B55", border:"#F59E0B80" },
+                          "On Schedule":      { dot:"#4ADE80", bar:"#4ADE8055", border:"#4ADE8080" },
+                          "Behind Schedule":  { dot:"#F87171", bar:"#F8717155", border:"#F8717180" },
+                          "At Risk":          { dot:"#F97316", bar:"#F9731655", border:"#F9731680" },
+                          "Hold":             { dot:"#FCD34D", bar:"#FCD34D55", border:"#FCD34D80" },
+                          "Closeout":         { dot:"#818CF8", bar:"#818CF855", border:"#818CF880" },
+                        };
+                        const bc = BAR_COLOR[st] || { dot:"#9BA3BF", bar:"#3B6FE840", border:"#3B6FE850" };
                         const startPct = pct(job.startDate);
                         const endPct   = pct(job.endDate);
                         return (
@@ -7083,7 +7093,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                             onMouseLeave={e=>e.currentTarget.style.background=""}>
                             {/* Name */}
                             <div style={{width:220,flexShrink:0,padding:"8px 14px",borderRight:"1px solid #D4D9EE",display:"flex",alignItems:"center",gap:8}}>
-                              <div style={{width:8,height:8,borderRadius:"50%",background:sc,flexShrink:0,boxShadow:"0 0 0 2px "+sc+"30"}}/>
+                              <div style={{width:8,height:8,borderRadius:"50%",background:bc.dot,flexShrink:0,boxShadow:"0 0 0 2px "+bc.dot+"30"}}/>
                               <div style={{minWidth:0}}>
                                 <div style={{fontSize:12,fontWeight:700,color:"#1A2240",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{job.name}</div>
                                 {(job.startDate||job.endDate) && <div style={{fontSize:9,color:"#9BA3BF"}}>{job.startDate||"?"} → {job.endDate||"?"}</div>}
@@ -7092,7 +7102,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                             {/* Days */}
                             <div style={{width:64,flexShrink:0,borderRight:"1px solid #D4D9EE",display:"flex",alignItems:"center",justifyContent:"center"}}>
                               <div style={{textAlign:"center"}}>
-                                <div style={{fontSize:13,fontWeight:800,color:sc,lineHeight:1}}>{da===null?"—":Math.abs(da)}</div>
+                                <div style={{fontSize:13,fontWeight:800,color:bc.dot,lineHeight:1}}>{da===null?"—":Math.abs(da)}</div>
                                 <div style={{fontSize:8,color:"#9BA3BF"}}>{da===null?"":da>=0?"ahead":"behind"}</div>
                               </div>
                             </div>
@@ -7106,7 +7116,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                               <div style={{position:"absolute",left:"calc("+nowPct+"% + 6px)",top:0,bottom:0,width:1.5,background:"#F87171",opacity:0.5,zIndex:2}}/>
                               {/* Project bar - start to end */}
                               {startPct!==null && endPct!==null && (
-                                <div style={{position:"absolute",left:"calc("+startPct+"% + 6px)",right:"calc("+(100-endPct)+"% + 6px)",top:"50%",transform:"translateY(-50%)",height:14,background:"linear-gradient(90deg,#3B6FE840,#3B6FE870)",border:"1px solid #3B6FE850",borderRadius:7}}/>
+                                <div style={{position:"absolute",left:"calc("+startPct+"% + 6px)",right:"calc("+(100-endPct)+"% + 6px)",top:"50%",transform:"translateY(-50%)",height:14,background:bc.bar,border:"1px solid "+bc.border,borderRadius:7}}/>
                               )}
                               {/* Milestone diamonds */}
                               {[
