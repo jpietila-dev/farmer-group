@@ -1575,6 +1575,7 @@ const dbToMpJob = r => ({
   amountBilled: (r.amount_billed != null ? Number(r.amount_billed) : 0),
   closeoutChecklist: r.closeout_checklist ? (typeof r.closeout_checklist === 'object' ? r.closeout_checklist : JSON.parse(r.closeout_checklist)) : {},
   closeoutStartDate: r.closeout_start_date||"",
+  punchItems: r.punch_items ? (typeof r.punch_items === 'object' ? r.punch_items : JSON.parse(r.punch_items)) : [],
 });
 const mpJobToDB = j => ({
   id: j.id, name: j.name||"", client: j.client||"", status: j.status||"active",
@@ -1593,6 +1594,7 @@ const mpJobToDB = j => ({
   amount_billed: j.amountBilled||0,
   closeout_checklist: j.closeoutChecklist||null,
   closeout_start_date: j.closeoutStartDate||null,
+  punch_items: j.punchItems||null,
 });
 const dbToMpWeekly = r => ({
   id: r.id, projectId: r.project_id, reportDate: r.report_date||"",
@@ -3056,6 +3058,10 @@ export default function App() {
   const [showMpForm,       setShowMpForm]       = useState(false);
   const [showWeeklyForm,   setShowWeeklyForm]   = useState(false);
   const [weeklyFormJob,    setWeeklyFormJob]    = useState(null); // pre-selected job id
+  const [manualPunchItems, setManualPunchItems] = useState([]); // dashboard-level manual items
+  const [dismissedPunchIds, setDismissedPunchIds] = useState(new Set()); // checked/dismissed auto items
+  const [showAddPunch,     setShowAddPunch]     = useState(false);
+  const [punchForm,        setPunchForm]        = useState({ text: "", jobId: "", dueDate: "", priority: "medium", bu: "major" });
   const [weeklyForm,       setWeeklyForm]       = useState({
     project_id:"", report_date: new Date().toISOString().slice(0,10),
     forecast_end:"",
@@ -3287,23 +3293,53 @@ export default function App() {
 
   // Punch list
   const dynamicPunchList = useMemo(() => {
-    const items = [...PUNCH_LIST_STATIC];
+    const items = [];
     const today = new Date(); today.setHours(0,0,0,0);
-    const soon  = new Date(today.getTime() + 7 * 86400000);
-    const urgent = new Date(today.getTime() + 2 * 86400000);
+    const in3days  = new Date(today.getTime() + 3 * 86400000);
+    const in20days = new Date(today.getTime() + 20 * 86400000);
+    // MP jobs: past or upcoming milestone dates (within 3 days)
+    mpJobs.forEach(j => {
+      if (j.status === "archived") return;
+      const pm = j.pm || "";
+      [
+        { d: j.km1Date, label: j.km1 || "Milestone 1" },
+        { d: j.km2Date, label: j.km2 || "Milestone 2" },
+        { d: j.km3Date, label: j.km3 || "Milestone 3" },
+      ].forEach((m, i) => {
+        if (!m.d) return;
+        const mDate = new Date(m.d);
+        if (mDate <= in3days) { // past or within 3 days
+          const overdue = mDate < today;
+          items.push({
+            id: "km-" + j.id + "-" + i,
+            text: m.label + ": " + j.name,
+            bu: "major", priority: overdue ? "high" : "medium",
+            dueDate: m.d, tag: overdue ? "OVERDUE" : "UPCOMING",
+            assignedTo: pm,
+          });
+        }
+      });
+      // Bid due dates within 20 days (pipeline opps linked to jobs)
+    });
+    // Pipeline: bid due within 20 days
     pipeline.forEach(o => {
-      if (o.budgetDueDate) {
-        const d = new Date(o.budgetDueDate);
-        if (d >= today && d <= soon) items.push({ id: "budget-" + o.id, text: "Budget due: " + o.name, bu: o.bu, priority: d <= urgent ? "high" : "medium", dueDate: o.budgetDueDate, tag: "BUDGET DUE" });
-      }
       if (o.bidDueDate) {
         const d = new Date(o.bidDueDate);
-        if (d >= today && d <= soon) items.push({ id: "bid-" + o.id, text: "Bid due: " + o.name, bu: o.bu, priority: d <= urgent ? "high" : "medium", dueDate: o.bidDueDate, tag: "BID DUE" });
+        if (d >= today && d <= in20days) {
+          const daysLeft = Math.ceil((d-today)/(1000*60*60*24));
+          items.push({ id: "bid-" + o.id, text: "Bid due: " + o.name, bu: o.bu||"major", priority: daysLeft <= 3 ? "high" : "medium", dueDate: o.bidDueDate, tag: "BID DUE", assignedTo: o.contactName||"" });
+        }
+      }
+      if (o.budgetDueDate) {
+        const d = new Date(o.budgetDueDate);
+        if (d >= today && d <= in20days) {
+          items.push({ id: "budget-" + o.id, text: "Budget due: " + o.name, bu: o.bu||"major", priority: "medium", dueDate: o.budgetDueDate, tag: "BUDGET DUE" });
+        }
       }
       (o.nextSteps || []).forEach((ns, i) => {
         if (ns.dueDate) {
           const d = new Date(ns.dueDate);
-          if (d >= today && d <= soon) items.push({ id: "ns-" + o.id + "-" + i, text: ns.step + ": " + o.name, bu: o.bu, priority: d <= urgent ? "high" : "medium", dueDate: ns.dueDate, tag: ns.step.toUpperCase() });
+          if (d >= today && d <= in3days) items.push({ id: "ns-" + o.id + "-" + i, text: ns.step + ": " + o.name, bu: o.bu||"major", priority: "medium", dueDate: ns.dueDate, tag: ns.step.toUpperCase() });
         }
       });
     });
@@ -3342,7 +3378,7 @@ export default function App() {
       if (!b.dueDate) return -1;
       return new Date(a.dueDate) - new Date(b.dueDate);
     });
-  }, [pipeline, fmJobs]);
+  }, [pipeline, fmJobs, mpJobs]);
 
   const majorJobs = jobs.filter(j => j.bu === "major");
 
@@ -5644,23 +5680,139 @@ Return ONLY valid JSON, no markdown, no extra text:
               <div>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
                   <div style={{ fontSize: 11, letterSpacing: "0.1em", textTransform: "uppercase", color: "#4A5278", fontWeight: 600 }}>Today's Punch List</div>
-                  <div style={{ fontSize: 11, color: "#4A5278" }}>{new Date().toLocaleDateString("en-US", { month: "short", day: "numeric" })}</div>
+                  <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                    <span style={{ fontSize: 11, color: "#4A5278" }}>{new Date().toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>
+                    <button onClick={()=>{ setPunchForm({ text:"", jobId:"", dueDate:"", priority:"medium", bu: activeBU==="all"?"major":activeBU }); setShowAddPunch(true); }}
+                      style={{ fontSize: 11, padding: "4px 10px", background: "#3B6FE8", color: "#fff", border: "none", borderRadius: 6, cursor: "pointer", fontFamily: "inherit", fontWeight: 600 }}>
+                      + Add Item
+                    </button>
+                  </div>
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  {dynamicPunchList.filter(p => activeBU === "all" || p.bu === activeBU).map(item => (
-                    <div key={item.id} className="punch-item">
+                  {/* Auto-generated items (milestone/bid) with checkboxes */}
+                  {dynamicPunchList.filter(p => (activeBU === "all" || p.bu === activeBU) && !dismissedPunchIds.has(p.id)).map(item => (
+                    <div key={item.id} className="punch-item" style={{ opacity: 1 }}>
+                      <div onClick={()=>{ setDismissedPunchIds(prev=>{ const s=new Set(prev); s.add(item.id); return s; }); }}
+                        style={{ width:18,height:18,borderRadius:4,border:"2px solid #CBD1E8",background:"#fff",cursor:"pointer",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center" }}/>
                       <div className="priority-dot" style={{ background: item.priority === "high" ? "#F87171" : "#FCD34D" }} />
-                      <span style={{ fontSize: 13, color: "#252E52", flex: 1 }}>{item.text}</span>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 13, color: "#252E52" }}>{item.text}</div>
+                        {item.assignedTo && <div style={{ fontSize: 10, color: "#9BA3BF" }}>→ {item.assignedTo}</div>}
+                      </div>
                       {item.tag && <span style={{ fontSize: 10, color: "#3B6FE8", background: "#3B6FE820", padding: "2px 8px", borderRadius: 10, letterSpacing: "0.06em", textTransform: "uppercase" }}>{item.tag}</span>}
                       {item.dueDate && <span style={{ fontSize: 10, color: "#4A5278" }}>{item.dueDate}</span>}
                       <span style={{ fontSize: 10, color: "#4A5278", background: "#CBD1E8", padding: "2px 8px", borderRadius: 10, textTransform: "uppercase", letterSpacing: "0.06em" }}>{BUSINESS_UNITS.find(b => b.id === item.bu)?.short}</span>
                     </div>
                   ))}
-                  {dynamicPunchList.filter(p => activeBU === "all" || p.bu === activeBU).length === 0 && (
-                    <div style={{ textAlign: "center", padding: "24px", color: "#3D4570", fontSize: 12 }}>No reminders in the next 7 days.</div>
+                  {/* Manual punch items */}
+                  {manualPunchItems.filter(p => activeBU === "all" || p.bu === activeBU).map(item => {
+                    const job = item.jobId ? mpJobs.find(j=>j.id===item.jobId) : null;
+                    const assignedTo = job ? (job.pm || "PM") : (item.assignedTo||"");
+                    return (
+                      <div key={item.id} className="punch-item" style={{ background: item.done ? "#F0FFF4" : "#fff", opacity: item.done ? 0.7 : 1 }}>
+                        <div onClick={async()=>{
+                          const updated = manualPunchItems.map(p=>p.id===item.id?{...p,done:!p.done}:p);
+                          setManualPunchItems(updated);
+                          // If linked to a job, also save to mp_jobs.punch_items
+                          if (item.jobId) {
+                            const job = mpJobs.find(j=>j.id===item.jobId);
+                            if (job) {
+                              const jobItems = (job.punchItems||[]).map(p=>p.id===item.id?{...p,done:!p.done}:p);
+                              const updatedJob = {...job, punchItems: jobItems};
+                              setMpJobs(prev=>prev.map(j=>j.id===job.id?updatedJob:j));
+                              try { await fetch(`${SUPA_URL}/rest/v1/mp_jobs?id=eq.${encodeURIComponent(job.id)}`,{method:"PATCH",headers:{apikey:SUPA_KEY,Authorization:`Bearer ${SUPA_KEY}`,"Content-Type":"application/json",Prefer:"return=minimal"},body:JSON.stringify({punch_items:jobItems})}); } catch(e){}
+                            }
+                          }
+                        }}
+                          style={{ width:18,height:18,borderRadius:4,border:"2px solid "+(item.done?"#4ADE80":"#CBD1E8"),background:item.done?"#4ADE80":"#fff",cursor:"pointer",flexShrink:0,display:"flex",alignItems:"center",justifyContent:"center",transition:"all 0.15s" }}>
+                          {item.done && <span style={{color:"#fff",fontSize:11,fontWeight:700,lineHeight:1}}>✓</span>}
+                        </div>
+                        <div className="priority-dot" style={{ background: item.priority === "high" ? "#F87171" : "#FCD34D" }} />
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ fontSize: 13, color: "#252E52", textDecoration: item.done?"line-through":"none" }}>{item.text}</div>
+                          {(job||assignedTo) && <div style={{ fontSize: 10, color: "#9BA3BF" }}>{job ? `${job.name} → ` : ""}{assignedTo}</div>}
+                        </div>
+                        {item.dueDate && <span style={{ fontSize: 10, color: "#4A5278" }}>{item.dueDate}</span>}
+                        <span style={{ fontSize: 10, color: "#4A5278", background: "#CBD1E8", padding: "2px 8px", borderRadius: 10, textTransform: "uppercase", letterSpacing: "0.06em" }}>{BUSINESS_UNITS.find(b => b.id === item.bu)?.short}</span>
+                        <button onClick={()=>setManualPunchItems(prev=>prev.filter(p=>p.id!==item.id))}
+                          style={{ background:"none",border:"none",color:"#CBD1E8",cursor:"pointer",fontSize:14,padding:"0 2px",lineHeight:1 }}>✕</button>
+                      </div>
+                    );
+                  })}
+                  {dynamicPunchList.filter(p => (activeBU === "all" || p.bu === activeBU) && !dismissedPunchIds.has(p.id)).length === 0
+                    && manualPunchItems.filter(p => activeBU === "all" || p.bu === activeBU).length === 0 && (
+                    <div style={{ textAlign: "center", padding: "24px", color: "#3D4570", fontSize: 12 }}>No items — add one above.</div>
                   )}
                 </div>
               </div>
+
+              {/* Add Punch Item Modal */}
+              {showAddPunch && (
+                <div className="modal-bg" onClick={e=>e.target===e.currentTarget&&setShowAddPunch(false)}>
+                  <div className="modal fade-in" style={{ maxWidth: 420 }}>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: "#1A2240", marginBottom: 18, textTransform: "uppercase", letterSpacing: "0.04em" }}>Add Punch List Item</div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                      <div>
+                        <label className="lbl">Task *</label>
+                        <input className="fi" value={punchForm.text} onChange={e=>setPunchForm(f=>({...f,text:e.target.value}))} placeholder="e.g. Follow up on change order approval" autoFocus/>
+                      </div>
+                      <div>
+                        <label className="lbl">Assign to Job (optional)</label>
+                        <select className="fi" value={punchForm.jobId} onChange={e=>{
+                          const job = mpJobs.find(j=>j.id===e.target.value);
+                          setPunchForm(f=>({...f, jobId:e.target.value, assignedTo: job?job.pm:"" }));
+                        }}>
+                          <option value="">— No specific job —</option>
+                          {mpJobs.filter(j=>j.status!=="archived").map(j=><option key={j.id} value={j.id}>{j.name}{j.pm?" (PM: "+j.pm+")":""}</option>)}
+                        </select>
+                        {punchForm.jobId && mpJobs.find(j=>j.id===punchForm.jobId)?.pm && (
+                          <div style={{fontSize:10,color:"#3B6FE8",marginTop:3}}>→ Responsible: {mpJobs.find(j=>j.id===punchForm.jobId).pm}</div>
+                        )}
+                      </div>
+                      <div className="g2">
+                        <div>
+                          <label className="lbl">Due Date</label>
+                          <input className="fi" type="date" value={punchForm.dueDate} onChange={e=>setPunchForm(f=>({...f,dueDate:e.target.value}))}/>
+                        </div>
+                        <div>
+                          <label className="lbl">Priority</label>
+                          <select className="fi" value={punchForm.priority} onChange={e=>setPunchForm(f=>({...f,priority:e.target.value}))}>
+                            <option value="high">🔴 High</option>
+                            <option value="medium">🟡 Medium</option>
+                          </select>
+                        </div>
+                      </div>
+                      <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 4 }}>
+                        <button className="btn-ghost" onClick={()=>setShowAddPunch(false)}>Cancel</button>
+                        <button className="btn-primary" onClick={()=>{
+                          if (!punchForm.text.trim()) return;
+                          const job = punchForm.jobId ? mpJobs.find(j=>j.id===punchForm.jobId) : null;
+                          const newItem = {
+                            id: "punch_"+Date.now(),
+                            text: punchForm.text.trim(),
+                            jobId: punchForm.jobId||"",
+                            assignedTo: job ? (job.pm||"") : "",
+                            dueDate: punchForm.dueDate||"",
+                            priority: punchForm.priority||"medium",
+                            bu: job ? "major" : (punchForm.bu||"major"),
+                            done: false,
+                            createdAt: new Date().toISOString().slice(0,10),
+                          };
+                          setManualPunchItems(prev=>[newItem,...prev]);
+                          // If linked to job, also save to job's punch_items
+                          if (job) {
+                            const jobItems = [...(job.punchItems||[]), newItem];
+                            const updatedJob = {...job, punchItems: jobItems};
+                            setMpJobs(prev=>prev.map(j=>j.id===job.id?updatedJob:j));
+                            fetch(`${SUPA_URL}/rest/v1/mp_jobs?id=eq.${encodeURIComponent(job.id)}`,{method:"PATCH",headers:{apikey:SUPA_KEY,Authorization:`Bearer ${SUPA_KEY}`,"Content-Type":"application/json",Prefer:"return=minimal"},body:JSON.stringify({punch_items:jobItems})}).catch(()=>{});
+                          }
+                          setShowAddPunch(false);
+                        }}>Add Item</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Quick access */}
               {activeBU !== "all" && (
