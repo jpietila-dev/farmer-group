@@ -7167,7 +7167,6 @@ Return ONLY valid JSON, no markdown, no extra text:
                             <div style={{fontSize:13,color:"#1A2240",lineHeight:1.6}}>{latest?.longLeadItems||job.longLeadItems||"None"}</div>
                           </div>
                         </div>
-                      </div>
 
                         {/* Job Punch List - Task Table */}
                         {(() => {
@@ -7195,7 +7194,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                                 ))}
                               </div>
                               {rows.length===0 && (
-                                <div style={{padding:"28px",textAlign:"center",color:"#9BA3BF",fontSize:12}}>No tasks yet — click + Add Task above</div>
+                                <div style={{padding:"28px",textAlign:"center",color:"#9BA3BF",fontSize:12}}>No tasks yet - click + Add Task above</div>
                               )}
                               {rows.map((item,idx)=>{
                                 const isManual = manualPunchItems.some(p=>p.id===item.id);
@@ -7225,9 +7224,9 @@ Return ONLY valid JSON, no markdown, no extra text:
                                     {/* Task text */}
                                     <div style={{fontSize:12,color:"#1A2240",textDecoration:isDone?"line-through":"none",opacity:isDone?0.55:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={item.text}>{item.text}</div>
                                     {/* Assigned */}
-                                    <div style={{fontSize:11,color:"#4A5278",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{item.assignedTo||job.pm||"—"}</div>
+                                    <div style={{fontSize:11,color:"#4A5278",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{item.assignedTo||job.pm||"-"}</div>
                                     {/* Due date */}
-                                    <div style={{fontSize:11,color:item.dueDate&&new Date(item.dueDate)<new Date()&&!isDone?"#F87171":"#4A5278"}}>{item.dueDate||"—"}</div>
+                                    <div style={{fontSize:11,color:item.dueDate&&new Date(item.dueDate)<new Date()&&!isDone?"#F87171":"#4A5278"}}>{item.dueDate||"-"}</div>
                                     {/* Priority */}
                                     <div style={{display:"flex",alignItems:"center",gap:4}}>
                                       <div style={{width:7,height:7,borderRadius:"50%",background:item.priority==="high"?"#F87171":"#FCD34D",flexShrink:0}}/>
