@@ -1573,6 +1573,8 @@ const dbToMpJob = r => ({
   km3: r.km3||"", km3Date: r.km3_date||"",
   notes: r.notes||"",
   amountBilled: (r.amount_billed != null ? Number(r.amount_billed) : 0),
+  closeoutChecklist: r.closeout_checklist ? (typeof r.closeout_checklist === 'object' ? r.closeout_checklist : JSON.parse(r.closeout_checklist)) : {},
+  closeoutStartDate: r.closeout_start_date||"",
 });
 const mpJobToDB = j => ({
   id: j.id, name: j.name||"", client: j.client||"", status: j.status||"active",
@@ -1589,6 +1591,8 @@ const mpJobToDB = j => ({
   km3: j.km3||null, km3_date: j.km3Date||null,
   notes: j.notes||null,
   amount_billed: j.amountBilled||0,
+  closeout_checklist: j.closeoutChecklist||null,
+  closeout_start_date: j.closeoutStartDate||null,
 });
 const dbToMpWeekly = r => ({
   id: r.id, projectId: r.project_id, reportDate: r.report_date||"",
@@ -5243,7 +5247,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                               </div>
                             )}
                             <div
-                              onClick={()=>{setActiveNav("jobs");setSelectedMpJob(job.id);setMpDetailTab("weekly");}}
+                              onClick={()=>{setActiveNav("jobs");setSelectedMpJob(job.id);const st=job.status||"";setMpDetailTab(st==="Preconstruction"?"precon":st==="Closeout"||st==="completed"?"closeout":"construction");}}
                               style={{display:"flex",borderBottom:"1px solid #F4F6FB",cursor:"pointer",minHeight:46,alignItems:"stretch"}}
                               onMouseEnter={e=>e.currentTarget.style.background="#F5F8FF"}
                               onMouseLeave={e=>e.currentTarget.style.background=""}>
@@ -6024,7 +6028,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                         const billedPct = j.contractValue>0?Math.min(100,((j.amountBilled||0)/j.contractValue)*100):0;
                         return (
                           <div key={j.id}
-                            onClick={()=>{setActiveNav("jobs");setSelectedMpJob(j.id);setMpDetailTab("weekly");}}
+                            onClick={()=>{setActiveNav("jobs");setSelectedMpJob(j.id);{const _st=j.status||"";setMpDetailTab(_st==="Preconstruction"?"precon":_st==="Closeout"||_st==="completed"?"closeout":"construction");}}}
                             style={{ background:"#fff", border:"1px solid #D4D9EE", borderRadius:10, padding:"12px 16px", cursor:"pointer", borderLeft:"4px solid #818CF8" }}
                             onMouseEnter={e=>e.currentTarget.style.background="#F5F8FF"}
                             onMouseLeave={e=>e.currentTarget.style.background="#fff"}>
@@ -6694,6 +6698,15 @@ Return ONLY valid JSON, no markdown, no extra text:
               "Closeout":         { color:"#818CF8", bg:"#818CF815" },
             };
 
+            // Auto-select tab based on job status when job changes
+            const getDefaultTab = (j) => {
+              if (!j) return "construction";
+              const st = j.status||"";
+              if (st==="Preconstruction") return "precon";
+              if (st==="Closeout"||st==="completed") return "closeout";
+              return "construction";
+            };
+
             // If a job is selected, show detail view
             if (selectedMpJob) {
               const job = allMpJobs.find(j => j.id === selectedMpJob) || selectedMpJob;
@@ -6783,12 +6796,16 @@ Return ONLY valid JSON, no markdown, no extra text:
                       }} style={{padding:"6px 14px",border:"1px solid #F8717150",background:"transparent",color:"#F87171",borderRadius:7,cursor:"pointer",fontFamily:"inherit",fontSize:12,fontWeight:600}}>
                         🗑 Delete
                       </button>
-                      {[{id:"gantt",icon:"📊",label:"Gantt"},{id:"weekly",icon:"📋",label:"Weekly Report"},{id:"history",icon:"📅",label:"History"}].map(t=>(
-                        <button key={t.id} onClick={()=>setMpDetailTab(t.id)}
-                          style={{padding:"7px 14px",border:"1px solid "+(mpDetailTab===t.id?"#3B6FE8":"#CBD1E8"),background:mpDetailTab===t.id?"#3B6FE8":"#fff",color:mpDetailTab===t.id?"#fff":"#4A5278",borderRadius:8,cursor:"pointer",fontFamily:"inherit",fontSize:12,fontWeight:600,display:"flex",alignItems:"center",gap:5}}>
-                          {t.icon} {t.label}
-                        </button>
-                      ))}
+                      {[{id:"precon",icon:"🏗",label:"Preconstruction"},{id:"construction",icon:"📋",label:"Construction"},{id:"closeout",icon:"✅",label:"Closeout"}].map(t=>{
+                        const isActive = mpDetailTab===t.id;
+                        const tabColor = t.id==="closeout"?"#818CF8":t.id==="precon"?"#F59E0B":"#3B6FE8";
+                        return (
+                          <button key={t.id} onClick={()=>setMpDetailTab(t.id)}
+                            style={{padding:"7px 14px",border:"1px solid "+(isActive?tabColor:"#CBD1E8"),background:isActive?tabColor:"#fff",color:isActive?"#fff":"#4A5278",borderRadius:8,cursor:"pointer",fontFamily:"inherit",fontSize:12,fontWeight:600,display:"flex",alignItems:"center",gap:5}}>
+                            {t.icon} {t.label}
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
 
@@ -6816,7 +6833,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                     {/* Status dropdown */}
                     <div style={{borderRight:"1px solid #F0F2F8",padding:"8px 10px"}}>
                       <div style={{fontSize:9,color:"#9BA3BF",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:4}}>Status</div>
-                      <select value={job.status||""} onChange={e=>saveMpField("status",e.target.value)}
+                      <select value={job.status||""} onChange={e=>{saveMpField("status",e.target.value);const s=e.target.value;setMpDetailTab(s==="Preconstruction"?"precon":s==="Closeout"||s==="completed"?"closeout":"construction");}}
                         style={{width:"100%",padding:"4px 6px",border:"1px solid #D4D9EE",borderRadius:5,fontSize:12,fontFamily:"inherit",background:"#F9FAFC",color:STATUS_STYLE[job.status]?.color||"#1A2240",fontWeight:600,outline:"none"}}>
                         {["Preconstruction","On Schedule","Behind Schedule","At Risk","Hold","Closeout"].map(s=>(
                           <option key={s} value={s}>{s}</option>
@@ -6890,8 +6907,8 @@ Return ONLY valid JSON, no markdown, no extra text:
                     )}
                   </div>
 
-                  {/* -- GANTT TAB -- */}
-                  {mpDetailTab==="gantt" && (() => {
+                  {/* -- PRECON TAB -- */}
+                  {mpDetailTab==="precon" && (() => {
                     const today = new Date();
                     const km1d = job.km1Date||""; const km2d = job.km2Date||""; const km3d = job.km3Date||"";
                     // Build date range from start/end + milestones + today
@@ -7001,8 +7018,8 @@ Return ONLY valid JSON, no markdown, no extra text:
                   })()}
 
 
-                  {/* -- WEEKLY REPORT TAB -- */}
-                  {mpDetailTab==="weekly" && (() => {
+                  {/* -- CONSTRUCTION TAB -- */}
+                  {mpDetailTab==="construction" && (() => {
                     const r = latest;
                     if (!r) return (
                       <div style={{background:"#fff",borderRadius:12,border:"1px solid #D4D9EE",padding:"40px",textAlign:"center",color:"#9BA3BF"}}>
@@ -7068,23 +7085,136 @@ Return ONLY valid JSON, no markdown, no extra text:
                     );
                   })()}
 
-                  {/* -- HISTORY TAB -- */}
-                  {mpDetailTab==="history" && (
-                    <div style={{display:"flex",flexDirection:"column",gap:6}}>
-                      {reports.length===0 && <div style={{textAlign:"center",padding:"40px",color:"#9BA3BF",background:"#fff",borderRadius:12,border:"1px solid #D4D9EE"}}>No weekly history yet</div>}
-                      <div style={{display:"flex",alignItems:"center",gap:8,padding:"6px 0",marginBottom:2}}>
-                        <span style={{fontSize:11,fontWeight:700,color:"#4A5278",minWidth:110,paddingLeft:28}}>Week</span>
-                        <span style={{fontSize:11,fontWeight:700,color:"#4A5278",minWidth:70}}>Schedule</span>
-                        {["CO","Budget","Billing","Reports","Lookahead"].map(l=>(
-                          <span key={l} style={{fontSize:9,fontWeight:700,color:"#9BA3BF",textTransform:"uppercase",letterSpacing:"0.06em",flex:"1 1 0",textAlign:"center"}}>{l}</span>
-                        ))}
-                        <span style={{fontSize:9,fontWeight:700,color:"#9BA3BF",textTransform:"uppercase",letterSpacing:"0.06em",minWidth:60,textAlign:"right"}}>Safety</span>
+                  {/* -- CONSTRUCTION HISTORY (inside construction tab) -- */}
+                  {mpDetailTab==="construction" && (() => {
+                    return (
+                      <div style={{display:"flex",flexDirection:"column",gap:6,marginTop:16}}>
+                        <div style={{fontSize:11,fontWeight:700,color:"#4A5278",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:4}}>Report History</div>
+                        {reports.length===0 && <div style={{textAlign:"center",padding:"32px",color:"#9BA3BF",background:"#fff",borderRadius:12,border:"1px solid #D4D9EE"}}>No weekly history yet</div>}
+                        {reports.length>0 && (
+                          <>
+                            <div style={{display:"flex",alignItems:"center",gap:8,padding:"6px 0",marginBottom:2}}>
+                              <span style={{fontSize:11,fontWeight:700,color:"#4A5278",minWidth:110,paddingLeft:28}}>Week</span>
+                              <span style={{fontSize:11,fontWeight:700,color:"#4A5278",minWidth:70}}>Schedule</span>
+                              {["CO","Budget","Billing","Reports","Lookahead"].map(l=>(
+                                <span key={l} style={{fontSize:9,fontWeight:700,color:"#9BA3BF",textTransform:"uppercase",letterSpacing:"0.06em",flex:"1 1 0",textAlign:"center"}}>{l}</span>
+                              ))}
+                              <span style={{fontSize:9,fontWeight:700,color:"#9BA3BF",textTransform:"uppercase",letterSpacing:"0.06em",minWidth:60,textAlign:"right"}}>Safety</span>
+                            </div>
+                            {reports.map((r,i)=>(
+                              <MpHistoryCard key={r.id} r={r} i={i} fmt={fmt} />
+                            ))}
+                          </>
+                        )}
                       </div>
-                      {reports.map((r,i)=>(
-                        <MpHistoryCard key={r.id} r={r} i={i} fmt={fmt} />
-                      ))}
-                    </div>
-                  )}
+                    );
+                  })()}
+
+                  {/* -- CLOSEOUT TAB -- */}
+                  {mpDetailTab==="closeout" && (() => {
+                    const CLOSEOUT_ITEMS = [
+                      { id:"owner_punchlist_walk",   section:"Punchlist",          label:"Schedule & complete owner punchlist walk" },
+                      { id:"punchlist_list",          section:"Punchlist",          label:"Document all outstanding punchlist items" },
+                      { id:"punchlist_complete",      section:"Punchlist",          label:"Address & complete all punchlist items" },
+                      { id:"coo_received",            section:"Certificate of Occupancy", label:"Receive Certificate of Occupancy (CO)" },
+                      { id:"warranty_letters",        section:"Post-CO",            label:"Send warranty letters to all trades" },
+                      { id:"final_cleaning",          section:"Post-CO",            label:"Final cleaning complete" },
+                      { id:"final_floor_sealing",     section:"Post-CO",            label:"Final floor sealing complete" },
+                      { id:"om_manual_outline",       section:"Documentation",      label:"OM Manual outline collected" },
+                      { id:"drawings_submittals",     section:"Documentation",      label:"Drawings & submittals collected" },
+                      { id:"test_reports",            section:"Documentation",      label:"Test reports collected" },
+                      { id:"final_photos_videos",     section:"Documentation",      label:"Final photos & videos (owner + marketing)" },
+                      { id:"om_manual_sent",          section:"Documentation",      label:"OM Manual sent to owner" },
+                      { id:"final_invoices",          section:"Final Billing",      label:"Final invoices submitted" },
+                      { id:"final_conditionals",      section:"Final Billing",      label:"Final conditional lien waivers collected" },
+                      { id:"payment_received",        section:"Final Billing",      label:"Payment received from owner" },
+                      { id:"final_unconditional",     section:"Final Billing",      label:"Final unconditional lien waiver issued" },
+                    ];
+
+                    const checklist = job.closeoutChecklist || {};
+                    const startDate = job.closeoutStartDate || (job.status==="Closeout" ? new Date().toISOString().slice(0,10) : "");
+                    const completed = CLOSEOUT_ITEMS.filter(i=>checklist[i.id]).length;
+                    const total = CLOSEOUT_ITEMS.length;
+                    const pct = Math.round((completed/total)*100);
+
+                    // 60-day timer
+                    const daysElapsed = startDate ? Math.floor((new Date()-new Date(startDate))/(1000*60*60*24)) : null;
+                    const daysLeft = daysElapsed !== null ? 60 - daysElapsed : null;
+                    const timerColor = daysLeft===null?"#9BA3BF":daysLeft>20?"#4ADE80":daysLeft>7?"#FCD34D":"#F87171";
+
+                    const toggleItem = async (itemId) => {
+                      const newChecklist = {...checklist, [itemId]: !checklist[itemId]};
+                      // If this is the first item checked and no startDate, set it now
+                      const newStartDate = (!startDate && !checklist[itemId]) ? new Date().toISOString().slice(0,10) : startDate;
+                      const updated = {...job, closeoutChecklist: newChecklist, closeoutStartDate: newStartDate};
+                      setMpJobs(prev=>prev.map(j=>j.id===job.id?updated:j));
+                      try {
+                        await fetch(`${SUPA_URL}/rest/v1/mp_jobs?id=eq.${encodeURIComponent(job.id)}`,{
+                          method:"PATCH",
+                          headers:{apikey:SUPA_KEY,Authorization:`Bearer ${SUPA_KEY}`,"Content-Type":"application/json",Prefer:"return=minimal"},
+                          body:JSON.stringify({closeout_checklist:newChecklist, closeout_start_date:newStartDate||null})
+                        });
+                      } catch(e){console.error("closeout save:",e);}
+                    };
+
+                    // Group items by section
+                    const sections = [...new Set(CLOSEOUT_ITEMS.map(i=>i.section))];
+
+                    return (
+                      <div style={{display:"flex",flexDirection:"column",gap:16}}>
+                        {/* Header stats */}
+                        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12}}>
+                          <div style={{background:"#fff",borderRadius:10,border:"1px solid #D4D9EE",padding:"14px 16px",textAlign:"center"}}>
+                            <div style={{fontSize:28,fontWeight:800,color:"#818CF8"}}>{pct}%</div>
+                            <div style={{fontSize:10,color:"#9BA3BF",textTransform:"uppercase",letterSpacing:"0.07em",marginTop:2}}>Complete</div>
+                            <div style={{marginTop:8,height:6,background:"#F0F2F8",borderRadius:3,overflow:"hidden"}}>
+                              <div style={{width:pct+"%",height:"100%",background:"#818CF8",borderRadius:3,transition:"width 0.3s"}}/>
+                            </div>
+                          </div>
+                          <div style={{background:"#fff",borderRadius:10,border:"1px solid #D4D9EE",padding:"14px 16px",textAlign:"center"}}>
+                            <div style={{fontSize:28,fontWeight:800,color:"#4ADE80"}}>{completed}<span style={{fontSize:14,color:"#9BA3BF",fontWeight:400}}>/{total}</span></div>
+                            <div style={{fontSize:10,color:"#9BA3BF",textTransform:"uppercase",letterSpacing:"0.07em",marginTop:2}}>Items Done</div>
+                          </div>
+                          <div style={{background:"#fff",borderRadius:10,border:"1px solid #D4D9EE",padding:"14px 16px",textAlign:"center"}}>
+                            <div style={{fontSize:28,fontWeight:800,color:timerColor}}>{daysLeft===null?"—":Math.max(0,daysLeft)}</div>
+                            <div style={{fontSize:10,color:"#9BA3BF",textTransform:"uppercase",letterSpacing:"0.07em",marginTop:2}}>
+                              {daysLeft===null?"Days Left (60-day target)":daysLeft<0?"Days Overdue":"Days Remaining"}
+                            </div>
+                            {startDate && <div style={{fontSize:9,color:"#9BA3BF",marginTop:4}}>Started {startDate}</div>}
+                          </div>
+                        </div>
+
+                        {/* Checklist by section */}
+                        {sections.map(section=>{
+                          const items = CLOSEOUT_ITEMS.filter(i=>i.section===section);
+                          const sectionDone = items.filter(i=>checklist[i.id]).length;
+                          return (
+                            <div key={section} style={{background:"#fff",borderRadius:10,border:"1px solid #D4D9EE",overflow:"hidden"}}>
+                              <div style={{padding:"10px 16px",background:"#F9FAFC",borderBottom:"1px solid #D4D9EE",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                                <span style={{fontSize:12,fontWeight:700,color:"#1A2240",textTransform:"uppercase",letterSpacing:"0.06em"}}>{section}</span>
+                                <span style={{fontSize:11,color:sectionDone===items.length?"#4ADE80":"#9BA3BF",fontWeight:600}}>{sectionDone}/{items.length}</span>
+                              </div>
+                              {items.map(item=>{
+                                const done = !!checklist[item.id];
+                                return (
+                                  <div key={item.id}
+                                    onClick={()=>toggleItem(item.id)}
+                                    style={{display:"flex",alignItems:"center",gap:12,padding:"12px 16px",borderBottom:"1px solid #F4F6FB",cursor:"pointer",background:done?"#F0FFF4":"#fff",transition:"background 0.15s"}}
+                                    onMouseEnter={e=>{if(!done)e.currentTarget.style.background="#F5F8FF";}}
+                                    onMouseLeave={e=>{e.currentTarget.style.background=done?"#F0FFF4":"#fff";}}>
+                                    <div style={{width:20,height:20,borderRadius:5,border:"2px solid "+(done?"#4ADE80":"#CBD1E8"),background:done?"#4ADE80":"#fff",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all 0.15s"}}>
+                                      {done && <span style={{color:"#fff",fontSize:13,lineHeight:1,fontWeight:700}}>✓</span>}
+                                    </div>
+                                    <span style={{fontSize:13,color:done?"#4A5278":"#1A2240",textDecoration:done?"line-through":"none",flex:1}}>{item.label}</span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })()}
                 </div>
               );
             }
@@ -7200,7 +7330,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                         const startPct = pct(job.startDate);
                         const endPct   = pct(job.endDate);
                         return (
-                          <div key={job.id} onClick={()=>{setSelectedMpJob(job.id);setMpDetailTab("weekly");}}
+                          <div key={job.id} onClick={()=>{setSelectedMpJob(job.id);const st=job.status||"";setMpDetailTab(st==="Preconstruction"?"precon":st==="Closeout"||st==="completed"?"closeout":"construction");}}
                             style={{display:"flex",borderBottom:"1px solid #F4F6FB",cursor:"pointer",minHeight:46,alignItems:"stretch"}}
                             onMouseEnter={e=>e.currentTarget.style.background="#F5F8FF"}
                             onMouseLeave={e=>e.currentTarget.style.background=""}>
@@ -9731,7 +9861,7 @@ window.addEventListener('message',function(e){
                         const billedPct = job.contractValue>0 ? Math.min(100,((job.amountBilled||0)/job.contractValue)*100) : 0;
                         return (
                           <div key={job.id}
-                            onClick={()=>{setActiveNav("jobs");setSelectedMpJob(job.id);setMpDetailTab("weekly");}}
+                            onClick={()=>{setActiveNav("jobs");setSelectedMpJob(job.id);const st=job.status||"";setMpDetailTab(st==="Preconstruction"?"precon":st==="Closeout"||st==="completed"?"closeout":"construction");}}
                             style={{ background:"#fff", border:"1px solid #D4D9EE", borderRadius:10, padding:"14px 16px", cursor:"pointer" }}
                             onMouseEnter={e=>e.currentTarget.style.background="#F5F8FF"}
                             onMouseLeave={e=>e.currentTarget.style.background="#fff"}>
@@ -14766,7 +14896,7 @@ window.addEventListener('message',function(e){
           setActiveBU("major");
           setActiveNav("jobs");
           setSelectedMpJob(jobId);
-          setMpDetailTab("gantt");
+          setMpDetailTab("precon");
         };
 
         const inp = (label, key, type="text", hint) => (
