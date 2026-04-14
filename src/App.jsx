@@ -5126,11 +5126,12 @@ Return ONLY valid JSON, no markdown, no extra text:
                   ))}
                 </div>
               ) : (
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 12 }}>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 12 }}>
                   {[
                     { label: "Pipeline Value",        value: activeBU === "major" ? fmt(pipeline.filter(o => o.bu==="major" && !["won","closed_won","lost","Won","Lost"].includes(o.stage||"")).reduce((s,o) => s + (parseFloat(o.value)||0), 0)) : SAMPLE_STATS[activeBU]?.pipeline, sub: "Active opportunities" },
                     { label: "Active Jobs",            value: activeBU === "major" ? (mpJobs.filter(j=>j.status!=="archived").length || majorJobs.length) : SAMPLE_STATS[activeBU]?.jobs,                         sub: "In progress" },
                     { label: "Total Contract Value",   value: activeBU === "major" ? fmt((mpJobs.length ? mpJobs : majorJobs).filter(j=>j.status!=="archived").reduce((s, j) => s + (j.contractValue||0), 0)) : SAMPLE_STATS[activeBU]?.budget, sub: "Active jobs" },
+                    { label: "Remainder to Bill",      value: activeBU === "major" ? fmt((mpJobs.length ? mpJobs : majorJobs).filter(j=>j.status!=="archived").reduce((s,j) => s + Math.max(0,(j.contractValue||0)-(j.amountBilled||0)), 0)) : "—", sub: "Unbilled contract value" },
                   ].map(s => (
                     <div key={s.label} className="stat-card" style={{ position: "relative", overflow: "hidden" }}>
                       <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: buColor.accent }} />
@@ -7311,79 +7312,97 @@ Return ONLY valid JSON, no markdown, no extra text:
                           ))}
                         </div>
                       </div>
-                      {/* Project rows */}
-                      {visibleMpJobs.map(job=>{
-                        const rpts = mpWeeklyReports.filter(r=>r.projectId===job.id).sort((a,b)=>b.reportDate.localeCompare(a.reportDate));
-                        const latest = rpts[0];
-                        const { daysAhead: da } = getMpJobSchedule(job, latest);
-                        const gpm = latest?.gpm ?? job.gpm;
-                        const st = job.status||"";
-                        // Bar/dot color based on status
-                        const BAR_COLOR = {
-                          "Preconstruction":  { dot:"#F59E0B", bar:"#F59E0B55", border:"#F59E0B80" },
-                          "On Schedule":      { dot:"#4ADE80", bar:"#4ADE8055", border:"#4ADE8080" },
-                          "Behind Schedule":  { dot:"#F87171", bar:"#F8717155", border:"#F8717180" },
-                          "At Risk":          { dot:"#F97316", bar:"#F9731655", border:"#F9731680" },
-                          "Hold":             { dot:"#FCD34D", bar:"#FCD34D55", border:"#FCD34D80" },
-                          "Closeout":         { dot:"#818CF8", bar:"#818CF855", border:"#818CF880" },
+                      {/* Project rows — grouped by status, same as dashboard */}
+                      {(()=>{
+                        const GRP_CFG = {
+                          behind:     { label:"Behind Schedule", bar:"#F8717155", border:"#F8717180", dot:"#F87171" },
+                          onschedule: { label:"On Schedule",     bar:"#4ADE8055", border:"#4ADE8080", dot:"#4ADE80" },
+                          precon:     { label:"Preconstruction", bar:"#F59E0B55", border:"#F59E0B80", dot:"#F59E0B" },
+                          closeout:   { label:"Closeout",        bar:"#818CF855", border:"#818CF880", dot:"#818CF8" },
+                          hold:       { label:"Hold",            bar:"#FCD34D55", border:"#FCD34D80", dot:"#FCD34D" },
+                          atrisk:     { label:"At Risk",         bar:"#F9731655", border:"#F9731680", dot:"#F97316" },
                         };
-                        const bc = BAR_COLOR[st] || { dot:"#9BA3BF", bar:"#3B6FE840", border:"#3B6FE850" };
-                        const startPct = pct(job.startDate);
-                        const endPct   = pct(job.endDate);
-                        return (
-                          <div key={job.id} onClick={()=>{setSelectedMpJob(job.id);const st=job.status||"";setMpDetailTab(st==="Preconstruction"?"precon":st==="Closeout"||st==="completed"?"closeout":"construction");}}
-                            style={{display:"flex",borderBottom:"1px solid #F4F6FB",cursor:"pointer",minHeight:46,alignItems:"stretch"}}
-                            onMouseEnter={e=>e.currentTarget.style.background="#F5F8FF"}
-                            onMouseLeave={e=>e.currentTarget.style.background=""}>
-                            {/* Name */}
-                            <div style={{width:220,flexShrink:0,padding:"8px 14px",borderRight:"1px solid #D4D9EE",display:"flex",alignItems:"center",gap:8}}>
-                              <div style={{width:8,height:8,borderRadius:"50%",background:bc.dot,flexShrink:0,boxShadow:"0 0 0 2px "+bc.dot+"30"}}/>
-                              <div style={{minWidth:0}}>
-                                <div style={{fontSize:12,fontWeight:700,color:"#1A2240",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{job.name}</div>
-                                {(job.startDate||job.endDate) && <div style={{fontSize:9,color:"#9BA3BF"}}>{job.startDate||"?"} → {job.endDate||"?"}</div>}
-                              </div>
-                            </div>
-                            {/* Days */}
-                            <div style={{width:64,flexShrink:0,borderRight:"1px solid #D4D9EE",display:"flex",alignItems:"center",justifyContent:"center"}}>
-                              <div style={{textAlign:"center"}}>
-                                <div style={{fontSize:13,fontWeight:800,color:bc.dot,lineHeight:1}}>{da===null?"—":Math.abs(da)}</div>
-                                <div style={{fontSize:8,color:"#9BA3BF"}}>{da===null?"":da>=0?"ahead":"behind"}</div>
-                              </div>
-                            </div>
-                            {/* GPM */}
-                            <div style={{width:52,flexShrink:0,borderRight:"1px solid #D4D9EE",display:"flex",alignItems:"center",justifyContent:"center"}}>
-                              <div style={{fontSize:11,fontWeight:700,color:"#4ADE80"}}>{gpm?(gpm*100).toFixed(0)+"%":"—"}</div>
-                            </div>
-                            {/* Timeline */}
-                            <div style={{flex:1,position:"relative",padding:"0 6px"}}>
-                              {/* Today line */}
-                              <div style={{position:"absolute",left:"calc("+nowPct+"% + 6px)",top:0,bottom:0,width:1.5,background:"#F87171",opacity:0.5,zIndex:2}}/>
-                              {/* Project bar - start to end */}
-                              {startPct!==null && endPct!==null && (
-                                <div style={{position:"absolute",left:"calc("+startPct+"% + 6px)",right:"calc("+(100-endPct)+"% + 6px)",top:"50%",transform:"translateY(-50%)",height:14,background:bc.bar,border:"1px solid "+bc.border,borderRadius:7}}/>
+                        const getGrp = job => {
+                          const st = job.status||"";
+                          if (st==="Closeout"||st==="completed") return "closeout";
+                          if (st==="Preconstruction") return "precon";
+                          if (st==="Hold") return "hold";
+                          if (st==="At Risk") return "atrisk";
+                          const rpts = mpWeeklyReports.filter(r=>r.projectId===job.id).sort((a,b)=>b.reportDate.localeCompare(a.reportDate));
+                          const { daysAhead } = getMpJobSchedule(job, rpts[0]);
+                          if (st==="Behind Schedule"||(daysAhead!==null&&daysAhead<0)) return "behind";
+                          return "onschedule";
+                        };
+                        const ORDER = ["behind","atrisk","onschedule","hold","precon","closeout"];
+                        const sorted = [...visibleMpJobs].sort((a,b)=>ORDER.indexOf(getGrp(a))-ORDER.indexOf(getGrp(b)));
+                        let lastGrp = null;
+                        return sorted.map(job=>{
+                          const rpts = mpWeeklyReports.filter(r=>r.projectId===job.id).sort((a,b)=>b.reportDate.localeCompare(a.reportDate));
+                          const { daysAhead: da } = getMpJobSchedule(job, rpts[0]);
+                          const gpm = rpts[0]?.gpm ?? job.gpm;
+                          const grp = getGrp(job);
+                          const cfg = GRP_CFG[grp];
+                          const startPct = pct(job.startDate);
+                          const endPct   = pct(job.endDate);
+                          const mDates=[job.km1Date,job.km2Date,job.km3Date].filter(Boolean).map(d=>new Date(d));
+                          const spanStart=startPct!==null?job.startDate:(mDates.length?mDates.reduce((a,b)=>a<b?a:b).toISOString().slice(0,10):null);
+                          const spanEnd=endPct!==null?job.endDate:(mDates.length?mDates.reduce((a,b)=>a>b?a:b).toISOString().slice(0,10):null);
+                          const hasBar=job.startDate&&job.endDate;
+                          const showHdr = grp!==lastGrp; lastGrp=grp;
+                          return (
+                            <React.Fragment key={job.id}>
+                              {showHdr&&(
+                                <div style={{display:"flex",alignItems:"center",background:"#F4F6FB",borderBottom:"1px solid #E8ECFC",padding:"4px 14px",gap:8}}>
+                                  <div style={{width:8,height:8,borderRadius:"50%",background:cfg.dot,flexShrink:0}}/>
+                                  <span style={{fontSize:9,fontWeight:700,color:"#4A5278",textTransform:"uppercase",letterSpacing:"0.08em"}}>{cfg.label}</span>
+                                </div>
                               )}
-                              {/* Milestone diamonds */}
-                              {[
-                                {d:job.km1Date,c:"#F87171"},
-                                {d:job.km2Date,c:"#FCD34D"},
-                                {d:job.km3Date,c:"#4ADE80"},
-                              ].filter(m=>m.d && pct(m.d)!==null).map((m,i)=>(
-                                <div key={i} style={{position:"absolute",left:"calc("+pct(m.d)+"% + 6px - 7px)",top:"50%",width:13,height:13,background:m.c,transform:"translateY(-50%) rotate(45deg)",borderRadius:1,boxShadow:"0 1px 4px rgba(0,0,0,0.2)",zIndex:3,border:"1.5px solid white"}}/>
-                              ))}
-                            </div>
-                          </div>
-                        );
-                      })}
+                              <div onClick={()=>{setSelectedMpJob(job.id);const st=job.status||"";setMpDetailTab(st==="Preconstruction"?"precon":st==="Closeout"||st==="completed"?"closeout":"construction");}}
+                                style={{display:"flex",borderBottom:"1px solid #F4F6FB",cursor:"pointer",minHeight:46,alignItems:"stretch"}}
+                                onMouseEnter={e=>e.currentTarget.style.background="#F5F8FF"}
+                                onMouseLeave={e=>e.currentTarget.style.background=""}>
+                                <div style={{width:220,flexShrink:0,padding:"8px 14px",borderRight:"1px solid #D4D9EE",display:"flex",alignItems:"center",gap:8}}>
+                                  <div style={{width:8,height:8,borderRadius:"50%",background:cfg.dot,flexShrink:0,boxShadow:"0 0 0 2px "+cfg.dot+"30"}}/>
+                                  <div style={{minWidth:0}}>
+                                    <div style={{fontSize:12,fontWeight:700,color:"#1A2240",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{job.name}</div>
+                                    {hasBar?<div style={{fontSize:9,color:"#9BA3BF"}}>{job.startDate} → {job.endDate}</div>:<div style={{fontSize:9,color:"#CBD1E8",fontStyle:"italic"}}>Set start/end dates</div>}
+                                  </div>
+                                </div>
+                                <div style={{width:64,flexShrink:0,borderRight:"1px solid #D4D9EE",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                                  <div style={{textAlign:"center"}}>
+                                    <div style={{fontSize:13,fontWeight:800,color:cfg.dot,lineHeight:1}}>{da===null?"—":Math.abs(da)}</div>
+                                    <div style={{fontSize:8,color:"#9BA3BF"}}>{da===null?"":da>=0?"ahead":"behind"}</div>
+                                  </div>
+                                </div>
+                                <div style={{width:52,flexShrink:0,borderRight:"1px solid #D4D9EE",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                                  <div style={{fontSize:11,fontWeight:700,color:"#4ADE80"}}>{gpm?(gpm*100).toFixed(0)+"%":"—"}</div>
+                                </div>
+                                <div style={{flex:1,position:"relative",padding:"0 6px"}}>
+                                  <div style={{position:"absolute",left:"calc("+nowPct+"% + 6px)",top:0,bottom:0,width:1.5,background:"#F87171",opacity:0.5,zIndex:2}}/>
+                                  {spanStart&&spanEnd&&pct(spanStart)!==null&&pct(spanEnd)!==null&&(
+                                    <div style={{position:"absolute",left:"calc("+pct(spanStart)+"% + 6px)",right:"calc("+(100-pct(spanEnd))+"% + 6px)",top:"50%",transform:"translateY(-50%)",height:hasBar?14:4,background:hasBar?cfg.bar:"#CBD1E8",border:"1px solid "+(hasBar?cfg.border:"#CBD1E8"),borderRadius:7}}/>
+                                  )}
+                                  {[{d:job.km1Date,c:"#F87171"},{d:job.km2Date,c:"#FCD34D"},{d:job.km3Date,c:"#4ADE80"}]
+                                    .filter(m=>m.d&&pct(m.d)!==null)
+                                    .map((m,i)=>(
+                                      <div key={i} style={{position:"absolute",left:"calc("+pct(m.d)+"% + 6px - 7px)",top:"50%",width:13,height:13,background:m.c,transform:"translateY(-50%) rotate(45deg)",borderRadius:1,boxShadow:"0 1px 4px rgba(0,0,0,0.2)",zIndex:3,border:"1.5px solid white"}}/>
+                                    ))
+                                  }
+                                </div>
+                              </div>
+                            </React.Fragment>
+                          );
+                        });
+                      })()}
                       {/* Legend */}
-                      <div style={{padding:"7px 16px",background:"#F9FAFC",borderTop:"1px solid #D4D9EE",display:"flex",gap:16,flexWrap:"wrap",alignItems:"center"}}>
-                        <span style={{fontSize:10,color:"#9BA3BF"}}>Milestones:</span>
-                        {[{c:"#F87171",l:"KM1"},{c:"#FCD34D",l:"KM2"},{c:"#4ADE80",l:"KM3"}].map(l=>(
-                          <div key={l.l} style={{display:"flex",alignItems:"center",gap:4,fontSize:10,color:"#4A5278"}}>
-                            <span style={{width:9,height:9,background:l.c,transform:"rotate(45deg)",display:"inline-block",borderRadius:1}}/>
+                      <div style={{padding:"7px 16px",background:"#F9FAFC",borderTop:"1px solid #D4D9EE",display:"flex",gap:14,flexWrap:"wrap",alignItems:"center"}}>
+                        {[{c:"#F87171",l:"Behind"},{c:"#4ADE80",l:"On Schedule"},{c:"#F59E0B",l:"Precon"},{c:"#818CF8",l:"Closeout"}].map(l=>(
+                          <div key={l.l} style={{display:"flex",alignItems:"center",gap:5,fontSize:10,color:"#4A5278"}}>
+                            <span style={{width:18,height:8,borderRadius:4,background:l.c+"55",border:"1px solid "+l.c+"80",display:"inline-block"}}/>
                             {l.l}
                           </div>
                         ))}
-                        <span style={{fontSize:10,color:"#9BA3BF",marginLeft:"auto"}}>Click row to open →</span>
+                        <span style={{fontSize:9,color:"#9BA3BF",marginLeft:"auto"}}>Click row to open →</span>
                       </div>
                     </div>
                   );
