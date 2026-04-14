@@ -7557,17 +7557,11 @@ Return ONLY valid JSON, no markdown, no extra text:
                                   )}
                                 </div>
                                 <div style={{width:52,flexShrink:0,borderRight:"1px solid #D4D9EE",display:"flex",alignItems:"center",justifyContent:"center"}}>
-                                  {isCloseout && coStart ? (()=>{
-                                    const daysElapsed = Math.floor((today - new Date(coStart))/(1000*60*60*24));
-                                    const pctDone = Math.min(100, Math.max(0, Math.round((daysElapsed/60)*100)));
-                                    return <div style={{fontSize:11,fontWeight:700,color:"#818CF8"}}>{pctDone}%</div>;
-                                  })() : (
-                                    {(()=>{
-                                      const bp=job.contractValue>0?Math.min(100,Math.round(((job.amountBilled||0)/job.contractValue)*100)):0;
-                                      const c=bp>=100?"#4ADE80":bp>=50?"#FCD34D":"#60A5FA";
-                                      return <div style={{fontSize:11,fontWeight:700,color:c}}>{bp>0?bp+"%":"-"}</div>;
-                                    })()}
-                                  )}
+                                  {(()=>{
+                                    const bp=job.contractValue>0?Math.min(100,Math.round(((job.amountBilled||0)/job.contractValue)*100)):0;
+                                    const c=bp>=100?"#4ADE80":bp>=50?"#FCD34D":"#60A5FA";
+                                    return <div style={{fontSize:11,fontWeight:700,color:c}}>{bp>0?bp+"%":"-"}</div>;
+                                  })()}
                                 </div>
                                 <div style={{flex:1,position:"relative",padding:"0 6px"}}>
                                   <div style={{position:"absolute",left:"calc("+nowPct+"% + 6px)",top:0,bottom:0,width:1.5,background:"#F87171",opacity:0.5,zIndex:2}}/>
