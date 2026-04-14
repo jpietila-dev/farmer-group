@@ -7531,7 +7531,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                       <div style={{display:"flex",borderBottom:"1px solid #D4D9EE",background:"#FAFBFD"}}>
                         <div style={{width:220,flexShrink:0,padding:"7px 14px",fontSize:9,color:"#9BA3BF",textTransform:"uppercase",letterSpacing:"0.07em",borderRight:"1px solid #D4D9EE"}}>Project</div>
                         <div style={{width:64,flexShrink:0,padding:"7px 4px",fontSize:9,color:"#9BA3BF",textAlign:"center",borderRight:"1px solid #D4D9EE",letterSpacing:"0.05em",textTransform:"uppercase"}}>Days</div>
-                        <div style={{width:52,flexShrink:0,padding:"7px 4px",fontSize:9,color:"#9BA3BF",textAlign:"center",borderRight:"1px solid #D4D9EE",textTransform:"uppercase"}}>GPM</div>
+                        <div style={{width:52,flexShrink:0,padding:"7px 4px",fontSize:9,color:"#9BA3BF",textAlign:"center",borderRight:"1px solid #D4D9EE",textTransform:"uppercase"}}>PCT</div>
                         <div style={{flex:1,display:"grid",gridTemplateColumns:"repeat("+months.length+",1fr)"}}>
                           {months.map((m,i)=>(
                             <div key={i} style={{padding:"7px 4px",fontSize:9,textTransform:"uppercase",textAlign:"center",borderRight:i<months.length-1?"1px solid #EEF0F8":"none",fontWeight:m.m===today.getMonth()&&m.y===today.getFullYear()?700:400,color:m.m===today.getMonth()&&m.y===today.getFullYear()?"#3B6FE8":"#9BA3BF"}}>
@@ -7604,13 +7604,31 @@ Return ONLY valid JSON, no markdown, no extra text:
                                   </div>
                                 </div>
                                 <div style={{width:64,flexShrink:0,borderRight:"1px solid #D4D9EE",display:"flex",alignItems:"center",justifyContent:"center"}}>
-                                  <div style={{textAlign:"center"}}>
-                                    <div style={{fontSize:13,fontWeight:800,color:cfg.dot,lineHeight:1}}>{da===null?"—":Math.abs(da)}</div>
-                                    <div style={{fontSize:8,color:"#9BA3BF"}}>{da===null?"":da>=0?"ahead":"behind"}</div>
-                                  </div>
+                                  {isCloseout && coStart ? (()=>{
+                                    const daysElapsed = Math.floor((today - new Date(coStart))/(1000*60*60*24));
+                                    const daysLeft = 60 - daysElapsed;
+                                    const isOver = daysLeft < 0;
+                                    return (
+                                      <div style={{textAlign:"center"}}>
+                                        <div style={{fontSize:13,fontWeight:800,color:isOver?"#F87171":"#818CF8",lineHeight:1}}>{Math.abs(daysLeft)}</div>
+                                        <div style={{fontSize:8,color:"#9BA3BF"}}>{isOver?"over":"remain"}</div>
+                                      </div>
+                                    );
+                                  })() : (
+                                    <div style={{textAlign:"center"}}>
+                                      <div style={{fontSize:13,fontWeight:800,color:cfg.dot,lineHeight:1}}>{da===null?"-":Math.abs(da)}</div>
+                                      <div style={{fontSize:8,color:"#9BA3BF"}}>{da===null?"":da>=0?"ahead":"behind"}</div>
+                                    </div>
+                                  )}
                                 </div>
                                 <div style={{width:52,flexShrink:0,borderRight:"1px solid #D4D9EE",display:"flex",alignItems:"center",justifyContent:"center"}}>
-                                  <div style={{fontSize:11,fontWeight:700,color:"#4ADE80"}}>{gpm?(gpm*100).toFixed(0)+"%":"—"}</div>
+                                  {isCloseout && coStart ? (()=>{
+                                    const daysElapsed = Math.floor((today - new Date(coStart))/(1000*60*60*24));
+                                    const pctDone = Math.min(100, Math.max(0, Math.round((daysElapsed/60)*100)));
+                                    return <div style={{fontSize:11,fontWeight:700,color:"#818CF8"}}>{pctDone}%</div>;
+                                  })() : (
+                                    <div style={{fontSize:11,fontWeight:700,color:"#4ADE80"}}>{job.pct!=null&&job.pct>0?job.pct+"%":"-"}</div>
+                                  )}
                                 </div>
                                 <div style={{flex:1,position:"relative",padding:"0 6px"}}>
                                   <div style={{position:"absolute",left:"calc("+nowPct+"% + 6px)",top:0,bottom:0,width:1.5,background:"#F87171",opacity:0.5,zIndex:2}}/>
