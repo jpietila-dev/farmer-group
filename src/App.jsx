@@ -7549,7 +7549,6 @@ Return ONLY valid JSON, no markdown, no extra text:
                             </div>
                           );
                         })}
-                      </div>
                         {/* Job Task List */}
                         {(() => {
                           const allItems = [
@@ -7612,6 +7611,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                             </div>
                           );
                         })()}
+                      </div>
                     );
                   })()}
                 </div>
