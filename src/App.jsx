@@ -261,6 +261,39 @@ const STATUS_CONFIG = {
   "Closeout":        { color: "#818CF8", bg: "#818CF815" },
 };
 
+// Returns { daysAhead, autoStatus } for an MP job.
+// If forecastEnd is set and contractual endDate exists, calculates days difference.
+// Negative = behind, positive = ahead. Also derives auto-status if not manually overridden.
+const getMpJobSchedule = (job, latestReport) => {
+  const contractEnd  = job.endDate    ? new Date(job.endDate)    : null;
+  const forecastEnd  = job.forecastEnd? new Date(job.forecastEnd): null;
+  const today        = new Date();
+  today.setHours(0,0,0,0);
+
+  // Days ahead from weekly report takes priority if no forecastEnd set
+  let daysAhead = latestReport?.daysAhead ?? job.daysAhead ?? null;
+
+  if (contractEnd && forecastEnd) {
+    // Days = contractual end minus forecast end (negative means forecast is later = behind)
+    const ms = contractEnd - forecastEnd;
+    daysAhead = Math.round(ms / (1000 * 60 * 60 * 24));
+  } else if (contractEnd && !forecastEnd && job.pct < 100) {
+    // No forecast date — if today is past the contract end and not complete, flag behind
+    const ms = contractEnd - today;
+    if (ms < 0) daysAhead = Math.round(ms / (1000 * 60 * 60 * 24));
+  }
+
+  // Auto-derive status only for non-manual statuses
+  const manualStatuses = ["Preconstruction","Closeout","Hold"];
+  let autoStatus = job.status;
+  if (!manualStatuses.includes(job.status)) {
+    if (daysAhead !== null && daysAhead < -7) autoStatus = "Behind Schedule";
+    else if (daysAhead !== null && daysAhead >= -7) autoStatus = job.status === "Behind Schedule" ? "On Schedule" : job.status;
+  }
+
+  return { daysAhead, autoStatus };
+};
+
 const BU_COLORS = {
   all:      { accent: "#3B6FE8", light: "#3B6FE815" },
   major:    { accent: "#3B6FE8", light: "#3B6FE815" },
@@ -1528,6 +1561,7 @@ const mpVendorToDB = v => ({
 const dbToMpJob = r => ({
   id: r.id, name: r.name||"", client: r.client||"", status: r.status||"active",
   contractValue: r.contract_value||0, startDate: r.start_date||"", endDate: r.end_date||"",
+  forecastEnd: r.forecast_end||"",
   pm: r.pm||"", pct: r.pct||0, daysAhead: r.days_ahead,
   completionSchedule: r.completion_schedule||"",
   changeOrderStatus: r.change_order_status||"",
@@ -1543,6 +1577,7 @@ const dbToMpJob = r => ({
 const mpJobToDB = j => ({
   id: j.id, name: j.name||"", client: j.client||"", status: j.status||"active",
   contract_value: j.contractValue||null, start_date: j.startDate||null, end_date: j.endDate||null,
+  forecast_end: j.forecastEnd||null,
   pm: j.pm||null, pct: j.pct||0, days_ahead: j.daysAhead||null,
   completion_schedule: j.completionSchedule||null,
   change_order_status: j.changeOrderStatus||null,
@@ -5119,7 +5154,9 @@ Return ONLY valid JSON, no markdown, no extra text:
                         const st = job.status||"";
                         if (st==="Closeout"||st==="completed") return "closeout";
                         if (st==="Preconstruction") return "precon";
-                        if (st==="Behind Schedule"||st==="At Risk"||(()=>{const rpts=mpWeeklyReports.filter(r=>r.projectId===job.id).sort((a,b)=>b.reportDate.localeCompare(a.reportDate));const da=rpts[0]?.daysAhead??job.daysAhead;return da!==null&&da<-7;})()) return "behind";
+                        const rpts = mpWeeklyReports.filter(r=>r.projectId===job.id).sort((a,b)=>b.reportDate.localeCompare(a.reportDate));
+                        const { daysAhead, autoStatus } = getMpJobSchedule(job, rpts[0]);
+                        if (autoStatus==="Behind Schedule"||st==="At Risk"||(daysAhead!==null&&daysAhead<-7)) return "behind";
                         return "onschedule";
                       };
                       const ORDER = ["behind","onschedule","precon","closeout"];
@@ -5128,7 +5165,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                       return sorted.map(job=>{
                         const rpts=mpWeeklyReports.filter(r=>r.projectId===job.id).sort((a,b)=>b.reportDate.localeCompare(a.reportDate));
                         const latest=rpts[0];
-                        const da=latest?.daysAhead??job.daysAhead;
+                        const { daysAhead: da } = getMpJobSchedule(job, latest);
                         const gpm=latest?.gpm??job.gpm;
                         const group=getGroup(job);
                         const cfg=GROUP_CFG[group];
@@ -6619,7 +6656,12 @@ Return ONLY valid JSON, no markdown, no extra text:
               const billedPct = contractAmt > 0 ? Math.min(100, (billedAmt / contractAmt) * 100) : 0;
 
               const saveMpField = async (field, value) => {
-                const updated = { ...job, [field]: value };
+                let updated = { ...job, [field]: value };
+                // Auto-recalculate status when forecastEnd or endDate changes
+                if (field === "forecastEnd" || field === "endDate") {
+                  const { daysAhead, autoStatus } = getMpJobSchedule(updated, mpWeeklyReports.filter(r=>r.projectId===job.id).sort((a,b)=>b.reportDate.localeCompare(a.reportDate))[0]);
+                  updated = { ...updated, daysAhead, status: autoStatus };
+                }
                 setMpJobs(prev => prev.map(j => j.id === job.id ? updated : j));
                 try { await supa.from("mp_jobs").update(mpJobToDB(updated)).eq("id", job.id); } catch(e) {}
                 // If contract value changed, sync back to the linked pipeline opp
@@ -6693,11 +6735,22 @@ Return ONLY valid JSON, no markdown, no extra text:
                   {/* Editable project fields */}
                   <div style={{background:"#fff",borderRadius:10,border:"1px solid #D4D9EE",display:"grid",gridTemplateColumns:"repeat(5,1fr)",overflow:"hidden"}}>
                     {[
-                      {label:"Start Date", field:"startDate", value:job.startDate, type:"date"},
-                      {label:"End Date",   field:"endDate",   value:job.endDate,   type:"date"},
+                      {label:"Start Date",     field:"startDate",   value:job.startDate,   type:"date"},
+                      {label:"Contract End",   field:"endDate",     value:job.endDate,     type:"date"},
+                      {label:"Forecast End",   field:"forecastEnd", value:job.forecastEnd, type:"date"},
                     ].map((f,i)=>(
-                      <div key={f.field} style={{borderRight:"1px solid #F0F2F8"}}>
+                      <div key={f.field} style={{borderRight:"1px solid #F0F2F8",position:"relative"}}>
                         <HvacField label={f.label} value={f.value||""} type={f.type} onSave={val=>saveMpField(f.field,val)} />
+                        {f.field==="forecastEnd" && job.forecastEnd && job.endDate && (() => {
+                          const {daysAhead} = getMpJobSchedule(job, null);
+                          if (daysAhead === null) return null;
+                          const behind = daysAhead < 0;
+                          return (
+                            <div style={{position:"absolute",bottom:4,right:6,fontSize:9,fontWeight:700,color:behind?"#F87171":"#4ADE80"}}>
+                              {behind ? `${Math.abs(daysAhead)}d late` : `${daysAhead}d early`}
+                            </div>
+                          );
+                        })()}
                       </div>
                     ))}
                     {/* Status dropdown */}
@@ -7071,7 +7124,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                       {visibleMpJobs.map(job=>{
                         const rpts = mpWeeklyReports.filter(r=>r.projectId===job.id).sort((a,b)=>b.reportDate.localeCompare(a.reportDate));
                         const latest = rpts[0];
-                        const da = latest?.daysAhead ?? job.daysAhead;
+                        const { daysAhead: da } = getMpJobSchedule(job, latest);
                         const gpm = latest?.gpm ?? job.gpm;
                         const st = job.status||"";
                         // Bar/dot color based on status
