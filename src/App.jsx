@@ -7169,7 +7169,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                         </div>
                       </div>
 
-                        {/* ── Job Punch List / Task Table ── */}
+                        {/* Job Punch List - Task Table */}
                         {(() => {
                           const allItems = [
                             ...(job.punchItems||[]),
