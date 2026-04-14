@@ -5826,9 +5826,12 @@ Return ONLY valid JSON, no markdown, no extra text:
                             createdAt: new Date().toISOString().slice(0,10),
                           };
                           if (linkedJob) {
-                            // Save directly into the job's punch_items — single source of truth
-                            const jobItems = [...(linkedJob.punchItems||[]), newItem];
+                            // Merge stored + any unpersisted manual items + new item, then save all
+                            const stored = linkedJob.punchItems||[];
+                            const extraManual = manualPunchItems.filter(p=>p.jobId===linkedJob.id&&!stored.some(x=>x.id===p.id));
+                            const jobItems = [...stored, ...extraManual, newItem];
                             setMpJobs(prev=>prev.map(j=>j.id===linkedJob.id?{...j,punchItems:jobItems}:j));
+                            setManualPunchItems(prev=>prev.filter(p=>p.jobId!==linkedJob.id));
                             fetch(`${SUPA_URL}/rest/v1/mp_jobs?id=eq.${encodeURIComponent(linkedJob.id)}`,{method:"PATCH",headers:{apikey:SUPA_KEY,Authorization:`Bearer ${SUPA_KEY}`,"Content-Type":"application/json",Prefer:"return=minimal"},body:JSON.stringify({punch_items:jobItems})}).catch(()=>{});
                           } else {
                             setManualPunchItems(prev=>[newItem,...prev]);
@@ -6909,7 +6912,9 @@ Return ONLY valid JSON, no markdown, no extra text:
               const billedPct = contractAmt > 0 ? Math.min(100, (billedAmt / contractAmt) * 100) : 0;
 
               const saveMpField = async (field, value) => {
-                let updated = { ...job, [field]: value };
+                // Always read live from mpJobs to avoid overwriting punch_items or other fields
+                const liveSnap = mpJobs.find(j=>j.id===job.id)||job;
+                let updated = { ...liveSnap, [field]: value };
                 // Auto-recalculate status when forecastEnd or endDate changes
                 if (field === "forecastEnd" || field === "endDate") {
                   const { daysAhead, autoStatus } = getMpJobSchedule(updated, mpWeeklyReports.filter(r=>r.projectId===job.id).sort((a,b)=>b.reportDate.localeCompare(a.reportDate))[0]);
@@ -6943,11 +6948,13 @@ Return ONLY valid JSON, no markdown, no extra text:
                 return [...stored, ...manual];
               };
               const saveTaskItems = async (items) => {
+                // Write merged list into mpJobs state
                 setMpJobs(prev=>prev.map(j=>j.id===job.id?{...j,punchItems:items}:j));
+                // Sync done state back to manualPunchItems (don't filter them out - just update)
                 setManualPunchItems(prev=>prev.map(p=>{
                   const found=items.find(x=>x.id===p.id);
                   return found?{...p,done:found.done}:p;
-                }).filter(p=>items.some(x=>x.id===p.id)||p.jobId!==job.id));
+                }));
                 try{
                   await fetch(`${SUPA_URL}/rest/v1/mp_jobs?id=eq.${encodeURIComponent(job.id)}`,{
                     method:"PATCH",
