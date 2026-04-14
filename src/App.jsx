@@ -5813,25 +5813,25 @@ Return ONLY valid JSON, no markdown, no extra text:
                         <button className="btn-ghost" onClick={()=>setShowAddPunch(false)}>Cancel</button>
                         <button className="btn-primary" onClick={()=>{
                           if (!punchForm.text.trim()) return;
-                          const job = punchForm.jobId ? mpJobs.find(j=>j.id===punchForm.jobId) : null;
+                          const linkedJob = punchForm.jobId ? mpJobs.find(j=>j.id===punchForm.jobId) : null;
                           const newItem = {
                             id: "punch_"+Date.now(),
                             text: punchForm.text.trim(),
                             jobId: punchForm.jobId||"",
-                            assignedTo: job ? (job.pm||"") : "",
+                            assignedTo: punchForm.assignedTo||(linkedJob?linkedJob.pm||"":""),
                             dueDate: punchForm.dueDate||"",
                             priority: punchForm.priority||"medium",
-                            bu: job ? "major" : (punchForm.bu||"major"),
+                            bu: linkedJob ? "major" : (punchForm.bu||"major"),
                             done: false,
                             createdAt: new Date().toISOString().slice(0,10),
                           };
-                          setManualPunchItems(prev=>[newItem,...prev]);
-                          // If linked to job, also save to job's punch_items
-                          if (job) {
-                            const jobItems = [...(job.punchItems||[]), newItem];
-                            const updatedJob = {...job, punchItems: jobItems};
-                            setMpJobs(prev=>prev.map(j=>j.id===job.id?updatedJob:j));
-                            fetch(`${SUPA_URL}/rest/v1/mp_jobs?id=eq.${encodeURIComponent(job.id)}`,{method:"PATCH",headers:{apikey:SUPA_KEY,Authorization:`Bearer ${SUPA_KEY}`,"Content-Type":"application/json",Prefer:"return=minimal"},body:JSON.stringify({punch_items:jobItems})}).catch(()=>{});
+                          if (linkedJob) {
+                            // Save directly into the job's punch_items — single source of truth
+                            const jobItems = [...(linkedJob.punchItems||[]), newItem];
+                            setMpJobs(prev=>prev.map(j=>j.id===linkedJob.id?{...j,punchItems:jobItems}:j));
+                            fetch(`${SUPA_URL}/rest/v1/mp_jobs?id=eq.${encodeURIComponent(linkedJob.id)}`,{method:"PATCH",headers:{apikey:SUPA_KEY,Authorization:`Bearer ${SUPA_KEY}`,"Content-Type":"application/json",Prefer:"return=minimal"},body:JSON.stringify({punch_items:jobItems})}).catch(()=>{});
+                          } else {
+                            setManualPunchItems(prev=>[newItem,...prev]);
                           }
                           setShowAddPunch(false);
                         }}>Add Item</button>
@@ -6935,6 +6935,84 @@ Return ONLY valid JSON, no markdown, no extra text:
                 }
               };
 
+              // Shared helper: read live mpJobs, merge manual items, save to DB
+              const getJobItems = () => {
+                const liveJob = mpJobs.find(j=>j.id===job.id)||job;
+                const stored = liveJob.punchItems||[];
+                const manual = manualPunchItems.filter(p=>p.jobId===job.id&&!stored.some(x=>x.id===p.id));
+                return [...stored, ...manual];
+              };
+              const saveTaskItems = async (items) => {
+                setMpJobs(prev=>prev.map(j=>j.id===job.id?{...j,punchItems:items}:j));
+                setManualPunchItems(prev=>prev.map(p=>{
+                  const found=items.find(x=>x.id===p.id);
+                  return found?{...p,done:found.done}:p;
+                }).filter(p=>items.some(x=>x.id===p.id)||p.jobId!==job.id));
+                try{
+                  await fetch(`${SUPA_URL}/rest/v1/mp_jobs?id=eq.${encodeURIComponent(job.id)}`,{
+                    method:"PATCH",
+                    headers:{apikey:SUPA_KEY,Authorization:`Bearer ${SUPA_KEY}`,"Content-Type":"application/json",Prefer:"return=minimal"},
+                    body:JSON.stringify({punch_items:items})
+                  });
+                }catch(e){}
+              };
+              const toggleTask = async (itemId) => {
+                const items = getJobItems().map(p=>p.id===itemId?{...p,done:!p.done}:p);
+                await saveTaskItems(items);
+              };
+              const removeTask = async (itemId) => {
+                const items = getJobItems().filter(p=>p.id!==itemId);
+                await saveTaskItems(items);
+              };
+              const TaskListPanel = () => {
+                const allItems = getJobItems();
+                const done = allItems.filter(p=>p.done);
+                const todo = allItems.filter(p=>!p.done);
+                const rows = [...todo, ...done];
+                return (
+                  <div style={{background:"#fff",borderRadius:12,border:"1px solid #D4D9EE",overflow:"hidden"}}>
+                    <div style={{padding:"11px 16px",borderBottom:"1px solid #D4D9EE",background:"#F9FAFC",display:"flex",alignItems:"center",gap:10}}>
+                      <span style={{fontSize:12,fontWeight:700,color:"#1A2240",flex:1}}>Task List</span>
+                      <span style={{fontSize:10,color:"#9BA3BF"}}>{done.length}/{allItems.length} complete</span>
+                      <button onClick={()=>{ setPunchForm({text:"",jobId:job.id,dueDate:"",priority:"medium",bu:"major",assignedTo:job.pm||""}); setShowAddPunch(true); }}
+                        style={{fontSize:11,padding:"4px 10px",background:"#3B6FE8",color:"#fff",border:"none",borderRadius:6,cursor:"pointer",fontFamily:"inherit",fontWeight:600}}>
+                        + Add Task
+                      </button>
+                    </div>
+                    <div style={{display:"grid",gridTemplateColumns:"26px 1fr 90px 80px 70px 26px",background:"#FAFBFD",borderBottom:"1px solid #EEF0F8",padding:"5px 12px",gap:6}}>
+                      {["","Task","Assigned To","Due Date","Priority",""].map((h,hi)=>(
+                        <div key={hi} style={{fontSize:9,fontWeight:700,color:"#9BA3BF",textTransform:"uppercase",letterSpacing:"0.08em"}}>{h}</div>
+                      ))}
+                    </div>
+                    {rows.length===0 && <div style={{padding:"28px",textAlign:"center",color:"#9BA3BF",fontSize:12}}>No tasks yet - click + Add Task above</div>}
+                    {rows.map((item,idx)=>{
+                      const isDone=item.done;
+                      const overdue=item.dueDate&&new Date(item.dueDate)<new Date()&&!isDone;
+                      return (
+                        <div key={item.id} style={{display:"grid",gridTemplateColumns:"26px 1fr 90px 80px 70px 26px",padding:"8px 12px",gap:6,borderBottom:idx<rows.length-1?"1px solid #F4F6FB":"none",background:isDone?"#F9FFFE":idx%2===0?"#fff":"#FAFBFD",alignItems:"center"}}>
+                          <div onClick={()=>toggleTask(item.id)} style={{width:17,height:17,borderRadius:3,border:"2px solid "+(isDone?"#4ADE80":"#CBD1E8"),background:isDone?"#4ADE80":"#fff",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",transition:"all 0.12s",flexShrink:0}}>
+                            {isDone&&<span style={{color:"#fff",fontSize:10,fontWeight:700,lineHeight:1}}>&#10003;</span>}
+                          </div>
+                          <div style={{fontSize:12,color:"#1A2240",textDecoration:isDone?"line-through":"none",opacity:isDone?0.55:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={item.text}>{item.text}</div>
+                          <div style={{fontSize:11,color:"#4A5278",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{item.assignedTo||job.pm||"-"}</div>
+                          <div style={{fontSize:11,color:overdue?"#F87171":"#4A5278"}}>{item.dueDate||"-"}</div>
+                          <div style={{display:"flex",alignItems:"center",gap:4}}>
+                            <div style={{width:7,height:7,borderRadius:"50%",background:item.priority==="high"?"#F87171":"#FCD34D",flexShrink:0}}/>
+                            <span style={{fontSize:10,color:"#9BA3BF",textTransform:"capitalize"}}>{item.priority||"medium"}</span>
+                          </div>
+                          <button onClick={()=>removeTask(item.id)} style={{background:"none",border:"none",color:"#CBD1E8",cursor:"pointer",fontSize:12,padding:0,lineHeight:1,display:"flex",alignItems:"center",justifyContent:"center"}}>&#10005;</button>
+                        </div>
+                      );
+                    })}
+                    {done.length>0&&todo.length>0&&(
+                      <div style={{padding:"4px 12px",background:"#F4F6FB",borderTop:"1px solid #EEF0F8"}}>
+                        <span style={{fontSize:9,color:"#9BA3BF",textTransform:"uppercase",letterSpacing:"0.08em"}}>{done.length} of {allItems.length} completed</span>
+                      </div>
+                    )}
+                  </div>
+                );
+              };
+
               return (
                 <div className="fade-in" style={{display:"flex",flexDirection:"column",gap:18}}>
                   {/* Row 1: Back + job name + action buttons */}
@@ -7212,87 +7290,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                           </div>
                         </div>
 
-                        {/* Job Punch List - Task Table */}
-                        {(() => {
-                          const allItems = [
-                            ...(job.punchItems||[]),
-                            ...manualPunchItems.filter(p=>p.jobId===job.id),
-                          ].filter((p,i,arr)=>arr.findIndex(x=>x.id===p.id)===i); // dedupe
-                          const done   = allItems.filter(p=>p.done);
-                          const todo   = allItems.filter(p=>!p.done);
-                          const rows   = [...todo, ...done]; // upcoming first, completed at bottom
-                          return (
-                            <div style={{background:"#fff",borderRadius:12,border:"1px solid #D4D9EE",overflow:"hidden"}}>
-                              <div style={{padding:"11px 16px",borderBottom:"1px solid #D4D9EE",background:"#F9FAFC",display:"flex",alignItems:"center",gap:10}}>
-                                <span style={{fontSize:12,fontWeight:700,color:"#1A2240",flex:1}}>✅ Task List</span>
-                                <span style={{fontSize:10,color:"#9BA3BF"}}>{done.length}/{allItems.length} complete</span>
-                                <button onClick={()=>{ setPunchForm({text:"",jobId:job.id,dueDate:"",priority:"medium",bu:"major"}); setShowAddPunch(true); }}
-                                  style={{fontSize:11,padding:"4px 10px",background:"#3B6FE8",color:"#fff",border:"none",borderRadius:6,cursor:"pointer",fontFamily:"inherit",fontWeight:600}}>
-                                  + Add Task
-                                </button>
-                              </div>
-                              {/* Column headers */}
-                              <div style={{display:"grid",gridTemplateColumns:"28px 1fr 90px 80px 70px 28px",background:"#FAFBFD",borderBottom:"1px solid #EEF0F8",padding:"6px 12px",gap:6}}>
-                                {["","Task","Assigned To","Due Date","Priority",""].map((h,i)=>(
-                                  <div key={i} style={{fontSize:9,fontWeight:700,color:"#9BA3BF",textTransform:"uppercase",letterSpacing:"0.08em"}}>{h}</div>
-                                ))}
-                              </div>
-                              {rows.length===0 && (
-                                <div style={{padding:"28px",textAlign:"center",color:"#9BA3BF",fontSize:12}}>No tasks yet - click + Add Task above</div>
-                              )}
-                              {rows.map((item,idx)=>{
-                                const isManual = manualPunchItems.some(p=>p.id===item.id);
-                                const isDone = item.done;
-                                const toggleDone = async () => {
-                                  const next = !item.done;
-                                  // Merge job.punchItems + manualPunchItems for this job, deduplicated
-                                  const merged = [
-                                    ...(job.punchItems||[]),
-                                    ...manualPunchItems.filter(p=>p.jobId===job.id&&!(job.punchItems||[]).some(x=>x.id===p.id))
-                                  ].map(p=>p.id===item.id?{...p,done:next}:p);
-                                  const updatedJob = {...job, punchItems: merged};
-                                  setMpJobs(prev=>prev.map(j=>j.id===job.id?updatedJob:j));
-                                  setManualPunchItems(prev=>prev.map(p=>p.id===item.id?{...p,done:next}:p));
-                                  try { await fetch(`${SUPA_URL}/rest/v1/mp_jobs?id=eq.${encodeURIComponent(job.id)}`,{method:"PATCH",headers:{apikey:SUPA_KEY,Authorization:`Bearer ${SUPA_KEY}`,"Content-Type":"application/json",Prefer:"return=minimal"},body:JSON.stringify({punch_items:merged})}); } catch(e){}
-                                };
-                                const removeItem = async () => {
-                                  const merged = [
-                                    ...(job.punchItems||[]),
-                                    ...manualPunchItems.filter(p=>p.jobId===job.id&&!(job.punchItems||[]).some(x=>x.id===p.id))
-                                  ].filter(p=>p.id!==item.id);
-                                  const updatedJob = {...job, punchItems: merged};
-                                  setMpJobs(prev=>prev.map(j=>j.id===job.id?updatedJob:j));
-                                  setManualPunchItems(prev=>prev.filter(p=>p.id!==item.id));
-                                  try { await fetch(`${SUPA_URL}/rest/v1/mp_jobs?id=eq.${encodeURIComponent(job.id)}`,{method:"PATCH",headers:{apikey:SUPA_KEY,Authorization:`Bearer ${SUPA_KEY}`,"Content-Type":"application/json",Prefer:"return=minimal"},body:JSON.stringify({punch_items:merged})}); } catch(e){}
-                                };
-                                return (
-                                  <div key={item.id} style={{display:"grid",gridTemplateColumns:"28px 1fr 90px 80px 70px 28px",padding:"8px 12px",gap:6,borderBottom:idx<rows.length-1?"1px solid #F4F6FB":"none",background:isDone?"#F9FFFE":idx%2===0?"#fff":"#FAFBFD",alignItems:"center"}}>
-                                    {/* Checkbox */}
-                                    <div onClick={toggleDone} style={{width:17,height:17,borderRadius:3,border:"2px solid "+(isDone?"#4ADE80":"#CBD1E8"),background:isDone?"#4ADE80":"#fff",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",transition:"all 0.12s"}}>
-                                      {isDone&&<span style={{color:"#fff",fontSize:10,fontWeight:700,lineHeight:1}}>✓</span>}
-                                    </div>
-                                    {/* Task text */}
-                                    <div style={{fontSize:12,color:"#1A2240",textDecoration:isDone?"line-through":"none",opacity:isDone?0.55:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={item.text}>{item.text}</div>
-                                    {/* Assigned */}
-                                    <div style={{fontSize:11,color:"#4A5278",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{item.assignedTo||job.pm||"-"}</div>
-                                    {/* Due date */}
-                                    <div style={{fontSize:11,color:item.dueDate&&new Date(item.dueDate)<new Date()&&!isDone?"#F87171":"#4A5278"}}>{item.dueDate||"-"}</div>
-                                    {/* Priority */}
-                                    <div style={{display:"flex",alignItems:"center",gap:4}}>
-                                      <div style={{width:7,height:7,borderRadius:"50%",background:item.priority==="high"?"#F87171":"#FCD34D",flexShrink:0}}/>
-                                      <span style={{fontSize:10,color:"#9BA3BF",textTransform:"capitalize"}}>{item.priority||"medium"}</span>
-                                    </div>
-                                    {/* Delete */}
-                                    <button onClick={removeItem} style={{background:"none",border:"none",color:"#CBD1E8",cursor:"pointer",fontSize:13,padding:0,lineHeight:1,display:"flex",alignItems:"center",justifyContent:"center"}} title="Remove">✕</button>
-                                  </div>
-                                );
-                              })}
-                              {done.length>0&&todo.length>0&&(
-                                <div style={{padding:"4px 12px",background:"#F4F6FB",borderTop:"1px solid #EEF0F8"}}><span style={{fontSize:9,color:"#9BA3BF",textTransform:"uppercase",letterSpacing:"0.08em"}}>✓ {done.length} Completed</span></div>
-                              )}
-                            </div>
-                          );
-                        })()}
+                        <TaskListPanel />
                       </div>
                     );
                   })()}
@@ -7391,229 +7389,9 @@ Return ONLY valid JSON, no markdown, no extra text:
                   })()}
 
 
-                  {/* Task list - visible on construction tab */}
-                  {mpDetailTab==="construction" && (() => {
-                    const allItems=[...(job.punchItems||[]),...manualPunchItems.filter(p=>p.jobId===job.id&&!(job.punchItems||[]).some(x=>x.id===p.id))];
-                    const done=allItems.filter(p=>p.done); const todo=allItems.filter(p=>!p.done); const rows=[...todo,...done];
-                    return (
-                      <div style={{background:"#fff",borderRadius:12,border:"1px solid #D4D9EE",overflow:"hidden"}}>
-                        <div style={{padding:"11px 16px",borderBottom:"1px solid #D4D9EE",background:"#F9FAFC",display:"flex",alignItems:"center",gap:10}}>
-                          <span style={{fontSize:12,fontWeight:700,color:"#1A2240",flex:1}}>Task List</span>
-                          <span style={{fontSize:10,color:"#9BA3BF"}}>{done.length}/{allItems.length} complete</span>
-                          <button onClick={()=>{ setPunchForm({text:"",jobId:job.id,dueDate:"",priority:"medium",bu:"major"}); setShowAddPunch(true); }}
-                            style={{fontSize:11,padding:"4px 10px",background:"#3B6FE8",color:"#fff",border:"none",borderRadius:6,cursor:"pointer",fontFamily:"inherit",fontWeight:600}}>+ Add Task</button>
-                        </div>
-                        <div style={{display:"grid",gridTemplateColumns:"28px 1fr 90px 80px 70px 28px",background:"#FAFBFD",borderBottom:"1px solid #EEF0F8",padding:"6px 12px",gap:6}}>
-                          {["","Task","Assigned To","Due Date","Priority",""].map((h,i)=>(
-                            <div key={i} style={{fontSize:9,fontWeight:700,color:"#9BA3BF",textTransform:"uppercase",letterSpacing:"0.08em"}}>{h}</div>
-                          ))}
-                        </div>
-                        {rows.length===0&&(<div style={{padding:"28px",textAlign:"center",color:"#9BA3BF",fontSize:12}}>No tasks yet - click + Add Task above</div>)}
-                        {rows.map((item,idx)=>{
-                          const isDone=item.done;
-                          const toggle=async()=>{
-                            const next=!isDone;
-                            const merged=[...(job.punchItems||[]),...manualPunchItems.filter(p=>p.jobId===job.id&&!(job.punchItems||[]).some(x=>x.id===p.id))].map(p=>p.id===item.id?{...p,done:next}:p);
-                            setMpJobs(prev=>prev.map(j=>j.id===job.id?{...j,punchItems:merged}:j));
-                            setManualPunchItems(prev=>prev.map(p=>p.id===item.id?{...p,done:next}:p));
-                            try{await fetch(`${SUPA_URL}/rest/v1/mp_jobs?id=eq.${encodeURIComponent(job.id)}`,{method:"PATCH",headers:{apikey:SUPA_KEY,Authorization:`Bearer ${SUPA_KEY}`,"Content-Type":"application/json",Prefer:"return=minimal"},body:JSON.stringify({punch_items:merged})});}catch(e){}
-                          };
-                          const remove=async()=>{
-                            const merged=[...(job.punchItems||[]),...manualPunchItems.filter(p=>p.jobId===job.id&&!(job.punchItems||[]).some(x=>x.id===p.id))].filter(p=>p.id!==item.id);
-                            setMpJobs(prev=>prev.map(j=>j.id===job.id?{...j,punchItems:merged}:j));
-                            setManualPunchItems(prev=>prev.filter(p=>p.id!==item.id));
-                            try{await fetch(`${SUPA_URL}/rest/v1/mp_jobs?id=eq.${encodeURIComponent(job.id)}`,{method:"PATCH",headers:{apikey:SUPA_KEY,Authorization:`Bearer ${SUPA_KEY}`,"Content-Type":"application/json",Prefer:"return=minimal"},body:JSON.stringify({punch_items:merged})});}catch(e){}
-                          };
-                          return (
-                            <div key={item.id} style={{display:"grid",gridTemplateColumns:"28px 1fr 90px 80px 70px 28px",padding:"8px 12px",gap:6,borderBottom:idx<rows.length-1?"1px solid #F4F6FB":"none",background:isDone?"#F9FFFE":idx%2===0?"#fff":"#FAFBFD",alignItems:"center"}}>
-                              <div onClick={toggle} style={{width:17,height:17,borderRadius:3,border:"2px solid "+(isDone?"#4ADE80":"#CBD1E8"),background:isDone?"#4ADE80":"#fff",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",transition:"all 0.12s"}}>
-                                {isDone&&<span style={{color:"#fff",fontSize:10,fontWeight:700,lineHeight:1}}>&#10003;</span>}
-                              </div>
-                              <div style={{fontSize:12,color:"#1A2240",textDecoration:isDone?"line-through":"none",opacity:isDone?0.55:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={item.text}>{item.text}</div>
-                              <div style={{fontSize:11,color:"#4A5278",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{item.assignedTo||job.pm||"-"}</div>
-                              <div style={{fontSize:11,color:item.dueDate&&new Date(item.dueDate)<new Date()&&!isDone?"#F87171":"#4A5278"}}>{item.dueDate||"-"}</div>
-                              <div style={{display:"flex",alignItems:"center",gap:4}}>
-                                <div style={{width:7,height:7,borderRadius:"50%",background:item.priority==="high"?"#F87171":"#FCD34D",flexShrink:0}}/>
-                                <span style={{fontSize:10,color:"#9BA3BF",textTransform:"capitalize"}}>{item.priority||"medium"}</span>
-                              </div>
-                              <button onClick={remove} style={{background:"none",border:"none",color:"#CBD1E8",cursor:"pointer",fontSize:13,padding:0,lineHeight:1,display:"flex",alignItems:"center",justifyContent:"center"}}>&#10005;</button>
-                            </div>
-                          );
-                        })}
-                        {done.length>0&&todo.length>0&&(
-                          <div style={{padding:"4px 12px",background:"#F4F6FB",borderTop:"1px solid #EEF0F8"}}><span style={{fontSize:9,color:"#9BA3BF",textTransform:"uppercase",letterSpacing:"0.08em"}}>{done.length} Completed</span></div>
-                        )}
-                      </div>
-                    );
-                  })()}
-
-                  {/* -- CLOSEOUT TAB -- */}
-                  {mpDetailTab==="closeout" && (() => {
-                    const CLOSEOUT_ITEMS = [
-                      { id:"owner_punchlist_walk",   section:"Punchlist",          label:"Schedule & complete owner punchlist walk" },
-                      { id:"punchlist_list",          section:"Punchlist",          label:"Document all outstanding punchlist items" },
-                      { id:"punchlist_complete",      section:"Punchlist",          label:"Address & complete all punchlist items" },
-                      { id:"coo_received",            section:"Certificate of Occupancy", label:"Receive Certificate of Occupancy (CO)" },
-                      { id:"warranty_letters",        section:"Post-CO",            label:"Send warranty letters to all trades" },
-                      { id:"final_cleaning",          section:"Post-CO",            label:"Final cleaning complete" },
-                      { id:"final_floor_sealing",     section:"Post-CO",            label:"Final floor sealing complete" },
-                      { id:"om_manual_outline",       section:"Documentation",      label:"OM Manual outline collected" },
-                      { id:"drawings_submittals",     section:"Documentation",      label:"Drawings & submittals collected" },
-                      { id:"test_reports",            section:"Documentation",      label:"Test reports collected" },
-                      { id:"final_photos_videos",     section:"Documentation",      label:"Final photos & videos (owner + marketing)" },
-                      { id:"om_manual_sent",          section:"Documentation",      label:"OM Manual sent to owner" },
-                      { id:"final_invoices",          section:"Final Billing",      label:"Final invoices submitted" },
-                      { id:"final_conditionals",      section:"Final Billing",      label:"Final conditional lien waivers collected" },
-                      { id:"payment_received",        section:"Final Billing",      label:"Payment received from owner" },
-                      { id:"final_unconditional",     section:"Final Billing",      label:"Final unconditional lien waiver issued" },
-                    ];
-
-                    const checklist = job.closeoutChecklist || {};
-                    const startDate = job.closeoutStartDate || (job.status==="Closeout" ? new Date().toISOString().slice(0,10) : "");
-                    const completed = CLOSEOUT_ITEMS.filter(i=>checklist[i.id]).length;
-                    const total = CLOSEOUT_ITEMS.length;
-                    const pct = Math.round((completed/total)*100);
-
-                    // 60-day timer
-                    const daysElapsed = startDate ? Math.floor((new Date()-new Date(startDate))/(1000*60*60*24)) : null;
-                    const daysLeft = daysElapsed !== null ? 60 - daysElapsed : null;
-                    const timerColor = daysLeft===null?"#9BA3BF":daysLeft>20?"#4ADE80":daysLeft>7?"#FCD34D":"#F87171";
-
-                    const toggleItem = async (itemId) => {
-                      const newChecklist = {...checklist, [itemId]: !checklist[itemId]};
-                      // If this is the first item checked and no startDate, set it now
-                      const newStartDate = (!startDate && !checklist[itemId]) ? new Date().toISOString().slice(0,10) : startDate;
-                      const updated = {...job, closeoutChecklist: newChecklist, closeoutStartDate: newStartDate};
-                      setMpJobs(prev=>prev.map(j=>j.id===job.id?updated:j));
-                      try {
-                        await fetch(`${SUPA_URL}/rest/v1/mp_jobs?id=eq.${encodeURIComponent(job.id)}`,{
-                          method:"PATCH",
-                          headers:{apikey:SUPA_KEY,Authorization:`Bearer ${SUPA_KEY}`,"Content-Type":"application/json",Prefer:"return=minimal"},
-                          body:JSON.stringify({closeout_checklist:newChecklist, closeout_start_date:newStartDate||null})
-                        });
-                      } catch(e){console.error("closeout save:",e);}
-                    };
-
-                    // Group items by section
-                    const sections = [...new Set(CLOSEOUT_ITEMS.map(i=>i.section))];
-
-                    return (
-                      <div style={{display:"flex",flexDirection:"column",gap:16}}>
-                        {/* Header stats */}
-                        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12}}>
-                          <div style={{background:"#fff",borderRadius:10,border:"1px solid #D4D9EE",padding:"14px 16px",textAlign:"center"}}>
-                            <div style={{fontSize:28,fontWeight:800,color:"#818CF8"}}>{pct}%</div>
-                            <div style={{fontSize:10,color:"#9BA3BF",textTransform:"uppercase",letterSpacing:"0.07em",marginTop:2}}>Complete</div>
-                            <div style={{marginTop:8,height:6,background:"#F0F2F8",borderRadius:3,overflow:"hidden"}}>
-                              <div style={{width:pct+"%",height:"100%",background:"#818CF8",borderRadius:3,transition:"width 0.3s"}}/>
-                            </div>
-                          </div>
-                          <div style={{background:"#fff",borderRadius:10,border:"1px solid #D4D9EE",padding:"14px 16px",textAlign:"center"}}>
-                            <div style={{fontSize:28,fontWeight:800,color:"#4ADE80"}}>{completed}<span style={{fontSize:14,color:"#9BA3BF",fontWeight:400}}>/{total}</span></div>
-                            <div style={{fontSize:10,color:"#9BA3BF",textTransform:"uppercase",letterSpacing:"0.07em",marginTop:2}}>Items Done</div>
-                          </div>
-                          <div style={{background:"#fff",borderRadius:10,border:"1px solid #D4D9EE",padding:"14px 16px",textAlign:"center"}}>
-                            <div style={{fontSize:28,fontWeight:800,color:timerColor}}>{daysLeft===null?"—":Math.max(0,daysLeft)}</div>
-                            <div style={{fontSize:10,color:"#9BA3BF",textTransform:"uppercase",letterSpacing:"0.07em",marginTop:2}}>
-                              {daysLeft===null?"Days Left (60-day target)":daysLeft<0?"Days Overdue":"Days Remaining"}
-                            </div>
-                            {startDate && <div style={{fontSize:9,color:"#9BA3BF",marginTop:4}}>Started {startDate}</div>}
-                          </div>
-                        </div>
-
-                        {/* Checklist by section */}
-                        {sections.map(section=>{
-                          const items = CLOSEOUT_ITEMS.filter(i=>i.section===section);
-                          const sectionDone = items.filter(i=>checklist[i.id]).length;
-                          return (
-                            <div key={section} style={{background:"#fff",borderRadius:10,border:"1px solid #D4D9EE",overflow:"hidden"}}>
-                              <div style={{padding:"10px 16px",background:"#F9FAFC",borderBottom:"1px solid #D4D9EE",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-                                <span style={{fontSize:12,fontWeight:700,color:"#1A2240",textTransform:"uppercase",letterSpacing:"0.06em"}}>{section}</span>
-                                <span style={{fontSize:11,color:sectionDone===items.length?"#4ADE80":"#9BA3BF",fontWeight:600}}>{sectionDone}/{items.length}</span>
-                              </div>
-                              {items.map(item=>{
-                                const done = !!checklist[item.id];
-                                return (
-                                  <div key={item.id}
-                                    onClick={()=>toggleItem(item.id)}
-                                    style={{display:"flex",alignItems:"center",gap:12,padding:"12px 16px",borderBottom:"1px solid #F4F6FB",cursor:"pointer",background:done?"#F0FFF4":"#fff",transition:"background 0.15s"}}
-                                    onMouseEnter={e=>{if(!done)e.currentTarget.style.background="#F5F8FF";}}
-                                    onMouseLeave={e=>{e.currentTarget.style.background=done?"#F0FFF4":"#fff";}}>
-                                    <div style={{width:20,height:20,borderRadius:5,border:"2px solid "+(done?"#4ADE80":"#CBD1E8"),background:done?"#4ADE80":"#fff",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,transition:"all 0.15s"}}>
-                                      {done && <span style={{color:"#fff",fontSize:13,lineHeight:1,fontWeight:700}}>✓</span>}
-                                    </div>
-                                    <span style={{fontSize:13,color:done?"#4A5278":"#1A2240",textDecoration:done?"line-through":"none",flex:1}}>{item.label}</span>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          );
-                        })}
-                        {/* Job Task List */}
-                        {(() => {
-                          const allItems = [
-                            ...(job.punchItems||[]),
-                            ...manualPunchItems.filter(p=>p.jobId===job.id&&!(job.punchItems||[]).some(x=>x.id===p.id)),
-                          ];
-                          const done = allItems.filter(p=>p.done);
-                          const todo = allItems.filter(p=>!p.done);
-                          const rows = [...todo, ...done];
-                          return (
-                            <div style={{background:"#fff",borderRadius:12,border:"1px solid #D4D9EE",overflow:"hidden"}}>
-                              <div style={{padding:"11px 16px",borderBottom:"1px solid #D4D9EE",background:"#F9FAFC",display:"flex",alignItems:"center",gap:10}}>
-                                <span style={{fontSize:12,fontWeight:700,color:"#1A2240",flex:1}}>Task List</span>
-                                <span style={{fontSize:10,color:"#9BA3BF"}}>{done.length}/{allItems.length} complete</span>
-                                <button onClick={()=>{ setPunchForm({text:"",jobId:job.id,dueDate:"",priority:"medium",bu:"major"}); setShowAddPunch(true); }}
-                                  style={{fontSize:11,padding:"4px 10px",background:"#3B6FE8",color:"#fff",border:"none",borderRadius:6,cursor:"pointer",fontFamily:"inherit",fontWeight:600}}>
-                                  + Add Task
-                                </button>
-                              </div>
-                              <div style={{display:"grid",gridTemplateColumns:"28px 1fr 90px 80px 70px 28px",background:"#FAFBFD",borderBottom:"1px solid #EEF0F8",padding:"6px 12px",gap:6}}>
-                                {["","Task","Assigned To","Due Date","Priority",""].map((h,i)=>(
-                                  <div key={i} style={{fontSize:9,fontWeight:700,color:"#9BA3BF",textTransform:"uppercase",letterSpacing:"0.08em"}}>{h}</div>
-                                ))}
-                              </div>
-                              {rows.length===0&&(<div style={{padding:"28px",textAlign:"center",color:"#9BA3BF",fontSize:12}}>No tasks yet - click + Add Task above</div>)}
-                              {rows.map((item,idx)=>{
-                                const isDone=item.done;
-                                const toggle=async()=>{
-                                  const next=!isDone;
-                                  const merged=[...(job.punchItems||[]),...manualPunchItems.filter(p=>p.jobId===job.id&&!(job.punchItems||[]).some(x=>x.id===p.id))].map(p=>p.id===item.id?{...p,done:next}:p);
-                                  setMpJobs(prev=>prev.map(j=>j.id===job.id?{...j,punchItems:merged}:j));
-                                  setManualPunchItems(prev=>prev.map(p=>p.id===item.id?{...p,done:next}:p));
-                                  try{await fetch(`${SUPA_URL}/rest/v1/mp_jobs?id=eq.${encodeURIComponent(job.id)}`,{method:"PATCH",headers:{apikey:SUPA_KEY,Authorization:`Bearer ${SUPA_KEY}`,"Content-Type":"application/json",Prefer:"return=minimal"},body:JSON.stringify({punch_items:merged})});}catch(e){}
-                                };
-                                const remove=async()=>{
-                                  const merged=[...(job.punchItems||[]),...manualPunchItems.filter(p=>p.jobId===job.id&&!(job.punchItems||[]).some(x=>x.id===p.id))].filter(p=>p.id!==item.id);
-                                  setMpJobs(prev=>prev.map(j=>j.id===job.id?{...j,punchItems:merged}:j));
-                                  setManualPunchItems(prev=>prev.filter(p=>p.id!==item.id));
-                                  try{await fetch(`${SUPA_URL}/rest/v1/mp_jobs?id=eq.${encodeURIComponent(job.id)}`,{method:"PATCH",headers:{apikey:SUPA_KEY,Authorization:`Bearer ${SUPA_KEY}`,"Content-Type":"application/json",Prefer:"return=minimal"},body:JSON.stringify({punch_items:merged})});}catch(e){}
-                                };
-                                return (
-                                  <div key={item.id} style={{display:"grid",gridTemplateColumns:"28px 1fr 90px 80px 70px 28px",padding:"8px 12px",gap:6,borderBottom:idx<rows.length-1?"1px solid #F4F6FB":"none",background:isDone?"#F9FFFE":idx%2===0?"#fff":"#FAFBFD",alignItems:"center"}}>
-                                    <div onClick={toggle} style={{width:17,height:17,borderRadius:3,border:"2px solid "+(isDone?"#4ADE80":"#CBD1E8"),background:isDone?"#4ADE80":"#fff",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",transition:"all 0.12s"}}>
-                                      {isDone&&<span style={{color:"#fff",fontSize:10,fontWeight:700,lineHeight:1}}>&#10003;</span>}
-                                    </div>
-                                    <div style={{fontSize:12,color:"#1A2240",textDecoration:isDone?"line-through":"none",opacity:isDone?0.55:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={item.text}>{item.text}</div>
-                                    <div style={{fontSize:11,color:"#4A5278",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{item.assignedTo||job.pm||"-"}</div>
-                                    <div style={{fontSize:11,color:item.dueDate&&new Date(item.dueDate)<new Date()&&!isDone?"#F87171":"#4A5278"}}>{item.dueDate||"-"}</div>
-                                    <div style={{display:"flex",alignItems:"center",gap:4}}>
-                                      <div style={{width:7,height:7,borderRadius:"50%",background:item.priority==="high"?"#F87171":"#FCD34D",flexShrink:0}}/>
-                                      <span style={{fontSize:10,color:"#9BA3BF",textTransform:"capitalize"}}>{item.priority||"medium"}</span>
-                                    </div>
-                                    <button onClick={remove} style={{background:"none",border:"none",color:"#CBD1E8",cursor:"pointer",fontSize:13,padding:0,lineHeight:1,display:"flex",alignItems:"center",justifyContent:"center"}}>&#10005;</button>
-                                  </div>
-                                );
-                              })}
-                              {done.length>0&&todo.length>0&&(
-                                <div style={{padding:"4px 12px",background:"#F4F6FB",borderTop:"1px solid #EEF0F8"}}><span style={{fontSize:9,color:"#9BA3BF",textTransform:"uppercase",letterSpacing:"0.08em"}}>{done.length} Completed</span></div>
-                              )}
-                            </div>
-                          );
-                        })()}
-                      </div>
-                    );
-                  })()}
+                  {mpDetailTab==="construction" && <TaskListPanel />}
+                  
+                  {mpDetailTab==="closeout" && <TaskListPanel />}
                 </div>
               );
             }
