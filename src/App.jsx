@@ -5233,7 +5233,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                     <div style={{display:"flex",borderBottom:"1px solid #D4D9EE",background:"#FAFBFD"}}>
                       <div style={{width:200,flexShrink:0,padding:"7px 14px",fontSize:9,color:"#9BA3BF",textTransform:"uppercase",letterSpacing:"0.07em",borderRight:"1px solid #D4D9EE"}}>Project</div>
                       <div style={{width:64,flexShrink:0,padding:"7px 4px",fontSize:9,color:"#9BA3BF",textAlign:"center",borderRight:"1px solid #D4D9EE",textTransform:"uppercase"}}>Days</div>
-                      <div style={{width:52,flexShrink:0,padding:"7px 4px",fontSize:9,color:"#9BA3BF",textAlign:"center",borderRight:"1px solid #D4D9EE",textTransform:"uppercase"}}>GPM</div>
+                      <div style={{width:52,flexShrink:0,padding:"7px 4px",fontSize:9,color:"#9BA3BF",textAlign:"center",borderRight:"1px solid #D4D9EE",textTransform:"uppercase"}}>PCT</div>
                       <div style={{flex:1,display:"grid",gridTemplateColumns:"repeat("+months.length+",1fr)"}}>
                         {months.map((m,i)=>(
                           <div key={i} style={{padding:"7px 4px",fontSize:9,textTransform:"uppercase",textAlign:"center",borderRight:i<months.length-1?"1px solid #EEF0F8":"none",fontWeight:m.m===today.getMonth()&&m.y===today.getFullYear()?700:400,color:m.m===today.getMonth()&&m.y===today.getFullYear()?"#3B6FE8":"#9BA3BF"}}>
@@ -5270,10 +5270,15 @@ Return ONLY valid JSON, no markdown, no extra text:
                         const gpm=latest?.gpm??job.gpm;
                         const group=getGroup(job);
                         const cfg=GROUP_CFG[group];
-                        const hasBar=job.startDate&&job.endDate;
+                        const isCloseoutJob = (job.status||"")==="Closeout"||(job.status||"")==="completed";
+                        const coSt = isCloseoutJob?(job.closeoutStartDate||""):"";
+                        const coEn = coSt?(()=>{const d=new Date(coSt);d.setDate(d.getDate()+60);return d.toISOString().slice(0,10);})():"";
+                        const coOver = coEn&&new Date(coEn)<today;
+                        const hasBar = isCloseoutJob?!!(coSt&&coEn):!!(job.startDate&&job.endDate);
                         const mDates=[job.km1Date,job.km2Date,job.km3Date].filter(Boolean).map(d=>new Date(d));
-                        const spanStart=hasBar?job.startDate:(mDates.length?mDates.reduce((a,b)=>a<b?a:b).toISOString().slice(0,10):null);
-                        const spanEnd=hasBar?job.endDate:(mDates.length?mDates.reduce((a,b)=>a>b?a:b).toISOString().slice(0,10):null);
+                        const spanStart = isCloseoutJob?coSt:(hasBar?job.startDate:(mDates.length?mDates.reduce((a,b)=>a<b?a:b).toISOString().slice(0,10):null));
+                        const spanEnd   = isCloseoutJob?coEn:(hasBar?job.endDate:(mDates.length?mDates.reduce((a,b)=>a>b?a:b).toISOString().slice(0,10):null));
+                        const barColor  = isCloseoutJob&&coOver?{bar:"#F8717155",border:"#F8717180"}:{bar:cfg.bar,border:cfg.border};
                         const showHeader=group!==lastGroup; lastGroup=group;
                         return (
                           <React.Fragment key={job.id}>
@@ -5299,18 +5304,37 @@ Return ONLY valid JSON, no markdown, no extra text:
                                 </div>
                               </div>
                               <div style={{width:64,flexShrink:0,borderRight:"1px solid #D4D9EE",display:"flex",alignItems:"center",justifyContent:"center"}}>
-                                <div style={{textAlign:"center"}}>
-                                  <div style={{fontSize:13,fontWeight:800,color:cfg.dot,lineHeight:1}}>{da===null?"—":Math.abs(da)}</div>
-                                  <div style={{fontSize:8,color:"#9BA3BF"}}>{da===null?"":da>=0?"ahead":"behind"}</div>
-                                </div>
+                                {(group==="closeout"&&job.closeoutStartDate) ? (()=>{
+                                  const daysElapsed=Math.floor((today-new Date(job.closeoutStartDate))/(1000*60*60*24));
+                                  const daysLeft=60-daysElapsed;
+                                  return (
+                                    <div style={{textAlign:"center"}}>
+                                      <div style={{fontSize:13,fontWeight:800,color:daysLeft<0?"#F87171":"#818CF8",lineHeight:1}}>{Math.abs(daysLeft)}</div>
+                                      <div style={{fontSize:8,color:"#9BA3BF"}}>{daysLeft<0?"over":"remain"}</div>
+                                    </div>
+                                  );
+                                })() : (
+                                  <div style={{textAlign:"center"}}>
+                                    <div style={{fontSize:13,fontWeight:800,color:cfg.dot,lineHeight:1}}>{da===null?"-":Math.abs(da)}</div>
+                                    <div style={{fontSize:8,color:"#9BA3BF"}}>{da===null?"":da>=0?"ahead":"behind"}</div>
+                                  </div>
+                                )}
                               </div>
                               <div style={{width:52,flexShrink:0,borderRight:"1px solid #D4D9EE",display:"flex",alignItems:"center",justifyContent:"center"}}>
-                                <div style={{fontSize:11,fontWeight:700,color:"#4ADE80"}}>{gpm?(gpm*100).toFixed(0)+"%":"—"}</div>
+                                {(group==="closeout"&&job.closeoutStartDate) ? (()=>{
+                                  const daysElapsed=Math.floor((today-new Date(job.closeoutStartDate))/(1000*60*60*24));
+                                  const pctDone=Math.min(100,Math.max(0,Math.round((daysElapsed/60)*100)));
+                                  return <div style={{fontSize:11,fontWeight:700,color:"#818CF8"}}>{pctDone}%</div>;
+                                })() : (
+                                  <div style={{fontSize:11,fontWeight:700,color:"#4ADE80"}}>{job.pct!=null&&job.pct>0?job.pct+"%":"-"}</div>
+                                )}
                               </div>
                               <div style={{flex:1,position:"relative",padding:"0 6px"}}>
                                 <div style={{position:"absolute",left:"calc("+nowPct+"% + 6px)",top:0,bottom:0,width:1.5,background:"#F87171",opacity:0.5,zIndex:2}}/>
                                 {spanStart&&spanEnd&&pct(spanStart)!==null&&pct(spanEnd)!==null&&(
-                                  <div style={{position:"absolute",left:"calc("+pct(spanStart)+"% + 6px)",right:"calc("+(100-pct(spanEnd))+"% + 6px)",top:"50%",transform:"translateY(-50%)",height:hasBar?14:4,background:hasBar?cfg.bar:"#CBD1E8",border:"1px solid "+(hasBar?cfg.border:"#CBD1E8"),borderRadius:7}}/>
+                                  <div style={{position:"absolute",left:"calc("+pct(spanStart)+"% + 6px)",right:"calc("+(100-pct(spanEnd))+"% + 6px)",top:"50%",transform:"translateY(-50%)",height:hasBar?14:4,background:hasBar?barColor.bar:"#CBD1E8",border:"1px solid "+(hasBar?barColor.border:"#CBD1E8"),borderRadius:7}}>
+                                    {isCloseoutJob&&coSt&&(<div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center"}}><span style={{fontSize:8,color:coOver?"#F87171":"#818CF8",fontWeight:700,letterSpacing:"0.05em",textTransform:"uppercase"}}>{coOver?"OVERDUE":"60d"}</span></div>)}
+                                  </div>
                                 )}
                                 {[{d:job.km1Date,c:"#F87171"},{d:job.km2Date,c:"#FCD34D"},{d:job.km3Date,c:"#4ADE80"}]
                                   .filter(m=>m.d&&pct(m.d)!==null)
@@ -5715,12 +5739,15 @@ Return ONLY valid JSON, no markdown, no extra text:
                           setManualPunchItems(updated);
                           // If linked to a job, also save to mp_jobs.punch_items
                           if (item.jobId) {
-                            const job = mpJobs.find(j=>j.id===item.jobId);
-                            if (job) {
-                              const jobItems = (job.punchItems||[]).map(p=>p.id===item.id?{...p,done:!p.done}:p);
-                              const updatedJob = {...job, punchItems: jobItems};
-                              setMpJobs(prev=>prev.map(j=>j.id===job.id?updatedJob:j));
-                              try { await fetch(`${SUPA_URL}/rest/v1/mp_jobs?id=eq.${encodeURIComponent(job.id)}`,{method:"PATCH",headers:{apikey:SUPA_KEY,Authorization:`Bearer ${SUPA_KEY}`,"Content-Type":"application/json",Prefer:"return=minimal"},body:JSON.stringify({punch_items:jobItems})}); } catch(e){}
+                            const linkedJob = mpJobs.find(j=>j.id===item.jobId);
+                            if (linkedJob) {
+                              // Merge stored + manual items, then toggle
+                              const merged = [
+                                ...(linkedJob.punchItems||[]),
+                                ...manualPunchItems.filter(p=>p.jobId===linkedJob.id&&!(linkedJob.punchItems||[]).some(x=>x.id===p.id))
+                              ].map(p=>p.id===item.id?{...p,done:!p.done}:p);
+                              setMpJobs(prev=>prev.map(j=>j.id===linkedJob.id?{...j,punchItems:merged}:j));
+                              try { await fetch(`${SUPA_URL}/rest/v1/mp_jobs?id=eq.${encodeURIComponent(linkedJob.id)}`,{method:"PATCH",headers:{apikey:SUPA_KEY,Authorization:`Bearer ${SUPA_KEY}`,"Content-Type":"application/json",Prefer:"return=minimal"},body:JSON.stringify({punch_items:merged})}); } catch(e){}
                             }
                           }
                         }}
@@ -7015,21 +7042,38 @@ Return ONLY valid JSON, no markdown, no extra text:
                   </div>
 
                   {/* KPI strip */}
-                  <div style={{display:"grid",gridTemplateColumns:"repeat(6,1fr)",gap:10}}>
-                    {[
-                      {label:"Schedule",  value: daysAhead===null?"—":Math.abs(daysAhead)+" days "+(daysAhead>=0?"ahead":"behind"), color:scheduleColor},
-                      {label:"GPM",       value: (latest?.gpm??job.gpm) ? ((latest?.gpm??job.gpm)*100).toFixed(1)+"%" : "—", color:"#4ADE80"},
-                      {label:"Contract",  value: contractAmt ? fmt(contractAmt) : "—", color:"#60A5FA"},
-                      {label:"CO Status", value: (latest?.changeOrderStatus||job.changeOrderStatus)||"—", color:"#FCD34D"},
-                      {label:"Budget",    value: (latest?.budgetStatus||job.budgetStatus)||"—", color:"#A78BFA"},
-                      {label:"Billing",   value: (latest?.billingStatus||job.billingStatus)||"—", color:"#F97316"},
-                    ].map(k=>(
-                      <div key={k.label} style={{background:"#fff",borderRadius:10,border:"1px solid #D4D9EE",padding:"12px 14px",borderTop:"3px solid "+k.color}}>
-                        <div style={{fontSize:10,color:"#9BA3BF",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:4}}>{k.label}</div>
-                        <div style={{fontSize:14,fontWeight:700,color:"#1A2240"}}>{k.value}</div>
+                  {(()=>{
+                    const isCoJob = (job.status||"")==="Closeout"||(job.status||"")==="completed";
+                    const coStartD = isCoJob ? (job.closeoutStartDate||"") : "";
+                    const coElapsed = coStartD ? Math.floor((new Date()-new Date(coStartD))/(1000*60*60*24)) : null;
+                    const coDaysLeft = coElapsed!==null ? 60-coElapsed : null;
+                    const coPct = coElapsed!==null ? Math.min(100,Math.max(0,Math.round((coElapsed/60)*100))) : null;
+                    const coOver = coDaysLeft!==null && coDaysLeft<0;
+                    const schedVal = isCoJob && coDaysLeft!==null
+                      ? (coOver ? Math.abs(coDaysLeft)+" days over" : coDaysLeft+" days left")
+                      : (daysAhead===null?"-":Math.abs(daysAhead)+" days "+(daysAhead>=0?"ahead":"behind"));
+                    const schedColor = isCoJob ? (coOver?"#F87171":"#818CF8") : scheduleColor;
+                    const pctVal = isCoJob && coPct!==null ? coPct+"%" : (job.pct!=null&&job.pct>0 ? job.pct+"%" : "-");
+                    const pctColor = isCoJob ? (coOver?"#F87171":"#818CF8") : "#4ADE80";
+                    const tiles = [
+                      {label: isCoJob?"Closeout":"Schedule", value:schedVal, color:schedColor},
+                      {label:"% Complete", value:pctVal, color:pctColor},
+                      {label:"Contract",  value: contractAmt ? fmt(contractAmt) : "-", color:"#60A5FA"},
+                      {label:"CO Status", value: (latest?.changeOrderStatus||job.changeOrderStatus)||"-", color:"#FCD34D"},
+                      {label:"Budget",    value: (latest?.budgetStatus||job.budgetStatus)||"-", color:"#A78BFA"},
+                      {label:"Billing",   value: (latest?.billingStatus||job.billingStatus)||"-", color:"#F97316"},
+                    ];
+                    return (
+                      <div style={{display:"grid",gridTemplateColumns:"repeat(6,1fr)",gap:10}}>
+                        {tiles.map(k=>(
+                          <div key={k.label} style={{background:"#fff",borderRadius:10,border:"1px solid #D4D9EE",padding:"12px 14px",borderTop:"3px solid "+k.color}}>
+                            <div style={{fontSize:10,color:"#9BA3BF",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:4}}>{k.label}</div>
+                            <div style={{fontSize:14,fontWeight:700,color:"#1A2240"}}>{k.value}</div>
+                          </div>
+                        ))}
                       </div>
-                    ))}
-                  </div>
+                    );
+                  })()}
 
                   {/* Billing progress tracker */}
                   <div style={{background:"#fff",borderRadius:12,border:"1px solid #D4D9EE",padding:"16px 20px"}}>
@@ -7201,19 +7245,25 @@ Return ONLY valid JSON, no markdown, no extra text:
                                 const isDone = item.done;
                                 const toggleDone = async () => {
                                   const next = !item.done;
-                                  // update in mpJobs
-                                  const jobItems = (job.punchItems||[]).map(p=>p.id===item.id?{...p,done:next}:p);
-                                  const updatedJob = {...job, punchItems: jobItems};
+                                  // Merge job.punchItems + manualPunchItems for this job, deduplicated
+                                  const merged = [
+                                    ...(job.punchItems||[]),
+                                    ...manualPunchItems.filter(p=>p.jobId===job.id&&!(job.punchItems||[]).some(x=>x.id===p.id))
+                                  ].map(p=>p.id===item.id?{...p,done:next}:p);
+                                  const updatedJob = {...job, punchItems: merged};
                                   setMpJobs(prev=>prev.map(j=>j.id===job.id?updatedJob:j));
-                                  if (isManual) setManualPunchItems(prev=>prev.map(p=>p.id===item.id?{...p,done:next}:p));
-                                  try { await fetch(`${SUPA_URL}/rest/v1/mp_jobs?id=eq.${encodeURIComponent(job.id)}`,{method:"PATCH",headers:{apikey:SUPA_KEY,Authorization:`Bearer ${SUPA_KEY}`,"Content-Type":"application/json",Prefer:"return=minimal"},body:JSON.stringify({punch_items:jobItems})}); } catch(e){}
+                                  setManualPunchItems(prev=>prev.map(p=>p.id===item.id?{...p,done:next}:p));
+                                  try { await fetch(`${SUPA_URL}/rest/v1/mp_jobs?id=eq.${encodeURIComponent(job.id)}`,{method:"PATCH",headers:{apikey:SUPA_KEY,Authorization:`Bearer ${SUPA_KEY}`,"Content-Type":"application/json",Prefer:"return=minimal"},body:JSON.stringify({punch_items:merged})}); } catch(e){}
                                 };
                                 const removeItem = async () => {
-                                  const jobItems = (job.punchItems||[]).filter(p=>p.id!==item.id);
-                                  const updatedJob = {...job, punchItems: jobItems};
+                                  const merged = [
+                                    ...(job.punchItems||[]),
+                                    ...manualPunchItems.filter(p=>p.jobId===job.id&&!(job.punchItems||[]).some(x=>x.id===p.id))
+                                  ].filter(p=>p.id!==item.id);
+                                  const updatedJob = {...job, punchItems: merged};
                                   setMpJobs(prev=>prev.map(j=>j.id===job.id?updatedJob:j));
-                                  if (isManual) setManualPunchItems(prev=>prev.filter(p=>p.id!==item.id));
-                                  try { await fetch(`${SUPA_URL}/rest/v1/mp_jobs?id=eq.${encodeURIComponent(job.id)}`,{method:"PATCH",headers:{apikey:SUPA_KEY,Authorization:`Bearer ${SUPA_KEY}`,"Content-Type":"application/json",Prefer:"return=minimal"},body:JSON.stringify({punch_items:jobItems})}); } catch(e){}
+                                  setManualPunchItems(prev=>prev.filter(p=>p.id!==item.id));
+                                  try { await fetch(`${SUPA_URL}/rest/v1/mp_jobs?id=eq.${encodeURIComponent(job.id)}`,{method:"PATCH",headers:{apikey:SUPA_KEY,Authorization:`Bearer ${SUPA_KEY}`,"Content-Type":"application/json",Prefer:"return=minimal"},body:JSON.stringify({punch_items:merged})}); } catch(e){}
                                 };
                                 return (
                                   <div key={item.id} style={{display:"grid",gridTemplateColumns:"28px 1fr 90px 80px 70px 28px",padding:"8px 12px",gap:6,borderBottom:idx<rows.length-1?"1px solid #F4F6FB":"none",background:isDone?"#F9FFFE":idx%2===0?"#fff":"#FAFBFD",alignItems:"center"}}>
@@ -7340,6 +7390,63 @@ Return ONLY valid JSON, no markdown, no extra text:
                     );
                   })()}
 
+
+                  {/* Task list - visible on construction tab */}
+                  {mpDetailTab==="construction" && (() => {
+                    const allItems=[...(job.punchItems||[]),...manualPunchItems.filter(p=>p.jobId===job.id&&!(job.punchItems||[]).some(x=>x.id===p.id))];
+                    const done=allItems.filter(p=>p.done); const todo=allItems.filter(p=>!p.done); const rows=[...todo,...done];
+                    return (
+                      <div style={{background:"#fff",borderRadius:12,border:"1px solid #D4D9EE",overflow:"hidden"}}>
+                        <div style={{padding:"11px 16px",borderBottom:"1px solid #D4D9EE",background:"#F9FAFC",display:"flex",alignItems:"center",gap:10}}>
+                          <span style={{fontSize:12,fontWeight:700,color:"#1A2240",flex:1}}>Task List</span>
+                          <span style={{fontSize:10,color:"#9BA3BF"}}>{done.length}/{allItems.length} complete</span>
+                          <button onClick={()=>{ setPunchForm({text:"",jobId:job.id,dueDate:"",priority:"medium",bu:"major"}); setShowAddPunch(true); }}
+                            style={{fontSize:11,padding:"4px 10px",background:"#3B6FE8",color:"#fff",border:"none",borderRadius:6,cursor:"pointer",fontFamily:"inherit",fontWeight:600}}>+ Add Task</button>
+                        </div>
+                        <div style={{display:"grid",gridTemplateColumns:"28px 1fr 90px 80px 70px 28px",background:"#FAFBFD",borderBottom:"1px solid #EEF0F8",padding:"6px 12px",gap:6}}>
+                          {["","Task","Assigned To","Due Date","Priority",""].map((h,i)=>(
+                            <div key={i} style={{fontSize:9,fontWeight:700,color:"#9BA3BF",textTransform:"uppercase",letterSpacing:"0.08em"}}>{h}</div>
+                          ))}
+                        </div>
+                        {rows.length===0&&(<div style={{padding:"28px",textAlign:"center",color:"#9BA3BF",fontSize:12}}>No tasks yet - click + Add Task above</div>)}
+                        {rows.map((item,idx)=>{
+                          const isDone=item.done;
+                          const toggle=async()=>{
+                            const next=!isDone;
+                            const merged=[...(job.punchItems||[]),...manualPunchItems.filter(p=>p.jobId===job.id&&!(job.punchItems||[]).some(x=>x.id===p.id))].map(p=>p.id===item.id?{...p,done:next}:p);
+                            setMpJobs(prev=>prev.map(j=>j.id===job.id?{...j,punchItems:merged}:j));
+                            setManualPunchItems(prev=>prev.map(p=>p.id===item.id?{...p,done:next}:p));
+                            try{await fetch(`${SUPA_URL}/rest/v1/mp_jobs?id=eq.${encodeURIComponent(job.id)}`,{method:"PATCH",headers:{apikey:SUPA_KEY,Authorization:`Bearer ${SUPA_KEY}`,"Content-Type":"application/json",Prefer:"return=minimal"},body:JSON.stringify({punch_items:merged})});}catch(e){}
+                          };
+                          const remove=async()=>{
+                            const merged=[...(job.punchItems||[]),...manualPunchItems.filter(p=>p.jobId===job.id&&!(job.punchItems||[]).some(x=>x.id===p.id))].filter(p=>p.id!==item.id);
+                            setMpJobs(prev=>prev.map(j=>j.id===job.id?{...j,punchItems:merged}:j));
+                            setManualPunchItems(prev=>prev.filter(p=>p.id!==item.id));
+                            try{await fetch(`${SUPA_URL}/rest/v1/mp_jobs?id=eq.${encodeURIComponent(job.id)}`,{method:"PATCH",headers:{apikey:SUPA_KEY,Authorization:`Bearer ${SUPA_KEY}`,"Content-Type":"application/json",Prefer:"return=minimal"},body:JSON.stringify({punch_items:merged})});}catch(e){}
+                          };
+                          return (
+                            <div key={item.id} style={{display:"grid",gridTemplateColumns:"28px 1fr 90px 80px 70px 28px",padding:"8px 12px",gap:6,borderBottom:idx<rows.length-1?"1px solid #F4F6FB":"none",background:isDone?"#F9FFFE":idx%2===0?"#fff":"#FAFBFD",alignItems:"center"}}>
+                              <div onClick={toggle} style={{width:17,height:17,borderRadius:3,border:"2px solid "+(isDone?"#4ADE80":"#CBD1E8"),background:isDone?"#4ADE80":"#fff",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",transition:"all 0.12s"}}>
+                                {isDone&&<span style={{color:"#fff",fontSize:10,fontWeight:700,lineHeight:1}}>&#10003;</span>}
+                              </div>
+                              <div style={{fontSize:12,color:"#1A2240",textDecoration:isDone?"line-through":"none",opacity:isDone?0.55:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={item.text}>{item.text}</div>
+                              <div style={{fontSize:11,color:"#4A5278",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{item.assignedTo||job.pm||"-"}</div>
+                              <div style={{fontSize:11,color:item.dueDate&&new Date(item.dueDate)<new Date()&&!isDone?"#F87171":"#4A5278"}}>{item.dueDate||"-"}</div>
+                              <div style={{display:"flex",alignItems:"center",gap:4}}>
+                                <div style={{width:7,height:7,borderRadius:"50%",background:item.priority==="high"?"#F87171":"#FCD34D",flexShrink:0}}/>
+                                <span style={{fontSize:10,color:"#9BA3BF",textTransform:"capitalize"}}>{item.priority||"medium"}</span>
+                              </div>
+                              <button onClick={remove} style={{background:"none",border:"none",color:"#CBD1E8",cursor:"pointer",fontSize:13,padding:0,lineHeight:1,display:"flex",alignItems:"center",justifyContent:"center"}}>&#10005;</button>
+                            </div>
+                          );
+                        })}
+                        {done.length>0&&todo.length>0&&(
+                          <div style={{padding:"4px 12px",background:"#F4F6FB",borderTop:"1px solid #EEF0F8"}}><span style={{fontSize:9,color:"#9BA3BF",textTransform:"uppercase",letterSpacing:"0.08em"}}>{done.length} Completed</span></div>
+                        )}
+                      </div>
+                    );
+                  })()}
+
                   {/* -- CLOSEOUT TAB -- */}
                   {mpDetailTab==="closeout" && (() => {
                     const CLOSEOUT_ITEMS = [
@@ -7443,6 +7550,68 @@ Return ONLY valid JSON, no markdown, no extra text:
                           );
                         })}
                       </div>
+                        {/* Job Task List */}
+                        {(() => {
+                          const allItems = [
+                            ...(job.punchItems||[]),
+                            ...manualPunchItems.filter(p=>p.jobId===job.id&&!(job.punchItems||[]).some(x=>x.id===p.id)),
+                          ];
+                          const done = allItems.filter(p=>p.done);
+                          const todo = allItems.filter(p=>!p.done);
+                          const rows = [...todo, ...done];
+                          return (
+                            <div style={{background:"#fff",borderRadius:12,border:"1px solid #D4D9EE",overflow:"hidden"}}>
+                              <div style={{padding:"11px 16px",borderBottom:"1px solid #D4D9EE",background:"#F9FAFC",display:"flex",alignItems:"center",gap:10}}>
+                                <span style={{fontSize:12,fontWeight:700,color:"#1A2240",flex:1}}>Task List</span>
+                                <span style={{fontSize:10,color:"#9BA3BF"}}>{done.length}/{allItems.length} complete</span>
+                                <button onClick={()=>{ setPunchForm({text:"",jobId:job.id,dueDate:"",priority:"medium",bu:"major"}); setShowAddPunch(true); }}
+                                  style={{fontSize:11,padding:"4px 10px",background:"#3B6FE8",color:"#fff",border:"none",borderRadius:6,cursor:"pointer",fontFamily:"inherit",fontWeight:600}}>
+                                  + Add Task
+                                </button>
+                              </div>
+                              <div style={{display:"grid",gridTemplateColumns:"28px 1fr 90px 80px 70px 28px",background:"#FAFBFD",borderBottom:"1px solid #EEF0F8",padding:"6px 12px",gap:6}}>
+                                {["","Task","Assigned To","Due Date","Priority",""].map((h,i)=>(
+                                  <div key={i} style={{fontSize:9,fontWeight:700,color:"#9BA3BF",textTransform:"uppercase",letterSpacing:"0.08em"}}>{h}</div>
+                                ))}
+                              </div>
+                              {rows.length===0&&(<div style={{padding:"28px",textAlign:"center",color:"#9BA3BF",fontSize:12}}>No tasks yet - click + Add Task above</div>)}
+                              {rows.map((item,idx)=>{
+                                const isDone=item.done;
+                                const toggle=async()=>{
+                                  const next=!isDone;
+                                  const merged=[...(job.punchItems||[]),...manualPunchItems.filter(p=>p.jobId===job.id&&!(job.punchItems||[]).some(x=>x.id===p.id))].map(p=>p.id===item.id?{...p,done:next}:p);
+                                  setMpJobs(prev=>prev.map(j=>j.id===job.id?{...j,punchItems:merged}:j));
+                                  setManualPunchItems(prev=>prev.map(p=>p.id===item.id?{...p,done:next}:p));
+                                  try{await fetch(`${SUPA_URL}/rest/v1/mp_jobs?id=eq.${encodeURIComponent(job.id)}`,{method:"PATCH",headers:{apikey:SUPA_KEY,Authorization:`Bearer ${SUPA_KEY}`,"Content-Type":"application/json",Prefer:"return=minimal"},body:JSON.stringify({punch_items:merged})});}catch(e){}
+                                };
+                                const remove=async()=>{
+                                  const merged=[...(job.punchItems||[]),...manualPunchItems.filter(p=>p.jobId===job.id&&!(job.punchItems||[]).some(x=>x.id===p.id))].filter(p=>p.id!==item.id);
+                                  setMpJobs(prev=>prev.map(j=>j.id===job.id?{...j,punchItems:merged}:j));
+                                  setManualPunchItems(prev=>prev.filter(p=>p.id!==item.id));
+                                  try{await fetch(`${SUPA_URL}/rest/v1/mp_jobs?id=eq.${encodeURIComponent(job.id)}`,{method:"PATCH",headers:{apikey:SUPA_KEY,Authorization:`Bearer ${SUPA_KEY}`,"Content-Type":"application/json",Prefer:"return=minimal"},body:JSON.stringify({punch_items:merged})});}catch(e){}
+                                };
+                                return (
+                                  <div key={item.id} style={{display:"grid",gridTemplateColumns:"28px 1fr 90px 80px 70px 28px",padding:"8px 12px",gap:6,borderBottom:idx<rows.length-1?"1px solid #F4F6FB":"none",background:isDone?"#F9FFFE":idx%2===0?"#fff":"#FAFBFD",alignItems:"center"}}>
+                                    <div onClick={toggle} style={{width:17,height:17,borderRadius:3,border:"2px solid "+(isDone?"#4ADE80":"#CBD1E8"),background:isDone?"#4ADE80":"#fff",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",transition:"all 0.12s"}}>
+                                      {isDone&&<span style={{color:"#fff",fontSize:10,fontWeight:700,lineHeight:1}}>&#10003;</span>}
+                                    </div>
+                                    <div style={{fontSize:12,color:"#1A2240",textDecoration:isDone?"line-through":"none",opacity:isDone?0.55:1,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}} title={item.text}>{item.text}</div>
+                                    <div style={{fontSize:11,color:"#4A5278",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{item.assignedTo||job.pm||"-"}</div>
+                                    <div style={{fontSize:11,color:item.dueDate&&new Date(item.dueDate)<new Date()&&!isDone?"#F87171":"#4A5278"}}>{item.dueDate||"-"}</div>
+                                    <div style={{display:"flex",alignItems:"center",gap:4}}>
+                                      <div style={{width:7,height:7,borderRadius:"50%",background:item.priority==="high"?"#F87171":"#FCD34D",flexShrink:0}}/>
+                                      <span style={{fontSize:10,color:"#9BA3BF",textTransform:"capitalize"}}>{item.priority||"medium"}</span>
+                                    </div>
+                                    <button onClick={remove} style={{background:"none",border:"none",color:"#CBD1E8",cursor:"pointer",fontSize:13,padding:0,lineHeight:1,display:"flex",alignItems:"center",justifyContent:"center"}}>&#10005;</button>
+                                  </div>
+                                );
+                              })}
+                              {done.length>0&&todo.length>0&&(
+                                <div style={{padding:"4px 12px",background:"#F4F6FB",borderTop:"1px solid #EEF0F8"}}><span style={{fontSize:9,color:"#9BA3BF",textTransform:"uppercase",letterSpacing:"0.08em"}}>{done.length} Completed</span></div>
+                              )}
+                            </div>
+                          );
+                        })()}
                     );
                   })()}
                 </div>
