@@ -5321,13 +5321,11 @@ Return ONLY valid JSON, no markdown, no extra text:
                                 )}
                               </div>
                               <div style={{width:52,flexShrink:0,borderRight:"1px solid #D4D9EE",display:"flex",alignItems:"center",justifyContent:"center"}}>
-                                {(group==="closeout"&&job.closeoutStartDate) ? (()=>{
-                                  const daysElapsed=Math.floor((today-new Date(job.closeoutStartDate))/(1000*60*60*24));
-                                  const pctDone=Math.min(100,Math.max(0,Math.round((daysElapsed/60)*100)));
-                                  return <div style={{fontSize:11,fontWeight:700,color:"#818CF8"}}>{pctDone}%</div>;
-                                })() : (
-                                  <div style={{fontSize:11,fontWeight:700,color:"#4ADE80"}}>{job.pct!=null&&job.pct>0?job.pct+"%":"-"}</div>
-                                )}
+                                {(()=>{
+                                  const bp=job.contractValue>0?Math.min(100,Math.round(((job.amountBilled||0)/job.contractValue)*100)):0;
+                                  const c=bp>=100?"#4ADE80":bp>=50?"#FCD34D":"#60A5FA";
+                                  return <div style={{fontSize:11,fontWeight:700,color:c}}>{bp>0?bp+"%":"-"}</div>;
+                                })()}
                               </div>
                               <div style={{flex:1,position:"relative",padding:"0 6px"}}>
                                 <div style={{position:"absolute",left:"calc("+nowPct+"% + 6px)",top:0,bottom:0,width:1.5,background:"#F87171",opacity:0.5,zIndex:2}}/>
@@ -5826,13 +5824,11 @@ Return ONLY valid JSON, no markdown, no extra text:
                             createdAt: new Date().toISOString().slice(0,10),
                           };
                           if (linkedJob) {
-                            // Merge stored + any unpersisted manual items + new item, then save all
-                            const stored = linkedJob.punchItems||[];
-                            const extraManual = manualPunchItems.filter(p=>p.jobId===linkedJob.id&&!stored.some(x=>x.id===p.id));
-                            const jobItems = [...stored, ...extraManual, newItem];
-                            setMpJobs(prev=>prev.map(j=>j.id===linkedJob.id?{...j,punchItems:jobItems}:j));
-                            setManualPunchItems(prev=>prev.filter(p=>String(p.jobId)!==String(linkedJob.id)));
-                            fetch(`${SUPA_URL}/rest/v1/mp_jobs?id=eq.${linkedJob.id}`,{method:"PATCH",headers:{apikey:SUPA_KEY,Authorization:`Bearer ${SUPA_KEY}`,"Content-Type":"application/json","Prefer":"return=minimal"},body:JSON.stringify({punch_items:jobItems})}).catch(e=>console.error("add task save:",e));
+                            // Save into mpJobs state + Supabase via supa.update (proven path)
+                            const jobItems = [...(linkedJob.punchItems||[]), newItem];
+                            const updatedJob = {...linkedJob, punchItems: jobItems};
+                            setMpJobs(prev=>prev.map(j=>String(j.id)===String(linkedJob.id)?updatedJob:j));
+                            try{ await supa.from("mp_jobs").update({punch_items: jobItems}).eq("id", linkedJob.id); }catch(e){console.error("add task:",e);}
                           } else {
                             setManualPunchItems(prev=>[newItem,...prev]);
                           }
@@ -6940,36 +6936,14 @@ Return ONLY valid JSON, no markdown, no extra text:
                 }
               };
 
-              // Shared helper: read live mpJobs, merge manual items, save to DB
+              // Task list helpers - use saveMpField for reliable persistence
               const getJobItems = () => {
                 const liveJob = mpJobs.find(j=>String(j.id)===String(job.id))||job;
-                const stored = liveJob.punchItems||[];
-                const manual = manualPunchItems.filter(p=>String(p.jobId)===String(job.id)&&!stored.some(x=>x.id===p.id));
-                return [...stored, ...manual];
+                return liveJob.punchItems||[];
               };
               const saveTaskItems = async (items) => {
-                const liveJob = mpJobs.find(j=>String(j.id)===String(job.id))||job;
-                console.log("[TaskList] saveTaskItems - job.id:", liveJob.id, "items:", items.length, items.map(i=>({id:i.id,done:i.done,text:i.text?.slice(0,20)})));
-                // Write merged list into mpJobs state
-                setMpJobs(prev=>prev.map(j=>j.id===liveJob.id?{...j,punchItems:items}:j));
-                // Sync done state back to manualPunchItems
-                setManualPunchItems(prev=>prev.map(p=>{
-                  const found=items.find(x=>x.id===p.id);
-                  return found?{...p,done:found.done}:p;
-                }));
-                try{
-                  const res = await fetch(`${SUPA_URL}/rest/v1/mp_jobs?id=eq.${liveJob.id}`,{
-                    method:"PATCH",
-                    headers:{apikey:SUPA_KEY,Authorization:`Bearer ${SUPA_KEY}`,"Content-Type":"application/json","Prefer":"return=minimal"},
-                    body:JSON.stringify({punch_items:items})
-                  });
-                  if(!res.ok){
-                    const txt=await res.text();
-                    console.error("[TaskList] PATCH failed:",res.status,txt);
-                  } else {
-                    console.log("[TaskList] PATCH success - status:", res.status);
-                  }
-                }catch(e){console.error("[TaskList] saveTaskItems error:",e);}
+                // Use saveMpField - same proven path as dates/status/PM
+                await saveMpField("punchItems", items);
               };
               const toggleTask = async (itemId) => {
                 const items = getJobItems().map(p=>p.id===itemId?{...p,done:!p.done}:p);
@@ -7140,17 +7114,16 @@ Return ONLY valid JSON, no markdown, no extra text:
                     const coStartD = isCoJob ? (job.closeoutStartDate||"") : "";
                     const coElapsed = coStartD ? Math.floor((new Date()-new Date(coStartD))/(1000*60*60*24)) : null;
                     const coDaysLeft = coElapsed!==null ? 60-coElapsed : null;
-                    const coPct = coElapsed!==null ? Math.min(100,Math.max(0,Math.round((coElapsed/60)*100))) : null;
                     const coOver = coDaysLeft!==null && coDaysLeft<0;
                     const schedVal = isCoJob && coDaysLeft!==null
                       ? (coOver ? Math.abs(coDaysLeft)+" days over" : coDaysLeft+" days left")
                       : (daysAhead===null?"-":Math.abs(daysAhead)+" days "+(daysAhead>=0?"ahead":"behind"));
                     const schedColor = isCoJob ? (coOver?"#F87171":"#818CF8") : scheduleColor;
-                    const pctVal = isCoJob && coPct!==null ? coPct+"%" : (job.pct!=null&&job.pct>0 ? job.pct+"%" : "-");
-                    const pctColor = isCoJob ? (coOver?"#F87171":"#818CF8") : "#4ADE80";
+                    const pctVal = billedPct>0 ? billedPct.toFixed(0)+"%" : "-";
+                    const pctColor = billedPct>=100?"#4ADE80":billedPct>=50?"#FCD34D":"#60A5FA";
                     const tiles = [
                       {label: isCoJob?"Closeout":"Schedule", value:schedVal, color:schedColor},
-                      {label:"% Complete", value:pctVal, color:pctColor},
+                      {label:"% Billed", value:pctVal, color:pctColor},
                       {label:"Contract",  value: contractAmt ? fmt(contractAmt) : "-", color:"#60A5FA"},
                       {label:"CO Status", value: (latest?.changeOrderStatus||job.changeOrderStatus)||"-", color:"#FCD34D"},
                       {label:"Budget",    value: (latest?.budgetStatus||job.budgetStatus)||"-", color:"#A78BFA"},
@@ -7589,7 +7562,11 @@ Return ONLY valid JSON, no markdown, no extra text:
                                     const pctDone = Math.min(100, Math.max(0, Math.round((daysElapsed/60)*100)));
                                     return <div style={{fontSize:11,fontWeight:700,color:"#818CF8"}}>{pctDone}%</div>;
                                   })() : (
-                                    <div style={{fontSize:11,fontWeight:700,color:"#4ADE80"}}>{job.pct!=null&&job.pct>0?job.pct+"%":"-"}</div>
+                                    {(()=>{
+                                      const bp=job.contractValue>0?Math.min(100,Math.round(((job.amountBilled||0)/job.contractValue)*100)):0;
+                                      const c=bp>=100?"#4ADE80":bp>=50?"#FCD34D":"#60A5FA";
+                                      return <div style={{fontSize:11,fontWeight:700,color:c}}>{bp>0?bp+"%":"-"}</div>;
+                                    })()}
                                   )}
                                 </div>
                                 <div style={{flex:1,position:"relative",padding:"0 6px"}}>
