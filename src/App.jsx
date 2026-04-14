@@ -5128,9 +5128,9 @@ Return ONLY valid JSON, no markdown, no extra text:
               ) : (
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 12 }}>
                   {[
-                    { label: "Pipeline Value",        value: SAMPLE_STATS[activeBU]?.pipeline,                                                              sub: "Active opportunities" },
-                    { label: "Active Jobs",            value: activeBU === "major" ? (mpJobs.length || majorJobs.length) : SAMPLE_STATS[activeBU]?.jobs,                         sub: "In progress" },
-                    { label: "Total Contract Value",   value: activeBU === "major" ? fmt((mpJobs.length ? mpJobs : majorJobs).reduce((s, j) => s + (j.contractValue||0), 0)) : SAMPLE_STATS[activeBU]?.budget, sub: "Active jobs" },
+                    { label: "Pipeline Value",        value: activeBU === "major" ? fmt(pipeline.filter(o => o.bu==="major" && !["won","closed_won","lost","Won","Lost"].includes(o.stage||"")).reduce((s,o) => s + (parseFloat(o.value)||0), 0)) : SAMPLE_STATS[activeBU]?.pipeline, sub: "Active opportunities" },
+                    { label: "Active Jobs",            value: activeBU === "major" ? (mpJobs.filter(j=>j.status!=="archived").length || majorJobs.length) : SAMPLE_STATS[activeBU]?.jobs,                         sub: "In progress" },
+                    { label: "Total Contract Value",   value: activeBU === "major" ? fmt((mpJobs.length ? mpJobs : majorJobs).filter(j=>j.status!=="archived").reduce((s, j) => s + (j.contractValue||0), 0)) : SAMPLE_STATS[activeBU]?.budget, sub: "Active jobs" },
                   ].map(s => (
                     <div key={s.label} className="stat-card" style={{ position: "relative", overflow: "hidden" }}>
                       <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: buColor.accent }} />
