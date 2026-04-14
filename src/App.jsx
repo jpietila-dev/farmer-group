@@ -5809,7 +5809,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                       </div>
                       <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 4 }}>
                         <button className="btn-ghost" onClick={()=>setShowAddPunch(false)}>Cancel</button>
-                        <button className="btn-primary" onClick={()=>{
+                        <button className="btn-primary" onClick={async ()=>{
                           if (!punchForm.text.trim()) return;
                           const linkedJob = punchForm.jobId ? mpJobs.find(j=>String(j.id)===String(punchForm.jobId)) : null;
                           const newItem = {
