@@ -3876,14 +3876,24 @@ Return ONLY valid JSON, no markdown, no extra text:
       const updated = { ...entry, id: editId };
       setPipeline(pipeline.map(o => o.id === editId ? updated : o));
       if (selectedOpp && selectedOpp.id === editId) setSelectedOpp(updated);
-      // Persist edit to Supabase
+      // Persist edit to Supabase — try with all fields, fall back without optional columns
       try {
         const dbId = pipeline.find(o=>o.id===editId)?.dbId || String(editId);
-        await fetch(`${SUPA_URL}/rest/v1/mp_pipeline?id=eq.${dbId}`, {
+        const patchBody = { name: entry.name, company_id: entry.companyId||null, contact_name: entry.contactName||"", value: entry.value, stage: entry.stage||"budgeting_lead", close_date: entry.closeDate||null, city: entry.city||null, state: entry.state||null, address: entry.address||null };
+        const res = await fetch(`${SUPA_URL}/rest/v1/mp_pipeline?id=eq.${dbId}`, {
           method: "PATCH",
           headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}`, "Content-Type": "application/json", Prefer: "return=minimal" },
-          body: JSON.stringify({ name: entry.name, company_id: entry.companyId||null, contact_name: entry.contactName||"", value: entry.value, stage: entry.stage||"budgeting_lead", close_date: entry.closeDate||null, city: entry.city||null, state: entry.state||null, address: entry.address||null })
+          body: JSON.stringify(patchBody)
         });
+        if (!res.ok) {
+          // Retry without address/city/state in case columns don't exist
+          const { address: _a, city: _c, state: _s, ...patchFallback } = patchBody;
+          await fetch(`${SUPA_URL}/rest/v1/mp_pipeline?id=eq.${dbId}`, {
+            method: "PATCH",
+            headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}`, "Content-Type": "application/json", Prefer: "return=minimal" },
+            body: JSON.stringify(patchFallback)
+          });
+        }
       } catch(e) { console.error("saveOpp edit:", e); }
     } else {
       const newId = Date.now();
@@ -3901,8 +3911,8 @@ Return ONLY valid JSON, no markdown, no extra text:
           body: JSON.stringify(row)
         });
         if (!res.ok) {
-          // Retry without address in case column doesn't exist yet
-          const rowFallback = { id: String(newId), name: entry.name, company_id: entry.companyId||null, contact_name: entry.contactName||"", value: entry.value, stage: entry.stage||"budgeting_lead", notes: "", bu: entry.bu||"major", close_date: entry.closeDate||null, city: entry.city||null, state: entry.state||null };
+          // Retry without address/city/state in case columns don't exist yet
+          const { address: _a, city: _c, state: _s, ...rowFallback } = row;
           await fetch(`${SUPA_URL}/rest/v1/mp_pipeline`, {
             method: "POST",
             headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}`, "Content-Type": "application/json", Prefer: "return=minimal" },
@@ -6598,6 +6608,22 @@ Return ONLY valid JSON, no markdown, no extra text:
                 const updated = { ...job, [field]: value };
                 setMpJobs(prev => prev.map(j => j.id === job.id ? updated : j));
                 try { await supa.from("mp_jobs").update(mpJobToDB(updated)).eq("id", job.id); } catch(e) {}
+                // If contract value changed, sync back to the linked pipeline opp
+                if (field === "contractValue") {
+                  const linkedOpp = pipeline.find(o => String(o.dbId||o.id) === String(job.id) || o.name === job.name);
+                  if (linkedOpp) {
+                    const updatedOpp = { ...linkedOpp, value: value };
+                    setPipeline(prev => prev.map(o => o.id === linkedOpp.id ? updatedOpp : o));
+                    try {
+                      const dbId = linkedOpp.dbId || String(linkedOpp.id);
+                      await fetch(`${SUPA_URL}/rest/v1/mp_pipeline?id=eq.${dbId}`, {
+                        method: "PATCH",
+                        headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}`, "Content-Type": "application/json", Prefer: "return=minimal" },
+                        body: JSON.stringify({ value: value })
+                      });
+                    } catch(e) { console.error("saveMpField pipeline sync:", e); }
+                  }
+                }
               };
 
               return (
