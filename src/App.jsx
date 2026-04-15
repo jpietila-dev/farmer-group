@@ -4025,8 +4025,15 @@ Return ONLY valid JSON, no markdown, no extra text:
   const visiblePipeline = pipeline.filter(o => {
     const buOk = activeBU === "all" ? (filterBU === "all" || o.bu === filterBU) : o.bu === activeBU;
     const q    = search.toLowerCase();
-    return buOk && (o.name.toLowerCase().includes(q) || (o.contact || "").toLowerCase().includes(q));
+    const isArchived = ["Won", "Lost"].includes(o.stage);
+    return buOk && !isArchived && (o.name.toLowerCase().includes(q) || (o.contact || "").toLowerCase().includes(q));
   });
+  const archivedPipeline = pipeline.filter(o => {
+    const buOk = activeBU === "all" ? (filterBU === "all" || o.bu === filterBU) : o.bu === activeBU;
+    const q    = search.toLowerCase();
+    return buOk && ["Won", "Lost"].includes(o.stage) && (o.name.toLowerCase().includes(q) || (o.contact || "").toLowerCase().includes(q));
+  });
+  const displayPipeline = showBidArchive ? archivedPipeline : visiblePipeline;
   const totalPipeline = visiblePipeline.filter(o => !["Won", "Lost"].includes(o.stage)).reduce((s, o) => s + o.value, 0);
   const totalWon      = visiblePipeline.filter(o => o.stage === "Won").reduce((s, o) => s + o.value, 0);
   const closedOpps    = visiblePipeline.filter(o => ["Won", "Lost"].includes(o.stage));
@@ -6681,6 +6688,19 @@ Return ONLY valid JSON, no markdown, no extra text:
                 }
               };
 
+                  {/* -- CONSTRUCTION TAB -- */}
+                  {mpDetailTab==="construction" && (() => {
+                    const r = latest;
+                    if (!r) return (
+                      <div style={{background:"#fff",borderRadius:12,border:"1px solid #D4D9EE",padding:"40px",textAlign:"center",color:"#9BA3BF"}}>
+                        <div style={{fontSize:32,marginBottom:8}}>📋</div>
+                        <div style={{fontSize:14,fontWeight:600,color:"#1A2240"}}>No weekly reports yet</div>
+                      </div>
+                    );
+                    const Badge = ({label, val, ok, warn}) => {
+                      const color = val===ok?"#4ADE80":val===warn?"#FCD34D":"#F87171";
+                      return <span style={{fontSize:11,fontWeight:700,padding:"3px 10px",borderRadius:5,background:color+"15",color,border:"1px solid "+color+"40"}}>{val||"—"}</span>;
+                    };
                     return (
                       <div style={{display:"flex",flexDirection:"column",gap:12}}>
                         <div style={{display:"flex",alignItems:"center",gap:10}}>
@@ -7283,11 +7303,15 @@ Return ONLY valid JSON, no markdown, no extra text:
                     </select>
                   )}
                   <input className="fi" style={{ width: 180 }} placeholder="Search…" value={search} onChange={e => setSearch(e.target.value)} />
+                  <button onClick={()=>setShowBidArchive(v=>!v)}
+                    style={{padding:"6px 12px",border:"1px solid "+(showBidArchive?"#F87171":"#CBD1E8"),background:showBidArchive?"#FFF1F2":"transparent",color:showBidArchive?"#F87171":"#4A5278",borderRadius:7,cursor:"pointer",fontFamily:"inherit",fontSize:12,fontWeight:600}}>
+                    {showBidArchive ? "Active" : "Won/Lost ("+archivedPipeline.length+")"}
+                  </button>
                   <div style={{ display: "flex" }}>
                     <button className={"view-toggle" + (pipelineView === "kanban" ? " on" : "")} onClick={() => setPipelineView("kanban")}>Kanban</button>
                     <button className={"view-toggle" + (pipelineView === "list"   ? " on" : "")} onClick={() => setPipelineView("list")}>List</button>
                   </div>
-                  <button className="btn-primary" onClick={() => openAdd("Lead")}>+ Add</button>
+                  {!showBidArchive && <button className="btn-primary" onClick={() => openAdd("Lead")}>+ Add</button>}
                 </div>
               </div>
 
@@ -7378,9 +7402,9 @@ Return ONLY valid JSON, no markdown, no extra text:
               {/* -- NON-FM PIPELINE (kanban + list) -- */}
               {activeBU !== "facility" && pipelineView === "kanban" && (
                 <div style={{ display: "flex", gap: 10, overflowX: "auto", paddingBottom: 8 }}>
-                  {stages.map(stage => {
+                  {(showBidArchive ? ["Won","Lost"] : stages.filter(s=>!["Won","Lost"].includes(s))).map(stage => {
                     const sc        = STAGE_COLORS[stage] || { color: "#60A5FA", bg: "#60A5FA15" };
-                    const stageOpps = visiblePipeline.filter(o => o.stage === stage);
+                    const stageOpps = displayPipeline.filter(o => o.stage === stage);
                     return (
                       <div key={stage} style={{ minWidth: 200, flex: "0 0 200px" }}>
                         <div style={{ background: sc.bg, border: "1px solid " + sc.color + "30", borderRadius: 7, padding: "8px 12px", marginBottom: 10 }}>
@@ -7447,7 +7471,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                   <div style={{ display: "grid", gridTemplateColumns: "2fr 1.5fr 1fr 1fr 1fr auto", gap: 12, padding: "6px 16px", fontSize: 10, letterSpacing: "0.08em", textTransform: "uppercase", color: "#3D4570" }}>
                     <span>Opportunity</span><span>Company</span><span>Stage</span><span style={{ textAlign: "right" }}>Value</span><span>Close</span><span />
                   </div>
-                  {visiblePipeline.map(o => {
+                  {displayPipeline.map(o => {
                     const sc = STAGE_COLORS[o.stage] || { color: "#60A5FA", bg: "#60A5FA15" };
                     const co = companies.find(c => c.id === o.companyId);
                     return (
