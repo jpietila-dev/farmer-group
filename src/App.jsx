@@ -6688,6 +6688,8 @@ Return ONLY valid JSON, no markdown, no extra text:
                 }
               };
 
+              return (
+                <div style={{display:"flex",flexDirection:"column",gap:12}}>
                   {/* -- CONSTRUCTION TAB -- */}
                   {mpDetailTab==="construction" && (() => {
                     const r = latest;
