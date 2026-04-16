@@ -14,7 +14,7 @@ const supa = {
       const body = Array.isArray(rows) ? rows : [rows];
       return fetch(`${SUPA_URL}/rest/v1/${table}`, {
         method: "POST",
-        headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}`, "Content-Type": "application/json", Prefer: "return=representation" },x
+        headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}`, "Content-Type": "application/json", Prefer: "return=representation" },
         body: JSON.stringify(body)
       }).then(r => r.json()).then(data => ({ data, error: null })).catch(error => ({ data: null, error }));
     },
