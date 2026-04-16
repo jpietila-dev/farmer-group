@@ -6852,7 +6852,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                             <div key={section} style={{background:"#fff",borderRadius:10,border:"1px solid #D4D9EE",overflow:"hidden"}}>
                               <div style={{padding:"10px 16px",background:"#F9FAFC",borderBottom:"1px solid #D4D9EE",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
                                 <span style={{fontSize:12,fontWeight:700,color:"#1A2240",textTransform:"uppercase",letterSpacing:"0.06em"}}>{section}</span>
-                                <span style={{fontSize:11,color:sectionDone===items.length?"#4ADE80":"#9BA3BF",fontWeight:600}}>{sectionDone}/{items.length}</span>
+                                <span style={{fontSize:11,color:sectionDone===items.length?"#4ADE80":"#9BA3BF",fontWeight:600}}>{sectionDone+" / "+items.length}</span>
                               </div>
                               {items.map(item=>{
                                 const done = !!checklist[item.id];
@@ -7790,7 +7790,7 @@ window.addEventListener('message',function(e){
                       const ungeocoded = currentSites.filter(s => !s.lat || !s.lng);
                       if (geocodeAllProgress) return (
                         <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: "#60A5FA", background: "#60A5FA10", border: "1px solid #60A5FA30", borderRadius: 6, padding: "5px 10px" }}>
-                          <span>⏳ Geocoding {geocodeAllProgress.done}/{geocodeAllProgress.total}…</span>
+                          <span>{"⏳ Geocoding "+geocodeAllProgress.done+"/"+geocodeAllProgress.total+"…"}</span>
                         </div>
                       );
                       if (ungeocoded.length > 0) return (
