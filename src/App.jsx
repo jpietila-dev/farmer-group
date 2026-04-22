@@ -3315,15 +3315,9 @@ export default function App() {
           fetch(`${SUPA_URL}/rest/v1/contacts?select=id,company_id,first_name,last_name,title,email,phone&limit=1000`, {
             headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}` }
           }).then(r => r.json()).then(data => ({ data, error: null })).catch(error => ({ data: null, error })),
-          fetch(`${SUPA_URL}/rest/v1/mp_pipeline?select=*&limit=500`, {
-            headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}` }
-          }).then(r => r.json()).then(data => ({ data, error: null })).catch(() => ({ data: null, error: null })),
-          fetch(`${SUPA_URL}/rest/v1/mp_jobs?select=*&limit=100`, {
-            headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}` }
-          }).then(r => r.json()).then(data => ({ data, error: null })).catch(() => ({ data: null, error: null })),
-          fetch(`${SUPA_URL}/rest/v1/mp_weekly_reports?select=*&limit=1000`, {
-            headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}` }
-          }).then(r => r.json()).then(data => ({ data, error: null })).catch(() => ({ data: null, error: null })),
+          supa.from("mp_pipeline").select("*"),
+          supa.from("mp_jobs").select("*"),
+          supa.from("mp_weekly_reports").select("*"),
           fetch(`${SUPA_URL}/rest/v1/mp_bid_vendors?select=*&limit=500&order=company.asc`, {
             headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}` }
           }).then(r => r.json()).then(data => ({ data, error: null })).catch(() => ({ data: null, error: null })),
@@ -3337,6 +3331,8 @@ export default function App() {
         if (fmRes.data?.length)   setFmJobs(fmRes.data.map(dbToFmJob));
         if (teamRes.data?.length) setFmTeam(teamRes.data.map(dbToTeamMember));
         if (crmRes.data?.length)  setCrmContacts(crmRes.data.map(dbToCrmContact));
+        console.log('[DB] mpPipeRes:', JSON.stringify(mpPipeRes).slice(0,200));
+        console.log('[DB] mpRes:', JSON.stringify(mpRes).slice(0,200));
         if (Array.isArray(mpPipeRes.data) && mpPipeRes.data.length) {
           const pipeLoaded = mpPipeRes.data.map(r => ({
             id: r.id, name: r.name||"", companyId: r.company_id||"", contactName: r.contact_name||"",
