@@ -6233,9 +6233,10 @@ Return ONLY valid JSON, no markdown, no extra text:
 
             // All MP opps (from pipeline state, filtered to major)
             const mpOpps = pipeline.filter(o => o.bu === "major");
-            const activeOpps = mpOpps.filter(o => !["won","closed_won","lost"].includes(o.stage||o.pipelineType));
-            const wonOpps      = mpOpps.filter(o => o.stage==="won" || o.stage==="Won");
-            const closedWonOpps= mpOpps.filter(o => o.stage==="closed_won");
+            const TERMINAL = ["won","closed_won","lost","Won","Lost","Closed / Won"];
+            const activeOpps = mpOpps.filter(o => !TERMINAL.includes(o.stage) && !TERMINAL.includes(o.pipelineType));
+            const wonOpps      = mpOpps.filter(o => ["won","Won","closed_won","Closed / Won"].includes(o.stage));
+            const closedWonOpps= mpOpps.filter(o => o.stage==="closed_won" || o.stage==="Closed / Won");
             const lostOpps = mpOpps.filter(o => o.stage==="lost" || o.stage==="Lost");
 
             // Normalize stage key
