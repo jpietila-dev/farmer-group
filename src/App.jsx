@@ -3337,7 +3337,6 @@ export default function App() {
         if (fmRes.data?.length)   setFmJobs(fmRes.data.map(dbToFmJob));
         if (teamRes.data?.length) setFmTeam(teamRes.data.map(dbToTeamMember));
         if (crmRes.data?.length)  setCrmContacts(crmRes.data.map(dbToCrmContact));
-        console.log("[MP Pipeline] DB returned:", mpPipeRes.data?.length, "records", mpPipeRes.data?.slice?.(0,3)?.map(r=>({id:r.id,name:r.name,stage:r.stage})));
         if (Array.isArray(mpPipeRes.data) && mpPipeRes.data.length) {
           const pipeLoaded = mpPipeRes.data.map(r => ({
             id: r.id, name: r.name||"", companyId: r.company_id||"", contactName: r.contact_name||"",
