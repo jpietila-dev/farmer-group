@@ -4856,7 +4856,7 @@ Return ONLY valid JSON, no markdown, no extra text:
           })()}
 
           {/* -- DASHBOARD -- */}
-          {!crmMode && activeNav === "dashboard" && (
+          {!crmMode && activeNav === "dashboard" && !accountingMode && (
             <div className="fade-in" style={{ display: "flex", flexDirection: "column", gap: 28 }}>
 
               {/* ══ FM DASHBOARD ══ */}
@@ -6350,7 +6350,7 @@ Return ONLY valid JSON, no markdown, no extra text:
             );
           })()}
           {/* -- BUDGETING -- */}
-          {activeNav === "pipeline" && activeBU === "major" && (() => {
+          {activeNav === "pipeline" && activeBU === "major" && !accountingMode && (() => {
             const MP_STAGES = [
               { id:"lead",           label:"Lead",            color:"#A78BFA", short:"Lead" },
               { id:"budgeting_lead", label:"Budgeting Lead",  color:"#818CF8", short:"Budget" },
@@ -6778,7 +6778,7 @@ Example:
           })()}
 
           {/* -- ACTIVE JOBS (MP only) -- */}
-          {activeNav === "jobs" && activeBU !== "capital" && activeBU !== "facility" && (() => {
+          {activeNav === "jobs" && activeBU !== "capital" && activeBU !== "facility" && !accountingMode && (() => {
             // Use Supabase mp_jobs if loaded, fall back to hardcoded majorJobs
             const allMpJobs = mpJobs.length > 0 ? mpJobs : majorJobs;
             const archivedMpJobs = allMpJobs.filter(j => j.status === "archived");
@@ -7265,7 +7265,7 @@ Example:
 
 
           {/* -- PIPELINE -- */}
-          {activeNav === "pipeline" && activeBU !== "major" && activeBU !== "capital" && (
+          {activeNav === "pipeline" && activeBU !== "major" && activeBU !== "capital" && !accountingMode && (
             <div className="fade-in" style={{ display: "flex", flexDirection: "column", gap: 22 }}>
 
               {/* -- FM INBOX (unassigned leads) - FM only -- */}
@@ -8197,7 +8197,7 @@ window.addEventListener('message',function(e){
           })()}
 
           {/* -- CAPEX PIPELINE (estimating, owner_approval, won, lost) -- */}
-          {activeNav === "pipeline" && activeBU === "capital" && (() => {
+          {activeNav === "pipeline" && activeBU === "capital" && !accountingMode && (() => {
             const pipeStageIds = CAPEX_PIPELINE_STAGES.map(s=>s.id);
             const pipeJobs = capexJobs.filter(j => pipeStageIds.includes(j.stage));
 
@@ -8297,7 +8297,7 @@ window.addEventListener('message',function(e){
           })()}
 
           {/* -- CAPEX JOBS (buyout and beyond) -- */}
-          {activeNav === "jobs" && activeBU === "capital" && (() => {
+          {activeNav === "jobs" && activeBU === "capital" && !accountingMode && (() => {
             // Full-page detail view when a job is selected
             if (selectedCapexFull) {
               const job = capexJobs.find(j => j.id === selectedCapexFull) || null;
@@ -9319,7 +9319,7 @@ window.addEventListener('message',function(e){
           })()}
 
           {/* -- FM JOBS -- */}
-          {activeNav === "jobs" && activeBU === "facility" && (() => {
+          {activeNav === "jobs" && activeBU === "facility" && !accountingMode && (() => {
             const coords = ["all", ...Array.from(new Set(fmTeam.map(m => m.name)))];
             const filtered = fmJobs.filter(j => {
               const isActive    = FM_ACTIVE_STAGES.some(s => s.id === j.stage);
@@ -12426,7 +12426,7 @@ window.addEventListener('message',function(e){
           })()}
 
           {/* -- COMING SOON (other nav items) -- */}
-          {!["dashboard", "customers", "jobs", "pipeline", "budgeting", "estimating", "mpvendors", "vendors", "finance", "sites", "projects", "team", "subcontractors", "bids", "active-sites", "pricing"].includes(activeNav) && (
+          {!accountingMode && !["dashboard", "customers", "jobs", "pipeline", "budgeting", "estimating", "mpvendors", "vendors", "finance", "sites", "projects", "team", "subcontractors", "bids", "active-sites", "pricing"].includes(activeNav) && (
             <div className="fade-in">
               <div style={{ marginBottom: 28 }}>
                 <div style={{ fontSize: 22, fontWeight: 700, color: "#1A2240", textTransform: "uppercase" }}>{navItems.find(n => n.id === activeNav)?.label}</div>
