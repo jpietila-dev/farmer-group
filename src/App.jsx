@@ -3331,8 +3331,8 @@ export default function App() {
         if (fmRes.data?.length)   setFmJobs(fmRes.data.map(dbToFmJob));
         if (teamRes.data?.length) setFmTeam(teamRes.data.map(dbToTeamMember));
         if (crmRes.data?.length)  setCrmContacts(crmRes.data.map(dbToCrmContact));
-        console.log('[DB] mpPipeRes:', JSON.stringify(mpPipeRes).slice(0,200));
-        console.log('[DB] mpRes:', JSON.stringify(mpRes).slice(0,200));
+        console.log('[DB] mpPipeRes full:', JSON.stringify(mpPipeRes));
+        console.log('[DB] mpPipeRes.data type:', Array.isArray(mpPipeRes.data), 'length:', mpPipeRes.data?.length, 'first row:', JSON.stringify(mpPipeRes.data?.[0]));
         if (Array.isArray(mpPipeRes.data) && mpPipeRes.data.length) {
           const pipeLoaded = mpPipeRes.data.map(r => ({
             id: r.id, name: r.name||"", companyId: r.company_id||"", contactName: r.contact_name||"",
@@ -6293,7 +6293,7 @@ Return ONLY valid JSON, no markdown, no extra text:
               const entry = { ...fields, id, bu:"major", nextSteps:[] };
               setPipeline(prev=>[...prev, entry]);
               // Persist
-              const row = { id:String(id), name:fields.name, company_id:fields.companyId||null, contact_name:fields.contactName||"", value:parseFloat(fields.value)||0, stage:fields.stage||"budgeting_lead", notes:fields.notes||"", bu:"major", close_date:fields.closeDate||null, city:fields.city||null, state:fields.state||null };
+              const row = { id:String(id), name:fields.name, company_id:fields.companyId||null, contact_name:fields.contactName||"", value:parseFloat(fields.value)||0, stage:fields.stage||"budgeting_lead", notes:fields.notes||"", bu:"major", close_date:fields.closeDate||null, city:fields.city||null, state:fields.state||null, address:fields.address||null };
               try { await fetch(`${SUPA_URL}/rest/v1/mp_pipeline`, { method:"POST", headers:{apikey:SUPA_KEY,Authorization:`Bearer ${SUPA_KEY}`,"Content-Type":"application/json",Prefer:"return=minimal"}, body:JSON.stringify(row) }); } catch(e){}
             };
 
@@ -6305,8 +6305,8 @@ Return ONLY valid JSON, no markdown, no extra text:
                   method:"POST",
                   headers:{"Content-Type":"application/json"},
                   body:JSON.stringify({
-                    model:"claude-sonnet-4-20250514", max_tokens:500,
-                    system:"Extract project lead info from this email. Return ONLY JSON with keys: name (project name), company (company name), value (dollar amount as number, 0 if unknown), contact_name, contact_email, contact_phone, notes (brief summary), stage (one of: budgeting_lead, proposal_bid, negotiation). No markdown, just JSON.",
+                    model:"claude-sonnet-4-20250514", max_tokens:800,
+                    system:"You are a construction project lead extractor. Extract info from this text and return ONLY a raw JSON object with these keys (no markdown, no extra text):\nname: project name or address-based name\ncompany: developer/owner company if mentioned, else empty\ncontact_name: contact person name if found, else empty\ncontact_email: email if found, else empty\ncontact_phone: phone if found, else empty\nvalue: estimated contract value as number (0 if unknown)\naddress: street address if mentioned, else empty\ncity: city name, else empty\nstate: 2-letter state code, else empty\nsf: total gross SF as number (from GSF/SF mentions), 0 if unknown\nbuilding_type: brief building description (e.g. Climate Control Storage, RV Boat Storage)\nnotes: concise project summary with key details (stories, units, features, links)\nstage: one of budgeting_lead OR proposal_bid OR negotiation (use budgeting_lead for early/sketch phase)",
                     messages:[{role:"user",content:emailText}]
                   })
                 });
@@ -6474,6 +6474,11 @@ Return ONLY valid JSON, no markdown, no extra text:
                                   <button onClick={()=>{setWonConvertOpp(o);setWonConvertForm({startDate:"",endDate:"",contractValue:o.value||"",pm:"",notes:o.notes||""});setShowWonConvert(true);}} style={{padding:"2px 8px",borderRadius:4,border:"1px solid #4ADE8050",background:"#4ADE8015",color:"#4ADE80",fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"inherit"}}>✓ Won</button>
                                   <button onClick={()=>moveOpp(o.id,"lost")} style={{padding:"2px 8px",borderRadius:4,border:"1px solid #F8717150",background:"#F8717115",color:"#F87171",fontSize:10,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>✗ Lost</button>
                                   <button onClick={()=>{setEditId(o.id);setForm({...o,stage:getStage(o)});setShowForm(true);}} style={{background:"none",border:"1px solid #E0E4F0",borderRadius:4,color:"#9BA3BF",fontSize:11,cursor:"pointer",padding:"2px 6px",fontFamily:"inherit"}}>✎</button>
+                                  <button title="Delete opp" onClick={()=>{ if(window.confirm("Delete "+o.name+"? This cannot be undone.")){
+                                    setPipeline(prev=>prev.filter(p=>p.id!==o.id));
+                                    const did=o.dbId||String(o.id);
+                                    fetch(`${SUPA_URL}/rest/v1/mp_pipeline?id=eq.${did}`,{method:"DELETE",headers:{apikey:SUPA_KEY,Authorization:`Bearer ${SUPA_KEY}`}}).catch(()=>{});
+                                  }}} style={{background:"none",border:"1px solid #F8717130",borderRadius:4,color:"#F87171",fontSize:11,cursor:"pointer",padding:"2px 5px",fontFamily:"inherit",lineHeight:1}}>🗑</button>
                                 </div>
                               </div>
                             </div>
@@ -6521,7 +6526,10 @@ Return ONLY valid JSON, no markdown, no extra text:
                       <div style={{padding:"18px 22px",flex:1,overflowY:"auto",display:"flex",flexDirection:"column",gap:14}}>
                         <div>
                           <div style={{fontSize:12,fontWeight:700,color:"#1A2240",marginBottom:6}}>Paste email content</div>
-                          <textarea value={emailText} onChange={e=>setEmailText(e.target.value)} rows={8} placeholder="Paste the full email here — subject, body, any details about the project…"
+                          <textarea value={emailText} onChange={e=>setEmailText(e.target.value)} rows={8} placeholder="Paste email or notes — address, GSF, building type, storage units, stories, contacts, links…
+
+Example:
+10901 East Washington St. Indianapolis, Indiana / 126,570 GSF / 2-Story 94,600 GSF / 46 12x40 RV & Boat Storage / 8,450 SF Drive Up"
                             style={{width:"100%",padding:"10px 12px",border:"1.5px solid #CBD1E8",borderRadius:8,fontSize:13,fontFamily:"inherit",resize:"vertical",outline:"none",boxSizing:"border-box"}}/>
                         </div>
                         <button onClick={parseEmail} style={{padding:"10px",background:"#3B6FE8",border:"none",borderRadius:8,color:"#fff",fontWeight:700,cursor:"pointer",fontFamily:"inherit",fontSize:13}}>
@@ -6531,11 +6539,16 @@ Return ONLY valid JSON, no markdown, no extra text:
                           <div style={{background:"#F4F6FB",borderRadius:10,border:"1px solid #D4D9EE",padding:"14px 16px",display:"flex",flexDirection:"column",gap:10}}>
                             <div style={{fontSize:12,fontWeight:700,color:"#1A2240",marginBottom:4}}>Parsed Fields — edit before saving</div>
                             {[
-                              {label:"Project Name", key:"name", type:"text"},
-                              {label:"Company",      key:"company", type:"text"},
-                              {label:"Contact Name", key:"contact_name", type:"text"},
-                              {label:"Value ($)",    key:"value", type:"number"},
-                              {label:"Notes",        key:"notes", type:"text"},
+                              {label:"Project Name",   key:"name",          type:"text"},
+                              {label:"Company",        key:"company",       type:"text"},
+                              {label:"Address",        key:"address",       type:"text"},
+                              {label:"City",           key:"city",          type:"text"},
+                              {label:"State",          key:"state",         type:"text"},
+                              {label:"Building Type",  key:"building_type", type:"text"},
+                              {label:"Total SF (GSF)", key:"sf",            type:"number"},
+                              {label:"Est. Value ($)", key:"value",         type:"number"},
+                              {label:"Contact Name",   key:"contact_name",  type:"text"},
+                              {label:"Notes",          key:"notes",         type:"text"},
                             ].map(f=>(
                               <div key={f.key}>
                                 <div style={{fontSize:10,color:"#9BA3BF",textTransform:"uppercase",marginBottom:3}}>{f.label}</div>
@@ -6558,7 +6571,20 @@ Return ONLY valid JSON, no markdown, no extra text:
                                 setCompanies(prev=>[...prev,{id:coId,name:parsedFields.company}]);
                                 await supa.from("companies").insert({id:coId,name:parsedFields.company});
                               }
-                              await saveNewOpp({ name:parsedFields.name||"Untitled", companyId:coId||"", contactName:parsedFields.contact_name||"", value:parsedFields.value||0, stage:parsedFields.stage||"budgeting_lead", notes:parsedFields.notes||"", closeDate:"" });
+                              await saveNewOpp({
+                                name: parsedFields.name||"Untitled",
+                                companyId: coId||"",
+                                contactName: parsedFields.contact_name||"",
+                                value: parsedFields.value||0,
+                                stage: parsedFields.stage||"budgeting_lead",
+                                notes: parsedFields.notes||"",
+                                closeDate: "",
+                                address: parsedFields.address||"",
+                                city: parsedFields.city||"",
+                                state: parsedFields.state||"",
+                                sf: parsedFields.sf||0,
+                                buildingType: parsedFields.building_type||"",
+                              });
                               setShowEmailParse(false); setEmailText(""); setParsedFields(null);
                             }} style={{padding:"10px",background:"#4ADE80",border:"none",borderRadius:8,color:"#fff",fontWeight:700,cursor:"pointer",fontFamily:"inherit",fontSize:13}}>
                               ✓ Add to Pipeline
