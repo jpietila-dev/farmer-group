@@ -3001,7 +3001,7 @@ export default function App() {
   const [inlineContact, setInlineContact] = useState({ firstName: "", lastName: "", title: "", email: "", phone: "" });
 
   // Pipeline
-  const [pipeline,     setPipeline]     = useState(INIT_PIPELINE);
+  const [pipeline,     setPipeline]     = useState([]);
   const [showForm,     setShowForm]     = useState(false);
   const [editId,       setEditId]       = useState(null);
   const [form,         setForm]         = useState({ name: "", companyId: "", contactId: "", value: "", stage: "Budgeting", closeDate: "", notes: "", bu: "major", budgetDueDate: "", bidDueDate: "", nextSteps: [], sf:"", buildingType:"", buildingTypes:[], sf_multistory:"", sf_singlestory:"", sf_canopy:"", sf_mezzanine:"", city:"", state:"", address:"" });
@@ -3192,9 +3192,13 @@ export default function App() {
   const [expandedActiveSiteId, setExpandedActiveSiteId] = useState(null); // active site expanded detail
   const [showBidArchive, setShowBidArchive] = useState(false);
   const [accountingMode, setAccountingMode] = useState(false);
-  const [acctTab, setAcctTab] = useState("invoices"); // invoices | expenses | payroll | reports
+  const [acctTab, setAcctTab] = useState("invoices");
   const [invoices, setInvoices] = useState([]);
   const [expenses, setExpenses] = useState([]);
+  const [showInvForm, setShowInvForm] = useState(false);
+  const [showExpForm, setShowExpForm] = useState(false);
+  const [invForm, setInvForm] = useState({job:"",client:"",amount:"",dueDate:"",status:"draft",notes:"",invoiceNum:""});
+  const [expForm, setExpForm] = useState({description:"",vendor:"",amount:"",date:"",category:"Materials",job:"",notes:""});
   const [bidStatFilter,  setBidStatFilter]  = useState(null); // null | "all" | "bidding" | "locked"
 
   const GP_MARGIN = 0.30;
@@ -4234,10 +4238,7 @@ Return ONLY valid JSON, no markdown, no extra text:
             const totalExpenses  = expenses.reduce((s,e)=>s+(e.amount||0),0);
             const netProfit      = totalPaid - totalExpenses;
 
-            const [showInvForm, setShowInvForm] = useState(false);
-            const [showExpForm, setShowExpForm] = useState(false);
-            const [invForm, setInvForm] = useState({job:"",client:"",amount:"",dueDate:"",status:"draft",notes:"",invoiceNum:""});
-            const [expForm, setExpForm] = useState({description:"",vendor:"",amount:"",date:"",category:"Materials",job:"",notes:""});
+// (state hoisted to top level)
 
             const saveInvoice = async () => {
               if (!invForm.job || !invForm.amount) return;
