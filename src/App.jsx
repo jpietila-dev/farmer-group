@@ -3191,6 +3191,10 @@ export default function App() {
   const [ownerProposalSiteId, setOwnerProposalSiteId] = useState(null); // site id for owner proposal template picker
   const [expandedActiveSiteId, setExpandedActiveSiteId] = useState(null); // active site expanded detail
   const [showBidArchive, setShowBidArchive] = useState(false);
+  const [accountingMode, setAccountingMode] = useState(false);
+  const [acctTab, setAcctTab] = useState("invoices"); // invoices | expenses | payroll | reports
+  const [invoices, setInvoices] = useState([]);
+  const [expenses, setExpenses] = useState([]);
   const [bidStatFilter,  setBidStatFilter]  = useState(null); // null | "all" | "bidding" | "locked"
 
   const GP_MARGIN = 0.30;
@@ -3281,7 +3285,7 @@ export default function App() {
   const navItems = NAV_ITEMS[activeBU] || NAV_ITEMS.all;
   const buColor  = BU_COLORS[activeBU];
 
-  const handleBUChange = (id) => { setActiveBU(id); setActiveNav("dashboard"); setSelectedCoord(null); setCrmTagFilter(null); setSelectedCustomer(null); };
+  const handleBUChange = (id) => { setActiveBU(id); setActiveNav("dashboard"); setSelectedCoord(null); setCrmTagFilter(null); setSelectedCustomer(null); setCrmMode(false); setAccountingMode(false); };
 
   // Punch list
 
@@ -3361,6 +3365,14 @@ export default function App() {
             setOppDetails(prev => ({...detailsFromDB, ...prev})); // existing in-memory takes precedence
           }
         }
+        // Load accounting data
+        const [invRes, expRes] = await Promise.all([
+          supa.from("accounting_invoices").select("*"),
+          supa.from("accounting_expenses").select("*"),
+        ]);
+        if (invRes.data?.length) setInvoices(invRes.data.map(r=>({ id:r.id, invoiceNum:r.invoice_num||"", job:r.job||"", client:r.client||"", amount:r.amount||0, dueDate:r.due_date||"", status:r.status||"draft", notes:r.notes||"", createdAt:r.created_at||"" })));
+        if (expRes.data?.length) setExpenses(expRes.data.map(r=>({ id:r.id, description:r.description||"", vendor:r.vendor||"", amount:r.amount||0, date:r.date||"", category:r.category||"Other", job:r.job||"", notes:r.notes||"" })));
+
         let loadedMpJobs = [];
         if (Array.isArray(mpRes.data) && mpRes.data.length) {
           try {
@@ -4196,7 +4208,8 @@ Return ONLY valid JSON, no markdown, no extra text:
           <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
             {BUSINESS_UNITS.map(bu => <button key={bu.id} className={"bu-tab" + (activeBU === bu.id && !crmMode ? " active" : "")} onClick={() => { setCrmMode(false); handleBUChange(bu.id); }}>{bu.short}</button>)}
             <div style={{ width: 1, height: 20, background: "#D4D9EE", margin: "0 4px" }} />
-            <button className={"bu-tab" + (crmMode ? " active" : "")} onClick={() => setCrmMode(true)} style={{ background: crmMode ? "#3B6FE8" : "transparent", color: crmMode ? "#fff" : "#4A5278", border: crmMode ? "1px solid #3B6FE8" : "1px solid transparent", borderRadius: 6, padding: "4px 12px", fontSize: 11, fontWeight: 700, letterSpacing: "0.06em", cursor: "pointer", fontFamily: "inherit" }}>CRM</button>
+            <button className={"bu-tab" + (crmMode ? " active" : "")} onClick={() => { setCrmMode(true); setAccountingMode(false); }} style={{ background: crmMode ? "#3B6FE8" : "transparent", color: crmMode ? "#fff" : "#4A5278", border: crmMode ? "1px solid #3B6FE8" : "1px solid transparent", borderRadius: 6, padding: "4px 12px", fontSize: 11, fontWeight: 700, letterSpacing: "0.06em", cursor: "pointer", fontFamily: "inherit" }}>CRM</button>
+            <button className={"bu-tab" + (accountingMode ? " active" : "")} onClick={() => { setAccountingMode(true); setCrmMode(false); }} style={{ background: accountingMode ? "#059669" : "transparent", color: accountingMode ? "#fff" : "#4A5278", border: accountingMode ? "1px solid #059669" : "1px solid transparent", borderRadius: 6, padding: "4px 12px", fontSize: 11, fontWeight: 700, letterSpacing: "0.06em", cursor: "pointer", fontFamily: "inherit" }}>$ ACCT</button>
           </div>
           <div style={{ fontSize: 11, color: "#4A5278", letterSpacing: "0.1em", textTransform: "uppercase" }}>{BUSINESS_UNITS.find(b => b.id === activeBU)?.label}</div>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -4208,6 +4221,283 @@ Return ONLY valid JSON, no markdown, no extra text:
 
         {/* Content */}
         <div style={{ flex: 1, padding: "28px 32px", overflowY: "auto", paddingRight: panelOpen ? "calc(32px + 420px)" : "32px", transition: "padding-right 0.2s" }}>
+
+          {/* ══════════════════════════════════════════
+               ACCOUNTING MODULE
+          ══════════════════════════════════════════ */}
+          {accountingMode && (() => {
+            const now = new Date();
+            const fmt = n => "$"+Number(n||0).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2});
+            const totalInvoiced  = invoices.reduce((s,i)=>s+(i.amount||0),0);
+            const totalPaid      = invoices.filter(i=>i.status==="paid").reduce((s,i)=>s+(i.amount||0),0);
+            const totalOutstanding = invoices.filter(i=>i.status==="sent"||i.status==="overdue").reduce((s,i)=>s+(i.amount||0),0);
+            const totalExpenses  = expenses.reduce((s,e)=>s+(e.amount||0),0);
+            const netProfit      = totalPaid - totalExpenses;
+
+            const [showInvForm, setShowInvForm] = useState(false);
+            const [showExpForm, setShowExpForm] = useState(false);
+            const [invForm, setInvForm] = useState({job:"",client:"",amount:"",dueDate:"",status:"draft",notes:"",invoiceNum:""});
+            const [expForm, setExpForm] = useState({description:"",vendor:"",amount:"",date:"",category:"Materials",job:"",notes:""});
+
+            const saveInvoice = async () => {
+              if (!invForm.job || !invForm.amount) return;
+              const inv = { id: Date.now(), ...invForm, amount: parseFloat(invForm.amount)||0, createdAt: new Date().toISOString().slice(0,10) };
+              setInvoices(prev=>[inv,...prev]);
+              setInvForm({job:"",client:"",amount:"",dueDate:"",status:"draft",notes:"",invoiceNum:""});
+              setShowInvForm(false);
+              await supa.from("accounting_invoices").insert({ id:String(inv.id), job:inv.job, client:inv.client, amount:inv.amount, due_date:inv.dueDate||null, status:inv.status, notes:inv.notes||"", invoice_num:inv.invoiceNum||"", created_at:inv.createdAt });
+            };
+
+            const saveExpense = async () => {
+              if (!expForm.description || !expForm.amount) return;
+              const exp = { id: Date.now(), ...expForm, amount: parseFloat(expForm.amount)||0, date: expForm.date||new Date().toISOString().slice(0,10) };
+              setExpenses(prev=>[exp,...prev]);
+              setExpForm({description:"",vendor:"",amount:"",date:"",category:"Materials",job:"",notes:""});
+              setShowExpForm(false);
+              await supa.from("accounting_expenses").insert({ id:String(exp.id), description:exp.description, vendor:exp.vendor||"", amount:exp.amount, date:exp.date, category:exp.category, job:exp.job||"", notes:exp.notes||"" });
+            };
+
+            const updateInvStatus = async (id, status) => {
+              setInvoices(prev=>prev.map(i=>i.id===id?{...i,status}:i));
+              await supa.from("accounting_invoices").update({status}).eq("id",String(id));
+            };
+
+            const STATUS_COLOR = { draft:"#9BA3BF", sent:"#60A5FA", paid:"#4ADE80", overdue:"#F87171", void:"#E0E4F0" };
+            const EXP_CATS = ["Materials","Labor","Equipment","Subcontractor","Overhead","Travel","Software","Other"];
+
+            const jobNames = [...new Set([
+              ...(mpJobs||[]).map(j=>j.name),
+              ...invoices.map(i=>i.job),
+              ...expenses.map(e=>e.job)
+            ].filter(Boolean))];
+
+            return (
+              <div className="fade-in" style={{display:"flex",flexDirection:"column",gap:20}}>
+                {/* Header */}
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                  <div>
+                    <div style={{fontSize:22,fontWeight:700,color:"#1A2240",letterSpacing:"-0.01em",textTransform:"uppercase"}}>Accounting</div>
+                    <div style={{fontSize:11,color:"#4A5278",marginTop:3,letterSpacing:"0.06em"}}>INVOICES · EXPENSES · FINANCIALS</div>
+                  </div>
+                  <div style={{display:"flex",gap:8}}>
+                    <button onClick={()=>setShowExpForm(true)} style={{padding:"8px 16px",background:"#FFF7ED",border:"1px solid #F59E0B40",color:"#F59E0B",borderRadius:7,cursor:"pointer",fontFamily:"inherit",fontSize:12,fontWeight:700}}>+ Expense</button>
+                    <button onClick={()=>setShowInvForm(true)} style={{padding:"8px 16px",background:"#059669",border:"none",color:"#fff",borderRadius:7,cursor:"pointer",fontFamily:"inherit",fontSize:12,fontWeight:700}}>+ Invoice</button>
+                  </div>
+                </div>
+
+                {/* KPI tiles */}
+                <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:14}}>
+                  {[
+                    {label:"Total Invoiced",  value:fmt(totalInvoiced),   color:"#3B6FE8", sub:"All time"},
+                    {label:"Collected",       value:fmt(totalPaid),       color:"#4ADE80", sub:"Paid invoices"},
+                    {label:"Outstanding",     value:fmt(totalOutstanding),color:"#FCD34D", sub:"Sent / overdue"},
+                    {label:"Total Expenses",  value:fmt(totalExpenses),   color:"#F87171", sub:"All categories"},
+                    {label:"Net Profit",      value:fmt(netProfit),       color:netProfit>=0?"#4ADE80":"#F87171", sub:"Collected - expenses"},
+                  ].map(k=>(
+                    <div key={k.label} style={{background:"#fff",border:"1px solid #E8EBF5",borderRadius:10,padding:"16px 18px"}}>
+                      <div style={{fontSize:10,color:"#9BA3BF",letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:6}}>{k.label}</div>
+                      <div style={{fontSize:20,fontWeight:800,color:k.color,letterSpacing:"-0.02em"}}>{k.value}</div>
+                      <div style={{fontSize:10,color:"#9BA3BF",marginTop:4}}>{k.sub}</div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Tabs */}
+                <div style={{display:"flex",gap:4,borderBottom:"1px solid #E8EBF5",paddingBottom:0}}>
+                  {[{id:"invoices",label:"Invoices ("+invoices.length+")"},{id:"expenses",label:"Expenses ("+expenses.length+")"},{id:"reports",label:"Reports"}].map(t=>(
+                    <button key={t.id} onClick={()=>setAcctTab(t.id)}
+                      style={{padding:"8px 18px",background:"none",border:"none",borderBottom:acctTab===t.id?"2px solid #059669":"2px solid transparent",color:acctTab===t.id?"#059669":"#4A5278",fontWeight:acctTab===t.id?700:500,fontSize:12,cursor:"pointer",fontFamily:"inherit",marginBottom:-1}}>
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
+
+                {/* INVOICES TAB */}
+                {acctTab==="invoices" && (
+                  <div style={{background:"#fff",border:"1px solid #E8EBF5",borderRadius:10,overflow:"hidden"}}>
+                    {invoices.length===0 ? (
+                      <div style={{padding:"60px",textAlign:"center",color:"#9BA3BF"}}>
+                        <div style={{fontSize:32,marginBottom:8}}>🧾</div>
+                        <div style={{fontSize:14,fontWeight:600,color:"#1A2240",marginBottom:4}}>No invoices yet</div>
+                        <div style={{fontSize:12}}>Click + Invoice to create your first invoice</div>
+                      </div>
+                    ) : (
+                      <table style={{width:"100%",borderCollapse:"collapse"}}>
+                        <thead>
+                          <tr style={{background:"#F8F9FF",borderBottom:"1px solid #E8EBF5"}}>
+                            {["Invoice #","Job / Project","Client","Amount","Due Date","Status",""].map(h=>(
+                              <th key={h} style={{padding:"10px 16px",textAlign:"left",fontSize:10,color:"#9BA3BF",fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase"}}>{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {invoices.map((inv,idx)=>(
+                            <tr key={inv.id} style={{borderBottom:"1px solid #F0F2F8",background:idx%2===0?"#fff":"#FAFBFF"}}>
+                              <td style={{padding:"12px 16px",fontSize:12,fontWeight:700,color:"#1A2240"}}>{inv.invoiceNum||"INV-"+String(inv.id).slice(-4)}</td>
+                              <td style={{padding:"12px 16px",fontSize:12,color:"#4A5278"}}>{inv.job}</td>
+                              <td style={{padding:"12px 16px",fontSize:12,color:"#4A5278"}}>{inv.client||"—"}</td>
+                              <td style={{padding:"12px 16px",fontSize:13,fontWeight:700,color:"#1A2240"}}>{fmt(inv.amount)}</td>
+                              <td style={{padding:"12px 16px",fontSize:11,color:inv.dueDate&&new Date(inv.dueDate)<now&&inv.status!=="paid"?"#F87171":"#9BA3BF"}}>{inv.dueDate||"—"}</td>
+                              <td style={{padding:"12px 16px"}}>
+                                <select value={inv.status} onChange={e=>updateInvStatus(inv.id,e.target.value)}
+                                  style={{padding:"3px 8px",borderRadius:4,border:"1px solid "+(STATUS_COLOR[inv.status]||"#E8EBF5"),background:(STATUS_COLOR[inv.status]||"#9BA3BF")+"20",color:STATUS_COLOR[inv.status]||"#9BA3BF",fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>
+                                  {["draft","sent","paid","overdue","void"].map(s=><option key={s} value={s}>{s.charAt(0).toUpperCase()+s.slice(1)}</option>)}
+                                </select>
+                              </td>
+                              <td style={{padding:"12px 16px"}}>
+                                <button onClick={()=>setInvoices(prev=>prev.filter(i=>i.id!==inv.id))}
+                                  style={{background:"none",border:"none",color:"#F87171",cursor:"pointer",fontSize:14,padding:"2px 4px"}}>🗑</button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
+                )}
+
+                {/* EXPENSES TAB */}
+                {acctTab==="expenses" && (
+                  <div style={{background:"#fff",border:"1px solid #E8EBF5",borderRadius:10,overflow:"hidden"}}>
+                    {expenses.length===0 ? (
+                      <div style={{padding:"60px",textAlign:"center",color:"#9BA3BF"}}>
+                        <div style={{fontSize:32,marginBottom:8}}>💸</div>
+                        <div style={{fontSize:14,fontWeight:600,color:"#1A2240",marginBottom:4}}>No expenses yet</div>
+                        <div style={{fontSize:12}}>Click + Expense to log your first expense</div>
+                      </div>
+                    ) : (
+                      <table style={{width:"100%",borderCollapse:"collapse"}}>
+                        <thead>
+                          <tr style={{background:"#F8F9FF",borderBottom:"1px solid #E8EBF5"}}>
+                            {["Date","Description","Vendor","Category","Job","Amount",""].map(h=>(
+                              <th key={h} style={{padding:"10px 16px",textAlign:"left",fontSize:10,color:"#9BA3BF",fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase"}}>{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {expenses.map((exp,idx)=>(
+                            <tr key={exp.id} style={{borderBottom:"1px solid #F0F2F8",background:idx%2===0?"#fff":"#FAFBFF"}}>
+                              <td style={{padding:"12px 16px",fontSize:11,color:"#9BA3BF"}}>{exp.date}</td>
+                              <td style={{padding:"12px 16px",fontSize:12,fontWeight:600,color:"#1A2240"}}>{exp.description}</td>
+                              <td style={{padding:"12px 16px",fontSize:12,color:"#4A5278"}}>{exp.vendor||"—"}</td>
+                              <td style={{padding:"12px 16px"}}>
+                                <span style={{padding:"2px 8px",borderRadius:4,background:"#EEF3FF",color:"#3B6FE8",fontSize:10,fontWeight:600}}>{exp.category}</span>
+                              </td>
+                              <td style={{padding:"12px 16px",fontSize:12,color:"#4A5278"}}>{exp.job||"—"}</td>
+                              <td style={{padding:"12px 16px",fontSize:13,fontWeight:700,color:"#F87171"}}>{fmt(exp.amount)}</td>
+                              <td style={{padding:"12px 16px"}}>
+                                <button onClick={()=>setExpenses(prev=>prev.filter(e=>e.id!==exp.id))}
+                                  style={{background:"none",border:"none",color:"#F87171",cursor:"pointer",fontSize:14,padding:"2px 4px"}}>🗑</button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    )}
+                  </div>
+                )}
+
+                {/* REPORTS TAB */}
+                {acctTab==="reports" && (() => {
+                  const byJob = {};
+                  invoices.forEach(i=>{ if(!byJob[i.job]) byJob[i.job]={invoiced:0,collected:0,expenses:0}; byJob[i.job].invoiced+=i.amount; if(i.status==="paid") byJob[i.job].collected+=i.amount; });
+                  expenses.forEach(e=>{ if(!byJob[e.job]) byJob[e.job]={invoiced:0,collected:0,expenses:0}; byJob[e.job].expenses+=e.amount; });
+                  const byCat = {};
+                  expenses.forEach(e=>{ byCat[e.category]=(byCat[e.category]||0)+e.amount; });
+                  return (
+                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
+                      <div style={{background:"#fff",border:"1px solid #E8EBF5",borderRadius:10,padding:20}}>
+                        <div style={{fontSize:12,fontWeight:700,color:"#1A2240",marginBottom:14,textTransform:"uppercase",letterSpacing:"0.06em"}}>P&L by Job</div>
+                        {Object.keys(byJob).length===0 ? <div style={{color:"#9BA3BF",fontSize:12}}>No data yet</div> : Object.entries(byJob).map(([job,d])=>(
+                          <div key={job} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 0",borderBottom:"1px solid #F0F2F8"}}>
+                            <div style={{fontSize:12,color:"#4A5278",fontWeight:600}}>{job}</div>
+                            <div style={{display:"flex",gap:12,fontSize:11}}>
+                              <span style={{color:"#4ADE80"}}>+{fmt(d.collected)}</span>
+                              <span style={{color:"#F87171"}}>-{fmt(d.expenses)}</span>
+                              <span style={{fontWeight:700,color:d.collected-d.expenses>=0?"#4ADE80":"#F87171"}}>{fmt(d.collected-d.expenses)}</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      <div style={{background:"#fff",border:"1px solid #E8EBF5",borderRadius:10,padding:20}}>
+                        <div style={{fontSize:12,fontWeight:700,color:"#1A2240",marginBottom:14,textTransform:"uppercase",letterSpacing:"0.06em"}}>Expenses by Category</div>
+                        {Object.keys(byCat).length===0 ? <div style={{color:"#9BA3BF",fontSize:12}}>No data yet</div> : Object.entries(byCat).sort((a,b)=>b[1]-a[1]).map(([cat,amt])=>(
+                          <div key={cat} style={{marginBottom:10}}>
+                            <div style={{display:"flex",justifyContent:"space-between",marginBottom:3}}>
+                              <span style={{fontSize:11,color:"#4A5278",fontWeight:600}}>{cat}</span>
+                              <span style={{fontSize:11,fontWeight:700,color:"#F87171"}}>{fmt(amt)}</span>
+                            </div>
+                            <div style={{height:4,borderRadius:2,background:"#F0F2F8"}}>
+                              <div style={{height:4,borderRadius:2,background:"#F87171",width:totalExpenses>0?(amt/totalExpenses*100)+"%":"0%"}}/>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* ADD INVOICE MODAL */}
+                {showInvForm && (
+                  <div className="modal-bg" onClick={e=>e.target===e.currentTarget&&setShowInvForm(false)}>
+                    <div className="modal" style={{width:480}}>
+                      <div style={{fontSize:16,fontWeight:700,color:"#1A2240",marginBottom:18}}>New Invoice</div>
+                      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+                        <div><label className="fi-label">Invoice #</label><input className="fi" placeholder="INV-001" value={invForm.invoiceNum} onChange={e=>setInvForm(f=>({...f,invoiceNum:e.target.value}))}/></div>
+                        <div><label className="fi-label">Status</label>
+                          <select className="fi" value={invForm.status} onChange={e=>setInvForm(f=>({...f,status:e.target.value}))}>
+                            {["draft","sent","paid","overdue"].map(s=><option key={s} value={s}>{s.charAt(0).toUpperCase()+s.slice(1)}</option>)}
+                          </select>
+                        </div>
+                        <div style={{gridColumn:"1/-1"}}><label className="fi-label">Job / Project *</label>
+                          <input className="fi" list="job-list" placeholder="Select or type job name" value={invForm.job} onChange={e=>setInvForm(f=>({...f,job:e.target.value}))}/>
+                          <datalist id="job-list">{jobNames.map(n=><option key={n} value={n}/>)}</datalist>
+                        </div>
+                        <div style={{gridColumn:"1/-1"}}><label className="fi-label">Client</label><input className="fi" placeholder="Client name" value={invForm.client} onChange={e=>setInvForm(f=>({...f,client:e.target.value}))}/></div>
+                        <div><label className="fi-label">Amount ($) *</label><input className="fi" type="number" placeholder="0.00" value={invForm.amount} onChange={e=>setInvForm(f=>({...f,amount:e.target.value}))}/></div>
+                        <div><label className="fi-label">Due Date</label><input className="fi" type="date" value={invForm.dueDate} onChange={e=>setInvForm(f=>({...f,dueDate:e.target.value}))}/></div>
+                        <div style={{gridColumn:"1/-1"}}><label className="fi-label">Notes</label><textarea className="fi" rows={2} value={invForm.notes} onChange={e=>setInvForm(f=>({...f,notes:e.target.value}))}/></div>
+                      </div>
+                      <div style={{display:"flex",gap:10,marginTop:18,justifyContent:"flex-end"}}>
+                        <button className="btn-ghost" onClick={()=>setShowInvForm(false)}>Cancel</button>
+                        <button className="btn-primary" style={{background:"#059669",border:"none"}} onClick={saveInvoice}>Save Invoice</button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* ADD EXPENSE MODAL */}
+                {showExpForm && (
+                  <div className="modal-bg" onClick={e=>e.target===e.currentTarget&&setShowExpForm(false)}>
+                    <div className="modal" style={{width:480}}>
+                      <div style={{fontSize:16,fontWeight:700,color:"#1A2240",marginBottom:18}}>Log Expense</div>
+                      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+                        <div style={{gridColumn:"1/-1"}}><label className="fi-label">Description *</label><input className="fi" placeholder="What was purchased?" value={expForm.description} onChange={e=>setExpForm(f=>({...f,description:e.target.value}))}/></div>
+                        <div><label className="fi-label">Vendor</label><input className="fi" placeholder="Vendor name" value={expForm.vendor} onChange={e=>setExpForm(f=>({...f,vendor:e.target.value}))}/></div>
+                        <div><label className="fi-label">Category</label>
+                          <select className="fi" value={expForm.category} onChange={e=>setExpForm(f=>({...f,category:e.target.value}))}>
+                            {EXP_CATS.map(c=><option key={c} value={c}>{c}</option>)}
+                          </select>
+                        </div>
+                        <div><label className="fi-label">Amount ($) *</label><input className="fi" type="number" placeholder="0.00" value={expForm.amount} onChange={e=>setExpForm(f=>({...f,amount:e.target.value}))}/></div>
+                        <div><label className="fi-label">Date</label><input className="fi" type="date" value={expForm.date} onChange={e=>setExpForm(f=>({...f,date:e.target.value}))}/></div>
+                        <div style={{gridColumn:"1/-1"}}><label className="fi-label">Job (optional)</label>
+                          <input className="fi" list="job-list2" placeholder="Link to a job" value={expForm.job} onChange={e=>setExpForm(f=>({...f,job:e.target.value}))}/>
+                          <datalist id="job-list2">{jobNames.map(n=><option key={n} value={n}/>)}</datalist>
+                        </div>
+                        <div style={{gridColumn:"1/-1"}}><label className="fi-label">Notes</label><textarea className="fi" rows={2} value={expForm.notes} onChange={e=>setExpForm(f=>({...f,notes:e.target.value}))}/></div>
+                      </div>
+                      <div style={{display:"flex",gap:10,marginTop:18,justifyContent:"flex-end"}}>
+                        <button className="btn-ghost" onClick={()=>setShowExpForm(false)}>Cancel</button>
+                        <button className="btn-primary" style={{background:"#F59E0B",border:"none",color:"#fff"}} onClick={saveExpense}>Save Expense</button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+              </div>
+            );
+          })()}
 
           {/* ══════════════════════════════════════════
                CRM MODULE - renders when crmMode === true
