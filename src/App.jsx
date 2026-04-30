@@ -4234,7 +4234,6 @@ Return ONLY valid JSON, no markdown, no extra text:
             const completedFm  = fmJobs.filter(j => j.status==="Completed"||j.status==="completed");
             const completedAll = [
               ...completedFm.map(j=>({...j,_src:"FM"})),
-              ...(mpJobs||[]).filter(j=>j.status==="completed"||j.status==="Closeout").map(j=>({...j,_src:"MP"})),
             ];
             const totalBilled      = invoices.filter(i=>i.status!=="void").reduce((s,i)=>s+(i.amount||0),0);
             const totalCollected   = invoices.filter(i=>i.status==="paid").reduce((s,i)=>s+(i.amount||0),0);
