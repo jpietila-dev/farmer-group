@@ -3331,8 +3331,7 @@ export default function App() {
         if (fmRes.data?.length)   setFmJobs(fmRes.data.map(dbToFmJob));
         if (teamRes.data?.length) setFmTeam(teamRes.data.map(dbToTeamMember));
         if (crmRes.data?.length)  setCrmContacts(crmRes.data.map(dbToCrmContact));
-        console.log('[DB] mpPipeRes full:', JSON.stringify(mpPipeRes));
-        console.log('[DB] mpPipeRes.data type:', Array.isArray(mpPipeRes.data), 'length:', mpPipeRes.data?.length, 'first row:', JSON.stringify(mpPipeRes.data?.[0]));
+
         if (Array.isArray(mpPipeRes.data) && mpPipeRes.data.length) {
           const pipeLoaded = mpPipeRes.data.map(r => ({
             id: r.id, name: r.name||"", companyId: r.company_id||"", contactName: r.contact_name||"",
@@ -3919,19 +3918,11 @@ Return ONLY valid JSON, no markdown, no extra text:
       try {
         const dbId = pipeline.find(o=>o.id===editId)?.dbId || String(editId);
         const patchBody = { name: entry.name, company_id: entry.companyId||null, contact_name: entry.contactName||"", value: entry.value, stage: entry.stage||"budgeting_lead", close_date: entry.closeDate||null, city: entry.city||null, state: entry.state||null, address: entry.address||null };
-        const res = await fetch(`${SUPA_URL}/rest/v1/mp_pipeline?id=eq.${dbId}`, {
-          method: "PATCH",
-          headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}`, "Content-Type": "application/json", Prefer: "return=minimal" },
-          body: JSON.stringify(patchBody)
-        });
-        if (!res.ok) {
-          // Retry without address/city/state in case columns don't exist
-          const { address: _a, city: _c, state: _s, ...patchFallback } = patchBody;
-          await fetch(`${SUPA_URL}/rest/v1/mp_pipeline?id=eq.${dbId}`, {
-            method: "PATCH",
-            headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}`, "Content-Type": "application/json", Prefer: "return=minimal" },
-            body: JSON.stringify(patchFallback)
-          });
+        const { error: patchErr } = await supa.from("mp_pipeline").update(patchBody).eq("id", dbId);
+        if (patchErr) {
+          const { city: _c, state: _s, address: _a, ...patchCore } = patchBody;
+          const { error: patchErr2 } = await supa.from("mp_pipeline").update(patchCore).eq("id", dbId);
+          if (patchErr2) console.error("saveOpp patch failed:", patchErr2);
         }
       } catch(e) { console.error("saveOpp edit:", e); }
     } else {
@@ -3944,19 +3935,11 @@ Return ONLY valid JSON, no markdown, no extra text:
       // Persist new opp to Supabase
       try {
         const row = { id: String(newId), name: entry.name, company_id: entry.companyId||null, contact_name: entry.contactName||"", value: entry.value, stage: entry.stage||"budgeting_lead", notes: "", bu: entry.bu||"major", close_date: entry.closeDate||null, city: entry.city||null, state: entry.state||null, address: entry.address||null };
-        const res = await fetch(`${SUPA_URL}/rest/v1/mp_pipeline`, {
-          method: "POST",
-          headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}`, "Content-Type": "application/json", Prefer: "return=minimal" },
-          body: JSON.stringify(row)
-        });
-        if (!res.ok) {
-          // Retry without address/city/state in case columns don't exist yet
-          const { address: _a, city: _c, state: _s, ...rowFallback } = row;
-          await fetch(`${SUPA_URL}/rest/v1/mp_pipeline`, {
-            method: "POST",
-            headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}`, "Content-Type": "application/json", Prefer: "return=minimal" },
-            body: JSON.stringify(rowFallback)
-          });
+        const { error: insErr } = await supa.from("mp_pipeline").insert(row);
+        if (insErr) {
+          const { city: _c, state: _s, address: _a, ...rowCore } = row;
+          const { error: insErr2 } = await supa.from("mp_pipeline").insert(rowCore);
+          if (insErr2) console.error("saveOpp insert failed:", insErr2);
         }
       } catch(e) { console.error("saveOpp insert:", e); }
       // Auto-create a site if address entered and no existing site for this company+address
@@ -6290,11 +6273,20 @@ Return ONLY valid JSON, no markdown, no extra text:
 
             const saveNewOpp = async (fields) => {
               const id = Date.now();
-              const entry = { ...fields, id, bu:"major", nextSteps:[] };
+              const entry = { ...fields, id, bu:"major", nextSteps:[], dbId:String(id) };
               setPipeline(prev=>[...prev, entry]);
-              // Persist
+              // Persist via supa.from() — same pattern as mp_jobs
               const row = { id:String(id), name:fields.name, company_id:fields.companyId||null, contact_name:fields.contactName||"", value:parseFloat(fields.value)||0, stage:fields.stage||"budgeting_lead", notes:fields.notes||"", bu:"major", close_date:fields.closeDate||null, city:fields.city||null, state:fields.state||null, address:fields.address||null };
-              try { await fetch(`${SUPA_URL}/rest/v1/mp_pipeline`, { method:"POST", headers:{apikey:SUPA_KEY,Authorization:`Bearer ${SUPA_KEY}`,"Content-Type":"application/json",Prefer:"return=minimal"}, body:JSON.stringify(row) }); } catch(e){}
+              const { error } = await supa.from("mp_pipeline").insert(row);
+              if (error) {
+                // Retry without optional columns in case they don't exist yet
+                const { city:_c, state:_s, address:_a, ...rowCore } = row;
+                const { error: e2 } = await supa.from("mp_pipeline").insert(rowCore);
+                if (e2) console.error("saveNewOpp failed:", e2);
+                else console.log("saveNewOpp saved (core):", row.name);
+              } else {
+                console.log("saveNewOpp saved:", row.name);
+              }
             };
 
             const parseEmail = async () => {
