@@ -8,15 +8,24 @@ const supa = {
     select: function(cols = "*") {
       return fetch(`${SUPA_URL}/rest/v1/${table}?select=${cols}&limit=2000`, {
         headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}` }
-      }).then(r => r.json()).then(data => ({ data, error: null })).catch(error => ({ data: null, error }));
+      }).then(async r => {
+        const json = await r.json();
+        if (!r.ok) return { data: null, error: json };
+        return { data: Array.isArray(json) ? json : null, error: null };
+      }).catch(error => ({ data: null, error }));
     },
     insert: function(rows) {
       const body = Array.isArray(rows) ? rows : [rows];
       return fetch(`${SUPA_URL}/rest/v1/${table}`, {
         method: "POST",
-        headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}`, "Content-Type": "application/json", Prefer: "return=representation" },
+        headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}`, "Content-Type": "application/json", Prefer: "return=minimal" },
         body: JSON.stringify(body)
-      }).then(r => r.json()).then(data => ({ data, error: null })).catch(error => ({ data: null, error }));
+      }).then(async r => {
+        if (r.ok) return { data: true, error: null };
+        const err = await r.json().catch(()=>({message:"HTTP "+r.status}));
+        console.error("[supa.insert] "+table+" failed:", err);
+        return { data: null, error: err };
+      }).catch(error => ({ data: null, error }));
     },
     update: function(row) {
       return {
@@ -3191,6 +3200,8 @@ export default function App() {
   const [ownerProposalSiteId, setOwnerProposalSiteId] = useState(null); // site id for owner proposal template picker
   const [expandedActiveSiteId, setExpandedActiveSiteId] = useState(null); // active site expanded detail
   const [showBidArchive, setShowBidArchive] = useState(false);
+  const [toast, setToast] = useState(null); // {msg, type:"success"|"error"}
+  const showToast = (msg, type="success") => { setToast({msg,type}); setTimeout(()=>setToast(null),3000); };
   const [accountingMode, setAccountingMode] = useState(false);
   const [acctTab, setAcctTab] = useState("invoices");
   const [invoices, setInvoices] = useState([]);
@@ -3955,7 +3966,10 @@ Return ONLY valid JSON, no markdown, no extra text:
         if (insErr) {
           const { city: _c, state: _s, address: _a, ...rowCore } = row;
           const { error: insErr2 } = await supa.from("mp_pipeline").insert(rowCore);
-          if (insErr2) console.error("saveOpp insert failed:", insErr2);
+          if (insErr2) { showToast("Save failed: "+JSON.stringify(insErr2),"error"); }
+          else showToast("Opp saved: "+row.name);
+        } else {
+          showToast("Opp saved: "+row.name);
         }
       } catch(e) { console.error("saveOpp insert:", e); }
       // Auto-create a site if address entered and no existing site for this company+address
@@ -6431,13 +6445,12 @@ Return ONLY valid JSON, no markdown, no extra text:
               const row = { id:String(id), name:fields.name, company_id:fields.companyId||null, contact_name:fields.contactName||"", value:parseFloat(fields.value)||0, stage:fields.stage||"budgeting_lead", notes:fields.notes||"", bu:"major", close_date:fields.closeDate||null, city:fields.city||null, state:fields.state||null, address:fields.address||null };
               const { error } = await supa.from("mp_pipeline").insert(row);
               if (error) {
-                // Retry without optional columns in case they don't exist yet
                 const { city:_c, state:_s, address:_a, ...rowCore } = row;
                 const { error: e2 } = await supa.from("mp_pipeline").insert(rowCore);
-                if (e2) console.error("saveNewOpp failed:", e2);
-                else console.log("saveNewOpp saved (core):", row.name);
+                if (e2) { console.error("saveNewOpp failed:", e2); showToast("Save failed: "+JSON.stringify(e2),"error"); }
+                else showToast("Opp saved: "+row.name);
               } else {
-                console.log("saveNewOpp saved:", row.name);
+                showToast("Opp saved: "+row.name);
               }
             };
 
@@ -12766,6 +12779,12 @@ window.addEventListener('message',function(e){
       )}
 
       {/* -- OPP FORM -- */}
+      {/* Toast */}
+      {toast && (
+        <div style={{position:"fixed",bottom:28,left:"50%",transform:"translateX(-50%)",zIndex:9999,padding:"10px 24px",borderRadius:8,background:toast.type==="error"?"#EF4444":"#059669",color:"#fff",fontSize:13,fontWeight:600,boxShadow:"0 4px 20px rgba(0,0,0,0.25)",pointerEvents:"none",whiteSpace:"nowrap",letterSpacing:"0.01em"}}>
+          {toast.type==="error"?"⚠ ":"✓ "}{toast.msg}
+        </div>
+      )}
       {showForm && (
         <div className="modal-bg" onClick={e => e.target === e.currentTarget && setShowForm(false)}>
           <div className="modal fade-in">
