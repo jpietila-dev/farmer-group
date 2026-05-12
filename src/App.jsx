@@ -33,7 +33,15 @@ const supa = {
           method: "PATCH",
           headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}`, "Content-Type": "application/json", Prefer: "return=representation" },
           body: JSON.stringify(row)
-        }).then(r => r.json()).then(data => ({ data, error: null })).catch(error => ({ data: null, error }))
+        }).then(async r => {
+          if (r.ok) {
+            const data = await r.json().catch(() => null);
+            return { data, error: null };
+          }
+          const err = await r.json().catch(() => ({ message: "HTTP " + r.status }));
+          console.error("[supa.update] " + table + " failed:", err);
+          return { data: null, error: err };
+        }).catch(error => ({ data: null, error }))
       };
     },
     delete: function() {
@@ -5004,12 +5012,25 @@ export default function App() {
     if (!job) return { ok: false, error: "Job not found" };
     if (job.sentToAR) return { ok: false, error: "Already sent to AR" };
     const today = new Date().toISOString().slice(0, 10);
-    // 1) Mark job sent-to-AR and close it out for the coordinator
+    // Snapshot the original job in case we need to roll back
+    const originalJob = job;
+    const originalFmJobs = fmJobs;
+
+    // 1) Mark job sent-to-AR and close it out for the coordinator (LOCAL STATE)
     const updatedJob = { ...job, sentToAR: true, sentToARAt: new Date().toISOString(), status: "Completed" };
     setFmJobs(prev => prev.map(j => j.id === jobId ? updatedJob : j));
+    // Persist FM job first — verify it stuck before doing the invoice
+    const fmRes = await supa.from("fm_jobs").update(fmJobToDB(updatedJob)).eq("id", jobId);
+    if (fmRes && fmRes.error) {
+      // Roll back local state — DB write failed
+      console.error("[sendFmJobToAR] fm_jobs update failed", fmRes.error);
+      setFmJobs(originalFmJobs);
+      const msg = fmRes.error?.message || JSON.stringify(fmRes.error);
+      return { ok: false, error: "Couldn't save to fm_jobs. Migration likely not run.\n\n" + msg };
+    }
+    // FM update succeeded — close the panel
     if (fmFullScreenJob?.id === jobId) setFmFullScreenJob(null);
     if (selectedFmJob?.id === jobId) setSelectedFmJob(null);
-    try { await supa.from("fm_jobs").update(fmJobToDB(updatedJob)).eq("id", jobId); } catch(e) {}
 
     // 2) Build the invoice — pulled from job financials, not vendor invoice (we bill the customer the gross value)
     const co = companies.find(c => c.id === job.companyId);
@@ -5053,36 +5074,41 @@ export default function App() {
       })(),
     };
     setInvoices(prev => [inv, ...prev]);
-    try {
-      await supa.from("accounting_invoices").insert({
-        id: String(invId),
-        invoice_num: inv.invoiceNum,
-        job: inv.job,
-        client: inv.client,
-        amount: inv.amount,
-        invoice_date: inv.invoiceDate,
-        due_date: inv.dueDate,
-        paid_date: null,
-        status: inv.status,
-        notes: inv.notes,
-        created_at: inv.createdAt,
-        job_id: inv.jobId,
-        src: inv.src,
-        gross_value: inv.grossValue,
-        gross_profit: inv.grossProfit,
-        vendor_cost: inv.vendorCost,
-        category: inv.category,
-        ar_qbo_id: inv.arQboId,
-        closed: inv.closed,
-        closed_at: null,
-        project_no: inv.projectNo,
-        store_code: inv.storeCode,
-        owners_project_no: inv.ownersProjectNo,
-        vendor_invoice_number: inv.vendorInvoiceNumber,
-        vendor_name: inv.vendorName,
-      });
-    } catch (e) {
-      console.error("[sendFmJobToAR] invoice insert failed", e);
+    const invRes = await supa.from("accounting_invoices").insert({
+      id: String(invId),
+      invoice_num: inv.invoiceNum,
+      job: inv.job,
+      client: inv.client,
+      amount: inv.amount,
+      invoice_date: inv.invoiceDate,
+      due_date: inv.dueDate,
+      paid_date: null,
+      status: inv.status,
+      notes: inv.notes,
+      created_at: inv.createdAt,
+      job_id: inv.jobId,
+      src: inv.src,
+      gross_value: inv.grossValue,
+      gross_profit: inv.grossProfit,
+      vendor_cost: inv.vendorCost,
+      category: inv.category,
+      ar_qbo_id: inv.arQboId,
+      closed: inv.closed,
+      closed_at: null,
+      project_no: inv.projectNo,
+      store_code: inv.storeCode,
+      owners_project_no: inv.ownersProjectNo,
+      vendor_invoice_number: inv.vendorInvoiceNumber,
+      vendor_name: inv.vendorName,
+    });
+    if (invRes && invRes.error) {
+      // Roll back local invoice + roll back FM job — keep state consistent
+      console.error("[sendFmJobToAR] accounting_invoices insert failed", invRes.error);
+      setInvoices(prev => prev.filter(i => i.id !== invId));
+      setFmJobs(originalFmJobs);
+      try { await supa.from("fm_jobs").update(fmJobToDB(originalJob)).eq("id", jobId); } catch (e) {}
+      const msg = invRes.error?.message || JSON.stringify(invRes.error);
+      return { ok: false, error: "Saved FM job, but couldn't create the AR invoice. Rolled back.\n\n" + msg };
     }
     return { ok: true, invoiceId: invId };
   };
@@ -5847,13 +5873,20 @@ Return ONLY valid JSON, no markdown, no extra text:
               grossValue: "gross_value", grossProfit: "gross_profit", vendorCost: "vendor_cost",
             };
             const updateInv = async (id, patch) => {
+              const before = invoices.find(i => i.id === id);
               setInvoices(prev => prev.map(i => i.id === id ? { ...i, ...patch } : i));
               const dbPatch = {};
               for (const k of Object.keys(patch)) {
                 if (CAMEL_TO_SNAKE[k]) dbPatch[CAMEL_TO_SNAKE[k]] = patch[k] === "" ? null : patch[k];
               }
-              if (Object.keys(dbPatch).length > 0) {
-                try { await supa.from("accounting_invoices").update(dbPatch).eq("id", String(id)); } catch(e) { console.error("[updateInv]", e); }
+              if (Object.keys(dbPatch).length === 0) return;
+              const res = await supa.from("accounting_invoices").update(dbPatch).eq("id", String(id));
+              if (res && res.error) {
+                console.error("[updateInv] failed", res.error, "patch:", dbPatch);
+                // Roll back local state
+                if (before) setInvoices(prev => prev.map(i => i.id === id ? before : i));
+                const msg = res.error?.message || JSON.stringify(res.error);
+                alert("⚠️ Couldn't save change\n\n" + msg + "\n\nThis usually means the database is missing a column. Check VENDOR_PORTAL_MIGRATION.md.");
               }
             };
             // Toggle "Create Invoice" — moves status draft → sent
@@ -18487,7 +18520,7 @@ window.addEventListener('message',function(e){
                           const ok = window.confirm("Send this job to Accounts Receivable?\n\nThis will:\n• Move the job out of the coordinator's active list\n• Create an invoice in the ACCT tab for " + fmt(cvNum) + "\n• Mark this job Completed\n\nContinue?");
                           if (!ok) return;
                           const res = await sendFmJobToAR(job.id);
-                          if (!res.ok) { alert("Could not send to AR: " + (res.error || "unknown")); }
+                          if (!res.ok) { alert("⚠️ Could not send to AR\n\n" + (res.error || "unknown error") + "\n\nIf you haven't run the latest SQL migration yet, do that first (VENDOR_PORTAL_MIGRATION.md). Open the browser console for full details."); }
                         }}>
                         💼 Send to Accounts Receivable
                       </button>
