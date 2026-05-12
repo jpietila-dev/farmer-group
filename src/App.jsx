@@ -5180,6 +5180,35 @@ Return ONLY valid JSON, no markdown, no extra text:
     .t-section-hdr { display:flex; justify-content:space-between; align-items:center; margin-bottom:18px; }
     .t-section-meta { font-size:11px; color:var(--t-ink3); letter-spacing:0.06em; margin-top:4px; }
     .t-empty { text-align:center; padding:60px 20px; color:var(--t-ink3); font-size:14px; }
+
+    /* ── App Chrome (sidebar + topbar) ── */
+    .t-app-shell { display:flex; min-height:100vh; background:var(--t-paper); font-family:var(--t-font); color:var(--t-ink); }
+    .t-sidebar { background:var(--t-ink); color:#fff; border-right:1px solid rgba(255,255,255,0.06); flex-shrink:0; position:sticky; top:0; height:100vh; overflow:hidden; display:flex; flex-direction:column; transition:width 0.2s; }
+    .t-sidebar-brand { padding:18px 16px 14px; border-bottom:1px solid rgba(255,255,255,0.08); display:flex; align-items:center; gap:10px; }
+    .t-sidebar-logo { width:32px; height:32px; background:#fff; color:var(--t-ink); border-radius:7px; display:flex; align-items:center; justify-content:center; font-family:var(--t-mono); font-size:12px; font-weight:500; flex-shrink:0; }
+    .t-sidebar-brand-label { font-size:13px; font-weight:600; letter-spacing:0.04em; }
+    .t-sidebar-brand-sub { font-size:10px; color:rgba(255,255,255,0.5); letter-spacing:0.1em; font-weight:400; margin-top:1px; }
+    .t-nav { flex:1; padding:12px 8px; overflow-y:auto; }
+    .t-nav-item { display:flex; align-items:center; gap:10px; padding:10px 14px; border-radius:7px; cursor:pointer; font-size:13px; color:rgba(255,255,255,0.7); transition:all 0.15s; border:none; background:none; width:100%; text-align:left; font-family:inherit; font-weight:500; }
+    .t-nav-item:hover { background:rgba(255,255,255,0.06); color:#fff; }
+    .t-nav-item.active { background:#fff; color:var(--t-ink); }
+    .t-nav-item.active .t-nav-label { font-weight:600; }
+    .t-nav-icon { font-size:14px; flex-shrink:0; width:18px; text-align:center; }
+    .t-nav-label { letter-spacing:0.02em; }
+    .t-sidebar-footer { padding:10px 8px; border-top:1px solid rgba(255,255,255,0.08); }
+    .t-topbar { background:var(--t-surface); border-bottom:1px solid var(--t-line); padding:0 24px; height:56px; display:flex; align-items:center; justify-content:space-between; position:sticky; top:0; z-index:40; gap:14px; }
+    .t-bu-tab { padding:6px 14px; border-radius:7px; font-size:12px; font-weight:500; cursor:pointer; border:1px solid transparent; transition:all 0.15s; font-family:inherit; background:transparent; color:var(--t-ink2); letter-spacing:0.02em; }
+    .t-bu-tab:hover { color:var(--t-ink); background:var(--t-paper); }
+    .t-bu-tab.active { background:var(--t-ink); color:#fff; border-color:var(--t-ink); }
+    .t-bu-tab.k-crm { /* CRM mode chip when active */ }
+    .t-bu-tab.k-crm.active { background:var(--t-approval); border-color:var(--t-approval); }
+    .t-bu-tab.k-acct.active { background:var(--t-dowork); border-color:var(--t-dowork); }
+    .t-topbar-meta { font-size:11px; color:var(--t-ink3); letter-spacing:0.08em; text-transform:uppercase; }
+    .t-status-chip { font-size:10px; padding:4px 9px; border-radius:5px; display:inline-flex; align-items:center; gap:6px; font-weight:500; }
+    .t-status-live { background:var(--t-dowork-bg); color:var(--t-dowork); border:1px solid rgba(46,125,50,0.2); }
+    .t-status-offline { background:var(--t-danger-bg); color:var(--t-danger); border:1px solid rgba(153,27,27,0.2); }
+    .t-status-dot { width:6px; height:6px; border-radius:50%; background:currentColor; }
+    .t-owner-badge { background:var(--t-ink); color:#fff; font-size:11px; font-weight:600; padding:4px 12px; border-radius:5px; letterSpacing:0.08em; }
   `;
 
   const panelOpen = selectedJob || selectedOpp || selectedCompany || selectedSite || selectedCapexJob || selectedFmJob;
@@ -5195,38 +5224,45 @@ Return ONLY valid JSON, no markdown, no extra text:
 
   // Loading screen while Supabase fetches
   if (!supaReady && !dbError) return (
-    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "100vh", background: "#EEF0F8", color: "#1A2240", fontFamily: "'Inter','Segoe UI',sans-serif", gap: 16 }}>
-      <div style={{ width: 44, height: 44, background: "#3B6FE8", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, fontWeight: 700, color: "#fff" }}>FG</div>
-      <div style={{ fontSize: 13, color: "#4A5278", letterSpacing: "0.1em", textTransform: "uppercase" }}>Loading data…</div>
-      <div style={{ width: 180, height: 3, background: "#CBD1E8", borderRadius: 2, overflow: "hidden" }}>
-        <div style={{ height: "100%", background: "#3B6FE8", borderRadius: 2, animation: "pulse 1.5s ease-in-out infinite", width: "60%" }} />
+    <>
+      <style>{CSS}</style>
+      <div className="t-page" style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "100vh", gap: 16 }}>
+        <div style={{ width: 44, height: 44, background: "var(--t-ink)", color: "#fff", borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 600, fontFamily: "var(--t-mono)" }}>FG</div>
+        <div className="t-eyebrow">Loading data…</div>
+        <div style={{ width: 180, height: 3, background: "var(--t-line)", borderRadius: 2, overflow: "hidden" }}>
+          <div style={{ height: "100%", background: "var(--t-ink)", borderRadius: 2, animation: "pulse 1.5s ease-in-out infinite", width: "60%" }} />
+        </div>
       </div>
-    </div>
+    </>
   );
 
   return (
-    <div style={{ display: "flex", minHeight: "100vh", background: "#EEF0F8", color: "#1A2240", fontFamily: "'Inter','Segoe UI',sans-serif" }}>
+    <div className="t-app-shell">
       <style>{CSS}</style>
 
       {/* -- Sidebar -- */}
-      <div style={{ width: sidebarCollapsed ? 60 : 200, background: "#1E2A48", borderRight: "1px solid #162040", display: "flex", flexDirection: "column", transition: "width 0.2s", flexShrink: 0, position: "sticky", top: 0, height: "100vh", overflow: "hidden" }}>
-        <div style={{ padding: "18px 16px 14px", borderBottom: "1px solid #2A3860", display: "flex", alignItems: "center", gap: 10 }}>
-          <div style={{ width: 32, height: 32, background: "#3B6FE8", borderRadius: 6, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, color: "#fff", flexShrink: 0 }}>FG</div>
-          {!sidebarCollapsed && <div><div style={{ fontSize: 13, fontWeight: 700, color: "#FFFFFF", letterSpacing: "0.04em" }}>FARMER</div><div style={{ fontSize: 10, color: "#6B9FE8", letterSpacing: "0.1em", fontWeight: 500 }}>GROUP</div></div>}
+      <div className="t-sidebar" style={{ width: sidebarCollapsed ? 64 : 220 }}>
+        <div className="t-sidebar-brand">
+          <div className="t-sidebar-logo">FG</div>
+          {!sidebarCollapsed && (
+            <div>
+              <div className="t-sidebar-brand-label">FARMER</div>
+              <div className="t-sidebar-brand-sub">GROUP</div>
+            </div>
+          )}
         </div>
-        <div style={{ flex: 1, padding: "12px 8px", overflowY: "auto" }}>
+        <div className="t-nav">
           {navItems.map(item => (
-            <button key={item.id} className={"nav-item" + (activeNav === item.id ? " active" : "")} onClick={() => { setActiveNav(item.id); setSelectedCoord(null); }}
-              style={activeNav === item.id ? { borderLeft: "3px solid " + buColor.accent, paddingLeft: 13 } : { borderLeft: "3px solid transparent" }}>
-              <span style={{ fontSize: 14, flexShrink: 0 }}>{item.icon}</span>
-              {!sidebarCollapsed && <span style={{ textTransform: "uppercase", fontSize: 11, letterSpacing: "0.07em" }}>{item.label}</span>}
+            <button key={item.id} className={"t-nav-item" + (activeNav === item.id ? " active" : "")} onClick={() => { setActiveNav(item.id); setSelectedCoord(null); }}>
+              <span className="t-nav-icon">{item.icon}</span>
+              {!sidebarCollapsed && <span className="t-nav-label">{item.label}</span>}
             </button>
           ))}
         </div>
-        <div style={{ padding: "12px 8px", borderTop: "1px solid #2A3860" }}>
-          <button className="nav-item" onClick={() => setSidebarCollapsed(!sidebarCollapsed)} style={{ justifyContent: "center" }}>
-            <span style={{ fontSize: 14 }}>{sidebarCollapsed ? "→" : "←"}</span>
-            {!sidebarCollapsed && <span style={{ textTransform: "uppercase", fontSize: 11, letterSpacing: "0.07em" }}>Collapse</span>}
+        <div className="t-sidebar-footer">
+          <button className="t-nav-item" onClick={() => setSidebarCollapsed(!sidebarCollapsed)} style={{ justifyContent: "center" }}>
+            <span className="t-nav-icon">{sidebarCollapsed ? "→" : "←"}</span>
+            {!sidebarCollapsed && <span className="t-nav-label">Collapse</span>}
           </button>
         </div>
       </div>
@@ -5234,23 +5270,25 @@ Return ONLY valid JSON, no markdown, no extra text:
       {/* -- Main -- */}
       <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
         {/* Topbar */}
-        <div style={{ borderBottom: "1px solid #D4D9EE", padding: "0 28px", height: 52, display: "flex", alignItems: "center", justifyContent: "space-between", background: "#FFFFFF", position: "sticky", top: 0, zIndex: 40, boxShadow: "0 1px 4px rgba(30,42,80,0.06)" }}>
+        <div className="t-topbar">
           <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
-            {BUSINESS_UNITS.map(bu => <button key={bu.id} className={"bu-tab" + (activeBU === bu.id && !crmMode ? " active" : "")} onClick={() => { setCrmMode(false); handleBUChange(bu.id); }}>{bu.short}</button>)}
-            <div style={{ width: 1, height: 20, background: "#D4D9EE", margin: "0 4px" }} />
-            <button className={"bu-tab" + (crmMode ? " active" : "")} onClick={() => { setCrmMode(true); setAccountingMode(false); }} style={{ background: crmMode ? "#3B6FE8" : "transparent", color: crmMode ? "#fff" : "#4A5278", border: crmMode ? "1px solid #3B6FE8" : "1px solid transparent", borderRadius: 6, padding: "4px 12px", fontSize: 11, fontWeight: 700, letterSpacing: "0.06em", cursor: "pointer", fontFamily: "inherit" }}>CRM</button>
-            <button className={"bu-tab" + (accountingMode ? " active" : "")} onClick={() => { setAccountingMode(true); setCrmMode(false); }} style={{ background: accountingMode ? "#059669" : "transparent", color: accountingMode ? "#fff" : "#4A5278", border: accountingMode ? "1px solid #059669" : "1px solid transparent", borderRadius: 6, padding: "4px 12px", fontSize: 11, fontWeight: 700, letterSpacing: "0.06em", cursor: "pointer", fontFamily: "inherit" }}>$ ACCT</button>
+            {BUSINESS_UNITS.map(bu => (
+              <button key={bu.id} className={"t-bu-tab" + (activeBU === bu.id && !crmMode && !accountingMode ? " active" : "")} onClick={() => { setCrmMode(false); setAccountingMode(false); handleBUChange(bu.id); }}>{bu.short}</button>
+            ))}
+            <div style={{ width: 1, height: 20, background: "var(--t-line)", margin: "0 6px" }} />
+            <button className={"t-bu-tab k-crm" + (crmMode ? " active" : "")} onClick={() => { setCrmMode(true); setAccountingMode(false); }}>CRM</button>
+            <button className={"t-bu-tab k-acct" + (accountingMode ? " active" : "")} onClick={() => { setAccountingMode(true); setCrmMode(false); }}>$ ACCT</button>
           </div>
-          <div style={{ fontSize: 11, color: "#4A5278", letterSpacing: "0.1em", textTransform: "uppercase" }}>{BUSINESS_UNITS.find(b => b.id === activeBU)?.label}</div>
+          <div className="t-topbar-meta">{BUSINESS_UNITS.find(b => b.id === activeBU)?.label}</div>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            {supaReady && <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 10, color: "#4ADE80", background: "#4ADE8015", border: "1px solid #4ADE8030", padding: "3px 10px", borderRadius: 4 }}><span style={{ width: 6, height: 6, borderRadius: "50%", background: "#4ADE80", display: "inline-block" }}></span>DB Live</div>}
-            {dbError && <div style={{ fontSize: 10, color: "#F87171", background: "#F8717115", border: "1px solid #F8717130", padding: "3px 10px", borderRadius: 4 }}>⚠ Offline</div>}
-            <div style={{ background: "#EEF1FB", border: "1px solid #3B6FE840", color: "#3B6FE8", fontSize: 11, fontWeight: 600, padding: "4px 14px", borderRadius: 4, letterSpacing: "0.08em" }}>OWNER</div>
+            {supaReady && <div className="t-status-chip t-status-live"><span className="t-status-dot"></span>DB Live</div>}
+            {dbError && <div className="t-status-chip t-status-offline">⚠ Offline</div>}
+            <div className="t-owner-badge">OWNER</div>
           </div>
         </div>
 
         {/* Content */}
-        <div style={{ flex: 1, padding: "28px 32px", overflowY: "auto", paddingRight: panelOpen ? "calc(32px + 420px)" : "32px", transition: "padding-right 0.2s" }}>
+        <div style={{ flex: 1, padding: "28px 32px", overflowY: "auto", paddingRight: panelOpen ? "calc(32px + 420px)" : "32px", transition: "padding-right 0.2s", background: "var(--t-paper)" }}>
 
           {/* ══════════════════════════════════════════
                ACCOUNTING MODULE
@@ -8533,7 +8571,6 @@ Example:
                   const ai = FM_PIPELINE_STAGES.findIndex(s => s.id === a.stage);
                   const bi = FM_PIPELINE_STAGES.findIndex(s => s.id === b.stage);
                   if (ai !== bi) return ai - bi;
-                  // Within same stage, sort by action date (soonest first), nulls last
                   const ad = a[FM_PIPELINE_STAGES[ai]?.actionKey] || "";
                   const bd = b[FM_PIPELINE_STAGES[bi]?.actionKey] || "";
                   if (!ad && !bd) return 0;
@@ -8542,158 +8579,131 @@ Example:
                   return ad.localeCompare(bd);
                 });
                 const totalFmPipeline = fmPipelineJobs.reduce((s,j) => s + (j.contractValue||0), 0);
-                const PIPE_COLS = [
-                  { key: "storeCode",      label: "Store",          w: 70  },
-                  { key: "projectNo",      label: "Project #",      w: 90  },
-                  { key: "name",           label: "Scope of Work",  w: 200 },
-                  { key: "company",        label: "Company",        w: 140 },
-                  { key: "customer",       label: "Customer",       w: 130 },
-                  { key: "site",           label: "Site",           w: 170 },
-                  { key: "vendor",         label: "Vendor",         w: 130 },
-                  { key: "contractValue",  label: "Value",          w: 90  },
-                  { key: "actionDate",     label: "Action Date",    w: 110 },
-                  { key: "stage",          label: "Stage",          w: 140 },
-                  { key: "coordinator",    label: "Coordinator",    w: 110 },
-                ];
-                // stage-grouping for the stats bar at top
                 return (
-                  <div className="fade-in" style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+                  <div className="t-page fade-in" style={{ background: "transparent" }}>
                     {/* Header */}
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <div className="t-section-hdr">
                       <div>
-                        <div style={{ fontSize: 22, fontWeight: 700, color: "#1A2240", letterSpacing: "-0.01em", textTransform: "uppercase" }}>Pipeline</div>
-                        <div style={{ fontSize: 11, color: "#4A5278", marginTop: 3, letterSpacing: "0.06em" }}>{fmPipelineJobs.length} JOBS · {fmt(totalFmPipeline)} TOTAL POTENTIAL</div>
+                        <div className="t-h1">Pipeline</div>
+                        <div className="t-section-meta">
+                          <span className="t-mono">{fmPipelineJobs.length}</span> jobs &nbsp;·&nbsp;
+                          <span className="t-mono">{fmt(totalFmPipeline)}</span> total potential
+                        </div>
                       </div>
-                      <div style={{ display: "flex", gap: 8 }}>
-                        <input className="fi" style={{ width: 180 }} placeholder="Search…" value={search} onChange={e => setSearch(e.target.value)} />
-                        <button className="btn-primary" onClick={openAddFm}>+ Add Job</button>
+                      <div style={{ display: "flex", gap: 10 }}>
+                        <span className="t-srch"><input className="t-input" style={{ width: 220 }} placeholder="Search…" value={search} onChange={e => setSearch(e.target.value)} /></span>
+                        <button className="t-btn" onClick={openAddFm}>+ Add Job</button>
                       </div>
                     </div>
 
                     {/* Pipeline stage stats */}
-                    <div style={{ display: "flex", gap: 8, overflowX: "auto" }}>
+                    <div style={{ display: "grid", gridTemplateColumns: `repeat(${FM_PIPELINE_STAGES.length}, 1fr)`, gap: 10, marginBottom: 18 }}>
                       {FM_PIPELINE_STAGES.map(st => {
                         const cnt = fmPipelineJobs.filter(j => j.stage === st.id).length;
                         const val = fmPipelineJobs.filter(j => j.stage === st.id).reduce((s,j) => s+(j.contractValue||0),0);
                         return (
-                          <div key={st.id} style={{ flex: "0 0 160px", background: "#ECEEF8", border: "1px solid " + st.color + "30", borderRadius: 8, padding: "10px 14px", position: "relative", overflow: "hidden" }}>
-                            <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: st.color }} />
-                            <div style={{ fontSize: 10, color: st.color, textTransform: "uppercase", letterSpacing: "0.07em", fontWeight: 600, marginBottom: 3 }}>{st.label}</div>
-                            <div style={{ fontSize: 16, fontWeight: 700, color: "#1A2240" }}>{cnt}</div>
-                            <div style={{ fontSize: 10, color: "#4A5278" }}>{fmt(val)}</div>
+                          <div key={st.id} className="t-stat">
+                            <div className="t-stat-n">{cnt}</div>
+                            <div className="t-stat-l">{st.label}</div>
+                            <div className="t-stat-sub">{fmt(val)}</div>
                           </div>
                         );
                       })}
                     </div>
 
-                    {/* Spreadsheet table */}
-                    <div style={{ overflowX: "auto", borderRadius: 10, border: "1px solid #CBD1E8" }}>
-                      <table style={{ borderCollapse: "collapse", width: "100%", minWidth: PIPE_COLS.reduce((s,c) => s+c.w, 0) + 80 }}>
-                        <thead>
-                          <tr style={{ background: "#FFFFFF", borderBottom: "1px solid #CBD1E8" }}>
-                            <th style={{ width: 40, padding: "10px 12px", textAlign: "left" }}></th>
-                            {PIPE_COLS.map(col => (
-                              <th key={col.key} style={{ width: col.w, padding: "10px 12px", textAlign: "left", fontSize: 10, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", fontWeight: 600, whiteSpace: "nowrap" }}>{col.label}</th>
-                            ))}
-                            <th style={{ width: 80, padding: "10px 12px" }}></th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {fmPipelineJobs.length === 0 && (
-                            <tr><td colSpan={PIPE_COLS.length + 2} style={{ textAlign: "center", padding: "48px", color: "#3D4570", fontSize: 12 }}>No jobs in pipeline</td></tr>
-                          )}
-                          {fmPipelineJobs.map((job, idx) => {
-                            const st = FM_STAGES.find(s => s.id === job.stage) || FM_STAGES[0];
-                            const co = companies.find(c => c.id === job.companyId);
-                            const site = sites.find(s => s.id === job.siteId);
-                            const ct = contacts.find(c => c.id === job.approverContactId);
-                            const sub = subcontractors.find(s => s.id === job.subcontractorId);
-                            const ctName = ct ? `${ct.firstName||""} ${ct.lastName||""}`.trim() : "";
-                            const actionDate = job[st.actionKey];
-                            const overdue = actionDate && new Date(actionDate) < new Date();
-                            const soon = actionDate && !overdue && new Date(actionDate) <= new Date(Date.now() + 3*86400000);
-                            const rowBg = idx % 2 === 0 ? "#F8F9FD" : "#F2F4FA";
-                            return (
-                              <tr key={job.id} style={{ background: rowBg, borderBottom: "1px solid #D8DCF0", cursor: "pointer", transition: "background 0.1s" }}
-                                onMouseEnter={e => e.currentTarget.style.background = "#EBF0FF"}
-                                onMouseLeave={e => e.currentTarget.style.background = rowBg}
-                                onClick={() => setFmFullScreenJob(job)}>
-                                {/* Stage dot */}
-                                <td style={{ padding: "10px 12px" }}>
-                                  <div style={{ width: 8, height: 8, borderRadius: "50%", background: st.color, margin: "auto" }} title={st.label} />
-                                </td>
-                                {/* Store */}
-                                <td style={{ padding: "10px 12px", fontSize: 12, color: "#252E52", whiteSpace: "nowrap" }}>{job.storeCode || "—"}</td>
-                                {/* Project # */}
-                                <td style={{ padding: "10px 12px", fontSize: 12, color: "#252E52", whiteSpace: "nowrap" }}>{job.projectNo || "—"}</td>
-                                {/* Scope */}
-                                <td style={{ padding: "10px 12px", fontSize: 12, color: "#1A2240", fontWeight: 500, maxWidth: 200 }}>
-                                  <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{job.name}</div>
-                                </td>
-                                {/* Company */}
-                                <td style={{ padding: "10px 12px", fontSize: 11, maxWidth: 140 }}>
-                                  {co ? <span style={{ color: "#3B6FE8", fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "block" }}>🏢 {co.name}</span> : <span style={{ color: "#8892B8" }}>—</span>}
-                                </td>
-                                {/* Customer */}
-                                <td style={{ padding: "10px 12px", fontSize: 11, maxWidth: 130 }}>
-                                  {ctName ? <span style={{ color: "#353C62", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "block" }}>👤 {ctName}</span> : <span style={{ color: "#8892B8" }}>—</span>}
-                                </td>
-                                {/* Site */}
-                                <td style={{ padding: "10px 12px", fontSize: 11, color: "#353C62", maxWidth: 170 }}>
-                                  <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                                    {site ? `📍 ${site.address || site.storeNumber || "Site"}` : "—"}
-                                  </div>
-                                </td>
-                                {/* Vendor */}
-                                <td style={{ padding: "10px 12px", fontSize: 12 }}>
-                                  {sub ? <span style={{ background: "#3B6FE820", color: buColor.accent, padding: "2px 8px", borderRadius: 4, fontSize: 11, whiteSpace: "nowrap" }}>{sub.name}</span> : <span style={{ color: "#3D4570", fontSize: 11 }}>—</span>}
-                                </td>
-                                {/* Value */}
-                                <td style={{ padding: "10px 12px", fontSize: 12, color: "#1A2240", fontWeight: 600, whiteSpace: "nowrap" }}>{job.contractValue ? fmt(job.contractValue) : "—"}</td>
-                                {/* Action Date */}
-                                <td style={{ padding: "10px 12px", fontSize: 11, whiteSpace: "nowrap", color: overdue ? "#F87171" : soon ? "#F97316" : "#353C62", fontWeight: overdue || soon ? 600 : 400 }}>
-                                  {actionDate ? (<>{actionDate}{overdue ? " ⚠" : soon ? " ◷" : ""}</>) : "—"}
-                                  <div style={{ fontSize: 9, color: "#8892B8", marginTop: 1, fontWeight: 400 }}>{st.actionLabel}</div>
-                                </td>
-                                {/* Stage */}
-                                <td style={{ padding: "10px 12px" }}>
-                                  <span style={{ fontSize: 10, fontWeight: 600, color: st.color, background: st.color + "15", padding: "3px 8px", borderRadius: 4, whiteSpace: "nowrap" }}>{st.label}</span>
-                                </td>
-                                {/* Coordinator */}
-                                <td style={{ padding: "10px 12px", fontSize: 11, color: "#353C62", whiteSpace: "nowrap" }}>{job.coordinator || "—"}</td>
-                                {/* Actions */}
-                                <td style={{ padding: "10px 12px" }} onClick={e => e.stopPropagation()}>
-                                  <div style={{ display: "flex", gap: 4 }}>
-                                    {/* Stage advance buttons */}
-                                    {(() => {
-                                      const curIdx = FM_PIPELINE_STAGES.findIndex(x => x.id === job.stage);
-                                      const prevStage = FM_PIPELINE_STAGES[curIdx - 1];
-                                      const nextStage = FM_PIPELINE_STAGES[curIdx + 1];
-                                      return (
-                                        <>
-                                          {prevStage && <button className="btn-ghost" style={{ fontSize: 10, padding: "3px 6px" }} title={"← " + prevStage.label} onClick={() => updateFmJobPersist(job.id, { stage: prevStage.id })}>←</button>}
-                                          {nextStage && <button className="btn-ghost" style={{ fontSize: 10, padding: "3px 6px" }} title={"→ " + nextStage.label} onClick={() => updateFmJobPersist(job.id, { stage: nextStage.id })}>→</button>}
-                                          {job.stage === "owner_approval" && <button className="btn-ghost" style={{ fontSize: 10, padding: "3px 6px", color: "#4ADE80", borderColor: "#4ADE8040" }} title="Promote to Active (Buyout)" onClick={() => updateFmJobPersist(job.id, { stage: "buyout" })}>✓</button>}
-                                          <button className="btn-ghost" style={{ fontSize: 10, padding: "3px 6px" }} onClick={() => openEditFm(job)}>✎</button>
-                                        </>
-                                      );
-                                    })()}
-                                  </div>
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                        {fmPipelineJobs.length > 0 && (
-                          <tfoot>
-                            <tr style={{ background: "#F0F2F8", borderTop: "2px solid #CBD1E8" }}>
-                              <td colSpan={8} style={{ padding: "10px 12px", fontSize: 11, color: "#4A5278", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.07em" }}>Totals</td>
-                              <td style={{ padding: "10px 12px", fontSize: 12, color: "#1A2240", fontWeight: 700 }}>{fmt(totalFmPipeline)}</td>
-                              <td colSpan={4} style={{ padding: "10px 12px" }}></td>
+                    {/* Table */}
+                    <div className="t-table-wrap">
+                      <div className="t-table-scroll">
+                        <table className="t-table" style={{ minWidth: 1340 }}>
+                          <thead>
+                            <tr>
+                              <th style={{ width: 32 }}></th>
+                              <th style={{ width: 80 }}>Store</th>
+                              <th style={{ width: 100 }}>Project #</th>
+                              <th style={{ width: 240 }}>Scope of Work</th>
+                              <th style={{ width: 160 }}>Company</th>
+                              <th style={{ width: 140 }}>Customer</th>
+                              <th style={{ width: 200 }}>Site</th>
+                              <th style={{ width: 150 }}>Vendor</th>
+                              <th style={{ width: 100 }}>Value</th>
+                              <th style={{ width: 130 }}>Action Date</th>
+                              <th style={{ width: 150 }}>Stage</th>
+                              <th style={{ width: 120 }}>Coordinator</th>
+                              <th style={{ width: 110 }}></th>
                             </tr>
-                          </tfoot>
-                        )}
-                      </table>
+                          </thead>
+                          <tbody>
+                            {fmPipelineJobs.length === 0 && (
+                              <tr style={{ cursor: "default" }}><td colSpan={13} className="t-empty">No jobs in pipeline</td></tr>
+                            )}
+                            {fmPipelineJobs.map(job => {
+                              const st = FM_STAGES.find(s => s.id === job.stage) || FM_STAGES[0];
+                              const co = companies.find(c => c.id === job.companyId);
+                              const site = sites.find(s => s.id === job.siteId);
+                              const ct = contacts.find(c => c.id === job.approverContactId);
+                              const sub = subcontractors.find(s => s.id === job.subcontractorId);
+                              const ctName = ct ? `${ct.firstName||""} ${ct.lastName||""}`.trim() : "";
+                              const actionDate = job[st.actionKey];
+                              const overdue = actionDate && new Date(actionDate) < new Date();
+                              const soon = actionDate && !overdue && new Date(actionDate) <= new Date(Date.now() + 3*86400000);
+                              return (
+                                <tr key={job.id} onClick={() => setFmFullScreenJob(job)}>
+                                  {/* Stage dot */}
+                                  <td>
+                                    <span className="t-stage-dot" style={{ background: fmStageDotColor(job.stage) }} title={st.label} />
+                                  </td>
+                                  <td><span className="t-mono-tag">{job.storeCode || "—"}</span></td>
+                                  <td><span className="t-mono-tag">{job.projectNo || "—"}</span></td>
+                                  <td className="t-td-wrap" style={{ fontWeight: 500 }}>{job.name}</td>
+                                  <td className="t-td-wrap">{co ? <span>🏢 {co.name}</span> : <span style={{ color: "var(--t-ink3)" }}>—</span>}</td>
+                                  <td className="t-td-wrap">{ctName ? <span>👤 {ctName}</span> : <span style={{ color: "var(--t-ink3)" }}>—</span>}</td>
+                                  <td className="t-td-wrap" style={{ color: "var(--t-ink2)" }}>{site ? `📍 ${site.address || site.storeNumber || "Site"}` : "—"}</td>
+                                  <td>{sub ? <span className="t-pill t-pill-approval">{sub.name}</span> : <span style={{ color: "var(--t-ink3)" }}>—</span>}</td>
+                                  <td style={{ fontWeight: 600 }}>{job.contractValue ? fmt(job.contractValue) : "—"}</td>
+                                  {/* Action Date */}
+                                  <td style={{ color: overdue ? "var(--t-danger)" : soon ? "var(--t-warn)" : "var(--t-ink2)", fontWeight: overdue || soon ? 600 : 400 }}>
+                                    {actionDate ? (
+                                      <>
+                                        <div style={{ fontFamily: "var(--t-mono)", fontSize: 12 }}>{actionDate}{overdue ? " ⚠" : soon ? " ◷" : ""}</div>
+                                        <div style={{ fontSize: 10, color: "var(--t-ink3)", marginTop: 1, fontWeight: 400 }}>{st.actionLabel}</div>
+                                      </>
+                                    ) : "—"}
+                                  </td>
+                                  <td><span className={"t-pill " + fmStagePill(job.stage)}>{st.label}</span></td>
+                                  <td style={{ color: "var(--t-ink2)", fontSize: 12 }}>{job.coordinator || "—"}</td>
+                                  {/* Actions */}
+                                  <td onClick={e => e.stopPropagation()}>
+                                    <div style={{ display: "flex", gap: 4 }}>
+                                      {(() => {
+                                        const curIdx = FM_PIPELINE_STAGES.findIndex(x => x.id === job.stage);
+                                        const prevStage = FM_PIPELINE_STAGES[curIdx - 1];
+                                        const nextStage = FM_PIPELINE_STAGES[curIdx + 1];
+                                        return (
+                                          <>
+                                            {prevStage && <button className="t-btn t-btn-ghost t-btn-sm" title={"← " + prevStage.label} onClick={() => updateFmJobPersist(job.id, { stage: prevStage.id })}>←</button>}
+                                            {nextStage && <button className="t-btn t-btn-ghost t-btn-sm" title={"→ " + nextStage.label} onClick={() => updateFmJobPersist(job.id, { stage: nextStage.id })}>→</button>}
+                                            {job.stage === "owner_approval" && <button className="t-btn t-btn-ghost t-btn-sm" style={{ color: "var(--t-dowork)", borderColor: "rgba(46,125,50,0.3)" }} title="Promote to Active (Buyout)" onClick={() => updateFmJobPersist(job.id, { stage: "buyout" })}>✓</button>}
+                                            <button className="t-btn t-btn-ghost t-btn-sm" onClick={() => openEditFm(job)}>✎</button>
+                                          </>
+                                        );
+                                      })()}
+                                    </div>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                          {fmPipelineJobs.length > 0 && (
+                            <tfoot>
+                              <tr>
+                                <td colSpan={8} className="t-eyebrow">Totals</td>
+                                <td style={{ fontWeight: 700 }}>{fmt(totalFmPipeline)}</td>
+                                <td colSpan={4}></td>
+                              </tr>
+                            </tfoot>
+                          )}
+                        </table>
+                      </div>
                     </div>
                   </div>
                 );
