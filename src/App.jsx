@@ -4235,12 +4235,12 @@ export default function App() {
   // ── Column-order prefs (drag-to-reorder table columns) ────────────
   const [fmActiveJobsColOrder, setFmActiveJobsColOrder] = useColumnOrder(
     "fm_active_jobs",
-    ["store", "project", "scope", "company", "customer", "site", "vendor", "value", "profit", "schedule", "stage", "vendorNext"]
+    ["store", "project", "ownersProject", "scope", "company", "customer", "site", "vendor", "value", "profit", "schedule", "stage", "vendorNext"]
   );
   const fmActiveJobsDrag = useDragColumns(fmActiveJobsColOrder, setFmActiveJobsColOrder);
   const [fmPipelineColOrder, setFmPipelineColOrder] = useColumnOrder(
     "fm_pipeline",
-    ["store", "project", "scope", "company", "customer", "site", "vendor", "value", "actionDate", "stage", "coordinator"]
+    ["store", "project", "ownersProject", "scope", "company", "customer", "site", "vendor", "value", "actionDate", "stage", "coordinator"]
   );
   const fmPipelineDrag = useDragColumns(fmPipelineColOrder, setFmPipelineColOrder);
 
@@ -6039,7 +6039,27 @@ Return ONLY valid JSON, no markdown, no extra text:
                                     <td style={tdNum}>{fmtMoney(gv)}</td>
                                     <td style={{ ...tdNum, color: "#059669" }}>{fmtMoney(inv.grossProfit)}</td>
                                     <td style={{ ...tdNum, color: "#92400E" }}>{fmtMoney(inv.vendorCost)}</td>
-                                    <td style={tdMono}>{inv.ownersProjectNo || "—"}</td>
+                                    <td style={td}>
+                                      <input value={(() => {
+                                        // Prefer the live FM job's WO# if it still exists (in case coordinator updated it after send-to-AR)
+                                        const liveJob = inv.src === "FM" && inv.jobId ? fmJobs.find(j => String(j.id) === String(inv.jobId)) : null;
+                                        return liveJob ? (liveJob.ownersProjectNo || "") : (inv.ownersProjectNo || "");
+                                      })()}
+                                        onChange={e => {
+                                          updateInv(inv.id, { ownersProjectNo: e.target.value });
+                                          // Also sync back to the source FM job so it stays consistent across views
+                                          if (inv.src === "FM" && inv.jobId) {
+                                            const liveJob = fmJobs.find(j => String(j.id) === String(inv.jobId));
+                                            if (liveJob) {
+                                              const updated = { ...liveJob, ownersProjectNo: e.target.value };
+                                              setFmJobs(prev => prev.map(j => String(j.id) === String(inv.jobId) ? updated : j));
+                                              try { supa.from("fm_jobs").update({ owners_project_no: e.target.value || null }).eq("id", inv.jobId); } catch(err) {}
+                                            }
+                                          }
+                                        }}
+                                        onFocus={e => cellInputFocus(e.target, true)} onBlur={e => cellInputFocus(e.target, false)}
+                                        placeholder="—" style={{ ...cellInput, fontFamily: "'DM Mono', monospace" }} />
+                                    </td>
                                     <td style={td}>
                                       <input value={inv.arQboId || ""} onChange={e => updateInv(inv.id, { arQboId: e.target.value })}
                                         onFocus={e => cellInputFocus(e.target, true)} onBlur={e => cellInputFocus(e.target, false)}
@@ -9278,6 +9298,7 @@ Example:
                 const COLS = {
                   store: { label: "Store", width: 80, render: j => <span className="t-mono-tag">{j.storeCode || "—"}</span> },
                   project: { label: "Project #", width: 100, render: j => <span className="t-mono-tag">{j.projectNo || "—"}</span> },
+                  ownersProject: { label: "Owners Proj #", width: 140, render: j => j.ownersProjectNo ? <span className="t-mono-tag">{j.ownersProjectNo}</span> : <span style={{ color: "var(--t-ink3)" }}>—</span> },
                   scope: { label: "Scope of Work", width: 240, className: "t-td-wrap", style: { fontWeight: 500 }, render: j => j.name },
                   company: { label: "Company", width: 160, className: "t-td-wrap", render: j => {
                     const co = companies.find(c => c.id === j.companyId);
@@ -11217,6 +11238,7 @@ window.addEventListener('message',function(e){
             const COLS = {
               store: { label: "Store", width: 80, render: j => <span className="t-mono-tag">{j.storeCode || "—"}</span> },
               project: { label: "Project #", width: 100, render: j => <span className="t-mono-tag">{j.projectNo || "—"}</span> },
+              ownersProject: { label: "Owners Proj #", width: 140, render: j => j.ownersProjectNo ? <span className="t-mono-tag">{j.ownersProjectNo}</span> : <span style={{ color: "var(--t-ink3)" }}>—</span> },
               scope: { label: "Scope of Work", width: 240, className: "t-td-wrap", style: { fontWeight: 500 }, render: j => j.name },
               company: { label: "Company", width: 160, className: "t-td-wrap", render: j => {
                 const co = companies.find(c => c.id === j.companyId);
