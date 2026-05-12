@@ -4547,6 +4547,12 @@ export default function App() {
   const [showSubForm,       setShowSubForm]       = useState(false);
   const [editSubId,         setEditSubId]         = useState(null);
   const [subForm,           setSubForm]           = useState({ name: "", trade: "", phone: "", email: "", msaStatus: "missing", coiExpiry: "", w9: false, notes: "", services: [], address: "", city: "", state: "", contact_name: "", coverage: "", w9FileUrl: "", w9FileData: null, w9FileName: "", coiFileUrl: "", coiFileData: null, coiFileName: "" });
+  // When a coordinator opens the sub form via the "+ Vendor" picker on an FM job,
+  // capture the job id so we can auto-assign the new sub to that job after save.
+  const [addSubForFmJobId,  setAddSubForFmJobId]  = useState(null);
+  // Picker UI state — { jobId } open if non-null
+  const [vendorPickerJobOpen, setVendorPickerJobOpen] = useState(null);
+  const [vendorPickerJobSearch, setVendorPickerJobSearch] = useState("");
   const [subView,           setSubView]           = useState("list");
   const [subTradeFilter,    setSubTradeFilter]    = useState(null);
   const [subSearch,         setSubSearch]         = useState("");
@@ -17767,6 +17773,109 @@ window.addEventListener('message',function(e){
 
                 {/* -- WAITING FOR QUOTE panel: now folded into the Estimating panel above (which renders on both estimating + waiting_quote stages) -- */}
 
+                {/* -- VENDOR PICKER for buyout / do_work when no vendor is assigned -- */}
+                {(job.stage === "buyout" || job.stage === "do_work") && !job.subcontractorId && (() => {
+                  const pickerOpen = vendorPickerJobOpen === job.id;
+                  const q = (vendorPickerJobSearch || "").toLowerCase();
+                  const activeSubs = subcontractors.filter(s => !s.archived);
+                  const filteredSubs = q
+                    ? activeSubs.filter(s =>
+                        (s.name||"").toLowerCase().includes(q) ||
+                        (s.trade||"").toLowerCase().includes(q) ||
+                        (s.contact_name||"").toLowerCase().includes(q) ||
+                        (s.services||[]).some(sv => (sv||"").toLowerCase().includes(q))
+                      )
+                    : activeSubs;
+                  // Assign + auto-tag as FM division if needed
+                  const assignSub = (subId) => {
+                    const updated = { ...job, subcontractorId: subId };
+                    setFmJobs(prev => prev.map(j => j.id === job.id ? updated : j));
+                    if (fmFullScreenJob?.id === job.id) setFmFullScreenJob(updated);
+                    if (selectedFmJob?.id === job.id) setSelectedFmJob(updated);
+                    try { supa.from("fm_jobs").update({ subcontractor_id: subId }).eq("id", job.id); } catch(e) {}
+                    // Auto-tag sub as FM division
+                    const sb = subcontractors.find(s => s.id === subId);
+                    if (sb && !(sb.services||[]).includes("fm")) {
+                      const updatedSub = { ...sb, services: [...(sb.services||[]), "fm"] };
+                      setSubcontractors(prev => prev.map(s => s.id === subId ? updatedSub : s));
+                      try { supa.from("subcontractors").update(subToDB(updatedSub)).eq("id", subId); } catch(e) {}
+                    }
+                    setVendorPickerJobOpen(null);
+                    setVendorPickerJobSearch("");
+                  };
+                  const openAddNewVendor = () => {
+                    setAddSubForFmJobId(job.id);
+                    setEditSubId(null);
+                    setSubForm({
+                      name: "", trade: "", phone: "", email: "",
+                      msaStatus: "missing", coiExpiry: "", w9: false, notes: "",
+                      services: ["fm"], address: "", city: "", state: "",
+                      contact_name: "", coverage: "",
+                      w9FileUrl: "", w9FileData: null, w9FileName: "",
+                      coiFileUrl: "", coiFileData: null, coiFileName: "",
+                      portalEnabled: true, // Default checked per your spec — coordinator can uncheck
+                    });
+                    setShowSubForm(true);
+                    setVendorPickerJobOpen(null);
+                  };
+                  return (
+                    <div className="t-card" style={{ padding: "14px 16px", background: "var(--t-buyout-bg)", borderColor: "rgba(230,81,0,0.25)" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                        <div>
+                          <div className="t-eyebrow" style={{ color: "var(--t-buyout)", marginBottom: 3 }}>👤 Vendor Assignment Needed</div>
+                          <div style={{ fontSize: 12, color: "var(--t-ink2)" }}>This job doesn't have a vendor yet. Pick from existing subs or add a new one.</div>
+                        </div>
+                        {!pickerOpen && (
+                          <button className="t-btn" onClick={() => { setVendorPickerJobOpen(job.id); setVendorPickerJobSearch(""); }}>
+                            + Vendor
+                          </button>
+                        )}
+                      </div>
+
+                      {pickerOpen && (
+                        <div className="t-card" style={{ padding: 12, background: "var(--t-surface)" }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                            <div className="t-eyebrow">Assign Vendor</div>
+                            <button className="t-btn t-btn-ghost t-btn-sm"
+                              onClick={() => { setVendorPickerJobOpen(null); setVendorPickerJobSearch(""); }}>✕</button>
+                          </div>
+                          <span className="t-srch" style={{ display: "block", marginBottom: 8 }}>
+                            <input autoFocus className="t-input" placeholder="Search name, trade, contact…"
+                              value={vendorPickerJobSearch}
+                              onChange={e => setVendorPickerJobSearch(e.target.value)} />
+                          </span>
+                          <div style={{ maxHeight: 280, overflowY: "auto", display: "flex", flexDirection: "column", gap: 4, marginBottom: 10 }}>
+                            {filteredSubs.length === 0 ? (
+                              <div className="t-empty" style={{ padding: 18, fontSize: 12 }}>No vendors match — add a new one below</div>
+                            ) : (
+                              filteredSubs.slice(0, 80).map(s => (
+                                <div key={s.id}
+                                  onClick={() => assignSub(s.id)}
+                                  style={{ padding: "8px 10px", borderRadius: 6, cursor: "pointer", border: "1px solid transparent", display: "flex", justifyContent: "space-between", alignItems: "center" }}
+                                  onMouseEnter={e => { e.currentTarget.style.background = "var(--t-paper)"; e.currentTarget.style.borderColor = "var(--t-line)"; }}
+                                  onMouseLeave={e => { e.currentTarget.style.background = "transparent"; e.currentTarget.style.borderColor = "transparent"; }}>
+                                  <div style={{ flex: 1, minWidth: 0 }}>
+                                    <div style={{ fontSize: 13, fontWeight: 600, color: "var(--t-ink)" }}>{s.name}</div>
+                                    {(s.trade || s.contact_name) && (
+                                      <div style={{ fontSize: 11, color: "var(--t-ink3)", marginTop: 2 }}>
+                                        {s.trade}{s.trade && s.contact_name ? " · " : ""}{s.contact_name || ""}
+                                      </div>
+                                    )}
+                                  </div>
+                                  {s.portalEnabled && <span className="t-pill t-pill-approved" style={{ fontSize: 10 }}>🔑 portal</span>}
+                                </div>
+                              ))
+                            )}
+                          </div>
+                          <button className="t-btn" style={{ width: "100%", justifyContent: "center" }} onClick={openAddNewVendor}>
+                            + Add new vendor
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+
                 {/* -- GENERATE PROPOSAL panel -- */}
                 {job.stage === "generate_proposal" && (
                   <div style={{ background: "#F0F2F8", border: "1px solid #C084FC40", borderRadius: 8, padding: "14px" }}>
@@ -19266,7 +19375,7 @@ window.addEventListener('message',function(e){
             </div>
 
             <div style={{ display: "flex", gap: 8, marginTop: 20 }}>
-              <button className="btn-ghost" style={{ flex: 1 }} onClick={() => setShowSubForm(false)}>Cancel</button>
+              <button className="btn-ghost" style={{ flex: 1 }} onClick={() => { setShowSubForm(false); setAddSubForFmJobId(null); }}>Cancel</button>
               <button className="btn-primary" style={{ flex: 2 }} onClick={async () => {
                 if (!subForm.name) return;
                 let lat = subForm.lat || null;
@@ -19285,6 +19394,7 @@ window.addEventListener('message',function(e){
                   formWithCoords.passwordHash = await hashPassword(formWithCoords._newPassword);
                 }
                 delete formWithCoords._newPassword;
+                let savedSubId = editSubId;
                 if (editSubId) {
                   const updated = { ...subcontractors.find(s => s.id === editSubId), ...formWithCoords };
                   setSubcontractors(subcontractors.map(s => s.id === editSubId ? updated : s));
@@ -19294,6 +19404,19 @@ window.addEventListener('message',function(e){
                   const entry = { id: newId, ...formWithCoords };
                   setSubcontractors(s => [...s, entry]);
                   supa.from("subcontractors").insert(subToDB(entry));
+                  savedSubId = newId;
+                }
+                // If this form was opened via the FM "+ Vendor" picker, auto-assign the saved sub to that job
+                if (addSubForFmJobId && savedSubId) {
+                  const targetJob = fmJobs.find(j => j.id === addSubForFmJobId);
+                  if (targetJob) {
+                    const updatedJob = { ...targetJob, subcontractorId: savedSubId };
+                    setFmJobs(prev => prev.map(j => j.id === addSubForFmJobId ? updatedJob : j));
+                    if (fmFullScreenJob?.id === addSubForFmJobId) setFmFullScreenJob(updatedJob);
+                    if (selectedFmJob?.id === addSubForFmJobId) setSelectedFmJob(updatedJob);
+                    try { supa.from("fm_jobs").update({ subcontractor_id: savedSubId }).eq("id", addSubForFmJobId); } catch(e) {}
+                  }
+                  setAddSubForFmJobId(null);
                 }
                 setShowSubForm(false);
               }}>Save Subcontractor</button>
