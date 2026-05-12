@@ -4317,6 +4317,22 @@ export default function App() {
 
   // FM Jobs
   const [fmJobs,        setFmJobs]        = useState(INIT_FM_JOBS);
+  const [fmJobsRefreshing, setFmJobsRefreshing] = useState(false);
+  const [fmJobsRefreshedAt, setFmJobsRefreshedAt] = useState(null);
+  const refreshFmJobs = useCallback(async () => {
+    setFmJobsRefreshing(true);
+    try {
+      const res = await supa.from("fm_jobs").select("*");
+      if (res.data && Array.isArray(res.data)) {
+        setFmJobs(res.data.map(dbToFmJob));
+        setFmJobsRefreshedAt(new Date());
+      }
+    } catch (e) {
+      console.error("[refreshFmJobs] failed", e);
+    } finally {
+      setFmJobsRefreshing(false);
+    }
+  }, []);
   const [showFmForm,    setShowFmForm]    = useState(false);
   const [editFmId,      setEditFmId]      = useState(null);
   const [fmCompanySearch, setFmCompanySearch] = useState("");
@@ -9028,10 +9044,15 @@ Example:
                           <span className="t-mono">{fmPipelineJobs.length}</span> jobs &nbsp;·&nbsp;
                           <span className="t-mono">{fmt(totalFmPipeline)}</span> total potential
                           <span style={{ marginLeft: 12, fontSize: 10, color: "var(--t-ink3)", textTransform: "none", letterSpacing: 0 }}>↔ drag headers to reorder</span>
+                          {fmJobsRefreshedAt && <span style={{ marginLeft: 12, fontSize: 10, color: "var(--t-ink3)", textTransform: "none", letterSpacing: 0 }}>refreshed {fmJobsRefreshedAt.toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit" })}</span>}
                         </div>
                       </div>
                       <div style={{ display: "flex", gap: 10 }}>
                         <span className="t-srch"><input className="t-input" style={{ width: 220 }} placeholder="Search…" value={search} onChange={e => setSearch(e.target.value)} /></span>
+                        <button className="t-btn t-btn-ghost" onClick={refreshFmJobs} disabled={fmJobsRefreshing} title="Refresh from Supabase (pulls vendor updates)">
+                          <span style={{ display: "inline-block", transition: "transform 0.3s", transform: fmJobsRefreshing ? "rotate(360deg)" : "none" }}>🔄</span>
+                          {fmJobsRefreshing ? "Refreshing…" : "Refresh"}
+                        </button>
                         <button className="t-btn" onClick={openAddFm}>+ Add Job</button>
                       </div>
                     </div>
@@ -11009,10 +11030,15 @@ window.addEventListener('message',function(e){
                       <span className="t-mono">{fmt(totalGross)}</span> gross &nbsp;·&nbsp;
                       <span className="t-mono">{fmt(totalProfit)}</span> profit
                       <span style={{ marginLeft: 12, fontSize: 10, color: "var(--t-ink3)", textTransform: "none", letterSpacing: 0 }}>↔ drag headers to reorder</span>
+                      {fmJobsRefreshedAt && <span style={{ marginLeft: 12, fontSize: 10, color: "var(--t-ink3)", textTransform: "none", letterSpacing: 0 }}>refreshed {fmJobsRefreshedAt.toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit" })}</span>}
                     </div>
                   </div>
                   <div style={{ display: "flex", gap: 10 }}>
                     <span className="t-srch"><input className="t-input" style={{ width: 220 }} placeholder="Search…" value={fmSearch} onChange={e => setFmSearch(e.target.value)} /></span>
+                    <button className="t-btn t-btn-ghost" onClick={refreshFmJobs} disabled={fmJobsRefreshing} title="Refresh from Supabase (pulls vendor updates)">
+                      <span style={{ display: "inline-block", transition: "transform 0.3s", transform: fmJobsRefreshing ? "rotate(360deg)" : "none" }}>🔄</span>
+                      {fmJobsRefreshing ? "Refreshing…" : "Refresh"}
+                    </button>
                     <button className="t-btn" onClick={openAddFm}>+ Add Job</button>
                   </div>
                 </div>
