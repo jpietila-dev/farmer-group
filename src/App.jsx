@@ -491,7 +491,7 @@ const CAPEX_ACTIVE_STAGES   = CAPEX_STAGES.filter(s => s.phase === "active");
 
 const FM_STAGES = [
   { id: "estimating",         label: "Estimating",          actionLabel: "Bid Due Date",    actionKey: "bidDueDate",    color: "#818CF8", phase: "pipeline" },
-  { id: "waiting_quote",      label: "Waiting for Quote",   actionLabel: "Quote Due",       actionKey: "quoteDueDate",  color: "#A78BFA", phase: "pipeline" },
+  { id: "waiting_quote",      label: "Waiting on Quotes",   actionLabel: "Quote Due",       actionKey: "quoteDueDate",  color: "#A78BFA", phase: "pipeline" },
   { id: "generate_proposal",  label: "Generate Proposal",   actionLabel: "Proposal Date",   actionKey: "proposalDate",  color: "#C084FC", phase: "pipeline" },
   { id: "owner_approval",     label: "Owner Approval",      actionLabel: "Follow-up Date",  actionKey: "followUpDate",  color: "#60A5FA", phase: "pipeline" },
   { id: "buyout",             label: "Buyout",               actionLabel: "Buyout Date",     actionKey: "buyoutDate",    color: "#FCD34D", phase: "active"   },
@@ -3352,14 +3352,13 @@ function vpStepCls(stage) {
   if (stage === "buyout") return "vp-b-buyout";
   if (stage === "owner_approval" || stage === "generate_proposal") return "vp-b-approval";
   if (stage === "do_work") return "vp-b-dowork";
-  if (stage === "estimating") return "vp-b-pending";
-  if (stage === "waiting_quote") return "vp-b-approved";
+  if (stage === "estimating" || stage === "waiting_quote") return "vp-b-pending";
   if (stage === "bill") return "vp-b-approval";
   return "vp-b-hold";
 }
 function vpStepLbl(stage) {
   if (stage === "estimating")        return "Need Estimate";
-  if (stage === "waiting_quote")     return "Waiting on Quotes";
+  if (stage === "waiting_quote")     return "Need Estimate";
   if (stage === "generate_proposal") return "Waiting for Approval";
   if (stage === "owner_approval")    return "Waiting for Approval";
   if (stage === "buyout")            return "Approved";
@@ -3396,12 +3395,12 @@ function VendorPortalAuthenticated({ sub, myJobs, fmJobs, setFmJobs, companies, 
   const setForm = (jobId, patch) => setFormState(prev => ({ ...prev, [jobId]: { ...(prev[jobId]||{}), ...patch } }));
 
   // visible jobs = filter out owner_approval (vendor doesn't act on those yet)
-  const visibleJobs = useMemo(() => myJobs.filter(j => j.stage !== "owner_approval" && j.stage !== "waiting_quote"), [myJobs]);
+  const visibleJobs = useMemo(() => myJobs.filter(j => j.stage !== "owner_approval"), [myJobs]);
 
   // stats
   const stat = {
     all:        visibleJobs.length,
-    estimating: visibleJobs.filter(j => j.stage === "estimating").length,
+    estimating: visibleJobs.filter(j => j.stage === "estimating" || j.stage === "waiting_quote").length,
     buyout:     visibleJobs.filter(j => j.stage === "buyout").length,
     do_work:    visibleJobs.filter(j => j.stage === "do_work").length,
     bill:       visibleJobs.filter(j => j.stage === "bill").length,
@@ -3410,7 +3409,10 @@ function VendorPortalAuthenticated({ sub, myJobs, fmJobs, setFmJobs, companies, 
   // filtered list
   const filtered = useMemo(() => {
     let list = visibleJobs;
-    if (filter !== "all") list = list.filter(j => j.stage === filter);
+    if (filter !== "all") {
+      if (filter === "estimating") list = list.filter(j => j.stage === "estimating" || j.stage === "waiting_quote");
+      else list = list.filter(j => j.stage === filter);
+    }
     if (search.trim()) {
       const q = search.toLowerCase();
       list = list.filter(j => {
@@ -3774,8 +3776,8 @@ function VendorPortalAuthenticated({ sub, myJobs, fmJobs, setFmJobs, companies, 
 
               return (
               <div className="vp-bp">
-                {/* ─── NEED ESTIMATE (estimating) ─── */}
-                {stage === "estimating" && (
+                {/* ─── NEED ESTIMATE (estimating + waiting_quote both treat vendor side the same) ─── */}
+                {(stage === "estimating" || stage === "waiting_quote") && (
                   <>
                     {/* NTE display */}
                     {nte > 0 && (
@@ -4015,7 +4017,7 @@ function VendorPortalAuthenticated({ sub, myJobs, fmJobs, setFmJobs, companies, 
                 )}
 
                 {/* Fallback: any other stage (shouldn't happen, but just in case) */}
-                {!["estimating", "generate_proposal", "buyout", "do_work", "bill"].includes(stage) && (
+                {!["estimating", "waiting_quote", "generate_proposal", "buyout", "do_work", "bill"].includes(stage) && (
                   <>
                     <div className="vp-locked">No actions available for this job's current stage ({stage}).</div>
                     {noteSection}
@@ -4202,7 +4204,7 @@ function VendorPortalAuthenticated({ sub, myJobs, fmJobs, setFmJobs, companies, 
             <div className="vp-est-cnt">{stat.estimating}</div>
           </div>
           {(() => {
-            const est = visibleJobs.filter(j => j.stage === "estimating");
+            const est = visibleJobs.filter(j => j.stage === "estimating" || j.stage === "waiting_quote");
             return est.length === 0
               ? <div className="vp-empty">No jobs currently need estimates. You're all caught up!</div>
               : est.map(j => <div key={j.id} data-vp-jobid={j.id}>{renderCard(j)}</div>);
@@ -17039,8 +17041,8 @@ window.addEventListener('message',function(e){
                   </select>
                 </div>
 
-                {/* -- ESTIMATING stage panel -- */}
-                {job.stage === "estimating" && (() => {
+                {/* -- ESTIMATING stage panel (also stays during waiting_quote so coordinator can see bids/path UI) -- */}
+                {(job.stage === "estimating" || job.stage === "waiting_quote") && (() => {
                   const cvNum    = Number(job.contractValue || 0);
                   const gp       = Number(job.grossProfit || 0) || (cvNum > 0 ? fmGrossProfit(cvNum) : 0);
                   const nte      = cvNum; // gross value (kept as legacy variable name in this panel)
@@ -17049,11 +17051,20 @@ window.addEventListener('message',function(e){
                   const bidInvites = job.bidInvites || []; // [{ subId, token, sentAt, price, status }]
 
                   return (
-                    <div style={{ background: "#F0F2F8", border: "1px solid #818CF840", borderRadius: 8, padding: "14px" }}>
+                    <div style={{ background: "#F0F2F8", border: "1px solid " + (job.stage === "waiting_quote" ? "#A78BFA40" : "#818CF840"), borderRadius: 8, padding: "14px" }}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-                        <div style={{ fontSize: 10, color: "#818CF8", textTransform: "uppercase", letterSpacing: "0.07em", fontWeight: 700 }}>📋 Estimating</div>
+                        <div style={{ fontSize: 10, color: job.stage === "waiting_quote" ? "#A78BFA" : "#818CF8", textTransform: "uppercase", letterSpacing: "0.07em", fontWeight: 700 }}>
+                          {job.stage === "waiting_quote" ? "⏳ Waiting on Quotes" : "📋 Estimating"}
+                        </div>
                         {estPath && (
-                          <button onClick={() => update({ estimatingPath: null })}
+                          <button onClick={() => {
+                            // Resetting path → reset stage back to estimating and clear bid invites/assignment for a clean swap
+                            const patch = { estimatingPath: null };
+                            if (job.stage === "waiting_quote") patch.stage = "estimating";
+                            if (estPath === "bid_out") patch.bidInvites = [];
+                            if (estPath === "known_vendor") patch.subcontractorId = "";
+                            update(patch);
+                          }}
                             style={{ fontSize: 9, background: "transparent", border: "none", color: "#4A5278", cursor: "pointer", fontFamily: "inherit", padding: 0 }}>
                             ← Change path
                           </button>
@@ -17119,7 +17130,9 @@ window.addEventListener('message',function(e){
                             <div style={{ fontSize: 10, color: "#4A5278", marginBottom: 4 }}>Assign Vendor</div>
                             <select className="fi" value={job.subcontractorId || ""} onChange={e => {
                               const subId = e.target.value;
-                              update({ subcontractorId: subId });
+                              // Auto-advance to waiting_quote when a vendor is first assigned
+                              const stagePatch = (subId && job.stage === "estimating") ? { stage: "waiting_quote" } : {};
+                              update({ subcontractorId: subId, ...stagePatch });
                               // Auto-tag sub as FM division when assigned from FM jobs
                               if (subId) {
                                 const sub = subcontractors.find(s => s.id === subId);
@@ -17157,7 +17170,35 @@ window.addEventListener('message',function(e){
                                   <div style={{ fontSize: 11, color: "#1A2240", marginTop: 3 }}>Vendor price: <strong>{fmt(Number(job.vendorPortalPrice||0))}</strong>{vendorNTE > 0 ? " vs NTE: " + fmt(vendorNTE) : ""}</div>
                                   {job.vendorPortalNote && <div style={{ fontSize: 10, color: "#4A5278", marginTop: 3 }}>{job.vendorPortalNote}</div>}
                                   <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
-                                    <button onClick={() => update({ stage: "generate_proposal", vendorQuotePrice: job.vendorPortalPrice })}
+                                    <button onClick={() => {
+                                      const subPrice = Number(job.vendorPortalPrice || job.vendorQuotePrice || 0);
+                                      const gpExisting = Number(job.grossProfit || 0);
+                                      const gpFinal = gpExisting > 0 ? gpExisting : fmGrossProfit(subPrice);
+                                      const grossValue = subPrice + gpFinal;
+                                      const itemDesc = (job.scopeOfWork || job.name || "Scope of work")
+                                        + (assignedSub ? " — " + assignedSub.name : "")
+                                        + (job.vendorPortalNote ? "\n" + job.vendorPortalNote : "");
+                                      update({
+                                        stage: "generate_proposal",
+                                        vendorQuotePrice: String(subPrice),
+                                        vendorQuoteScope: job.vendorPortalNote || "",
+                                        contractValue: grossValue,
+                                        grossProfit: gpFinal,
+                                      });
+                                      // Pre-populate proposal modal
+                                      setProposalJob({ ...job, contractValue: grossValue, grossProfit: gpFinal });
+                                      setProposalGrossValue(grossValue);
+                                      setProposalScope((job.scopeOfWork || job.name || "") + (job.vendorPortalNote ? "\n\nVendor notes: " + job.vendorPortalNote : ""));
+                                      setProposalNum("");
+                                      setProposalExtras({ laborBurden: 0, salesTax: 0, generalLiability: 0, permitCost: 0 });
+                                      setProposalSections([{
+                                        id: "s1", name: "01 General",
+                                        items: [
+                                          { id: "i1", desc: itemDesc, unit: "LS", qty: 1, unitPrice: subPrice, labor: 0, material: 0, sub: subPrice, misc: 0 },
+                                        ]
+                                      }]);
+                                      setShowProposal(true);
+                                    }}
                                       style={{ flex: 1, padding: "7px", borderRadius: 5, border: "none", background: "#3B6FE8", color: "#FFF", fontSize: 10, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
                                       → Generate Proposal
                                     </button>
@@ -17199,18 +17240,45 @@ window.addEventListener('message',function(e){
                         const invites = job.bidInvites || [];
                         const responded = invites.filter(i => i.price);
                         const lowestBid = responded.length ? responded.reduce((a, b) => Number(a.price) < Number(b.price) ? a : b) : null;
-                        // Helper: pick a winner — sets subcontractorId, clears bidInvites so losers stop seeing the job
+                        // Helper: pick a winner — sets subcontractorId, clears bidInvites so losers stop seeing the job,
+                        // pre-populates the proposal modal with this vendor's price+notes (reuses self-estimate path).
                         const pickWinner = (inv) => {
+                          const subPrice = Number(inv.price || 0);
+                          const grossProfit = Number(job.grossProfit || 0) || fmGrossProfit(subPrice);
+                          const grossValue = subPrice + grossProfit;
+                          const winnerSub = subcontractors.find(s => s.id === inv.subId);
+                          const itemDesc = (job.scopeOfWork || job.name || "Scope of work")
+                            + (winnerSub ? " — " + winnerSub.name : "")
+                            + (inv.notes ? "\n" + inv.notes : "");
+
+                          // 1. Persist the winning bid + jump to generate_proposal
                           update({
                             subcontractorId: inv.subId,
-                            vendorQuotePrice: inv.price,
-                            vendorPortalPrice: inv.price,
+                            vendorQuotePrice: String(subPrice),
+                            vendorQuoteScope: inv.notes || "",
+                            vendorPortalPrice: String(subPrice),
                             vendorPortalStatus: "quote_submitted",
                             vendorPortalNote: inv.notes || "",
                             estimatingPath: "known_vendor",
                             bidInvites: [], // Clear invites so non-winners lose portal visibility
+                            contractValue: grossValue,
+                            grossProfit,
                             stage: "generate_proposal",
                           });
+
+                          // 2. Pre-populate proposal modal (same shape as self-estimate path)
+                          setProposalJob({ ...job, contractValue: grossValue, grossProfit, subcontractorId: inv.subId });
+                          setProposalGrossValue(grossValue);
+                          setProposalScope((job.scopeOfWork || job.name || "") + (inv.notes ? "\n\nVendor notes: " + inv.notes : ""));
+                          setProposalNum("");
+                          setProposalExtras({ laborBurden: 0, salesTax: 0, generalLiability: 0, permitCost: 0 });
+                          setProposalSections([{
+                            id: "s1", name: "01 General",
+                            items: [
+                              { id: "i1", desc: itemDesc, unit: "LS", qty: 1, unitPrice: subPrice, labor: 0, material: 0, sub: subPrice, misc: 0 },
+                            ]
+                          }]);
+                          setShowProposal(true);
                         };
                         return (
                           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
@@ -17279,7 +17347,10 @@ window.addEventListener('message',function(e){
                                 <select className="fi" value="" onChange={e => {
                                   if (!e.target.value) return;
                                   // Add invite — vendor immediately sees this job in their portal (bidInvites filter)
-                                  update({ bidInvites: [...invites, { subId: e.target.value, invitedAt: new Date().toISOString(), price: null, notes: "", status: "invited" }] });
+                                  // Auto-advance to waiting_quote on first invite
+                                  const newInvites = [...invites, { subId: e.target.value, invitedAt: new Date().toISOString(), price: null, notes: "", status: "invited" }];
+                                  const stagePatch = (invites.length === 0 && job.stage === "estimating") ? { stage: "waiting_quote" } : {};
+                                  update({ bidInvites: newInvites, ...stagePatch });
                                 }}>
                                   <option value="">+ Add vendor to bid list…</option>
                                   {available.map(s => <option key={s.id} value={s.id}>{s.name}{s.trade ? " — " + s.trade : ""}{!s.portalEnabled ? " ⚠ no portal" : ""}</option>)}
@@ -17602,67 +17673,7 @@ window.addEventListener('message',function(e){
                   );
                 })()}
 
-                {/* -- WAITING FOR QUOTE panel -- */}
-                {job.stage === "waiting_quote" && (() => {
-                  const nte = Number(job.contractValue || 0);
-                  const gp = Number(job.grossProfit || 0) || (nte > 0 ? fmGrossProfit(nte) : 0);
-                  const vendorNTE = Math.max(0, nte - gp);
-                  const quotePrice = Number(job.vendorQuotePrice || 0);
-                  const withinNTE = quotePrice > 0 && quotePrice <= vendorNTE;
-                  return (
-                    <div style={{ background: "#F0F2F8", border: "1px solid #A78BFA40", borderRadius: 8, padding: "14px" }}>
-                      <div style={{ fontSize: 10, color: "#A78BFA", textTransform: "uppercase", letterSpacing: "0.07em", fontWeight: 700, marginBottom: 12 }}>⏳ Waiting for Quote</div>
-                      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                        {/* Vendor NTE prominently displayed */}
-                        <div style={{ background: "#FCD34D10", border: "1px solid #FCD34D30", borderRadius: 6, padding: "10px 12px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                          <div>
-                            <div style={{ fontSize: 9, color: "#FCD34D", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 2 }}>Vendor Approved For</div>
-                            <div style={{ fontSize: 20, fontWeight: 700, color: "#FCD34D" }}>{fmt(vendorNTE)}</div>
-                          </div>
-                          <div style={{ textAlign: "right" }}>
-                            <div style={{ fontSize: 9, color: "#4A5278", marginBottom: 2 }}>Our Gross Value</div>
-                            <div style={{ fontSize: 13, fontWeight: 600, color: "#1A2240" }}>{fmt(nte)}</div>
-                            <div style={{ fontSize: 9, color: "#4ADE80" }}>GP: {fmt(gp)}</div>
-                          </div>
-                        </div>
-                        {job.subSentAt && <div style={{ fontSize: 10, color: "#353C62" }}>📤 Sent: {new Date(job.subSentAt).toLocaleDateString()}</div>}
-                        <div>
-                          <div style={{ fontSize: 10, color: "#4A5278", marginBottom: 4 }}>Quote Received — Price</div>
-                          <input className="fi" type="number" placeholder="Sub's quoted price"
-                            value={job.vendorQuotePrice || ""}
-                            onChange={e => update({ vendorQuotePrice: e.target.value })} />
-                        </div>
-                        <div>
-                          <div style={{ fontSize: 10, color: "#4A5278", marginBottom: 4 }}>Quote Scope</div>
-                          <textarea className="fi" rows={2} placeholder="What the sub quoted…"
-                            value={job.vendorQuoteScope || ""}
-                            onChange={e => update({ vendorQuoteScope: e.target.value })}
-                            style={{ resize: "vertical" }} />
-                        </div>
-                        {quotePrice > 0 && (
-                          <div style={{ background: withinNTE ? "#4ADE8015" : "#F8717115", border: "1px solid " + (withinNTE ? "#4ADE8030" : "#F8717130"), borderRadius: 6, padding: "8px 12px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                            <span style={{ fontSize: 12, fontWeight: 700, color: "#1A2240" }}>Quote: {fmt(quotePrice)}</span>
-                            <span style={{ fontSize: 11, color: withinNTE ? "#4ADE80" : "#F87171", fontWeight: 600 }}>
-                              {withinNTE ? "✓ Within vendor NTE" : "⚠ Exceeds vendor NTE by " + fmt(quotePrice - vendorNTE)}
-                            </span>
-                          </div>
-                        )}
-                        {(() => {
-                          const hasPrice = quotePrice > 0;
-                          const hasScope = !!(job.vendorQuoteScope || "").trim();
-                          const ready = hasPrice && hasScope;
-                          return (
-                            <button onClick={() => ready && update({ stage: "generate_proposal" })}
-                              style={{ width: "100%", padding: "10px", borderRadius: 6, border: ready ? "none" : "1px solid #3D4570", cursor: ready ? "pointer" : "not-allowed", fontFamily: "inherit", fontSize: 12, fontWeight: 700,
-                                background: ready ? "#C084FC" : "transparent", color: ready ? "#1A2240" : "#4A5278", transition: "all 0.2s" }}>
-                              {ready ? "→ Generate Proposal" : "Enter price + scope to continue"}
-                            </button>
-                          );
-                        })()}
-                      </div>
-                    </div>
-                  );
-                })()}
+                {/* -- WAITING FOR QUOTE panel: now folded into the Estimating panel above (which renders on both estimating + waiting_quote stages) -- */}
 
                 {/* -- GENERATE PROPOSAL panel -- */}
                 {job.stage === "generate_proposal" && (
