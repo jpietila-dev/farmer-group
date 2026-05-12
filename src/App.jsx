@@ -545,6 +545,125 @@ const fmStageDotColor = stage => {
 // Keep CAPEX_FM_STAGES as alias for CapEx (uses same 5-stage system)
 const CAPEX_FM_STAGES = CAPEX_STAGES;
 
+// ─── Column-order persistence ────────────────────────────────────────
+// One shared set of prefs per table (no auth yet). Hydrates from Supabase
+// on first use, falls back to localStorage cache, and writes through to both.
+const COL_PREFS_CACHE = {}; // in-memory mirror to avoid re-fetching per render
+function useColumnOrder(tableId, defaultIds) {
+  const [order, setOrderState] = React.useState(() => {
+    // 1. In-memory cache
+    if (COL_PREFS_CACHE[tableId]) return COL_PREFS_CACHE[tableId];
+    // 2. localStorage cache
+    try {
+      const raw = localStorage.getItem("colprefs:" + tableId);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          COL_PREFS_CACHE[tableId] = parsed;
+          return parsed;
+        }
+      }
+    } catch (e) {}
+    return defaultIds;
+  });
+
+  // Reconcile with defaultIds — drop unknowns, append new columns at end
+  React.useEffect(() => {
+    const known = new Set(defaultIds);
+    const filtered = order.filter(id => known.has(id));
+    const missing = defaultIds.filter(id => !order.includes(id));
+    if (filtered.length !== order.length || missing.length > 0) {
+      const reconciled = [...filtered, ...missing];
+      setOrderState(reconciled);
+      COL_PREFS_CACHE[tableId] = reconciled;
+    }
+  }, [defaultIds.join("|")]);
+
+  // Fetch latest from Supabase once on mount (overrides localStorage if found)
+  React.useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await supa.from("user_column_prefs").select("column_order").eq("table_id", tableId).single();
+        if (cancelled) return;
+        const remote = res?.data?.column_order;
+        if (Array.isArray(remote) && remote.length > 0) {
+          // Reconcile remote with current defaults
+          const known = new Set(defaultIds);
+          const filtered = remote.filter(id => known.has(id));
+          const missing = defaultIds.filter(id => !remote.includes(id));
+          const reconciled = [...filtered, ...missing];
+          COL_PREFS_CACHE[tableId] = reconciled;
+          try { localStorage.setItem("colprefs:" + tableId, JSON.stringify(reconciled)); } catch(e) {}
+          setOrderState(reconciled);
+        }
+      } catch (e) {}
+    })();
+    return () => { cancelled = true; };
+  }, [tableId]);
+
+  const setOrder = React.useCallback((nextOrder) => {
+    setOrderState(nextOrder);
+    COL_PREFS_CACHE[tableId] = nextOrder;
+    try { localStorage.setItem("colprefs:" + tableId, JSON.stringify(nextOrder)); } catch(e) {}
+    // Fire-and-forget persist to Supabase
+    (async () => {
+      try {
+        await supa.from("user_column_prefs").upsert({ table_id: tableId, column_order: nextOrder, updated_at: new Date().toISOString() }, { onConflict: "table_id" });
+      } catch (e) {}
+    })();
+  }, [tableId]);
+
+  return [order, setOrder];
+}
+
+// Helper: drag handlers used by the headers in restyled tables.
+// Returns { onDragStart, onDragOver, onDragLeave, onDrop, onDragEnd, className } for each <th>.
+function useDragColumns(order, setOrder) {
+  const [draggingId, setDraggingId] = React.useState(null);
+  const [dropTarget, setDropTarget] = React.useState(null); // { id, side: "left"|"right" }
+  const handlersFor = (colId) => ({
+    draggable: true,
+    onDragStart: (e) => {
+      setDraggingId(colId);
+      try { e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", colId); } catch(_){}
+    },
+    onDragOver: (e) => {
+      if (!draggingId || draggingId === colId) return;
+      e.preventDefault();
+      try { e.dataTransfer.dropEffect = "move"; } catch(_){}
+      const rect = e.currentTarget.getBoundingClientRect();
+      const side = (e.clientX - rect.left) < rect.width / 2 ? "left" : "right";
+      setDropTarget({ id: colId, side });
+    },
+    onDragLeave: () => {
+      // Only clear if leaving this specific target
+      setDropTarget(prev => prev?.id === colId ? null : prev);
+    },
+    onDrop: (e) => {
+      e.preventDefault();
+      if (!draggingId || draggingId === colId) { setDraggingId(null); setDropTarget(null); return; }
+      const fromIdx = order.indexOf(draggingId);
+      const toIdx = order.indexOf(colId);
+      if (fromIdx < 0 || toIdx < 0) { setDraggingId(null); setDropTarget(null); return; }
+      // Remove dragging, insert at target position (adjusted for side)
+      const next = order.filter(id => id !== draggingId);
+      const adjTo = next.indexOf(colId);
+      const insertAt = (dropTarget?.side === "right") ? adjTo + 1 : adjTo;
+      next.splice(insertAt, 0, draggingId);
+      setOrder(next);
+      setDraggingId(null);
+      setDropTarget(null);
+    },
+    onDragEnd: () => { setDraggingId(null); setDropTarget(null); },
+    className: "t-th-drag"
+      + (draggingId === colId ? " t-th-dragging" : "")
+      + (dropTarget?.id === colId && dropTarget?.side === "left" ? " t-th-drop-left" : "")
+      + (dropTarget?.id === colId && dropTarget?.side === "right" ? " t-th-drop-right" : ""),
+  });
+  return handlersFor;
+}
+
 const VENDOR_NEXT_STEPS = [
   { id: "need_quote",         label: "Need Quote",          hasQuote: true  },
   { id: "awaiting_confirm",   label: "Awaiting Confirmation", hasQuote: false },
@@ -4097,6 +4216,19 @@ export default function App() {
   const [activeBU,  setActiveBU]  = useState("all");
   const [activeNav, setActiveNav] = useState("dashboard");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+
+  // ── Column-order prefs (drag-to-reorder table columns) ────────────
+  const [fmActiveJobsColOrder, setFmActiveJobsColOrder] = useColumnOrder(
+    "fm_active_jobs",
+    ["store", "project", "scope", "company", "customer", "site", "vendor", "value", "profit", "schedule", "stage", "vendorNext"]
+  );
+  const fmActiveJobsDrag = useDragColumns(fmActiveJobsColOrder, setFmActiveJobsColOrder);
+  const [fmPipelineColOrder, setFmPipelineColOrder] = useColumnOrder(
+    "fm_pipeline",
+    ["store", "project", "scope", "company", "customer", "site", "vendor", "value", "actionDate", "stage", "coordinator"]
+  );
+  const fmPipelineDrag = useDragColumns(fmPipelineColOrder, setFmPipelineColOrder);
+
   const [crmMode, setCrmMode] = useState(false); // top-level CRM/Sales view
   const [salesTab, setSalesTab] = useState("major"); // major | capex | acquisition
   const [crmTagFilter, setCrmTagFilter] = useState(null); // null | "FM" | "CapEx" | "Major" | "Lawn" | "Snow"
@@ -5435,6 +5567,15 @@ Return ONLY valid JSON, no markdown, no extra text:
     .t-status-offline { background:var(--t-danger-bg); color:var(--t-danger); border:1px solid rgba(153,27,27,0.2); }
     .t-status-dot { width:6px; height:6px; border-radius:50%; background:currentColor; }
     .t-owner-badge { background:var(--t-ink); color:#fff; font-size:11px; font-weight:600; padding:4px 12px; border-radius:5px; letterSpacing:0.08em; }
+
+    /* ── Draggable column headers ── */
+    .t-th-drag { cursor:grab; user-select:none; position:relative; }
+    .t-th-drag:active { cursor:grabbing; }
+    .t-th-drag::before { content:"⋮⋮"; position:absolute; left:4px; top:50%; transform:translateY(-50%); font-size:10px; color:var(--t-ink3); opacity:0; transition:opacity 0.12s; letter-spacing:-1px; }
+    .t-th-drag:hover::before { opacity:0.55; }
+    .t-th-drag.t-th-dragging { opacity:0.4; background:var(--t-paper); }
+    .t-th-drag.t-th-drop-left { box-shadow:inset 3px 0 0 var(--t-ink); }
+    .t-th-drag.t-th-drop-right { box-shadow:inset -3px 0 0 var(--t-ink); }
   `;
 
   const panelOpen = selectedJob || selectedOpp || selectedCompany || selectedSite || selectedCapexJob || selectedFmJob;
@@ -8805,6 +8946,56 @@ Example:
                   return ad.localeCompare(bd);
                 });
                 const totalFmPipeline = fmPipelineJobs.reduce((s,j) => s + (j.contractValue||0), 0);
+
+                // Column definitions
+                const COLS = {
+                  store: { label: "Store", width: 80, render: j => <span className="t-mono-tag">{j.storeCode || "—"}</span> },
+                  project: { label: "Project #", width: 100, render: j => <span className="t-mono-tag">{j.projectNo || "—"}</span> },
+                  scope: { label: "Scope of Work", width: 240, className: "t-td-wrap", style: { fontWeight: 500 }, render: j => j.name },
+                  company: { label: "Company", width: 160, className: "t-td-wrap", render: j => {
+                    const co = companies.find(c => c.id === j.companyId);
+                    return co ? <span>🏢 {co.name}</span> : <span style={{ color: "var(--t-ink3)" }}>—</span>;
+                  }},
+                  customer: { label: "Customer", width: 140, className: "t-td-wrap", render: j => {
+                    const ct = contacts.find(c => c.id === j.approverContactId);
+                    const ctName = ct ? `${ct.firstName||""} ${ct.lastName||""}`.trim() : "";
+                    return ctName ? <span>👤 {ctName}</span> : <span style={{ color: "var(--t-ink3)" }}>—</span>;
+                  }},
+                  site: { label: "Site", width: 200, className: "t-td-wrap", style: { color: "var(--t-ink2)" }, render: j => {
+                    const site = sites.find(s => s.id === j.siteId);
+                    return site ? `📍 ${site.address || site.storeNumber || "Site"}` : "—";
+                  }},
+                  vendor: { label: "Vendor", width: 150, render: j => {
+                    const sub = subcontractors.find(s => s.id === j.subcontractorId);
+                    return sub ? <span className="t-pill t-pill-approval">{sub.name}</span> : <span style={{ color: "var(--t-ink3)" }}>—</span>;
+                  }},
+                  value: { label: "Value", width: 100, style: { fontWeight: 600 }, render: j => j.contractValue ? fmt(j.contractValue) : "—" },
+                  actionDate: { label: "Action Date", width: 130, render: j => {
+                    const st = FM_STAGES.find(s => s.id === j.stage) || FM_STAGES[0];
+                    const actionDate = j[st.actionKey];
+                    const overdue = actionDate && new Date(actionDate) < new Date();
+                    const soon = actionDate && !overdue && new Date(actionDate) <= new Date(Date.now() + 3*86400000);
+                    return (
+                      <span style={{ color: overdue ? "var(--t-danger)" : soon ? "var(--t-warn)" : "var(--t-ink2)", fontWeight: overdue || soon ? 600 : 400 }}>
+                        {actionDate ? (
+                          <>
+                            <div style={{ fontFamily: "var(--t-mono)", fontSize: 12 }}>{actionDate}{overdue ? " ⚠" : soon ? " ◷" : ""}</div>
+                            <div style={{ fontSize: 10, color: "var(--t-ink3)", marginTop: 1, fontWeight: 400 }}>{st.actionLabel}</div>
+                          </>
+                        ) : "—"}
+                      </span>
+                    );
+                  }},
+                  stage: { label: "Stage", width: 150, render: j => {
+                    const st = FM_STAGES.find(s => s.id === j.stage) || FM_STAGES[0];
+                    return <span className={"t-pill " + fmStagePill(j.stage)}>{st.label}</span>;
+                  }},
+                  coordinator: { label: "Coordinator", width: 120, style: { color: "var(--t-ink2)", fontSize: 12 }, render: j => j.coordinator || "—" },
+                };
+
+                const order = fmPipelineColOrder;
+                const dragHandlers = fmPipelineDrag;
+
                 return (
                   <div className="t-page fade-in" style={{ background: "transparent" }}>
                     {/* Header */}
@@ -8814,6 +9005,7 @@ Example:
                         <div className="t-section-meta">
                           <span className="t-mono">{fmPipelineJobs.length}</span> jobs &nbsp;·&nbsp;
                           <span className="t-mono">{fmt(totalFmPipeline)}</span> total potential
+                          <span style={{ marginLeft: 12, fontSize: 10, color: "var(--t-ink3)", textTransform: "none", letterSpacing: 0 }}>↔ drag headers to reorder</span>
                         </div>
                       </div>
                       <div style={{ display: "flex", gap: 10 }}>
@@ -8840,63 +9032,41 @@ Example:
                     {/* Table */}
                     <div className="t-table-wrap">
                       <div className="t-table-scroll">
-                        <table className="t-table" style={{ minWidth: 1340 }}>
+                        <table className="t-table" style={{ minWidth: order.reduce((s, id) => s + (COLS[id]?.width || 100), 0) + 150 }}>
                           <thead>
                             <tr>
                               <th style={{ width: 32 }}></th>
-                              <th style={{ width: 80 }}>Store</th>
-                              <th style={{ width: 100 }}>Project #</th>
-                              <th style={{ width: 240 }}>Scope of Work</th>
-                              <th style={{ width: 160 }}>Company</th>
-                              <th style={{ width: 140 }}>Customer</th>
-                              <th style={{ width: 200 }}>Site</th>
-                              <th style={{ width: 150 }}>Vendor</th>
-                              <th style={{ width: 100 }}>Value</th>
-                              <th style={{ width: 130 }}>Action Date</th>
-                              <th style={{ width: 150 }}>Stage</th>
-                              <th style={{ width: 120 }}>Coordinator</th>
+                              {order.map(colId => {
+                                const col = COLS[colId];
+                                if (!col) return null;
+                                return (
+                                  <th key={colId} style={{ width: col.width, paddingLeft: 18 }} {...dragHandlers(colId)}>
+                                    {col.label}
+                                  </th>
+                                );
+                              })}
                               <th style={{ width: 110 }}></th>
                             </tr>
                           </thead>
                           <tbody>
                             {fmPipelineJobs.length === 0 && (
-                              <tr style={{ cursor: "default" }}><td colSpan={13} className="t-empty">No jobs in pipeline</td></tr>
+                              <tr style={{ cursor: "default" }}><td colSpan={order.length + 2} className="t-empty">No jobs in pipeline</td></tr>
                             )}
                             {fmPipelineJobs.map(job => {
                               const st = FM_STAGES.find(s => s.id === job.stage) || FM_STAGES[0];
-                              const co = companies.find(c => c.id === job.companyId);
-                              const site = sites.find(s => s.id === job.siteId);
-                              const ct = contacts.find(c => c.id === job.approverContactId);
-                              const sub = subcontractors.find(s => s.id === job.subcontractorId);
-                              const ctName = ct ? `${ct.firstName||""} ${ct.lastName||""}`.trim() : "";
-                              const actionDate = job[st.actionKey];
-                              const overdue = actionDate && new Date(actionDate) < new Date();
-                              const soon = actionDate && !overdue && new Date(actionDate) <= new Date(Date.now() + 3*86400000);
                               return (
                                 <tr key={job.id} onClick={() => setFmFullScreenJob(job)}>
                                   {/* Stage dot */}
                                   <td>
                                     <span className="t-stage-dot" style={{ background: fmStageDotColor(job.stage) }} title={st.label} />
                                   </td>
-                                  <td><span className="t-mono-tag">{job.storeCode || "—"}</span></td>
-                                  <td><span className="t-mono-tag">{job.projectNo || "—"}</span></td>
-                                  <td className="t-td-wrap" style={{ fontWeight: 500 }}>{job.name}</td>
-                                  <td className="t-td-wrap">{co ? <span>🏢 {co.name}</span> : <span style={{ color: "var(--t-ink3)" }}>—</span>}</td>
-                                  <td className="t-td-wrap">{ctName ? <span>👤 {ctName}</span> : <span style={{ color: "var(--t-ink3)" }}>—</span>}</td>
-                                  <td className="t-td-wrap" style={{ color: "var(--t-ink2)" }}>{site ? `📍 ${site.address || site.storeNumber || "Site"}` : "—"}</td>
-                                  <td>{sub ? <span className="t-pill t-pill-approval">{sub.name}</span> : <span style={{ color: "var(--t-ink3)" }}>—</span>}</td>
-                                  <td style={{ fontWeight: 600 }}>{job.contractValue ? fmt(job.contractValue) : "—"}</td>
-                                  {/* Action Date */}
-                                  <td style={{ color: overdue ? "var(--t-danger)" : soon ? "var(--t-warn)" : "var(--t-ink2)", fontWeight: overdue || soon ? 600 : 400 }}>
-                                    {actionDate ? (
-                                      <>
-                                        <div style={{ fontFamily: "var(--t-mono)", fontSize: 12 }}>{actionDate}{overdue ? " ⚠" : soon ? " ◷" : ""}</div>
-                                        <div style={{ fontSize: 10, color: "var(--t-ink3)", marginTop: 1, fontWeight: 400 }}>{st.actionLabel}</div>
-                                      </>
-                                    ) : "—"}
-                                  </td>
-                                  <td><span className={"t-pill " + fmStagePill(job.stage)}>{st.label}</span></td>
-                                  <td style={{ color: "var(--t-ink2)", fontSize: 12 }}>{job.coordinator || "—"}</td>
+                                  {order.map(colId => {
+                                    const col = COLS[colId];
+                                    if (!col) return null;
+                                    return (
+                                      <td key={colId} className={col.className || ""} style={col.style || {}}>{col.render(job)}</td>
+                                    );
+                                  })}
                                   {/* Actions */}
                                   <td onClick={e => e.stopPropagation()}>
                                     <div style={{ display: "flex", gap: 4 }}>
@@ -8922,9 +9092,12 @@ Example:
                           {fmPipelineJobs.length > 0 && (
                             <tfoot>
                               <tr>
-                                <td colSpan={8} className="t-eyebrow">Totals</td>
-                                <td style={{ fontWeight: 700 }}>{fmt(totalFmPipeline)}</td>
-                                <td colSpan={4}></td>
+                                <td className="t-eyebrow">Totals</td>
+                                {order.map(colId => {
+                                  if (colId === "value")  return <td key={colId} style={{ fontWeight: 700 }}>{fmt(totalFmPipeline)}</td>;
+                                  return <td key={colId}></td>;
+                                })}
+                                <td></td>
                               </tr>
                             </tfoot>
                           )}
@@ -10706,6 +10879,103 @@ window.addEventListener('message',function(e){
             });
             const totalGross  = filtered.reduce((s,j) => s + (j.contractValue||0), 0);
             const totalProfit = filtered.reduce((s,j) => s + (j.grossProfit||0), 0);
+
+            // ── Column definitions (id, label, width, render) ──
+            const COLS = {
+              store: { label: "Store", width: 80, render: j => <span className="t-mono-tag">{j.storeCode || "—"}</span> },
+              project: { label: "Project #", width: 100, render: j => <span className="t-mono-tag">{j.projectNo || "—"}</span> },
+              scope: { label: "Scope of Work", width: 240, className: "t-td-wrap", style: { fontWeight: 500 }, render: j => j.name },
+              company: { label: "Company", width: 160, className: "t-td-wrap", render: j => {
+                const co = companies.find(c => c.id === j.companyId);
+                return co ? <span>🏢 {co.name}</span> : <span style={{ color: "var(--t-ink3)" }}>—</span>;
+              }},
+              customer: { label: "Customer", width: 140, className: "t-td-wrap", render: j => {
+                const ct = contacts.find(c => c.id === j.approverContactId);
+                const ctName = ct ? `${ct.firstName||""} ${ct.lastName||""}`.trim() : "";
+                return ctName ? <span>👤 {ctName}</span> : <span style={{ color: "var(--t-ink3)" }}>—</span>;
+              }},
+              site: { label: "Site", width: 200, className: "t-td-wrap", style: { color: "var(--t-ink2)" }, render: j => {
+                const site = sites.find(s => s.id === j.siteId);
+                return site ? `📍 ${site.address || site.storeNumber || "Site"}` : "—";
+              }},
+              vendor: { label: "Vendor", width: 150, stopPropagation: true, style: { position: "relative" }, render: j => {
+                const sub = subcontractors.find(s => s.id === j.subcontractorId);
+                const pickerOpen = showVendorPickerForJob === j.id;
+                const activeSubs = subcontractors.filter(s => !s.archived);
+                const filteredSubs = vendorPickerSearch
+                  ? activeSubs.filter(s =>
+                      (s.name||"").toLowerCase().includes(vendorPickerSearch.toLowerCase()) ||
+                      (s.trade||"").toLowerCase().includes(vendorPickerSearch.toLowerCase()) ||
+                      (s.services||[]).some(sv => (sv||"").toLowerCase().includes(vendorPickerSearch.toLowerCase()))
+                    )
+                  : activeSubs;
+                return (
+                  <>
+                    {pickerOpen && (
+                      <div style={{ position: "absolute", top: "calc(100% - 4px)", left: 8, zIndex: 50, width: 300, background: "var(--t-surface)", border: "1px solid var(--t-line3)", borderRadius: "var(--t-rlg)", boxShadow: "0 12px 32px rgba(0,0,0,0.14)", padding: 12 }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                          <div className="t-eyebrow">Assign Vendor</div>
+                          <button onClick={() => { setShowVendorPickerForJob(null); setVendorPickerSearch(""); }}
+                            style={{ background: "transparent", border: "none", color: "var(--t-ink3)", cursor: "pointer", fontSize: 14, padding: 0 }}>✕</button>
+                        </div>
+                        <input autoFocus className="t-input" style={{ fontSize: 12, marginBottom: 8 }} placeholder="Search name, trade, service…"
+                          value={vendorPickerSearch} onChange={e => setVendorPickerSearch(e.target.value)} />
+                        <div style={{ maxHeight: 260, overflowY: "auto", display: "flex", flexDirection: "column", gap: 3 }}>
+                          {filteredSubs.length === 0 && (
+                            <div className="t-empty" style={{ padding: 16, fontSize: 12 }}>No vendors match</div>
+                          )}
+                          {filteredSubs.slice(0, 50).map(s => (
+                            <div key={s.id} onClick={() => { updateFmJobPersist(j.id, { subcontractorId: s.id }); setShowVendorPickerForJob(null); setVendorPickerSearch(""); }}
+                              style={{ padding: "8px 10px", borderRadius: 6, cursor: "pointer", background: j.subcontractorId === s.id ? "var(--t-paper)" : "transparent", border: "1px solid " + (j.subcontractorId === s.id ? "var(--t-line3)" : "transparent") }}
+                              onMouseEnter={e => { if (j.subcontractorId !== s.id) e.currentTarget.style.background = "var(--t-paper)"; }}
+                              onMouseLeave={e => { if (j.subcontractorId !== s.id) e.currentTarget.style.background = "transparent"; }}>
+                              <div style={{ fontSize: 13, fontWeight: 600 }}>{s.name}</div>
+                              {(s.trade || (s.services||[]).length > 0) && (
+                                <div style={{ fontSize: 11, color: "var(--t-ink3)", marginTop: 2 }}>
+                                  {s.trade}{s.trade && (s.services||[]).length > 0 ? " · " : ""}{(s.services||[]).slice(0,3).join(", ")}
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                        {j.subcontractorId && (
+                          <button onClick={() => { updateFmJobPersist(j.id, { subcontractorId: "" }); setShowVendorPickerForJob(null); setVendorPickerSearch(""); }}
+                            className="t-btn t-btn-ghost t-btn-danger t-btn-sm" style={{ width: "100%", marginTop: 8, justifyContent: "center" }}>
+                            Clear vendor
+                          </button>
+                        )}
+                      </div>
+                    )}
+                    {sub ? (
+                      <button onClick={() => { setShowVendorPickerForJob(j.id); setVendorPickerSearch(""); }}
+                        className="t-pill t-pill-approval" style={{ border: "none", cursor: "pointer", fontFamily: "inherit" }}>
+                        {sub.name}
+                      </button>
+                    ) : (
+                      <button onClick={() => { setShowVendorPickerForJob(j.id); setVendorPickerSearch(""); }}
+                        style={{ background: "transparent", color: "var(--t-ink2)", padding: "4px 10px", borderRadius: 6, fontSize: 11, whiteSpace: "nowrap", border: "1px dashed var(--t-line3)", cursor: "pointer", fontFamily: "inherit" }}>
+                        + Add Vendor
+                      </button>
+                    )}
+                  </>
+                );
+              }},
+              value: { label: "Value", width: 110, style: { fontWeight: 600 }, render: j => fmt(j.contractValue) },
+              profit: { label: "Profit", width: 110, style: { fontWeight: 600, color: "var(--t-dowork)" }, render: j => fmt(j.grossProfit) },
+              schedule: { label: "Schedule", width: 120, render: j => (
+                <span style={{ fontFamily: "var(--t-mono)", fontSize: 12, color: j.stage === "do_work" && j.startDate ? "var(--t-dowork)" : "var(--t-ink2)", fontWeight: j.stage === "do_work" && j.startDate ? 600 : 400 }}>
+                  {j.startDate ? (<>{j.startDate}{j.stage === "do_work" && <span style={{ marginLeft: 4, fontSize: 10 }}>📅</span>}</>) : "—"}
+                </span>
+              )},
+              stage: { label: "Stage", width: 140, render: j => {
+                const st = FM_STAGES.find(s => s.id === j.stage) || FM_STAGES[0];
+                return <span className={"t-pill " + fmStagePill(j.stage)}>{st.label}</span>;
+              }},
+              vendorNext: { label: "Vendor Next", width: 140, className: "t-td-wrap", style: { color: "var(--t-ink2)", fontSize: 12, maxWidth: 140 }, render: j => VENDOR_NEXT_STEPS.find(v => v.id === j.vendorNextStep)?.label || j.vendorNextStep || "—" },
+            };
+            const order = fmActiveJobsColOrder;
+            const dragHandlers = fmActiveJobsDrag;
+
             return (
               <div className="t-page fade-in" style={{ background: "transparent" }}>
                 {/* Header */}
@@ -10716,6 +10986,7 @@ window.addEventListener('message',function(e){
                       <span className="t-mono">{filtered.length}</span> jobs &nbsp;·&nbsp;
                       <span className="t-mono">{fmt(totalGross)}</span> gross &nbsp;·&nbsp;
                       <span className="t-mono">{fmt(totalProfit)}</span> profit
+                      <span style={{ marginLeft: 12, fontSize: 10, color: "var(--t-ink3)", textTransform: "none", letterSpacing: 0 }}>↔ drag headers to reorder</span>
                     </div>
                   </div>
                   <div style={{ display: "flex", gap: 10 }}>
@@ -10756,129 +11027,46 @@ window.addEventListener('message',function(e){
                 {/* Table */}
                 <div className="t-table-wrap">
                   <div className="t-table-scroll">
-                    <table className="t-table" style={{ minWidth: 1340 }}>
+                    <table className="t-table" style={{ minWidth: order.reduce((s, id) => s + (COLS[id]?.width || 100), 0) + 120 }}>
                       <thead>
                         <tr>
                           <th style={{ width: 32 }}></th>
-                          <th style={{ width: 80 }}>Store</th>
-                          <th style={{ width: 100 }}>Project #</th>
-                          <th style={{ width: 240 }}>Scope of Work</th>
-                          <th style={{ width: 160 }}>Company</th>
-                          <th style={{ width: 140 }}>Customer</th>
-                          <th style={{ width: 200 }}>Site</th>
-                          <th style={{ width: 150 }}>Vendor</th>
-                          <th style={{ width: 110 }}>Value</th>
-                          <th style={{ width: 110 }}>Profit</th>
-                          <th style={{ width: 110 }}>Schedule</th>
-                          <th style={{ width: 140 }}>Stage</th>
-                          <th style={{ width: 140 }}>Vendor Next</th>
+                          {order.map(colId => {
+                            const col = COLS[colId];
+                            if (!col) return null;
+                            return (
+                              <th key={colId} style={{ width: col.width, paddingLeft: 18 }} {...dragHandlers(colId)}>
+                                {col.label}
+                              </th>
+                            );
+                          })}
                           <th style={{ width: 80 }}></th>
                         </tr>
                       </thead>
                       <tbody>
                         {filtered.length === 0 && (
-                          <tr style={{ cursor: "default" }}><td colSpan={14} className="t-empty">No jobs found</td></tr>
+                          <tr style={{ cursor: "default" }}><td colSpan={order.length + 2} className="t-empty">No jobs found</td></tr>
                         )}
                         {filtered.map(job => {
-                          const co   = companies.find(c => c.id === job.companyId);
-                          const site = sites.find(s => s.id === job.siteId);
-                          const ct   = contacts.find(c => c.id === job.approverContactId);
-                          const sub  = subcontractors.find(s => s.id === job.subcontractorId);
                           const stMeta = FM_STAGES.find(s => s.id === job.stage) || FM_STAGES[0];
-                          const ctName = ct ? `${ct.firstName||""} ${ct.lastName||""}`.trim() : "";
-                          const pickerOpen = showVendorPickerForJob === job.id;
-                          const activeSubs = subcontractors.filter(s => !s.archived);
-                          const filteredSubs = vendorPickerSearch
-                            ? activeSubs.filter(s =>
-                                (s.name||"").toLowerCase().includes(vendorPickerSearch.toLowerCase()) ||
-                                (s.trade||"").toLowerCase().includes(vendorPickerSearch.toLowerCase()) ||
-                                (s.services||[]).some(sv => (sv||"").toLowerCase().includes(vendorPickerSearch.toLowerCase()))
-                              )
-                            : activeSubs;
                           return (
                             <tr key={job.id} onClick={() => setFmFullScreenJob(job)}>
                               {/* Stage dot */}
                               <td>
                                 <span className="t-stage-dot" style={{ background: fmStageDotColor(job.stage) }} title={stMeta.label} />
                               </td>
-                              {/* Store */}
-                              <td><span className="t-mono-tag">{job.storeCode || "—"}</span></td>
-                              {/* Project # */}
-                              <td><span className="t-mono-tag">{job.projectNo || "—"}</span></td>
-                              {/* Scope */}
-                              <td className="t-td-wrap" style={{ fontWeight: 500 }}>{job.name}</td>
-                              {/* Company */}
-                              <td className="t-td-wrap">{co ? <span style={{ color: "var(--t-ink)" }}>🏢 {co.name}</span> : <span style={{ color: "var(--t-ink3)" }}>—</span>}</td>
-                              {/* Customer */}
-                              <td className="t-td-wrap">{ctName ? <span>👤 {ctName}</span> : <span style={{ color: "var(--t-ink3)" }}>—</span>}</td>
-                              {/* Site */}
-                              <td className="t-td-wrap" style={{ color: "var(--t-ink2)" }}>{site ? `📍 ${site.address || site.storeNumber || "Site"}` : "—"}</td>
-                              {/* Vendor — searchable picker */}
-                              <td style={{ position: "relative" }} onClick={e => e.stopPropagation()}>
-                                {pickerOpen && (
-                                  <div style={{ position: "absolute", top: "calc(100% - 4px)", left: 8, zIndex: 50, width: 300, background: "var(--t-surface)", border: "1px solid var(--t-line3)", borderRadius: "var(--t-rlg)", boxShadow: "0 12px 32px rgba(0,0,0,0.14)", padding: 12 }}>
-                                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                                      <div className="t-eyebrow">Assign Vendor</div>
-                                      <button onClick={() => { setShowVendorPickerForJob(null); setVendorPickerSearch(""); }}
-                                        style={{ background: "transparent", border: "none", color: "var(--t-ink3)", cursor: "pointer", fontSize: 14, padding: 0 }}>✕</button>
-                                    </div>
-                                    <input autoFocus className="t-input" style={{ fontSize: 12, marginBottom: 8 }} placeholder="Search name, trade, service…"
-                                      value={vendorPickerSearch} onChange={e => setVendorPickerSearch(e.target.value)} />
-                                    <div style={{ maxHeight: 260, overflowY: "auto", display: "flex", flexDirection: "column", gap: 3 }}>
-                                      {filteredSubs.length === 0 && (
-                                        <div className="t-empty" style={{ padding: 16, fontSize: 12 }}>No vendors match</div>
-                                      )}
-                                      {filteredSubs.slice(0, 50).map(s => (
-                                        <div key={s.id} onClick={() => { updateFmJobPersist(job.id, { subcontractorId: s.id }); setShowVendorPickerForJob(null); setVendorPickerSearch(""); }}
-                                          style={{ padding: "8px 10px", borderRadius: 6, cursor: "pointer", background: job.subcontractorId === s.id ? "var(--t-paper)" : "transparent", border: "1px solid " + (job.subcontractorId === s.id ? "var(--t-line3)" : "transparent") }}
-                                          onMouseEnter={e => { if (job.subcontractorId !== s.id) e.currentTarget.style.background = "var(--t-paper)"; }}
-                                          onMouseLeave={e => { if (job.subcontractorId !== s.id) e.currentTarget.style.background = "transparent"; }}>
-                                          <div style={{ fontSize: 13, fontWeight: 600 }}>{s.name}</div>
-                                          {(s.trade || (s.services||[]).length > 0) && (
-                                            <div style={{ fontSize: 11, color: "var(--t-ink3)", marginTop: 2 }}>
-                                              {s.trade}{s.trade && (s.services||[]).length > 0 ? " · " : ""}{(s.services||[]).slice(0,3).join(", ")}
-                                            </div>
-                                          )}
-                                        </div>
-                                      ))}
-                                    </div>
-                                    {job.subcontractorId && (
-                                      <button onClick={() => { updateFmJobPersist(job.id, { subcontractorId: "" }); setShowVendorPickerForJob(null); setVendorPickerSearch(""); }}
-                                        className="t-btn t-btn-ghost t-btn-danger t-btn-sm" style={{ width: "100%", marginTop: 8, justifyContent: "center" }}>
-                                        Clear vendor
-                                      </button>
-                                    )}
-                                  </div>
-                                )}
-                                {sub ? (
-                                  <button onClick={() => { setShowVendorPickerForJob(job.id); setVendorPickerSearch(""); }}
-                                    className="t-pill t-pill-approval" style={{ border: "none", cursor: "pointer", fontFamily: "inherit" }}>
-                                    {sub.name}
-                                  </button>
-                                ) : (
-                                  <button onClick={() => { setShowVendorPickerForJob(job.id); setVendorPickerSearch(""); }}
-                                    style={{ background: "transparent", color: "var(--t-ink2)", padding: "4px 10px", borderRadius: 6, fontSize: 11, whiteSpace: "nowrap", border: "1px dashed var(--t-line3)", cursor: "pointer", fontFamily: "inherit" }}>
-                                    + Add Vendor
-                                  </button>
-                                )}
-                              </td>
-                              {/* Value */}
-                              <td style={{ fontWeight: 600 }}>{fmt(job.contractValue)}</td>
-                              {/* Profit */}
-                              <td style={{ fontWeight: 600, color: "var(--t-dowork)" }}>{fmt(job.grossProfit)}</td>
-                              {/* Start */}
-                              <td style={{ fontFamily: "var(--t-mono)", fontSize: 12, color: job.stage === "do_work" && job.startDate ? "var(--t-dowork)" : "var(--t-ink2)", fontWeight: job.stage === "do_work" && job.startDate ? 600 : 400 }}>
-                                {job.startDate ? (
-                                  <>
-                                    {job.startDate}
-                                    {job.stage === "do_work" && <span style={{ marginLeft: 4, fontSize: 10 }}>📅</span>}
-                                  </>
-                                ) : "—"}
-                              </td>
-                              {/* Stage */}
-                              <td><span className={"t-pill " + fmStagePill(job.stage)}>{stMeta.label}</span></td>
-                              {/* Vendor Next */}
-                              <td className="t-td-wrap" style={{ color: "var(--t-ink2)", fontSize: 12, maxWidth: 140 }}>{VENDOR_NEXT_STEPS.find(v => v.id === job.vendorNextStep)?.label || job.vendorNextStep || "—"}</td>
+                              {order.map(colId => {
+                                const col = COLS[colId];
+                                if (!col) return null;
+                                const tdProps = {
+                                  className: col.className || "",
+                                  style: col.style || {},
+                                };
+                                if (col.stopPropagation) tdProps.onClick = e => e.stopPropagation();
+                                return (
+                                  <td key={colId} {...tdProps}>{col.render(job)}</td>
+                                );
+                              })}
                               {/* Actions */}
                               <td onClick={e => e.stopPropagation()}>
                                 <div style={{ display: "flex", gap: 4 }}>
@@ -10893,10 +11081,14 @@ window.addEventListener('message',function(e){
                       {filtered.length > 0 && (
                         <tfoot>
                           <tr>
-                            <td colSpan={8} className="t-eyebrow">Totals</td>
-                            <td style={{ fontWeight: 700 }}>{fmt(totalGross)}</td>
-                            <td style={{ fontWeight: 700, color: "var(--t-dowork)" }}>{fmt(totalProfit)}</td>
-                            <td colSpan={4}></td>
+                            {/* Totals row aligned by current column order — only Value and Profit show numbers */}
+                            <td className="t-eyebrow">Totals</td>
+                            {order.map(colId => {
+                              if (colId === "value")  return <td key={colId} style={{ fontWeight: 700 }}>{fmt(totalGross)}</td>;
+                              if (colId === "profit") return <td key={colId} style={{ fontWeight: 700, color: "var(--t-dowork)" }}>{fmt(totalProfit)}</td>;
+                              return <td key={colId}></td>;
+                            })}
+                            <td></td>
                           </tr>
                         </tfoot>
                       )}
