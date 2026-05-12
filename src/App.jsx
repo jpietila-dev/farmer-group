@@ -59,8 +59,17 @@ const siteToDB = s => ({ id: s.id, company_id: s.companyId||null, contact_ids: s
 const dbToLsSite = r => dbToSite(r); // same structure now
 const lsSiteToDB = s => siteToDB(s);
 
-const dbToSub = r => ({ id: r.id, name: r.name||"", trade: r.trade||"", phone: r.phone||"", email: r.email||"", msaStatus: r.msa_status||"missing", coiExpiry: r.coi_expiry||"", w9: r.w9||false, notes: r.notes||"", services: r.services||[], address: r.address||"", city: r.city||"", state: r.state||"", lat: r.lat||null, lng: r.lng||null, coverage: r.coverage||"", contact_name: r.contact_name||"", w9FileUrl: r.w9_file_url||"", coiFileUrl: r.coi_file_url||"", archived: r.archived||false });
-const subToDB = s => ({ id: s.id, name: s.name||"", trade: s.trade||"", phone: s.phone||"", email: s.email||"", msa_status: s.msaStatus||s.msa_status||"missing", coi_expiry: s.coiExpiry||s.coi_expiry||null, w9: s.w9||false, notes: s.notes||"", services: s.services||[], address: s.address||null, city: s.city||null, state: s.state||null, lat: s.lat||null, lng: s.lng||null, coverage: s.coverage||null, contact_name: s.contact_name||null, w9_file_url: s.w9FileData||s.w9FileUrl||null, coi_file_url: s.coiFileData||s.coiFileUrl||null, archived: s.archived||false });
+const dbToSub = r => ({ id: r.id, name: r.name||"", trade: r.trade||"", phone: r.phone||"", email: r.email||"", msaStatus: r.msa_status||"missing", coiExpiry: r.coi_expiry||"", w9: r.w9||false, notes: r.notes||"", services: r.services||[], address: r.address||"", city: r.city||"", state: r.state||"", lat: r.lat||null, lng: r.lng||null, coverage: r.coverage||"", contact_name: r.contact_name||"", w9FileUrl: r.w9_file_url||"", coiFileUrl: r.coi_file_url||"", archived: r.archived||false, username: r.username||"", passwordHash: r.password_hash||"", portalEnabled: r.portal_enabled||false });
+const subToDB = s => ({ id: s.id, name: s.name||"", trade: s.trade||"", phone: s.phone||"", email: s.email||"", msa_status: s.msaStatus||s.msa_status||"missing", coi_expiry: s.coiExpiry||s.coi_expiry||null, w9: s.w9||false, notes: s.notes||"", services: s.services||[], address: s.address||null, city: s.city||null, state: s.state||null, lat: s.lat||null, lng: s.lng||null, coverage: s.coverage||null, contact_name: s.contact_name||null, w9_file_url: s.w9FileData||s.w9FileUrl||null, coi_file_url: s.coiFileData||s.coiFileUrl||null, archived: s.archived||false, username: s.username||null, password_hash: s.passwordHash||null, portal_enabled: s.portalEnabled||false });
+
+// SHA-256 password hashing — browser Web Crypto API, no dependency
+// Prefixed with "fdi:" salt to make rainbow tables less useful
+async function hashPassword(plain) {
+  const text = "fdi:" + (plain || "");
+  const enc = new TextEncoder().encode(text);
+  const buf = await crypto.subtle.digest("SHA-256", enc);
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, "0")).join("");
+}
 const dbToTeamMember = r => ({ id: r.id, name: r.name||"", role: r.role||"", phone: r.phone||"", email: r.email||"",
   // Support both old string "facility" and new array ["facility","major"] formats
   divisions: Array.isArray(r.divisions) ? r.divisions : (r.division ? [r.division] : ["facility"]),
@@ -2958,11 +2967,673 @@ function VendorsPage({ supa }) {
 }
 // ── End VendorsPage ──────────────────────────────────────────────────────────
 
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ── VendorPortal ─ Vendor-facing login + portal mimicking tradesmans HTML ─
+// Two entry modes:
+//   1. Vendor login   →  ?vendor=login    (or just ?vendor=)
+//   2. Admin preview  →  ?vendor=preview&subId=<id>  (no login required)
+// ═══════════════════════════════════════════════════════════════════════════════
+function VendorPortal({ adminPreviewSubId, fmJobs, setFmJobs, subcontractors, companies, sites, contacts }) {
+  const isAdminPreview = !!adminPreviewSubId;
+  // session
+  const [authSubId, setAuthSubId] = useState(() => {
+    if (isAdminPreview) return adminPreviewSubId;
+    try { return sessionStorage.getItem("fdi_vendor_sub_id") || null; } catch(e) { return null; }
+  });
+  const [loginUsername, setLoginUsername] = useState("");
+  const [loginPassword, setLoginPassword] = useState("");
+  const [loginError, setLoginError]   = useState("");
+  const [loginBusy, setLoginBusy]    = useState(false);
+
+  const sub = subcontractors.find(s => s.id === authSubId);
+  const myJobs = useMemo(() => sub ? fmJobs.filter(j => j.subcontractorId === sub.id) : [], [sub, fmJobs]);
+
+  // login submit
+  const submitLogin = async (e) => {
+    if (e) e.preventDefault();
+    setLoginError("");
+    if (!loginUsername || !loginPassword) { setLoginError("Username and password required"); return; }
+    setLoginBusy(true);
+    try {
+      const hash = await hashPassword(loginPassword);
+      const match = subcontractors.find(s => s.portalEnabled && s.username && s.username.toLowerCase() === loginUsername.trim().toLowerCase() && s.passwordHash === hash);
+      if (!match) { setLoginError("Invalid username or password — or portal not enabled for this account"); setLoginBusy(false); return; }
+      try { sessionStorage.setItem("fdi_vendor_sub_id", match.id); } catch(e) {}
+      setAuthSubId(match.id);
+    } catch (err) { setLoginError("Login failed: " + err.message); }
+    setLoginBusy(false);
+  };
+
+  const logout = () => {
+    try { sessionStorage.removeItem("fdi_vendor_sub_id"); } catch(e) {}
+    setAuthSubId(null); setLoginUsername(""); setLoginPassword("");
+    if (!isAdminPreview) window.location.href = "/?vendor=login";
+  };
+
+  // ── LOGIN SCREEN ─────────────────────────────────────────────────────
+  if (!authSubId) {
+    return (
+      <>
+        <style>{VENDOR_PORTAL_CSS}</style>
+        <div style={{minHeight:"100vh",background:"#F7F6F2",display:"flex",alignItems:"center",justifyContent:"center",padding:"20px",fontFamily:"'DM Sans',system-ui,sans-serif"}}>
+          <div style={{width:"100%",maxWidth:380,background:"#FFFFFF",borderRadius:14,boxShadow:"0 6px 30px rgba(0,0,0,0.08)",padding:"32px 28px"}}>
+            <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:24}}>
+              <div style={{width:40,height:40,borderRadius:9,background:"#18181A",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'DM Mono',monospace",fontSize:14,fontWeight:500}}>FG</div>
+              <div>
+                <div style={{fontSize:15,fontWeight:600,color:"#18181A"}}>Vendor Portal</div>
+                <div style={{fontSize:11,color:"#8a8a92"}}>Farmer Group · FM &amp; CapEx</div>
+              </div>
+            </div>
+            <form onSubmit={submitLogin}>
+              <label style={{display:"block",fontSize:10,fontWeight:600,textTransform:"uppercase",letterSpacing:"0.06em",color:"#8a8a92",marginBottom:5}}>Username</label>
+              <input type="text" autoFocus value={loginUsername} onChange={e => setLoginUsername(e.target.value)}
+                style={{width:"100%",padding:"10px 12px",border:"1px solid rgba(24,24,26,0.12)",borderRadius:8,fontSize:13,fontFamily:"inherit",marginBottom:14,outline:"none"}} />
+              <label style={{display:"block",fontSize:10,fontWeight:600,textTransform:"uppercase",letterSpacing:"0.06em",color:"#8a8a92",marginBottom:5}}>Password</label>
+              <input type="password" value={loginPassword} onChange={e => setLoginPassword(e.target.value)}
+                style={{width:"100%",padding:"10px 12px",border:"1px solid rgba(24,24,26,0.12)",borderRadius:8,fontSize:13,fontFamily:"inherit",marginBottom:18,outline:"none"}} />
+              {loginError && <div style={{padding:"8px 12px",background:"#FCE4EC",color:"#880E4F",borderRadius:7,fontSize:12,marginBottom:14}}>{loginError}</div>}
+              <button type="submit" disabled={loginBusy}
+                style={{width:"100%",padding:"11px",background:"#18181A",color:"#fff",border:"none",borderRadius:8,fontSize:13,fontWeight:600,fontFamily:"inherit",cursor:loginBusy?"default":"pointer",opacity:loginBusy?0.6:1}}>
+                {loginBusy ? "Signing in…" : "Sign In"}
+              </button>
+            </form>
+            <div style={{marginTop:20,fontSize:11,color:"#8a8a92",textAlign:"center"}}>
+              Contact your project manager if you need access.
+            </div>
+          </div>
+        </div>
+      </>
+    );
+  }
+
+  if (!sub) {
+    return (
+      <div style={{minHeight:"100vh",background:"#F7F6F2",display:"flex",alignItems:"center",justifyContent:"center",padding:"20px",fontFamily:"'DM Sans',system-ui,sans-serif"}}>
+        <div style={{padding:"24px 28px",background:"#FFF",borderRadius:12,maxWidth:380}}>
+          <div style={{fontSize:14,color:"#18181A",fontWeight:600,marginBottom:8}}>Account not found</div>
+          <div style={{fontSize:12,color:"#8a8a92",marginBottom:14}}>Your subcontractor record may have been removed. Please contact your project manager.</div>
+          <button onClick={logout} style={{padding:"9px 16px",background:"#18181A",color:"#fff",border:"none",borderRadius:8,fontSize:12,fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>Sign Out</button>
+        </div>
+      </div>
+    );
+  }
+
+  return <VendorPortalAuthenticated sub={sub} myJobs={myJobs} fmJobs={fmJobs} setFmJobs={setFmJobs} companies={companies} sites={sites} contacts={contacts} isAdminPreview={isAdminPreview} onLogout={logout} />;
+}
+
+// ── Vendor portal CSS (shared) — mimics tradesmans HTML aesthetic
+const VENDOR_PORTAL_CSS = `
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap');
+.vp { font-family:'DM Sans',system-ui,sans-serif; color:#18181A; background:#F7F6F2; min-height:100vh; }
+.vp-hdr { position:sticky; top:0; z-index:200; background:#18181A; color:#fff; height:56px; display:flex; align-items:center; padding:0 24px; gap:14px; }
+.vp-hdr-logo { width:30px; height:30px; border-radius:7px; background:#fff; display:flex; align-items:center; justify-content:center; font-family:'DM Mono',monospace; font-size:11px; font-weight:500; color:#18181A; }
+.vp-hdr-name { font-size:14px; font-weight:500; }
+.vp-hdr-sep { opacity:.2; }
+.vp-hdr-sub { font-size:12px; opacity:.55; }
+.vp-hdr-right { margin-left:auto; display:flex; align-items:center; gap:10px; font-size:11px; opacity:.7; }
+.vp-live-dot { width:6px; height:6px; border-radius:50%; background:#4ade80; animation:vpblink 2.5s ease-in-out infinite; }
+@keyframes vpblink { 0%,100%{opacity:1} 50%{opacity:.3} }
+.vp-logout { background:rgba(255,255,255,0.1); border:1px solid rgba(255,255,255,0.15); color:#fff; padding:5px 11px; border-radius:6px; font-size:11px; cursor:pointer; font-family:inherit; }
+.vp-logout:hover { background:rgba(255,255,255,0.18); }
+.vp-tabs { background:#FFF; border-bottom:1px solid rgba(24,24,26,0.1); padding:0 20px; display:flex; position:sticky; top:56px; z-index:190; overflow-x:auto; }
+.vp-tab { padding:13px 16px; font-size:13px; font-weight:500; color:#8a8a92; border:none; background:none; cursor:pointer; border-bottom:2px solid transparent; margin-bottom:-1px; display:flex; align-items:center; gap:7px; white-space:nowrap; font-family:inherit; }
+.vp-tab:hover { color:#18181A; }
+.vp-tab.active { color:#18181A; border-bottom-color:#18181A; }
+.vp-shell { max-width:980px; margin:0 auto; padding:22px 20px; }
+.vp-stats { display:grid; grid-template-columns:repeat(5,1fr); gap:10px; margin-bottom:20px; }
+.vp-stat { background:#FFF; border:1px solid rgba(24,24,26,0.1); border-radius:10px; padding:14px 16px; cursor:pointer; transition:all .15s; }
+.vp-stat:hover { border-color:rgba(24,24,26,0.25); box-shadow:0 3px 12px rgba(0,0,0,.08); transform:translateY(-1px); }
+.vp-stat.act { box-shadow:0 2px 8px rgba(0,0,0,.1); }
+.vp-stat.act.k0 { background:#18181A; border-color:#18181A; }
+.vp-stat.act.k0 .vp-n, .vp-stat.act.k0 .vp-l { color:#fff; }
+.vp-stat.act.k0 .vp-l { color:rgba(255,255,255,.45); }
+.vp-stat.act.k1 { background:#E65100; border-color:#E65100; }
+.vp-stat.act.k1 .vp-n, .vp-stat.act.k1 .vp-l { color:#fff; }
+.vp-stat.act.k2 { background:#2E7D32; border-color:#2E7D32; }
+.vp-stat.act.k2 .vp-n, .vp-stat.act.k2 .vp-l { color:#fff; }
+.vp-stat.act.k3 { background:#1565C0; border-color:#1565C0; }
+.vp-stat.act.k3 .vp-n, .vp-stat.act.k3 .vp-l { color:#fff; }
+.vp-stat.act.k4 { background:#00695C; border-color:#00695C; }
+.vp-stat.act.k4 .vp-n, .vp-stat.act.k4 .vp-l { color:#fff; }
+.vp-n { font-size:26px; font-weight:600; letter-spacing:-1px; color:#18181A; }
+.vp-l { font-size:11px; color:#8a8a92; margin-top:2px; }
+.vp-jcard { background:#FFF; border:1px solid rgba(24,24,26,0.1); border-radius:14px; margin-bottom:8px; overflow:hidden; transition:all .15s; }
+.vp-jcard:hover { border-color:rgba(24,24,26,0.2); box-shadow:0 2px 14px rgba(0,0,0,.07); }
+.vp-jcard.open { border-color:rgba(24,24,26,0.22); box-shadow:0 4px 22px rgba(0,0,0,.09); }
+.vp-jhead { padding:14px 18px; cursor:pointer; display:flex; align-items:center; gap:12px; }
+.vp-jnum { font-family:'DM Mono',monospace; font-size:11px; color:#8a8a92; background:#F7F6F2; padding:3px 8px; border-radius:6px; white-space:nowrap; flex-shrink:0; }
+.vp-jtitle { flex:1; min-width:0; }
+.vp-jname { font-size:14px; font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.vp-jaddr { font-size:12px; color:#8a8a92; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.vp-badge { font-size:11px; font-weight:500; padding:3px 9px; border-radius:20px; white-space:nowrap; }
+.vp-b-buyout { background:#FFF3E0; color:#E65100; }
+.vp-b-approval { background:#E3F2FD; color:#1565C0; }
+.vp-b-dowork { background:#E8F5E9; color:#2E7D32; }
+.vp-b-pending { background:#FCE4EC; color:#880E4F; }
+.vp-b-approved { background:#E0F2F1; color:#00695C; }
+.vp-b-hold { background:#F5F5F5; color:#616161; }
+.vp-chev { color:#8a8a92; transition:transform .2s; flex-shrink:0; }
+.vp-jcard.open .vp-chev { transform:rotate(180deg); }
+.vp-jbody { display:none; border-top:1px solid rgba(24,24,26,0.06); }
+.vp-jcard.open .vp-jbody { display:block; }
+.vp-btabs { display:flex; border-bottom:1px solid rgba(24,24,26,0.06); padding:0 18px; background:#F7F6F2; }
+.vp-btab { font-size:12px; font-weight:500; color:#8a8a92; padding:9px 12px; cursor:pointer; border:none; background:none; border-bottom:2px solid transparent; margin-bottom:-1px; font-family:inherit; }
+.vp-btab:hover { color:#18181A; }
+.vp-btab.act { color:#18181A; border-bottom-color:#18181A; }
+.vp-bp { padding:18px; }
+.vp-igrid { display:grid; grid-template-columns:1fr 1fr; gap:14px 22px; }
+.vp-iitem label { font-size:10px; font-weight:600; text-transform:uppercase; letter-spacing:.06em; color:#8a8a92; display:block; margin-bottom:3px; }
+.vp-iitem p { font-size:14px; line-height:1.55; }
+.vp-iitem.full { grid-column:1/-1; }
+.vp-gate { display:inline-flex; align-items:center; gap:8px; background:#18181A; color:#fff; padding:7px 14px; border-radius:8px; font-family:'DM Mono',monospace; font-size:13px; margin-top:3px; }
+.vp-asec { padding:14px 16px; background:#F7F6F2; border-radius:10px; margin-bottom:12px; }
+.vp-asec h4 { font-size:12px; font-weight:600; text-transform:uppercase; letter-spacing:.04em; margin-bottom:10px; color:#18181A; }
+.vp-input { width:100%; padding:9px 12px; border:1px solid rgba(24,24,26,0.12); border-radius:8px; font-size:13px; font-family:inherit; background:#FFF; outline:none; }
+.vp-input:focus { border-color:#18181A; }
+.vp-ta { width:100%; padding:9px 12px; border:1px solid rgba(24,24,26,0.12); border-radius:8px; font-size:13px; font-family:inherit; background:#FFF; outline:none; min-height:54px; resize:vertical; }
+.vp-btn { padding:9px 16px; background:#18181A; color:#fff; border:none; border-radius:8px; font-size:12px; font-weight:600; cursor:pointer; font-family:inherit; margin-top:8px; }
+.vp-btn:hover { background:#000; }
+.vp-btn:disabled { opacity:.5; cursor:default; }
+.vp-msg-ok { display:none; padding:7px 10px; background:#E0F2F1; color:#00695C; border-radius:6px; font-size:12px; margin-top:8px; }
+.vp-msg-ok.on { display:block; }
+.vp-msg-er { display:none; padding:7px 10px; background:#FCE4EC; color:#880E4F; border-radius:6px; font-size:12px; margin-top:8px; }
+.vp-msg-er.on { display:block; }
+.vp-locked { display:flex; align-items:center; gap:8px; background:#F7F6F2; border:1px solid rgba(24,24,26,0.1); border-radius:8px; padding:12px 16px; font-size:13px; color:#8a8a92; }
+.vp-srch { width:100%; padding:9px 12px 9px 34px; border:1px solid rgba(24,24,26,0.1); border-radius:10px; font-size:13px; font-family:inherit; background:#FFF; outline:none; margin-bottom:14px; }
+.vp-srch:focus { border-color:#18181A; }
+.vp-empty { text-align:center; padding:60px 20px; color:#8a8a92; font-size:14px; }
+.vp-cal { display:grid; grid-template-columns:repeat(7,1fr); gap:1px; background:rgba(24,24,26,0.1); border:1px solid rgba(24,24,26,0.1); border-radius:10px; overflow:hidden; }
+.vp-cal-dn { background:#F7F6F2; padding:8px; text-align:center; font-size:10px; font-weight:600; color:#8a8a92; text-transform:uppercase; letter-spacing:.06em; }
+.vp-cal-day { background:#FFF; min-height:78px; padding:6px; }
+.vp-cal-day.other { background:#FAFAF7; }
+.vp-cal-day.today .vp-cal-dnum { background:#18181A; color:#fff; border-radius:50%; width:22px; height:22px; display:inline-flex; align-items:center; justify-content:center; }
+.vp-cal-dnum { font-size:12px; font-weight:600; color:#18181A; margin-bottom:4px; display:inline-block; }
+.vp-cal-ev { font-size:10px; padding:2px 5px; border-radius:4px; margin-bottom:2px; cursor:pointer; font-weight:500; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.vp-cal-nav { display:flex; align-items:center; justify-content:center; gap:14px; margin-bottom:14px; }
+.vp-cal-nbtn { width:30px; height:30px; border:1px solid rgba(24,24,26,0.1); background:#FFF; border-radius:7px; cursor:pointer; display:flex; align-items:center; justify-content:center; font-family:inherit; font-size:14px; color:#18181A; }
+.vp-cal-month { font-size:15px; font-weight:600; }
+.vp-sched-row { display:flex; align-items:center; gap:14px; padding:12px 14px; background:#FFF; border:1px solid rgba(24,24,26,0.08); border-radius:10px; cursor:pointer; margin-bottom:6px; }
+.vp-sched-row:hover { border-color:rgba(24,24,26,0.2); }
+.vp-sched-dt { font-family:'DM Mono',monospace; font-size:12px; color:#8a8a92; flex-shrink:0; min-width:110px; }
+.vp-sched-info { flex:1; min-width:0; }
+.vp-rtab { display:inline-flex; align-items:center; gap:7px; padding:9px 14px; border:1px solid rgba(24,24,26,0.1); background:#FFF; border-radius:8px; cursor:pointer; font-family:inherit; font-size:12px; color:#18181A; margin-right:6px; margin-bottom:6px; font-weight:500; }
+.vp-rtab.act { background:#18181A; color:#fff; border-color:#18181A; }
+.vp-rtab-dot { width:10px; height:10px; border-radius:50%; flex-shrink:0; }
+.vp-rtab-cnt { font-family:'DM Mono',monospace; font-size:10px; opacity:.65; }
+.vp-est-hdr { display:flex; align-items:center; gap:16px; padding:4px 0 20px; border-bottom:1px solid rgba(24,24,26,0.1); margin-bottom:20px; }
+.vp-est-hdr-icon { width:44px; height:44px; border-radius:12px; background:#FFF3E0; display:flex; align-items:center; justify-content:center; flex-shrink:0; color:#E65100; font-size:22px; }
+.vp-est-hdr-title { font-size:17px; font-weight:600; letter-spacing:-.2px; }
+.vp-est-hdr-sub { font-size:12px; color:#8a8a92; margin-top:3px; }
+.vp-est-cnt { margin-left:auto; font-size:28px; font-weight:600; letter-spacing:-1px; color:#E65100; flex-shrink:0; }
+.vp-admin-banner { background:#1565C0; color:#fff; text-align:center; padding:6px; font-size:11px; font-weight:600; letter-spacing:.05em; text-transform:uppercase; }
+`;
+
+// ── stage helpers (map FM stage IDs to vendor portal labels/styles)
+function vpStepCls(stage) {
+  if (stage === "buyout") return "vp-b-buyout";
+  if (stage === "owner_approval" || stage === "generate_proposal") return "vp-b-approval";
+  if (stage === "do_work") return "vp-b-dowork";
+  if (stage === "estimating") return "vp-b-pending";
+  if (stage === "waiting_quote") return "vp-b-approved";
+  if (stage === "bill") return "vp-b-approval";
+  return "vp-b-hold";
+}
+function vpStepLbl(stage) {
+  if (stage === "estimating")        return "Need Estimate";
+  if (stage === "waiting_quote")     return "Waiting on Quotes";
+  if (stage === "generate_proposal") return "Proposal Pending";
+  if (stage === "owner_approval")    return "Waiting for Approval";
+  if (stage === "buyout")            return "Approved";
+  if (stage === "do_work")           return "Scheduled";
+  if (stage === "bill")              return "Bill";
+  return stage || "—";
+}
+// regions — derive from city in address
+const VP_REGIONS = {
+  grandrapids: { label:"Grand Rapids", color:"#1a3a5c", cities:["grand rapids","wyoming","kentwood","comstock park"] },
+  holland:     { label:"Holland",      color:"#2d5a27", cities:["holland"] },
+  jenison:     { label:"Jenison",      color:"#5a3a1a", cities:["jenison","hudsonville"] },
+  detroit:     { label:"Metro Detroit", color:"#7a2020", cities:["westland","dearborn","canton","southfield","detroit"] },
+  other:       { label:"Other",        color:"#3a2060", cities:[] }
+};
+function vpRegion(addr) {
+  const a = (addr || "").toLowerCase();
+  for (const [k, r] of Object.entries(VP_REGIONS)) {
+    if (r.cities.some(c => a.includes(c))) return k;
+  }
+  return "other";
+}
+
+function VendorPortalAuthenticated({ sub, myJobs, fmJobs, setFmJobs, companies, sites, contacts, isAdminPreview, onLogout }) {
+  const [view, setView] = useState("jobs"); // jobs | geo | sched | est
+  const [filter, setFilter] = useState("all"); // all | estimating | buyout | do_work | bill
+  const [search, setSearch] = useState("");
+  const [openCardId, setOpenCardId] = useState(null);
+  const [cardTab, setCardTab] = useState({}); // {jobId: "info"|"photos"|"update"}
+  const [region, setRegion] = useState("grandrapids");
+  const [calDate, setCalDate] = useState(new Date());
+  // per-job form state for Update Job actions
+  const [formState, setFormState] = useState({}); // {jobId: { bidAmt, bidNotes, schedDate, note, invAmt, invNum, msgOk, msgEr, busy }}
+  const setForm = (jobId, patch) => setFormState(prev => ({ ...prev, [jobId]: { ...(prev[jobId]||{}), ...patch } }));
+
+  // visible jobs = filter out owner_approval (vendor doesn't act on those yet)
+  const visibleJobs = useMemo(() => myJobs.filter(j => j.stage !== "owner_approval"), [myJobs]);
+
+  // stats
+  const stat = {
+    all:        visibleJobs.length,
+    estimating: visibleJobs.filter(j => j.stage === "estimating").length,
+    buyout:     visibleJobs.filter(j => j.stage === "buyout").length,
+    do_work:    visibleJobs.filter(j => j.stage === "do_work").length,
+    bill:       visibleJobs.filter(j => j.stage === "bill").length,
+  };
+
+  // filtered list
+  const filtered = useMemo(() => {
+    let list = visibleJobs;
+    if (filter !== "all") list = list.filter(j => j.stage === filter);
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      list = list.filter(j => {
+        const site = sites.find(s => s.id === j.siteId);
+        return (j.name||"").toLowerCase().includes(q)
+            || (j.storeCode||"").toLowerCase().includes(q)
+            || (j.projectNo||"").toLowerCase().includes(q)
+            || (site?.address||"").toLowerCase().includes(q);
+      });
+    }
+    return list;
+  }, [visibleJobs, filter, search, sites]);
+
+  // persist a patch to fm_jobs immediately + locally
+  const updateJob = (jobId, patch) => {
+    const updated = fmJobs.map(j => j.id === jobId ? { ...j, ...patch } : j);
+    setFmJobs(updated);
+    try { supa.from("fm_jobs").update(patch).eq("id", jobId); } catch(e) {}
+  };
+
+  // Action handlers — match the HTML doX functions
+  const flash = (jobId, key) => {
+    setForm(jobId, { [key]: true });
+    setTimeout(() => setForm(jobId, { [key]: false }), 2500);
+  };
+
+  const submitBid = async (jobId) => {
+    const fs = formState[jobId] || {};
+    if (!fs.bidAmt) { setForm(jobId, { msgEr: "Please enter a bid amount" }); flash(jobId, "msgEr"); return; }
+    setForm(jobId, { busy: true });
+    try {
+      const patch = {
+        vendor_quote_price: String(parseFloat(fs.bidAmt).toFixed(2)),
+        vendor_quote_scope: fs.bidNotes || "",
+        vendor_portal_status: "quote_submitted",
+        vendor_portal_price: String(parseFloat(fs.bidAmt).toFixed(2)),
+        vendor_portal_note: fs.bidNotes || "",
+        vendor_portal_responded_at: new Date().toISOString(),
+      };
+      const updated = fmJobs.map(j => j.id === jobId ? { ...j, vendorQuotePrice: patch.vendor_quote_price, vendorQuoteScope: patch.vendor_quote_scope, vendorPortalStatus: "quote_submitted", vendorPortalPrice: patch.vendor_portal_price, vendorPortalNote: patch.vendor_portal_note, vendorPortalRespondedAt: patch.vendor_portal_responded_at } : j);
+      setFmJobs(updated);
+      try { await supa.from("fm_jobs").update(patch).eq("id", jobId); } catch(e) {}
+      setForm(jobId, { bidAmt: "", bidNotes: "", msgOk: "Bid submitted", busy: false });
+      flash(jobId, "msgOk");
+    } catch (e) {
+      setForm(jobId, { msgEr: "Error submitting bid", busy: false }); flash(jobId, "msgEr");
+    }
+  };
+
+  const submitSched = async (jobId) => {
+    const fs = formState[jobId] || {};
+    if (!fs.schedDate) { setForm(jobId, { msgEr: "Please select a date" }); flash(jobId, "msgEr"); return; }
+    setForm(jobId, { busy: true });
+    try {
+      const patch = { start_date: fs.schedDate, vendor_portal_status: "scheduled", vendor_portal_date: fs.schedDate };
+      const updated = fmJobs.map(j => j.id === jobId ? { ...j, startDate: fs.schedDate, vendorPortalStatus: "scheduled", vendorPortalDate: fs.schedDate } : j);
+      setFmJobs(updated);
+      try { await supa.from("fm_jobs").update(patch).eq("id", jobId); } catch(e) {}
+      setForm(jobId, { msgOk: "Schedule date saved", busy: false });
+      flash(jobId, "msgOk");
+    } catch (e) {
+      setForm(jobId, { msgEr: "Error saving date", busy: false }); flash(jobId, "msgEr");
+    }
+  };
+
+  const submitNote = async (jobId) => {
+    const fs = formState[jobId] || {};
+    if (!fs.note || !fs.note.trim()) return;
+    setForm(jobId, { busy: true });
+    try {
+      const job = fmJobs.find(j => j.id === jobId);
+      const newEntry = `[${sub.name} · ${new Date().toLocaleDateString()}] ${fs.note.trim()}`;
+      const appended = (job?.notes ? job.notes + "\n\n" : "") + newEntry;
+      const patch = { notes: appended };
+      const updated = fmJobs.map(j => j.id === jobId ? { ...j, notes: appended } : j);
+      setFmJobs(updated);
+      try { await supa.from("fm_jobs").update(patch).eq("id", jobId); } catch(e) {}
+      setForm(jobId, { note: "", msgOk: "Note posted", busy: false });
+      flash(jobId, "msgOk");
+    } catch (e) {
+      setForm(jobId, { msgEr: "Error posting note", busy: false }); flash(jobId, "msgEr");
+    }
+  };
+
+  const submitInvoice = async (jobId) => {
+    const fs = formState[jobId] || {};
+    if (!fs.invAmt) { setForm(jobId, { msgEr: "Please enter an invoice amount" }); flash(jobId, "msgEr"); return; }
+    setForm(jobId, { busy: true });
+    try {
+      const patch = { vendor_invoice_amount: parseFloat(fs.invAmt), vendor_invoice_number: fs.invNum || null };
+      const updated = fmJobs.map(j => j.id === jobId ? { ...j, vendorInvoiceAmount: parseFloat(fs.invAmt), vendorInvoiceNumber: fs.invNum || "" } : j);
+      setFmJobs(updated);
+      try { await supa.from("fm_jobs").update(patch).eq("id", jobId); } catch(e) {}
+      setForm(jobId, { msgOk: "Invoice submitted", busy: false });
+      flash(jobId, "msgOk");
+    } catch (e) {
+      setForm(jobId, { msgEr: "Error submitting invoice", busy: false }); flash(jobId, "msgEr");
+    }
+  };
+
+  const fmtMoney = n => "$" + Number(n||0).toLocaleString("en-US",{minimumFractionDigits:0,maximumFractionDigits:0});
+  const fmtDate = d => d ? new Date(d+"T12:00:00").toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"}) : "—";
+
+  // ── Job Card ──────────────────────────────────────────────────────
+  const renderCard = (job) => {
+    const site = sites.find(s => s.id === job.siteId);
+    const co   = companies.find(c => c.id === job.companyId);
+    const ct   = contacts.find(c => c.id === job.approverContactId);
+    const isOpen = openCardId === job.id;
+    const tab = cardTab[job.id] || "info";
+    const fs = formState[job.id] || {};
+    const canSchedule = job.stage === "buyout" || job.stage === "do_work";
+    return (
+      <div key={job.id} className={"vp-jcard" + (isOpen ? " open" : "")}>
+        <div className="vp-jhead" onClick={() => setOpenCardId(isOpen ? null : job.id)}>
+          {job.projectNo && <span className="vp-jnum">#{job.projectNo}</span>}
+          <div className="vp-jtitle">
+            <div className="vp-jname">{job.name}</div>
+            <div className="vp-jaddr">{site ? site.address : (job.storeCode ? `Store ${job.storeCode}` : "")}</div>
+          </div>
+          <span className={"vp-badge " + vpStepCls(job.stage)}>{vpStepLbl(job.stage)}</span>
+          <svg className="vp-chev" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg>
+        </div>
+        {isOpen && (
+          <div className="vp-jbody">
+            <div className="vp-btabs">
+              <button className={"vp-btab" + (tab === "info" ? " act" : "")} onClick={() => setCardTab(p => ({ ...p, [job.id]: "info" }))}>Job Info</button>
+              <button className={"vp-btab" + (tab === "photos" ? " act" : "")} onClick={() => setCardTab(p => ({ ...p, [job.id]: "photos" }))}>Photos</button>
+              <button className={"vp-btab" + (tab === "update" ? " act" : "")} onClick={() => setCardTab(p => ({ ...p, [job.id]: "update" }))}>Update Job</button>
+            </div>
+            {tab === "info" && (
+              <div className="vp-bp">
+                <div className="vp-igrid">
+                  <div className="vp-iitem full"><label>Scope of Work</label><p>{job.scopeOfWork || job.name || "—"}</p></div>
+                  <div className="vp-iitem">
+                    <label>Site Address</label><p>{site?.address || "—"}</p>
+                    {site?.address && <a href={"https://maps.google.com/?q=" + encodeURIComponent(site.address)} target="_blank" rel="noreferrer" style={{fontSize:12,color:"#1565C0",textDecoration:"none",marginTop:5,display:"inline-block"}}>🗺️ Open in Maps</a>}
+                  </div>
+                  {site?.gateCode && <div className="vp-iitem"><label>Gate / Access Code</label><div className="vp-gate">🔒 {site.gateCode}</div></div>}
+                  <div className="vp-iitem"><label>Status</label><span className={"vp-badge " + vpStepCls(job.stage)}>{vpStepLbl(job.stage)}</span></div>
+                  {co && <div className="vp-iitem"><label>Company</label><p>{co.name}</p></div>}
+                  {ct && <div className="vp-iitem"><label>Customer Contact</label><p>{`${ct.firstName||""} ${ct.lastName||""}`.trim()}{ct.title?` · ${ct.title}`:""}</p>{ct.phone && <p style={{fontSize:12,color:"#8a8a92"}}>📞 {ct.phone}</p>}</div>}
+                  {job.pm && <div className="vp-iitem"><label>Project Manager</label><p>{job.pm}</p></div>}
+                  {job.startDate && <div className="vp-iitem"><label>Scheduled Start</label><p>{fmtDate(job.startDate)}</p></div>}
+                  {job.vendorQuotePrice && <div className="vp-iitem"><label>Your Submitted Bid</label><p>{fmtMoney(job.vendorQuotePrice)}</p></div>}
+                </div>
+              </div>
+            )}
+            {tab === "photos" && (
+              <div className="vp-bp">
+                {(job.photos||[]).length === 0 ? (
+                  <div style={{textAlign:"center",padding:"30px",color:"#8a8a92",fontSize:13}}>No photos attached to this job</div>
+                ) : (
+                  <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(140px,1fr))",gap:10}}>
+                    {(job.photos||[]).map((p,i) => (
+                      <a key={i} href={p.data || p.url || "#"} target="_blank" rel="noreferrer">
+                        <img src={p.data || p.url} alt={p.name || ""} style={{width:"100%",aspectRatio:"1",objectFit:"cover",borderRadius:8,border:"1px solid rgba(24,24,26,0.1)"}} />
+                      </a>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+            {tab === "update" && (
+              <div className="vp-bp">
+                {/* Submit Bid */}
+                <div className="vp-asec">
+                  <h4>Submit Bid / Estimate</h4>
+                  <input className="vp-input" type="number" placeholder="Bid amount ($)" value={fs.bidAmt || ""} onChange={e => setForm(job.id, { bidAmt: e.target.value })} style={{marginBottom:8}} />
+                  <textarea className="vp-ta" placeholder="Bid notes or breakdown (optional)…" value={fs.bidNotes || ""} onChange={e => setForm(job.id, { bidNotes: e.target.value })} />
+                  <button className="vp-btn" onClick={() => submitBid(job.id)} disabled={fs.busy}>{fs.busy ? "Submitting…" : "Submit Bid"}</button>
+                  {fs.msgOk && <div className={"vp-msg-ok on"}>✓ {fs.msgOk}</div>}
+                  {fs.msgEr && <div className={"vp-msg-er on"}>{fs.msgEr}</div>}
+                </div>
+                {/* Schedule Date */}
+                <div className="vp-asec">
+                  <h4>Schedule Date</h4>
+                  {canSchedule ? (
+                    <>
+                      <input className="vp-input" type="date" value={fs.schedDate || job.startDate || ""} onChange={e => setForm(job.id, { schedDate: e.target.value })} style={{marginBottom:8}} />
+                      <button className="vp-btn" onClick={() => submitSched(job.id)} disabled={fs.busy}>{fs.busy ? "Saving…" : "Save Schedule Date"}</button>
+                    </>
+                  ) : (
+                    <div className="vp-locked">🔒 Scheduling is available once this job is approved.</div>
+                  )}
+                </div>
+                {/* Add Note */}
+                <div className="vp-asec">
+                  <h4>Add a Note</h4>
+                  <textarea className="vp-ta" placeholder="Visible to your PM…" value={fs.note || ""} onChange={e => setForm(job.id, { note: e.target.value })} />
+                  <button className="vp-btn" onClick={() => submitNote(job.id)} disabled={fs.busy}>{fs.busy ? "Posting…" : "Post Note"}</button>
+                </div>
+                {/* Submit Invoice */}
+                <div className="vp-asec">
+                  <h4>Submit Invoice</h4>
+                  <div style={{display:"flex",gap:8,marginBottom:8}}>
+                    <input className="vp-input" type="number" placeholder="Amount ($)" value={fs.invAmt || job.vendorInvoiceAmount || ""} onChange={e => setForm(job.id, { invAmt: e.target.value })} />
+                    <input className="vp-input" type="text" placeholder="Invoice # (optional)" value={fs.invNum || job.vendorInvoiceNumber || ""} onChange={e => setForm(job.id, { invNum: e.target.value })} style={{maxWidth:180}} />
+                  </div>
+                  <button className="vp-btn" onClick={() => submitInvoice(job.id)} disabled={fs.busy}>{fs.busy ? "Submitting…" : "Submit Invoice"}</button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // jump to a job (used from calendar)
+  const goToJob = (jobId) => {
+    setView("jobs"); setFilter("all"); setOpenCardId(jobId);
+    setTimeout(() => {
+      const el = document.querySelector(`[data-vp-jobid="${jobId}"]`);
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 80);
+  };
+
+  // ── Geographic ─────────────────────────────────────────────────────
+  const jobsByRegion = useMemo(() => {
+    const m = {}; Object.keys(VP_REGIONS).forEach(k => m[k] = []);
+    visibleJobs.forEach(j => {
+      const site = sites.find(s => s.id === j.siteId);
+      const key = vpRegion(site?.address || "");
+      m[key].push(j);
+    });
+    return m;
+  }, [visibleJobs, sites]);
+
+  // ── Calendar ────────────────────────────────────────────────────────
+  const renderCalendar = () => {
+    const y = calDate.getFullYear(), mIdx = calDate.getMonth();
+    const MN = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+    const today = new Date(); today.setHours(0,0,0,0);
+    const first = new Date(y, mIdx, 1), last = new Date(y, mIdx+1, 0);
+    const sdow = first.getDay();
+    const byD = {};
+    visibleJobs.filter(j => j.startDate).forEach(j => { (byD[j.startDate] = byD[j.startDate] || []).push(j); });
+    const DN = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+    const cells = [];
+    DN.forEach(d => cells.push(<div key={"dn-"+d} className="vp-cal-dn">{d}</div>));
+    for (let i = 0; i < sdow; i++) cells.push(<div key={"pre-"+i} className="vp-cal-day other"></div>);
+    for (let d = 1; d <= last.getDate(); d++) {
+      const dt = new Date(y, mIdx, d); dt.setHours(0,0,0,0);
+      const isT = dt.getTime() === today.getTime();
+      const k = `${y}-${String(mIdx+1).padStart(2,"0")}-${String(d).padStart(2,"0")}`;
+      const dj = byD[k] || [];
+      cells.push(
+        <div key={"d-"+d} className={"vp-cal-day" + (isT ? " today" : "")}>
+          <div className="vp-cal-dnum">{d}</div>
+          {dj.slice(0,3).map(j => (
+            <div key={j.id} className={"vp-cal-ev " + vpStepCls(j.stage)} onClick={e => { e.stopPropagation(); goToJob(j.id); }} title={j.name}>
+              {j.projectNo ? "#"+j.projectNo : j.name.slice(0,12)}
+            </div>
+          ))}
+          {dj.length > 3 && <div style={{fontSize:9,color:"#8a8a92"}}>+{dj.length-3} more</div>}
+        </div>
+      );
+    }
+    const rem = (7 - (sdow + last.getDate()) % 7) % 7;
+    for (let i = 0; i < rem; i++) cells.push(<div key={"post-"+i} className="vp-cal-day other"></div>);
+    const upcoming = visibleJobs.filter(j => j.startDate).sort((a,b) => (a.startDate||"").localeCompare(b.startDate||""));
+    return (
+      <>
+        <div className="vp-cal-nav">
+          <button className="vp-cal-nbtn" onClick={() => setCalDate(new Date(y, mIdx-1, 1))}>‹</button>
+          <div className="vp-cal-month">{MN[mIdx]} {y}</div>
+          <button className="vp-cal-nbtn" onClick={() => setCalDate(new Date(y, mIdx+1, 1))}>›</button>
+        </div>
+        <div className="vp-cal">{cells}</div>
+        <div style={{margin:"20px 0 10px",fontSize:13,fontWeight:600,color:"#18181A"}}>All Scheduled Jobs</div>
+        {upcoming.length === 0
+          ? <div className="vp-empty">No jobs with scheduled start dates yet.</div>
+          : upcoming.map(j => {
+              const site = sites.find(s => s.id === j.siteId);
+              return (
+                <div key={j.id} className="vp-sched-row" onClick={() => goToJob(j.id)}>
+                  <div className="vp-sched-dt">{fmtDate(j.startDate)}</div>
+                  <div className="vp-sched-info">
+                    <div style={{fontSize:13,fontWeight:500}}>{j.name}</div>
+                    <div style={{fontSize:11,color:"#8a8a92"}}>{site?.address || ""}</div>
+                  </div>
+                  <span className={"vp-badge " + vpStepCls(j.stage)}>{vpStepLbl(j.stage)}</span>
+                </div>
+              );
+            })
+        }
+      </>
+    );
+  };
+
+  return (
+    <div className="vp">
+      <style>{VENDOR_PORTAL_CSS}</style>
+      {isAdminPreview && <div className="vp-admin-banner">⚠ Admin Preview Mode · Viewing as {sub.name}</div>}
+      {/* Header */}
+      <div className="vp-hdr">
+        <div className="vp-hdr-logo">{(sub.name || "FG").split(" ").map(x => x[0]).join("").toUpperCase().slice(0,2)}</div>
+        <span className="vp-hdr-name">{sub.name}</span>
+        <span className="vp-hdr-sep">|</span>
+        <span className="vp-hdr-sub">Vendor Job Portal</span>
+        <div className="vp-hdr-right">
+          <span className="vp-live-dot"></span>
+          <span>Live · {myJobs.length} jobs</span>
+          <button className="vp-logout" onClick={onLogout}>{isAdminPreview ? "Exit Preview" : "Sign Out"}</button>
+        </div>
+      </div>
+      {/* Tabs */}
+      <div className="vp-tabs">
+        <button className={"vp-tab" + (view === "jobs" ? " active" : "")} onClick={() => setView("jobs")}>📋 All Jobs</button>
+        <button className={"vp-tab" + (view === "geo" ? " active" : "")} onClick={() => setView("geo")}>📍 Geographic</button>
+        <button className={"vp-tab" + (view === "sched" ? " active" : "")} onClick={() => setView("sched")}>📅 Schedule</button>
+        <button className={"vp-tab" + (view === "est" ? " active" : "")} onClick={() => setView("est")}>📝 Need Estimates</button>
+      </div>
+
+      {/* All Jobs */}
+      {view === "jobs" && (
+        <div className="vp-shell">
+          <div className="vp-stats">
+            <div className={"vp-stat" + (filter === "all" ? " act k0" : "")} onClick={() => setFilter("all")}>
+              <div className="vp-n">{stat.all}</div><div className="vp-l">All Jobs</div>
+            </div>
+            <div className={"vp-stat" + (filter === "estimating" ? " act k1" : "")} onClick={() => setFilter("estimating")}>
+              <div className="vp-n">{stat.estimating}</div><div className="vp-l">Need Estimate</div>
+            </div>
+            <div className={"vp-stat" + (filter === "buyout" ? " act k2" : "")} onClick={() => setFilter("buyout")}>
+              <div className="vp-n">{stat.buyout}</div><div className="vp-l">Approved</div>
+            </div>
+            <div className={"vp-stat" + (filter === "do_work" ? " act k3" : "")} onClick={() => setFilter("do_work")}>
+              <div className="vp-n">{stat.do_work}</div><div className="vp-l">Scheduled</div>
+            </div>
+            <div className={"vp-stat" + (filter === "bill" ? " act k4" : "")} onClick={() => setFilter("bill")}>
+              <div className="vp-n">{stat.bill}</div><div className="vp-l">Bill</div>
+            </div>
+          </div>
+          <input className="vp-srch" placeholder="🔍  Search by name, store, address…" value={search} onChange={e => setSearch(e.target.value)} />
+          {filtered.length === 0
+            ? <div className="vp-empty">No jobs in this category.</div>
+            : filtered.map(j => <div key={j.id} data-vp-jobid={j.id}>{renderCard(j)}</div>)
+          }
+        </div>
+      )}
+
+      {/* Geographic */}
+      {view === "geo" && (
+        <div className="vp-shell">
+          <div style={{marginBottom:14}}>
+            {Object.entries(VP_REGIONS).map(([key, r]) => (
+              <button key={key} className={"vp-rtab" + (region === key ? " act" : "")} onClick={() => setRegion(key)}>
+                <span className="vp-rtab-dot" style={{background:r.color}}></span>
+                {r.label}
+                <span className="vp-rtab-cnt">{(jobsByRegion[key]||[]).length}</span>
+              </button>
+            ))}
+          </div>
+          {(jobsByRegion[region]||[]).length === 0
+            ? <div className="vp-empty">No active jobs in {VP_REGIONS[region].label}.</div>
+            : (jobsByRegion[region]||[]).map(j => <div key={j.id} data-vp-jobid={j.id}>{renderCard(j)}</div>)
+          }
+        </div>
+      )}
+
+      {/* Schedule */}
+      {view === "sched" && (
+        <div className="vp-shell">
+          {renderCalendar()}
+        </div>
+      )}
+
+      {/* Need Estimates */}
+      {view === "est" && (
+        <div className="vp-shell">
+          <div className="vp-est-hdr">
+            <div className="vp-est-hdr-icon">📝</div>
+            <div>
+              <div className="vp-est-hdr-title">Jobs Needing Estimates</div>
+              <div className="vp-est-hdr-sub">Submit your bid for these jobs. Scope and site details included.</div>
+            </div>
+            <div className="vp-est-cnt">{stat.estimating + visibleJobs.filter(j => j.stage === "waiting_quote").length}</div>
+          </div>
+          {(() => {
+            const est = visibleJobs.filter(j => j.stage === "estimating" || j.stage === "waiting_quote");
+            return est.length === 0
+              ? <div className="vp-empty">No jobs currently need estimates. You're all caught up!</div>
+              : est.map(j => <div key={j.id} data-vp-jobid={j.id}>{renderCard(j)}</div>);
+          })()}
+        </div>
+      )}
+    </div>
+  );
+}
+// ── End VendorPortal ───────────────────────────────────────────────────────────
+
+
 export default function App() {
   // URL routing — sub-facing page
   const urlToken  = useMemo(() => new URLSearchParams(window.location.search).get("subtoken"), []);
   const urlSched  = useMemo(() => new URLSearchParams(window.location.search).get("schedtoken"), []);
   const urlVendor = useMemo(() => new URLSearchParams(window.location.search).get("vendortoken"), []);
+  const urlVendorPortal = useMemo(() => new URLSearchParams(window.location.search).get("vendor"), []);
+  const urlPreviewSubId = useMemo(() => new URLSearchParams(window.location.search).get("subId"), []);
 
   const [activeBU,  setActiveBU]  = useState("all");
   const [activeNav, setActiveNav] = useState("dashboard");
@@ -3051,6 +3722,9 @@ export default function App() {
   const [fmSiteSearch,    setFmSiteSearch]    = useState("");
   const [fmForm,        setFmForm]        = useState({ name: "", companyId: "", siteId: "", approverContactId: "", contractValue: "", grossProfit: "", nte: "", stage: "estimating", startDate: "", endDate: "", pm: "", pct: 0, bidDueDate: "", quoteDueDate: "", proposalDate: "", followUpDate: "", buyoutDate: "", invoiceDate: "", notes: "", storeCode: "", projectNo: "", ownersProjectNo: "", vendorInvoiceAmount: "", vendorInvoiceNumber: "", subcontractorId: "", vendorNextStep: "", vendorQuotePrice: "", vendorQuoteScope: "", scopeOfWork: "", coordinator: "" });
   const [selectedFmJob, setSelectedFmJob] = useState(null);
+  const [fmFullScreenJob, setFmFullScreenJob] = useState(null); // full-screen detail view (from list + kanban)
+  const [showVendorPickerForJob, setShowVendorPickerForJob] = useState(null); // job whose row vendor picker is open
+  const [vendorPickerSearch, setVendorPickerSearch] = useState("");
   const [fmSearch,      setFmSearch]      = useState("");
   const [fmCoordFilter, setFmCoordFilter] = useState("all");
   const [selectedPM,    setSelectedPM]    = useState(null);
@@ -3678,7 +4352,7 @@ export default function App() {
     setShowFmForm(false);
     setFmCompanySearch(""); setFmSiteSearch("");
   };
-  const deleteFm = (id) => { setFmJobs(fmJobs.filter(j => j.id !== id)); setSelectedFmJob(null); try { supa.from("fm_jobs").delete().eq("id", id); } catch(e) {} };
+  const deleteFm = (id) => { setFmJobs(fmJobs.filter(j => j.id !== id)); setSelectedFmJob(null); setFmFullScreenJob(null); try { supa.from("fm_jobs").delete().eq("id", id); } catch(e) {} };
   // Persist a patch to an FM job in both state and DB
   const updateFmJobPersist = (id, patch) => {
     setFmJobs(prev => prev.map(j => {
@@ -4180,6 +4854,10 @@ Return ONLY valid JSON, no markdown, no extra text:
   if (urlToken)  return <SubPage    token={urlToken}  fmJobs={fmJobs} setFmJobs={setFmJobs} subcontractors={subcontractors} companies={companies} sites={sites} />;
   if (urlSched)  return <SchedPage  token={urlSched}  fmJobs={fmJobs} setFmJobs={setFmJobs} subcontractors={subcontractors} companies={companies} sites={sites} />;
   if (urlVendor) return <VendorPage token={urlVendor} fmJobs={fmJobs} setFmJobs={setFmJobs} subcontractors={subcontractors} companies={companies} sites={sites} />;
+  if (urlVendorPortal !== null) {
+    const previewSubId = urlVendorPortal === "preview" ? urlPreviewSubId : null;
+    return <VendorPortal adminPreviewSubId={previewSubId} fmJobs={fmJobs} setFmJobs={setFmJobs} subcontractors={subcontractors} companies={companies} sites={sites} contacts={contacts} />;
+  }
 
   // Loading screen while Supabase fetches
   if (!supaReady && !dbError) return (
@@ -7547,7 +8225,7 @@ Example:
                                 const overdue = actionDate && new Date(actionDate) < new Date();
                                 const soon    = actionDate && new Date(actionDate) <= new Date(Date.now() + 3*86400000);
                                 return (
-                                  <div key={job.id} style={{ background: "#ECEEF8", border: "1px solid " + st.color + "25", borderRadius: 8, padding: 12, cursor: "pointer" }} onClick={() => setSelectedFmJob(job)}>
+                                  <div key={job.id} style={{ background: "#ECEEF8", border: "1px solid " + st.color + "25", borderRadius: 8, padding: 12, cursor: "pointer" }} onClick={() => setFmFullScreenJob(job)}>
                                     <div style={{ fontSize: 12, color: "#1A2240", fontWeight: 500, lineHeight: 1.35, marginBottom: 6 }}>{job.name}</div>
                                     {co && <div style={{ fontSize: 10, color: "#3B6FE8", marginBottom: 3 }}>🏢 {co.name}</div>}
                                     {ctName && <div style={{ fontSize: 10, color: "#353C62", marginBottom: 3 }}>👤 {ctName}</div>}
@@ -9431,11 +10109,20 @@ window.addEventListener('message',function(e){
                         const sub  = subcontractors.find(s => s.id === job.subcontractorId);
                         const rowBg = idx % 2 === 0 ? "#F8F9FD" : "#F2F4FA";
                         const ctName = ct ? `${ct.firstName||""} ${ct.lastName||""}`.trim() : "";
+                        const pickerOpen = showVendorPickerForJob === job.id;
+                        const activeSubs = subcontractors.filter(s => !s.archived);
+                        const filteredSubs = vendorPickerSearch
+                          ? activeSubs.filter(s =>
+                              (s.name||"").toLowerCase().includes(vendorPickerSearch.toLowerCase()) ||
+                              (s.trade||"").toLowerCase().includes(vendorPickerSearch.toLowerCase()) ||
+                              (s.services||[]).some(sv => (sv||"").toLowerCase().includes(vendorPickerSearch.toLowerCase()))
+                            )
+                          : activeSubs;
                         return (
                           <tr key={job.id} style={{ background: rowBg, borderBottom: "1px solid #D8DCF0", cursor: "pointer", transition: "background 0.1s" }}
                             onMouseEnter={e => e.currentTarget.style.background = "#EBF0FF"}
                             onMouseLeave={e => e.currentTarget.style.background = rowBg}
-                            onClick={() => setSelectedFmJob(job)}>
+                            onClick={() => setFmFullScreenJob(job)}>
                             {/* Stage dot */}
                             <td style={{ padding: "10px 12px" }}>
                               <div style={{ width: 8, height: 8, borderRadius: "50%", background: st.color, margin: "auto" }} title={st.label} />
@@ -9462,9 +10149,54 @@ window.addEventListener('message',function(e){
                                 {site ? `📍 ${site.address || site.storeNumber || "Site"}` : "—"}
                               </div>
                             </td>
-                            {/* Vendor */}
-                            <td style={{ padding: "10px 12px", fontSize: 12 }}>
-                              {sub ? <span style={{ background: "#3B6FE820", color: buColor.accent, padding: "2px 8px", borderRadius: 4, fontSize: 11, whiteSpace: "nowrap" }}>{sub.name}</span> : <span style={{ color: "#3D4570", fontSize: 11 }}>—</span>}
+                            {/* Vendor — searchable picker */}
+                            <td style={{ padding: "10px 12px", fontSize: 12, position: "relative" }} onClick={e => e.stopPropagation()}>
+                              {pickerOpen ? (
+                                <div style={{ position: "absolute", top: "calc(100% - 2px)", left: 6, zIndex: 50, width: 280, background: "#FFF", border: "1px solid #3B6FE860", borderRadius: 8, boxShadow: "0 8px 24px rgba(30,38,80,0.18)", padding: 10 }}>
+                                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                                    <div style={{ fontSize: 10, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", fontWeight: 700 }}>Assign Vendor</div>
+                                    <button onClick={() => { setShowVendorPickerForJob(null); setVendorPickerSearch(""); }}
+                                      style={{ background: "transparent", border: "none", color: "#8892B8", cursor: "pointer", fontSize: 14, padding: 0 }}>✕</button>
+                                  </div>
+                                  <input autoFocus className="fi" style={{ width: "100%", fontSize: 11, marginBottom: 8 }} placeholder="Search vendor name, trade, service…"
+                                    value={vendorPickerSearch} onChange={e => setVendorPickerSearch(e.target.value)} />
+                                  <div style={{ maxHeight: 240, overflowY: "auto", display: "flex", flexDirection: "column", gap: 3 }}>
+                                    {filteredSubs.length === 0 && (
+                                      <div style={{ fontSize: 11, color: "#8892B8", textAlign: "center", padding: "16px 8px", fontStyle: "italic" }}>No vendors match</div>
+                                    )}
+                                    {filteredSubs.slice(0, 50).map(s => (
+                                      <div key={s.id} onClick={() => { updateFmJobPersist(job.id, { subcontractorId: s.id }); setShowVendorPickerForJob(null); setVendorPickerSearch(""); }}
+                                        style={{ padding: "7px 10px", borderRadius: 5, cursor: "pointer", background: job.subcontractorId === s.id ? "#3B6FE815" : "transparent", border: "1px solid " + (job.subcontractorId === s.id ? "#3B6FE840" : "transparent") }}
+                                        onMouseEnter={e => { if (job.subcontractorId !== s.id) e.currentTarget.style.background = "#F0F2F8"; }}
+                                        onMouseLeave={e => { if (job.subcontractorId !== s.id) e.currentTarget.style.background = "transparent"; }}>
+                                        <div style={{ fontSize: 12, color: "#1A2240", fontWeight: 600 }}>{s.name}</div>
+                                        {(s.trade || (s.services||[]).length > 0) && (
+                                          <div style={{ fontSize: 10, color: "#4A5278", marginTop: 2 }}>
+                                            {s.trade}{s.trade && (s.services||[]).length > 0 ? " · " : ""}{(s.services||[]).slice(0,3).join(", ")}
+                                          </div>
+                                        )}
+                                      </div>
+                                    ))}
+                                  </div>
+                                  {job.subcontractorId && (
+                                    <button onClick={() => { updateFmJobPersist(job.id, { subcontractorId: "" }); setShowVendorPickerForJob(null); setVendorPickerSearch(""); }}
+                                      style={{ width: "100%", marginTop: 8, padding: "6px", borderRadius: 5, border: "1px solid #F8717140", background: "transparent", color: "#F87171", fontSize: 10, cursor: "pointer", fontFamily: "inherit" }}>
+                                      Clear vendor
+                                    </button>
+                                  )}
+                                </div>
+                              ) : null}
+                              {sub ? (
+                                <button onClick={() => { setShowVendorPickerForJob(job.id); setVendorPickerSearch(""); }}
+                                  style={{ background: "#3B6FE820", color: buColor.accent, padding: "3px 9px", borderRadius: 4, fontSize: 11, whiteSpace: "nowrap", border: "1px solid #3B6FE830", cursor: "pointer", fontFamily: "inherit" }}>
+                                  {sub.name}
+                                </button>
+                              ) : (
+                                <button onClick={() => { setShowVendorPickerForJob(job.id); setVendorPickerSearch(""); }}
+                                  style={{ background: "transparent", color: "#3B6FE8", padding: "3px 9px", borderRadius: 4, fontSize: 11, whiteSpace: "nowrap", border: "1px dashed #3B6FE860", cursor: "pointer", fontFamily: "inherit" }}>
+                                  + Add Vendor
+                                </button>
+                              )}
                             </td>
                             {/* Gross Value */}
                             <td style={{ padding: "10px 12px", fontSize: 12, color: "#1A2240", fontWeight: 600, whiteSpace: "nowrap" }}>{fmt(job.contractValue)}</td>
@@ -10243,6 +10975,10 @@ window.addEventListener('message',function(e){
 
                                 {/* Actions */}
                                 <div style={{display:"flex",gap:4,justifyContent:"flex-end"}} onClick={e=>e.stopPropagation()}>
+                                  {s.portalEnabled && (
+                                    <button className="btn-ghost" style={{fontSize:10,padding:"3px 8px",color:"#18181A",borderColor:"#18181A40"}} title="Open vendor portal (admin preview)"
+                                      onClick={()=>window.open(`/?vendor=preview&subId=${s.id}`,"_blank")}>🔑</button>
+                                  )}
                                   <button className="btn-ghost" style={{fontSize:10,padding:"3px 8px"}} onClick={()=>{setEditSubId(s.id);setSubForm({...s});setShowSubForm(true);}}>✎</button>
                                   <button className="btn-ghost" style={{fontSize:10,padding:"3px 8px",color:"#F97316",borderColor:"#F9731620"}} onClick={()=>{
                                     const updated={...s,archived:true};
@@ -10472,8 +11208,20 @@ window.addEventListener('message',function(e){
                           </div>
                         )}
 
-                        {/* Edit button */}
-                        <button className="btn-primary" style={{width:"100%"}} onClick={()=>{setEditSubId(sp.id);setSubForm({...sp,w9FileData:null,w9FileName:"",coiFileData:null,coiFileName:""});setShowSubForm(true);setSelectedSubProfile(null);}}>✎ Edit Subcontractor</button>
+                        {/* Edit + Portal buttons */}
+                        <div style={{display:"flex",gap:8,flexDirection:"column"}}>
+                          <button className="btn-primary" style={{width:"100%"}} onClick={()=>{setEditSubId(sp.id);setSubForm({...sp,w9FileData:null,w9FileName:"",coiFileData:null,coiFileName:""});setShowSubForm(true);setSelectedSubProfile(null);}}>✎ Edit Subcontractor</button>
+                          {sp.portalEnabled ? (
+                            <button onClick={()=>window.open(`/?vendor=preview&subId=${sp.id}`,"_blank")}
+                              style={{width:"100%",padding:"10px",background:"#18181A",color:"#fff",border:"none",borderRadius:6,cursor:"pointer",fontFamily:"inherit",fontSize:12,fontWeight:600}}>
+                              🔑 Open Vendor Portal (Admin Preview)
+                            </button>
+                          ) : (
+                            <div style={{padding:"10px 12px",background:"#FFF8F0",border:"1px solid #FED7AA",borderRadius:6,fontSize:11,color:"#C2410C",textAlign:"center"}}>
+                              Portal not enabled — set username/password in Edit
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
                   );
@@ -15061,11 +15809,18 @@ window.addEventListener('message',function(e){
         </div>
       )}
 
-      {/* -- FM JOB SIDE PANEL -- */}
-      {selectedFmJob && (
-        <div className="side-panel slide-in" style={{ overflowY: "auto" }}>
+      {/* -- FM JOB SIDE PANEL / FULL-SCREEN -- */}
+      {(selectedFmJob || fmFullScreenJob) && (() => {
+        const isFullScreen = !!fmFullScreenJob;
+        const job  = fmFullScreenJob || selectedFmJob;
+        const closePanel = () => { setSelectedFmJob(null); setFmFullScreenJob(null); };
+        const wrapperClass = isFullScreen ? "fm-fullscreen fade-in" : "side-panel slide-in";
+        const wrapperStyle = isFullScreen
+          ? { position: "fixed", top: 52, right: 0, bottom: 0, left: sidebarCollapsed ? 60 : 200, background: "#F0F2F8", zIndex: 50, overflowY: "auto", padding: "24px 40px", transition: "left 0.2s" }
+          : { overflowY: "auto" };
+        return (
+        <div className={wrapperClass} style={wrapperStyle}>
           {(() => {
-            const job  = selectedFmJob;
             const st   = FM_STAGES.find(s => s.id === job.stage) || FM_STAGES[0];
             const co   = companies.find(c => c.id === job.companyId);
             const site = sites.find(s => s.id === job.siteId);
@@ -15079,7 +15834,7 @@ window.addEventListener('message',function(e){
             const update = (fields) => {
               const updated = { ...job, ...fields };
               setFmJobs(fmJobs.map(j => j.id === job.id ? updated : j));
-              setSelectedFmJob(updated);
+              if (isFullScreen) setFmFullScreenJob(updated); else setSelectedFmJob(updated);
               try { supa.from("fm_jobs").update(fmJobToDB(updated)).eq("id", job.id); } catch(e) {}
             };
             // Add a new contact tied to this job's company, persist to DB, link to job
@@ -15105,16 +15860,36 @@ window.addEventListener('message',function(e){
               update({ approverContactId: newContact.id });
             };
             return (
-              <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 16, maxWidth: isFullScreen ? 1100 : "none", margin: isFullScreen ? "0 auto" : 0 }}>
                 {/* Header */}
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 11, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 4 }}>FM Job</div>
-                    <div style={{ fontSize: 15, color: "#1A2240", fontWeight: 700, lineHeight: 1.3 }}>{job.name}</div>
-                    {job.storeCode && <div style={{ fontSize: 11, color: "#4A5278", marginTop: 2 }}>#{job.storeCode} {job.projectNo ? "· " + job.projectNo : ""}</div>}
+                {isFullScreen ? (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 14, paddingBottom: 16, borderBottom: "1px solid #CBD1E8" }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                      <button onClick={closePanel}
+                        style={{ display: "flex", alignItems: "center", gap: 6, background: "#FFF", border: "1px solid #CBD1E8", borderRadius: 7, padding: "8px 14px", fontSize: 12, color: "#3B6FE8", fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
+                        ← Back to list
+                      </button>
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <button className="btn-ghost" onClick={() => { openEditFm(job); closePanel(); }} style={{ fontSize: 12 }}>✎ Full Edit</button>
+                        <button className="btn-ghost" style={{ color: "#F87171", borderColor: "#F8717120", fontSize: 12 }} onClick={() => deleteFm(job.id)}>✕ Delete</button>
+                      </div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 11, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 4 }}>FM Job · <span style={{ color: st.color }}>{st.label}</span></div>
+                      <div style={{ fontSize: 24, color: "#1A2240", fontWeight: 700, lineHeight: 1.2 }}>{job.name}</div>
+                      {(job.storeCode || job.projectNo) && <div style={{ fontSize: 12, color: "#4A5278", marginTop: 4 }}>{job.storeCode ? "#" + job.storeCode : ""}{job.storeCode && job.projectNo ? " · " : ""}{job.projectNo ? "Project " + job.projectNo : ""}</div>}
+                    </div>
                   </div>
-                  <button className="btn-ghost" onClick={() => setSelectedFmJob(null)} style={{ flexShrink: 0 }}>✕</button>
-                </div>
+                ) : (
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 11, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 4 }}>FM Job</div>
+                      <div style={{ fontSize: 15, color: "#1A2240", fontWeight: 700, lineHeight: 1.3 }}>{job.name}</div>
+                      {job.storeCode && <div style={{ fontSize: 11, color: "#4A5278", marginTop: 2 }}>#{job.storeCode} {job.projectNo ? "· " + job.projectNo : ""}</div>}
+                    </div>
+                    <button className="btn-ghost" onClick={closePanel} style={{ flexShrink: 0 }}>✕</button>
+                  </div>
+                )}
 
                 {/* ── LINKED RECORDS ── Company / Customer / Site cards */}
                 <div style={{ background: "#F8F9FD", border: "1px solid #CBD1E8", borderRadius: 10, padding: "12px 14px" }}>
@@ -15126,7 +15901,7 @@ window.addEventListener('message',function(e){
                     {co ? (
                       <div>
                         <div style={{ fontSize: 13, color: "#3B6FE8", fontWeight: 600, cursor: "pointer", marginBottom: 4 }}
-                          onClick={() => { setSelectedFmJob(null); setSelectedCompany(co); }}>
+                          onClick={() => { closePanel(); setSelectedCompany(co); }}>
                           {co.name} →
                         </div>
                         <div style={{ display: "flex", gap: 6 }}>
@@ -15154,7 +15929,7 @@ window.addEventListener('message',function(e){
                     {ct ? (
                       <div>
                         <div style={{ fontSize: 13, color: "#A78BFA", fontWeight: 600, cursor: co ? "pointer" : "default", marginBottom: 2 }}
-                          onClick={() => { if (co) { setSelectedFmJob(null); setSelectedContact({ contact: ct, company: co }); } }}>
+                          onClick={() => { if (co) { closePanel(); setSelectedContact({ contact: ct, company: co }); } }}>
                           {`${ct.firstName||""} ${ct.lastName||""}`.trim()}{co ? " →" : ""}
                         </div>
                         {ct.title && <div style={{ fontSize: 10, color: "#4A5278", marginBottom: 2 }}>{ct.title}</div>}
@@ -15198,7 +15973,7 @@ window.addEventListener('message',function(e){
                     {site ? (
                       <div>
                         <div style={{ fontSize: 13, color: "#60A5FA", fontWeight: 600, cursor: "pointer", marginBottom: 2 }}
-                          onClick={() => { setSelectedFmJob(null); setSelectedSite(site); }}>
+                          onClick={() => { closePanel(); setSelectedSite(site); }}>
                           {site.storeNumber ? `#${site.storeNumber} · ` : ""}{site.address || "Site"} →
                         </div>
                         {site.city && <div style={{ fontSize: 10, color: "#4A5278", marginBottom: 4 }}>{site.city}{site.state ? ", " + site.state : ""}{site.zip ? " " + site.zip : ""}</div>}
@@ -16126,14 +16901,15 @@ window.addEventListener('message',function(e){
                 </div>
 
                 <div style={{ display: "flex", gap: 8 }}>
-                  <button className="btn-ghost" style={{ flex: 1 }} onClick={() => { openEditFm(job); setSelectedFmJob(null); }}>✎ Full Edit</button>
+                  <button className="btn-ghost" style={{ flex: 1 }} onClick={() => { openEditFm(job); closePanel(); }}>✎ Full Edit</button>
                   <button className="btn-ghost" style={{ color: "#F87171", borderColor: "#F8717120" }} onClick={() => deleteFm(job.id)}>✕</button>
                 </div>
               </div>
             );
           })()}
         </div>
-      )}
+        );
+      })()}
 
       {/* -- CAPEX JOB FORM -- */}
       {showCapexForm && (
@@ -17319,6 +18095,34 @@ window.addEventListener('message',function(e){
                 <div style={{ fontSize: 10, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5 }}>Notes</div>
                 <textarea className="fi" rows={3} style={{ width: "100%", boxSizing: "border-box", resize: "vertical" }} value={subForm.notes||""} onChange={e => setSubForm({ ...subForm, notes: e.target.value })} />
               </div>
+
+              {/* ── PORTAL ACCESS ── */}
+              <div style={{ borderTop: "1px solid #D4D9EE", paddingTop: 16, marginTop: 8 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                  <div style={{ fontSize: 11, color: "#1A2240", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em" }}>🔑 Vendor Portal Access</div>
+                  <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: "#4A5278", cursor: "pointer" }}>
+                    <input type="checkbox" checked={!!subForm.portalEnabled} onChange={e => setSubForm({ ...subForm, portalEnabled: e.target.checked })} />
+                    Portal Enabled
+                  </label>
+                </div>
+                {subForm.portalEnabled && (
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                    <div>
+                      <div style={{ fontSize: 10, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5 }}>Username</div>
+                      <input className="fi" value={subForm.username||""} onChange={e => setSubForm({ ...subForm, username: e.target.value.trim() })} placeholder="e.g. tradesmans" />
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 10, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5 }}>
+                        Password {subForm.passwordHash && !subForm._newPassword && <span style={{ color: "#4ADE80", fontSize: 9 }}>· current saved</span>}
+                      </div>
+                      <input className="fi" type="text" value={subForm._newPassword||""} onChange={e => setSubForm({ ...subForm, _newPassword: e.target.value })} placeholder={subForm.passwordHash ? "(leave blank to keep)" : "Set a password"} />
+                    </div>
+                    <div style={{ gridColumn: "1 / -1", fontSize: 10, color: "#8a8a92" }}>
+                      Portal URL: <code style={{ background: "#F0F2F8", padding: "1px 5px", borderRadius: 3 }}>{window.location.origin}/?vendor=login</code>
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
 
             <div style={{ display: "flex", gap: 8, marginTop: 20 }}>
@@ -17336,6 +18140,11 @@ window.addEventListener('message',function(e){
                   } catch(e) {}
                 }
                 const formWithCoords = { ...subForm, lat, lng };
+                // If a new password was typed, hash it; otherwise keep existing hash. Strip _newPassword (it's UI-only)
+                if (formWithCoords._newPassword) {
+                  formWithCoords.passwordHash = await hashPassword(formWithCoords._newPassword);
+                }
+                delete formWithCoords._newPassword;
                 if (editSubId) {
                   const updated = { ...subcontractors.find(s => s.id === editSubId), ...formWithCoords };
                   setSubcontractors(subcontractors.map(s => s.id === editSubId ? updated : s));
