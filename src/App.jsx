@@ -16724,9 +16724,9 @@ window.addEventListener('message',function(e){
         const isFullScreen = !!fmFullScreenJob;
         const job  = fmFullScreenJob || selectedFmJob;
         const closePanel = () => { setSelectedFmJob(null); setFmFullScreenJob(null); };
-        const wrapperClass = isFullScreen ? "fm-fullscreen fade-in" : "side-panel slide-in";
+        const wrapperClass = isFullScreen ? "fm-fullscreen fade-in t-page" : "side-panel slide-in";
         const wrapperStyle = isFullScreen
-          ? { position: "fixed", top: 52, right: 0, bottom: 0, left: sidebarCollapsed ? 60 : 200, background: "#F0F2F8", zIndex: 50, overflowY: "auto", padding: "24px 40px", transition: "left 0.2s" }
+          ? { position: "fixed", top: 56, right: 0, bottom: 0, left: sidebarCollapsed ? 64 : 220, background: "var(--t-paper)", zIndex: 50, overflowY: "auto", padding: "28px 36px", transition: "left 0.2s" }
           : { overflowY: "auto" };
         return (
         <div className={wrapperClass} style={wrapperStyle}>
@@ -16773,138 +16773,230 @@ window.addEventListener('message',function(e){
               <div style={{ display: "flex", flexDirection: "column", gap: 16, maxWidth: isFullScreen ? 1100 : "none", margin: isFullScreen ? "0 auto" : 0 }}>
                 {/* Header */}
                 {isFullScreen ? (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 14, paddingBottom: 16, borderBottom: "1px solid #CBD1E8" }}>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 14, paddingBottom: 16, borderBottom: "1px solid var(--t-line)" }}>
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                      <button onClick={closePanel}
-                        style={{ display: "flex", alignItems: "center", gap: 6, background: "#FFF", border: "1px solid #CBD1E8", borderRadius: 7, padding: "8px 14px", fontSize: 12, color: "#3B6FE8", fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
-                        ← Back to list
-                      </button>
+                      <button className="t-btn t-btn-ghost" onClick={closePanel}>← Back to list</button>
                       <div style={{ display: "flex", gap: 8 }}>
-                        <button className="btn-ghost" onClick={() => { openEditFm(job); closePanel(); }} style={{ fontSize: 12 }}>✎ Full Edit</button>
-                        <button className="btn-ghost" style={{ color: "#F87171", borderColor: "#F8717120", fontSize: 12 }} onClick={() => deleteFm(job.id)}>✕ Delete</button>
+                        <button className="t-btn t-btn-ghost t-btn-sm" onClick={() => { openEditFm(job); closePanel(); }}>✎ Full Edit</button>
+                        <button className="t-btn t-btn-ghost t-btn-sm t-btn-danger" onClick={() => deleteFm(job.id)}>✕ Delete</button>
                       </div>
                     </div>
                     <div>
-                      <div style={{ fontSize: 11, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 4 }}>FM Job · <span style={{ color: st.color }}>{st.label}</span></div>
-                      <div style={{ fontSize: 24, color: "#1A2240", fontWeight: 700, lineHeight: 1.2 }}>{job.name}</div>
-                      {(job.storeCode || job.projectNo) && <div style={{ fontSize: 12, color: "#4A5278", marginTop: 4 }}>{job.storeCode ? "#" + job.storeCode : ""}{job.storeCode && job.projectNo ? " · " : ""}{job.projectNo ? "Project " + job.projectNo : ""}</div>}
+                      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+                        <span className="t-eyebrow">FM Job</span>
+                        <span className={"t-pill " + fmStagePill(job.stage)}>{st.label}</span>
+                        {job.storeCode && <span className="t-mono-tag">#{job.storeCode}</span>}
+                        {job.projectNo && <span className="t-mono-tag">Project {job.projectNo}</span>}
+                      </div>
+                      <div className="t-h1" style={{ fontSize: 26, lineHeight: 1.15 }}>{job.name}</div>
                     </div>
                   </div>
                 ) : (
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 11, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 4 }}>FM Job</div>
-                      <div style={{ fontSize: 15, color: "#1A2240", fontWeight: 700, lineHeight: 1.3 }}>{job.name}</div>
-                      {job.storeCode && <div style={{ fontSize: 11, color: "#4A5278", marginTop: 2 }}>#{job.storeCode} {job.projectNo ? "· " + job.projectNo : ""}</div>}
+                      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                        <span className="t-eyebrow">FM Job</span>
+                        <span className={"t-pill " + fmStagePill(job.stage)}>{st.label}</span>
+                      </div>
+                      <div className="t-h2" style={{ lineHeight: 1.3 }}>{job.name}</div>
+                      {job.storeCode && <div className="t-section-meta" style={{ marginTop: 4 }}><span className="t-mono">#{job.storeCode}</span> {job.projectNo ? "· " + job.projectNo : ""}</div>}
                     </div>
-                    <button className="btn-ghost" onClick={closePanel} style={{ flexShrink: 0 }}>✕</button>
+                    <button className="t-btn t-btn-ghost t-btn-sm" onClick={closePanel} style={{ flexShrink: 0 }}>✕</button>
                   </div>
                 )}
 
+                {/* ─── STAGE STATUS CARD — stage-aware summary ─── */}
+                {(() => {
+                  const cvNum = Number(job.contractValue || 0);
+                  const gpNum = Number(job.grossProfit || 0) || (cvNum > 0 ? fmGrossProfit(cvNum) : 0);
+                  const vendorNTE = Math.max(0, cvNum - gpNum);
+                  const quoted = Number(job.vendorQuotePrice || 0);
+
+                  // Decide the headline / tone for this stage
+                  let title = st.label, subtitle = "", tone = "neutral";
+                  switch (job.stage) {
+                    case "estimating":
+                      title = "Estimating";
+                      subtitle = job.estimatingPath === "known_vendor" ? "Known vendor path — pick a vendor to begin" :
+                                 job.estimatingPath === "bid_out" ? "Bid out path — invite vendors" :
+                                 job.estimatingPath === "self_estimate" ? "Self-estimate path — build the price" :
+                                 "Choose how this job will be priced";
+                      tone = "pending";
+                      break;
+                    case "waiting_quote":
+                      title = "Waiting on Quotes";
+                      subtitle = job.estimatingPath === "bid_out" ? "Invited vendors are reviewing in their portals" :
+                                 sub ? sub.name + " is reviewing in their portal" : "Awaiting vendor response";
+                      tone = "approved";
+                      break;
+                    case "generate_proposal":
+                      title = "Generate Proposal";
+                      subtitle = quoted > 0 ? "Quote received — build the customer proposal" : "Ready to generate proposal";
+                      tone = "approval";
+                      break;
+                    case "owner_approval":
+                      title = "Waiting for Owner Approval";
+                      subtitle = "Proposal sent — awaiting customer sign-off";
+                      tone = "approval";
+                      break;
+                    case "buyout":
+                      title = "Approved";
+                      subtitle = "Vendor needs to accept and schedule";
+                      tone = "buyout";
+                      break;
+                    case "do_work":
+                      title = "Scheduled — Work in Progress";
+                      subtitle = job.startDate ? "Start date: " + job.startDate : "Work scheduled";
+                      tone = "dowork";
+                      break;
+                    case "bill":
+                      title = "Bill";
+                      subtitle = job.vendorInvoiceAmount > 0 ? "Invoice submitted by vendor" : "Awaiting vendor invoice";
+                      tone = "warn";
+                      break;
+                    default: break;
+                  }
+                  const toneVar = ({pending:"--t-pending", approved:"--t-approved", approval:"--t-approval", buyout:"--t-buyout", dowork:"--t-dowork", warn:"--t-warn", neutral:"--t-ink3"})[tone];
+                  const toneBg  = ({pending:"--t-pending-bg", approved:"--t-approved-bg", approval:"--t-approval-bg", buyout:"--t-buyout-bg", dowork:"--t-dowork-bg", warn:"--t-warn-bg", neutral:"--t-paper"})[tone];
+
+                  // Facts grid
+                  const facts = [];
+                  if (cvNum > 0) facts.push({ label: "Gross Value", val: fmt(cvNum), mono: true });
+                  if (gpNum > 0) facts.push({ label: "Gross Profit", val: fmt(gpNum), mono: true, color: "var(--t-dowork)" });
+                  if (vendorNTE > 0) facts.push({ label: "Vendor NTE", val: fmt(vendorNTE), mono: true, color: "var(--t-warn)" });
+                  if (sub) facts.push({ label: "Vendor", val: sub.name });
+                  if (quoted > 0 && job.stage !== "estimating") facts.push({ label: "Vendor Quote", val: fmt(quoted), mono: true });
+                  if (job.startDate && ["buyout","do_work","bill"].includes(job.stage)) facts.push({ label: "Schedule", val: job.startDate, mono: true, color: "var(--t-dowork)" });
+                  if (job.vendorInvoiceAmount > 0 && job.stage === "bill") facts.push({ label: "Invoice Amt", val: fmt(job.vendorInvoiceAmount), mono: true });
+                  if (job.coordinator) facts.push({ label: "Coordinator", val: job.coordinator });
+
+                  return (
+                    <div className="t-card" style={{ padding: "16px 18px", background: `var(${toneBg})`, borderColor: `color-mix(in srgb, var(${toneVar}) 25%, transparent)` }}>
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+                        <div>
+                          <div style={{ fontSize: 11, color: `var(${toneVar})`, textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: 600, marginBottom: 2 }}>Current Stage</div>
+                          <div style={{ fontSize: 18, fontWeight: 600, color: "var(--t-ink)" }}>{title}</div>
+                          {subtitle && <div style={{ fontSize: 12, color: "var(--t-ink2)", marginTop: 3 }}>{subtitle}</div>}
+                        </div>
+                        <span className={"t-pill " + fmStagePill(job.stage)} style={{ fontSize: 12, padding: "5px 12px" }}>{st.label}</span>
+                      </div>
+                      {/* Facts grid */}
+                      {facts.length > 0 && (
+                        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(110px, 1fr))", gap: 12, paddingTop: 10, borderTop: "1px solid var(--t-line2)" }}>
+                          {facts.map((f, i) => (
+                            <div key={i}>
+                              <div style={{ fontSize: 10, color: "var(--t-ink3)", textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 500, marginBottom: 2 }}>{f.label}</div>
+                              <div style={{ fontSize: 14, fontWeight: 600, color: f.color || "var(--t-ink)", fontFamily: f.mono ? "var(--t-mono)" : "inherit" }}>{f.val}</div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+
                 {/* ── LINKED RECORDS ── Company / Customer / Site cards */}
-                <div style={{ background: "#F8F9FD", border: "1px solid #CBD1E8", borderRadius: 10, padding: "12px 14px" }}>
-                  <div style={{ fontSize: 10, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", fontWeight: 700, marginBottom: 10 }}>🔗 Linked Records</div>
+                <div className="t-card" style={{ padding: "14px 16px", background: "var(--t-surface)" }}>
+                  <div className="t-eyebrow" style={{ marginBottom: 12 }}>🔗 Linked Records</div>
+                  <div style={{ display: "grid", gridTemplateColumns: isFullScreen ? "repeat(3, 1fr)" : "1fr", gap: 10 }}>
 
-                  {/* COMPANY CARD */}
-                  <div style={{ background: "#FFF", border: "1px solid " + (co ? "#3B6FE830" : "#CBD1E8"), borderRadius: 8, padding: "10px 12px", marginBottom: 8 }}>
-                    <div style={{ fontSize: 9, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 4 }}>🏢 Company</div>
-                    {co ? (
-                      <div>
-                        <div style={{ fontSize: 13, color: "#3B6FE8", fontWeight: 600, cursor: "pointer", marginBottom: 4 }}
-                          onClick={() => { closePanel(); setSelectedCompany(co); }}>
-                          {co.name} →
+                    {/* COMPANY CARD */}
+                    <div className="t-card" style={{ padding: "10px 12px", background: "var(--t-paper)", borderColor: co ? "var(--t-line3)" : "var(--t-line)" }}>
+                      <div className="t-eyebrow" style={{ marginBottom: 6 }}>🏢 Company</div>
+                      {co ? (
+                        <div>
+                          <div onClick={() => { closePanel(); setSelectedCompany(co); }}
+                            style={{ fontSize: 13, color: "var(--t-ink)", fontWeight: 600, cursor: "pointer", marginBottom: 6, textDecoration: "underline", textDecorationColor: "var(--t-line3)", textUnderlineOffset: 3 }}>
+                            {co.name} →
+                          </div>
+                          <div style={{ display: "flex", gap: 6 }}>
+                            <select className="t-input" style={{ flex: 1, fontSize: 11, padding: "6px 8px" }} value={job.companyId || ""}
+                              onChange={e => update({ companyId: e.target.value, approverContactId: "", siteId: "" })}>
+                              <option value="">— change company —</option>
+                              {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                            </select>
+                            <button className="t-btn t-btn-ghost t-btn-sm t-btn-danger"
+                              onClick={() => update({ companyId: "", approverContactId: "", siteId: "" })}>Clear</button>
+                          </div>
                         </div>
-                        <div style={{ display: "flex", gap: 6 }}>
-                          <select className="fi" style={{ flex: 1, fontSize: 11 }} value={job.companyId || ""}
-                            onChange={e => update({ companyId: e.target.value, approverContactId: "", siteId: "" })}>
-                            <option value="">— change company —</option>
-                            {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                          </select>
-                          <button className="btn-ghost" style={{ fontSize: 10, color: "#F87171", borderColor: "#F8717120" }}
-                            onClick={() => update({ companyId: "", approverContactId: "", siteId: "" })}>Clear</button>
-                        </div>
-                      </div>
-                    ) : (
-                      <select className="fi" style={{ width: "100%", fontSize: 11 }} value=""
-                        onChange={e => update({ companyId: e.target.value })}>
-                        <option value="">Select a company…</option>
-                        {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                      </select>
-                    )}
-                  </div>
-
-                  {/* CUSTOMER (CONTACT) CARD */}
-                  <div style={{ background: "#FFF", border: "1px solid " + (ct ? "#A78BFA30" : "#CBD1E8"), borderRadius: 8, padding: "10px 12px", marginBottom: 8 }}>
-                    <div style={{ fontSize: 9, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 4 }}>👤 Customer</div>
-                    {ct ? (
-                      <div>
-                        <div style={{ fontSize: 13, color: "#A78BFA", fontWeight: 600, cursor: co ? "pointer" : "default", marginBottom: 2 }}
-                          onClick={() => { if (co) { closePanel(); setSelectedContact({ contact: ct, company: co }); } }}>
-                          {`${ct.firstName||""} ${ct.lastName||""}`.trim()}{co ? " →" : ""}
-                        </div>
-                        {ct.title && <div style={{ fontSize: 10, color: "#4A5278", marginBottom: 2 }}>{ct.title}</div>}
-                        {ct.email && <div style={{ fontSize: 10, color: "#4A5278", marginBottom: 2 }}>✉ {ct.email}</div>}
-                        {ct.phone && <div style={{ fontSize: 10, color: "#4A5278", marginBottom: 4 }}>📞 {ct.phone}</div>}
-                        <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
-                          <select className="fi" style={{ flex: 1, fontSize: 11 }} value={job.approverContactId || ""}
-                            onChange={e => update({ approverContactId: e.target.value })}>
-                            <option value="">— change customer —</option>
-                            {companyContacts.map(c => <option key={c.id} value={c.id}>{`${c.firstName||""} ${c.lastName||""}`.trim()}{c.title ? " · " + c.title : ""}</option>)}
-                          </select>
-                          <button className="btn-ghost" style={{ fontSize: 10, color: "#F87171", borderColor: "#F8717120" }}
-                            onClick={() => update({ approverContactId: "" })}>Clear</button>
-                        </div>
-                      </div>
-                    ) : !job.companyId ? (
-                      <div style={{ fontSize: 11, color: "#8892B8", fontStyle: "italic" }}>Select a company first</div>
-                    ) : (
-                      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                        <select className="fi" style={{ width: "100%", fontSize: 11 }} value=""
-                          onChange={e => update({ approverContactId: e.target.value })}>
-                          <option value="">Select a customer…</option>
-                          {companyContacts.map(c => <option key={c.id} value={c.id}>{`${c.firstName||""} ${c.lastName||""}`.trim()}{c.title ? " · " + c.title : ""}</option>)}
-                          {companyContacts.length === 0 && <option disabled>No contacts at this company</option>}
+                      ) : (
+                        <select className="t-input" style={{ fontSize: 11, padding: "6px 8px" }} value=""
+                          onChange={e => update({ companyId: e.target.value })}>
+                          <option value="">Select a company…</option>
+                          {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                         </select>
-                        <button className="btn-ghost" style={{ fontSize: 11, color: "#A78BFA", borderColor: "#A78BFA40" }}
-                          onClick={addContactToJob}>+ Add new customer</button>
-                      </div>
-                    )}
-                    {ct && (
-                      <div style={{ marginTop: 6 }}>
-                        <button className="btn-ghost" style={{ fontSize: 10, color: "#A78BFA", borderColor: "#A78BFA40", width: "100%" }}
-                          onClick={addContactToJob}>+ Add new customer</button>
-                      </div>
-                    )}
-                  </div>
+                      )}
+                    </div>
 
-                  {/* SITE CARD */}
-                  <div style={{ background: "#FFF", border: "1px solid " + (site ? "#60A5FA30" : "#CBD1E8"), borderRadius: 8, padding: "10px 12px" }}>
-                    <div style={{ fontSize: 9, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 4 }}>📍 Site</div>
-                    {site ? (
-                      <div>
-                        <div style={{ fontSize: 13, color: "#60A5FA", fontWeight: 600, cursor: "pointer", marginBottom: 2 }}
-                          onClick={() => { closePanel(); setSelectedSite(site); }}>
-                          {site.storeNumber ? `#${site.storeNumber} · ` : ""}{site.address || "Site"} →
+                    {/* CUSTOMER (CONTACT) CARD */}
+                    <div className="t-card" style={{ padding: "10px 12px", background: "var(--t-paper)", borderColor: ct ? "var(--t-line3)" : "var(--t-line)" }}>
+                      <div className="t-eyebrow" style={{ marginBottom: 6 }}>👤 Customer</div>
+                      {ct ? (
+                        <div>
+                          <div onClick={() => { if (co) { closePanel(); setSelectedContact({ contact: ct, company: co }); } }}
+                            style={{ fontSize: 13, color: "var(--t-ink)", fontWeight: 600, cursor: co ? "pointer" : "default", marginBottom: 4, textDecoration: co ? "underline" : "none", textDecorationColor: "var(--t-line3)", textUnderlineOffset: 3 }}>
+                            {`${ct.firstName||""} ${ct.lastName||""}`.trim()}{co ? " →" : ""}
+                          </div>
+                          {ct.title && <div style={{ fontSize: 11, color: "var(--t-ink2)", marginBottom: 2 }}>{ct.title}</div>}
+                          {ct.email && <div style={{ fontSize: 11, color: "var(--t-ink2)", marginBottom: 2 }}>✉ {ct.email}</div>}
+                          {ct.phone && <div style={{ fontSize: 11, color: "var(--t-ink2)", marginBottom: 4 }}>📞 {ct.phone}</div>}
+                          <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
+                            <select className="t-input" style={{ flex: 1, fontSize: 11, padding: "6px 8px" }} value={job.approverContactId || ""}
+                              onChange={e => update({ approverContactId: e.target.value })}>
+                              <option value="">— change customer —</option>
+                              {companyContacts.map(c => <option key={c.id} value={c.id}>{`${c.firstName||""} ${c.lastName||""}`.trim()}{c.title ? " · " + c.title : ""}</option>)}
+                            </select>
+                            <button className="t-btn t-btn-ghost t-btn-sm t-btn-danger"
+                              onClick={() => update({ approverContactId: "" })}>Clear</button>
+                          </div>
+                          <button className="t-btn t-btn-ghost t-btn-sm" style={{ width: "100%", marginTop: 6, justifyContent: "center" }}
+                            onClick={addContactToJob}>+ Add new customer</button>
                         </div>
-                        {site.city && <div style={{ fontSize: 10, color: "#4A5278", marginBottom: 4 }}>{site.city}{site.state ? ", " + site.state : ""}{site.zip ? " " + site.zip : ""}</div>}
-                        <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
-                          <select className="fi" style={{ flex: 1, fontSize: 11 }} value={job.siteId || ""}
-                            onChange={e => update({ siteId: e.target.value })}>
-                            <option value="">— change site —</option>
-                            {(job.companyId ? companySites : sites).map(s => <option key={s.id} value={s.id}>{s.storeNumber ? `#${s.storeNumber} ` : ""}{s.address || "Site"}</option>)}
+                      ) : !job.companyId ? (
+                        <div style={{ fontSize: 11, color: "var(--t-ink3)", fontStyle: "italic" }}>Select a company first</div>
+                      ) : (
+                        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                          <select className="t-input" style={{ fontSize: 11, padding: "6px 8px" }} value=""
+                            onChange={e => update({ approverContactId: e.target.value })}>
+                            <option value="">Select a customer…</option>
+                            {companyContacts.map(c => <option key={c.id} value={c.id}>{`${c.firstName||""} ${c.lastName||""}`.trim()}{c.title ? " · " + c.title : ""}</option>)}
+                            {companyContacts.length === 0 && <option disabled>No contacts at this company</option>}
                           </select>
-                          <button className="btn-ghost" style={{ fontSize: 10, color: "#F87171", borderColor: "#F8717120" }}
-                            onClick={() => update({ siteId: "" })}>Clear</button>
+                          <button className="t-btn t-btn-ghost t-btn-sm" onClick={addContactToJob}>+ Add new customer</button>
                         </div>
-                      </div>
-                    ) : (
-                      <select className="fi" style={{ width: "100%", fontSize: 11 }} value=""
-                        onChange={e => update({ siteId: e.target.value })}>
-                        <option value="">Select a site…</option>
-                        {(job.companyId ? companySites : sites).map(s => <option key={s.id} value={s.id}>{s.storeNumber ? `#${s.storeNumber} ` : ""}{s.address || "Site"}</option>)}
-                        {job.companyId && companySites.length === 0 && <option disabled>No sites at this company</option>}
-                      </select>
-                    )}
+                      )}
+                    </div>
+
+                    {/* SITE CARD */}
+                    <div className="t-card" style={{ padding: "10px 12px", background: "var(--t-paper)", borderColor: site ? "var(--t-line3)" : "var(--t-line)" }}>
+                      <div className="t-eyebrow" style={{ marginBottom: 6 }}>📍 Site</div>
+                      {site ? (
+                        <div>
+                          <div onClick={() => { closePanel(); setSelectedSite(site); }}
+                            style={{ fontSize: 13, color: "var(--t-ink)", fontWeight: 600, cursor: "pointer", marginBottom: 4, textDecoration: "underline", textDecorationColor: "var(--t-line3)", textUnderlineOffset: 3 }}>
+                            {site.storeNumber ? `#${site.storeNumber} · ` : ""}{site.address || "Site"} →
+                          </div>
+                          {site.city && <div style={{ fontSize: 11, color: "var(--t-ink2)", marginBottom: 4 }}>{site.city}{site.state ? ", " + site.state : ""}{site.zip ? " " + site.zip : ""}</div>}
+                          <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
+                            <select className="t-input" style={{ flex: 1, fontSize: 11, padding: "6px 8px" }} value={job.siteId || ""}
+                              onChange={e => update({ siteId: e.target.value })}>
+                              <option value="">— change site —</option>
+                              {(job.companyId ? companySites : sites).map(s => <option key={s.id} value={s.id}>{s.storeNumber ? `#${s.storeNumber} ` : ""}{s.address || "Site"}</option>)}
+                            </select>
+                            <button className="t-btn t-btn-ghost t-btn-sm t-btn-danger"
+                              onClick={() => update({ siteId: "" })}>Clear</button>
+                          </div>
+                        </div>
+                      ) : (
+                        <select className="t-input" style={{ fontSize: 11, padding: "6px 8px" }} value=""
+                          onChange={e => update({ siteId: e.target.value })}>
+                          <option value="">Select a site…</option>
+                          {(job.companyId ? companySites : sites).map(s => <option key={s.id} value={s.id}>{s.storeNumber ? `#${s.storeNumber} ` : ""}{s.address || "Site"}</option>)}
+                          {job.companyId && companySites.length === 0 && <option disabled>No sites at this company</option>}
+                        </select>
+                      )}
+                    </div>
+
                   </div>
                 </div>
 
@@ -17780,23 +17872,30 @@ window.addEventListener('message',function(e){
                 })()}
 
                 {/* Financials */}
-                <div style={{ background: "#F0F2F8", borderRadius: 8, padding: "12px 14px", border: "1px solid #CBD1E8", display: "flex", gap: 20 }}>
+                <div className="t-card" style={{ padding: "14px 16px", display: "flex", gap: 28 }}>
                   <div>
-                    <div style={{ fontSize: 9, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 3 }}>Gross Value</div>
-                    <div style={{ fontSize: 18, fontWeight: 700, color: "#1A2240" }}>{fmt(job.contractValue)}</div>
+                    <div className="t-eyebrow" style={{ marginBottom: 3 }}>Gross Value</div>
+                    <div style={{ fontSize: 18, fontWeight: 600, color: "var(--t-ink)", fontFamily: "var(--t-mono)" }}>{fmt(job.contractValue)}</div>
                   </div>
                   <div>
-                    <div style={{ fontSize: 9, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 3 }}>Gross Profit</div>
-                    <div style={{ fontSize: 18, fontWeight: 700, color: "#4ADE80" }}>{fmt(job.grossProfit)}</div>
+                    <div className="t-eyebrow" style={{ marginBottom: 3 }}>Gross Profit</div>
+                    <div style={{ fontSize: 18, fontWeight: 600, color: "var(--t-dowork)", fontFamily: "var(--t-mono)" }}>{fmt(job.grossProfit)}</div>
                   </div>
-                  {job.vendorNTE && <div>
-                    <div style={{ fontSize: 9, color: "#FCD34D", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 3 }}>Vendor NTE</div>
-                    <div style={{ fontSize: 18, fontWeight: 700, color: "#FCD34D" }}>{fmt(Number(job.vendorNTE))}</div>
-                  </div>}
+                  {(() => {
+                    const cvNum = Number(job.contractValue || 0);
+                    const gpNum = Number(job.grossProfit || 0) || (cvNum > 0 ? fmGrossProfit(cvNum) : 0);
+                    const vendorNTE = Math.max(0, cvNum - gpNum);
+                    return vendorNTE > 0 ? (
+                      <div>
+                        <div className="t-eyebrow" style={{ marginBottom: 3 }}>Vendor NTE</div>
+                        <div style={{ fontSize: 18, fontWeight: 600, color: "var(--t-warn)", fontFamily: "var(--t-mono)" }}>{fmt(vendorNTE)}</div>
+                      </div>
+                    ) : null;
+                  })()}
                 </div>
 
-                {/* Vendor Invoice Submission — shown when vendor has submitted anything */}
-                {(job.vendorInvoiceAmount > 0 || (job.completionPhotos||[]).length > 0 || job.invoiceAttachment) && (
+                {/* Vendor Invoice Submission — only shown once stage is at Bill (or later) */}
+                {job.stage === "bill" && (job.vendorInvoiceAmount > 0 || (job.completionPhotos||[]).length > 0 || job.invoiceAttachment) && (
                   <div style={{ background: "#FFFBEB", border: "1px solid #FCD34D40", borderRadius: 8, padding: "12px 14px" }}>
                     <div style={{ fontSize: 10, color: "#92400E", textTransform: "uppercase", letterSpacing: "0.07em", fontWeight: 700, marginBottom: 10 }}>📋 Vendor Invoice Submission</div>
                     <div style={{ display: "flex", gap: 20, flexWrap: "wrap", marginBottom: 10 }}>
@@ -17850,26 +17949,31 @@ window.addEventListener('message',function(e){
                 )}
 
                 {/* Notes */}
-                {job.notes && <div style={{ fontSize: 12, color: "#6B7694", lineHeight: 1.6, background: "#F0F2F8", padding: "10px 12px", borderRadius: 6, border: "1px solid #CBD1E8" }}>{job.notes}</div>}
+                {job.notes && (
+                  <div className="t-card" style={{ padding: "12px 14px", background: "var(--t-paper)" }}>
+                    <div className="t-eyebrow" style={{ marginBottom: 6 }}>📝 Notes</div>
+                    <div style={{ fontSize: 13, color: "var(--t-ink2)", lineHeight: 1.6, whiteSpace: "pre-wrap" }}>{job.notes}</div>
+                  </div>
+                )}
 
                 {/* Photos */}
-                <div>
-                  <div style={{ fontSize: 10, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 8, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <span>📸 Site Photos</span>
-                    <span style={{ color: "#3D4570" }}>{(job.photos||[]).length} photo{(job.photos||[]).length !== 1 ? "s" : ""} · shown to sub after accept</span>
+                <div className="t-card" style={{ padding: "14px 16px" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                    <div className="t-eyebrow">📸 Site Photos</div>
+                    <div style={{ fontSize: 11, color: "var(--t-ink3)" }}>{(job.photos||[]).length} photo{(job.photos||[]).length !== 1 ? "s" : ""} · shown to sub after accept</div>
                   </div>
                   {(job.photos||[]).length > 0 && (
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 6, marginBottom: 8 }}>
+                    <div style={{ display: "grid", gridTemplateColumns: isFullScreen ? "repeat(6, 1fr)" : "repeat(3, 1fr)", gap: 6, marginBottom: 10 }}>
                       {(job.photos||[]).map((p, i) => (
                         <div key={i} style={{ position: "relative" }}>
-                          <img src={p.data} alt={p.name} style={{ width: "100%", aspectRatio: "1", objectFit: "cover", borderRadius: 6, display: "block" }} />
+                          <img src={p.data} alt={p.name} style={{ width: "100%", aspectRatio: "1", objectFit: "cover", borderRadius: 6, display: "block", border: "1px solid var(--t-line)" }} />
                           <button onClick={() => update({ photos: job.photos.filter((_,j) => j !== i) })}
-                            style={{ position: "absolute", top: 3, right: 3, width: 18, height: 18, borderRadius: "50%", border: "none", background: "#F87171CC", color: "#FFF", fontSize: 9, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0 }}>✕</button>
+                            style={{ position: "absolute", top: 3, right: 3, width: 20, height: 20, borderRadius: "50%", border: "none", background: "rgba(0,0,0,0.7)", color: "#FFF", fontSize: 10, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: 0, fontFamily: "inherit" }}>✕</button>
                         </div>
                       ))}
                     </div>
                   )}
-                  <label style={{ display: "block", padding: "8px 12px", borderRadius: 6, border: "1px dashed #3D4570", textAlign: "center", cursor: "pointer", fontSize: 11, color: "#4A5278" }}>
+                  <label style={{ display: "block", padding: "10px 12px", borderRadius: "var(--t-r)", border: "1px dashed var(--t-line3)", textAlign: "center", cursor: "pointer", fontSize: 12, color: "var(--t-ink2)", background: "var(--t-paper)" }}>
                     + Add Photos
                     <input type="file" accept="image/*" multiple style={{ display: "none" }} onChange={e => {
                       const files = Array.from(e.target.files);
@@ -17883,10 +17987,13 @@ window.addEventListener('message',function(e){
                   </label>
                 </div>
 
-                <div style={{ display: "flex", gap: 8 }}>
-                  <button className="btn-ghost" style={{ flex: 1 }} onClick={() => { openEditFm(job); closePanel(); }}>✎ Full Edit</button>
-                  <button className="btn-ghost" style={{ color: "#F87171", borderColor: "#F8717120" }} onClick={() => deleteFm(job.id)}>✕</button>
-                </div>
+                {/* Footer actions (side-panel only) */}
+                {!isFullScreen && (
+                  <div style={{ display: "flex", gap: 8 }}>
+                    <button className="t-btn t-btn-ghost" style={{ flex: 1, justifyContent: "center" }} onClick={() => { openEditFm(job); closePanel(); }}>✎ Full Edit</button>
+                    <button className="t-btn t-btn-ghost t-btn-danger" onClick={() => deleteFm(job.id)}>✕</button>
+                  </div>
+                )}
               </div>
             );
           })()}
