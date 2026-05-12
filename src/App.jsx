@@ -4506,6 +4506,10 @@ export default function App() {
   const [showExpForm, setShowExpForm] = useState(false);
   const [invForm, setInvForm] = useState({job:"",client:"",amount:"",invoiceDate:"",dueDate:"",paidDate:"",status:"draft",notes:"",invoiceNum:""});
   const [expForm, setExpForm] = useState({description:"",vendor:"",amount:"",date:"",category:"Materials",job:"",notes:""});
+  // AR sheet view state
+  const [arSheetShowClosed, setArSheetShowClosed] = useState(false);
+  const [arSheetCategory, setArSheetCategory]   = useState("all"); // all | FM | CapEx | Lawn | Snow
+  const [arSheetSearch, setArSheetSearch]       = useState("");
   const [bidStatFilter,  setBidStatFilter]  = useState(null); // null | "all" | "bidding" | "locked"
 
   const GP_MARGIN = 0.30;
@@ -4687,7 +4691,7 @@ export default function App() {
           supa.from("accounting_invoices").select("*"),
           supa.from("accounting_expenses").select("*"),
         ]);
-        if (invRes.data?.length) setInvoices(invRes.data.map(r=>({ id:r.id, invoiceNum:r.invoice_num||"", job:r.job||"", client:r.client||"", amount:r.amount||0, dueDate:r.due_date||"", invoiceDate:r.invoice_date||"", paidDate:r.paid_date||"", status:r.status||"draft", notes:r.notes||"", createdAt:r.created_at||"", jobId:r.job_id||"", src:r.src||"", grossValue:Number(r.gross_value||0), grossProfit:Number(r.gross_profit||0), vendorCost:Number(r.vendor_cost||0) })));
+        if (invRes.data?.length) setInvoices(invRes.data.map(r=>({ id:r.id, invoiceNum:r.invoice_num||"", job:r.job||"", client:r.client||"", amount:r.amount||0, dueDate:r.due_date||"", invoiceDate:r.invoice_date||"", paidDate:r.paid_date||"", status:r.status||"draft", notes:r.notes||"", createdAt:r.created_at||"", jobId:r.job_id||"", src:r.src||"", grossValue:Number(r.gross_value||0), grossProfit:Number(r.gross_profit||0), vendorCost:Number(r.vendor_cost||0), category:r.category||"", arQboId:r.ar_qbo_id||"", closed:!!r.closed, closedAt:r.closed_at||"", projectNo:r.project_no||"", storeCode:r.store_code||"", ownersProjectNo:r.owners_project_no||"", vendorInvoiceNumber:r.vendor_invoice_number||"", vendorName:r.vendor_name||"" })));
         if (expRes.data?.length) setExpenses(expRes.data.map(r=>({ id:r.id, description:r.description||"", vendor:r.vendor||"", amount:r.amount||0, date:r.date||"", category:r.category||"Other", job:r.job||"", notes:r.notes||"" })));
 
         let loadedMpJobs = [];
@@ -5034,6 +5038,19 @@ export default function App() {
       grossValue: Number(job.contractValue || 0),
       grossProfit: Number(job.grossProfit || 0) || (Number(job.contractValue||0) > 0 ? fmGrossProfit(Number(job.contractValue||0)) : 0),
       vendorCost: Number(job.vendorInvoiceAmount || 0),
+      // AR-sheet denormalized fields (so the row keeps making sense even if the FM job is later edited)
+      category: "FM",
+      arQboId: "",
+      closed: false,
+      closedAt: "",
+      projectNo: job.projectNo || "",
+      storeCode: job.storeCode || "",
+      ownersProjectNo: job.ownersProjectNo || "",
+      vendorInvoiceNumber: job.vendorInvoiceNumber || "",
+      vendorName: (() => {
+        const sb = subcontractors.find(s => s.id === job.subcontractorId);
+        return sb ? sb.name : "";
+      })(),
     };
     setInvoices(prev => [inv, ...prev]);
     try {
@@ -5054,6 +5071,15 @@ export default function App() {
         gross_value: inv.grossValue,
         gross_profit: inv.grossProfit,
         vendor_cost: inv.vendorCost,
+        category: inv.category,
+        ar_qbo_id: inv.arQboId,
+        closed: inv.closed,
+        closed_at: null,
+        project_no: inv.projectNo,
+        store_code: inv.storeCode,
+        owners_project_no: inv.ownersProjectNo,
+        vendor_invoice_number: inv.vendorInvoiceNumber,
+        vendor_name: inv.vendorName,
       });
     } catch (e) {
       console.error("[sendFmJobToAR] invoice insert failed", e);
@@ -5808,6 +5834,49 @@ Return ONLY valid JSON, no markdown, no extra text:
               if (status === "paid") dbPatch.paid_date = patch.paidDate;
               await supa.from("accounting_invoices").update(dbPatch).eq("id",String(id));
             };
+            // Generic patch helper for AR-sheet edits — accepts a partial invoice update,
+            // syncs state and persists to Supabase. The CAMEL_TO_SNAKE map covers every
+            // editable column on the AR sheet.
+            const CAMEL_TO_SNAKE = {
+              invoiceNum: "invoice_num", invoiceDate: "invoice_date", dueDate: "due_date",
+              paidDate: "paid_date", status: "status", notes: "notes", amount: "amount",
+              client: "client", job: "job", category: "category", arQboId: "ar_qbo_id",
+              closed: "closed", closedAt: "closed_at", projectNo: "project_no",
+              storeCode: "store_code", ownersProjectNo: "owners_project_no",
+              vendorInvoiceNumber: "vendor_invoice_number", vendorName: "vendor_name",
+              grossValue: "gross_value", grossProfit: "gross_profit", vendorCost: "vendor_cost",
+            };
+            const updateInv = async (id, patch) => {
+              setInvoices(prev => prev.map(i => i.id === id ? { ...i, ...patch } : i));
+              const dbPatch = {};
+              for (const k of Object.keys(patch)) {
+                if (CAMEL_TO_SNAKE[k]) dbPatch[CAMEL_TO_SNAKE[k]] = patch[k] === "" ? null : patch[k];
+              }
+              if (Object.keys(dbPatch).length > 0) {
+                try { await supa.from("accounting_invoices").update(dbPatch).eq("id", String(id)); } catch(e) { console.error("[updateInv]", e); }
+              }
+            };
+            // Toggle "Create Invoice" — moves status draft → sent
+            const toggleCreateInvoice = (inv) => {
+              const isCreated = inv.status !== "draft";
+              updateInv(inv.id, { status: isCreated ? "draft" : "sent" });
+            };
+            // Toggle PAID — moves status to paid (and stamps paid_date) or back to sent
+            const togglePaid = (inv) => {
+              if (inv.status === "paid") {
+                updateInv(inv.id, { status: "sent", paidDate: "" });
+              } else {
+                updateInv(inv.id, { status: "paid", paidDate: new Date().toISOString().slice(0, 10) });
+              }
+            };
+            // Toggle CLOSED — soft-archives the invoice. Hidden from default view.
+            const toggleClosed = (inv) => {
+              if (inv.closed) {
+                updateInv(inv.id, { closed: false, closedAt: "" });
+              } else {
+                updateInv(inv.id, { closed: true, closedAt: new Date().toISOString().slice(0, 10) });
+              }
+            };
             const invoicedJobIds = new Set(invoices.map(i=>i.jobId).filter(Boolean));
             const readyJobs = completedAll.filter(j=>!invoicedJobIds.has(String(j.id)));
             return (
@@ -5850,47 +5919,173 @@ Return ONLY valid JSON, no markdown, no extra text:
                     </div>
                   </div>
                 )}
-                <div style={{background:"#fff",border:"1px solid #E8EBF5",borderRadius:10,overflow:"hidden"}}>
-                  <div style={{padding:"14px 18px",borderBottom:"1px solid #F0F2F8",fontSize:12,fontWeight:700,color:"#1A2240",textTransform:"uppercase",letterSpacing:"0.06em"}}>All Invoices ({invoices.length})</div>
-                  {invoices.length===0?(
-                    <div style={{padding:"50px",textAlign:"center",color:"#9BA3BF"}}>
-                      <div style={{fontSize:28,marginBottom:8}}>{"\U0001f9fe"}</div>
-                      <div style={{fontSize:13,fontWeight:600,color:"#1A2240",marginBottom:4}}>No invoices yet</div>
-                      <div style={{fontSize:11}}>Complete a job or click + Manual Invoice to get started</div>
+                {/* ─── AR SHEET — replaces the old All Invoices table ─── */}
+                {(() => {
+                  // Filter: hide MP (per spec — "everything except major projects"); category + closed + search filters
+                  const arInvoices = invoices
+                    .filter(i => i.src !== "MP" && i.src !== "major")
+                    .filter(i => arSheetShowClosed ? true : !i.closed)
+                    .filter(i => arSheetCategory === "all" ? true : (i.category || "FM") === arSheetCategory)
+                    .filter(i => {
+                      if (!arSheetSearch.trim()) return true;
+                      const q = arSheetSearch.toLowerCase();
+                      return [i.job, i.client, i.invoiceNum, i.projectNo, i.storeCode, i.ownersProjectNo, i.vendorName, i.vendorInvoiceNumber, i.arQboId]
+                        .some(v => (v || "").toLowerCase().includes(q));
+                    });
+                  // Header cell style
+                  const th = { padding: "10px 12px", textAlign: "left", fontSize: 10, color: "#9BA3BF", fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", whiteSpace: "nowrap", borderBottom: "1px solid #E8EBF5", position: "sticky", top: 0, background: "#F8F9FF", zIndex: 1 };
+                  const td = { padding: "8px 12px", fontSize: 12, color: "#1A2240", whiteSpace: "nowrap", borderBottom: "1px solid #F0F2F8" };
+                  const tdMono = { ...td, fontFamily: "'DM Mono', monospace" };
+                  const tdNum  = { ...td, textAlign: "right", fontFamily: "'DM Mono', monospace", fontWeight: 600 };
+                  // Tiny edit input styling
+                  const cellInput = { padding: "4px 6px", fontSize: 12, border: "1px solid transparent", background: "transparent", borderRadius: 4, fontFamily: "inherit", color: "#1A2240", width: "100%", boxSizing: "border-box", minWidth: 0 };
+                  const cellInputFocus = (el, on) => {
+                    el.style.border = on ? "1px solid #3B6FE830" : "1px solid transparent";
+                    el.style.background = on ? "#FFF" : "transparent";
+                  };
+                  // Checkbox style
+                  const cb = (checked, onChange) => (
+                    <input type="checkbox" checked={!!checked} onChange={onChange}
+                      style={{ width: 16, height: 16, cursor: "pointer", accentColor: "#3B6FE8" }} />
+                  );
+
+                  const totalGV  = arInvoices.reduce((s, i) => s + (Number(i.grossValue||0) || Number(i.amount||0)), 0);
+                  const totalGP  = arInvoices.reduce((s, i) => s + Number(i.grossProfit||0), 0);
+                  const totalVC  = arInvoices.reduce((s, i) => s + Number(i.vendorCost||0), 0);
+                  const openCount = arInvoices.filter(i => i.status !== "paid" && !i.closed).length;
+                  const paidCount = arInvoices.filter(i => i.status === "paid").length;
+
+                  return (
+                    <div style={{ background: "#fff", border: "1px solid #E8EBF5", borderRadius: 10, overflow: "hidden" }}>
+                      {/* Sheet header */}
+                      <div style={{ padding: "14px 18px", borderBottom: "1px solid #F0F2F8", display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
+                        <div>
+                          <div style={{ fontSize: 12, fontWeight: 700, color: "#1A2240", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+                            AR Sheet ({arInvoices.length})
+                          </div>
+                          <div style={{ fontSize: 11, color: "#9BA3BF", marginTop: 2, fontFamily: "'DM Mono', monospace" }}>
+                            {fmtMoney(totalGV)} billed · {fmtMoney(totalGP)} profit · {fmtMoney(totalVC)} vendor cost · {openCount} open · {paidCount} paid
+                          </div>
+                        </div>
+                        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                          {/* Category filter */}
+                          <select value={arSheetCategory} onChange={e => setArSheetCategory(e.target.value)}
+                            style={{ padding: "6px 10px", fontSize: 11, border: "1px solid #E8EBF5", borderRadius: 6, background: "#fff", fontFamily: "inherit", cursor: "pointer" }}>
+                            <option value="all">All Categories</option>
+                            <option value="FM">FM</option>
+                            <option value="CapEx">CapEx</option>
+                            <option value="Lawn">Lawn</option>
+                            <option value="Snow">Snow</option>
+                          </select>
+                          {/* Search */}
+                          <input value={arSheetSearch} onChange={e => setArSheetSearch(e.target.value)}
+                            placeholder="Search project, client, invoice #…"
+                            style={{ padding: "6px 10px", fontSize: 11, border: "1px solid #E8EBF5", borderRadius: 6, fontFamily: "inherit", width: 220 }} />
+                          {/* Show closed toggle */}
+                          <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: "#4A5278", cursor: "pointer" }}>
+                            <input type="checkbox" checked={arSheetShowClosed} onChange={e => setArSheetShowClosed(e.target.checked)} />
+                            Show closed
+                          </label>
+                        </div>
+                      </div>
+
+                      {/* Scrollable table */}
+                      {arInvoices.length === 0 ? (
+                        <div style={{ padding: 50, textAlign: "center", color: "#9BA3BF" }}>
+                          <div style={{ fontSize: 28, marginBottom: 8 }}>🧾</div>
+                          <div style={{ fontSize: 13, fontWeight: 600, color: "#1A2240", marginBottom: 4 }}>No invoices match your filters</div>
+                          <div style={{ fontSize: 11 }}>Jobs sent to AR by FM coordinators will appear here</div>
+                        </div>
+                      ) : (
+                        <div style={{ overflowX: "auto", maxHeight: "70vh" }}>
+                          <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 1900 }}>
+                            <thead>
+                              <tr>
+                                <th style={th}>Project No.</th>
+                                <th style={th}>Store Code</th>
+                                <th style={th}>Category</th>
+                                <th style={{ ...th, minWidth: 240 }}>Project Name</th>
+                                <th style={{ ...th, textAlign: "right" }}>Gross Value</th>
+                                <th style={{ ...th, textAlign: "right" }}>Gross Profit</th>
+                                <th style={{ ...th, textAlign: "right" }}>Vendor Invoice Amt</th>
+                                <th style={th}>Owners Proj. No.</th>
+                                <th style={th}>AR QBO ID</th>
+                                <th style={th}>Invoice Number</th>
+                                <th style={{ ...th, textAlign: "center" }}>Create Invoice</th>
+                                <th style={th}>Invoice Date</th>
+                                <th style={{ ...th, textAlign: "center" }}>PAID</th>
+                                <th style={th}>Paid Date</th>
+                                <th style={{ ...th, textAlign: "center" }}>CLOSED</th>
+                                <th style={th}>Vendor Invoice Number</th>
+                                <th style={th}>Vendor</th>
+                                <th style={th}></th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {arInvoices.map((inv, idx) => {
+                                const rowBg = inv.closed ? "#F9FAFB" : (inv.status === "paid" ? "#F0FDF4" : (idx % 2 === 0 ? "#fff" : "#FAFBFF"));
+                                const gv = Number(inv.grossValue || 0) || Number(inv.amount || 0);
+                                return (
+                                  <tr key={inv.id} style={{ background: rowBg, opacity: inv.closed ? 0.55 : 1 }}>
+                                    <td style={tdMono}>{inv.projectNo || "—"}</td>
+                                    <td style={tdMono}>{inv.storeCode || "—"}</td>
+                                    <td style={td}>
+                                      <select value={inv.category || "FM"} onChange={e => updateInv(inv.id, { category: e.target.value })}
+                                        style={{ padding: "3px 6px", fontSize: 11, border: "1px solid transparent", borderRadius: 4, background: "transparent", fontFamily: "inherit", cursor: "pointer", color: "#1A2240" }}>
+                                        {["FM", "CapEx", "Lawn", "Snow"].map(c => <option key={c} value={c}>{c}</option>)}
+                                      </select>
+                                    </td>
+                                    <td style={{ ...td, whiteSpace: "normal", maxWidth: 320 }}>{inv.job || "—"}</td>
+                                    <td style={tdNum}>{fmtMoney(gv)}</td>
+                                    <td style={{ ...tdNum, color: "#059669" }}>{fmtMoney(inv.grossProfit)}</td>
+                                    <td style={{ ...tdNum, color: "#92400E" }}>{fmtMoney(inv.vendorCost)}</td>
+                                    <td style={tdMono}>{inv.ownersProjectNo || "—"}</td>
+                                    <td style={td}>
+                                      <input value={inv.arQboId || ""} onChange={e => updateInv(inv.id, { arQboId: e.target.value })}
+                                        onFocus={e => cellInputFocus(e.target, true)} onBlur={e => cellInputFocus(e.target, false)}
+                                        placeholder="—" style={cellInput} />
+                                    </td>
+                                    <td style={td}>
+                                      <input value={inv.invoiceNum || ""} onChange={e => updateInv(inv.id, { invoiceNum: e.target.value })}
+                                        onFocus={e => cellInputFocus(e.target, true)} onBlur={e => cellInputFocus(e.target, false)}
+                                        placeholder="—" style={cellInput} />
+                                    </td>
+                                    <td style={{ ...td, textAlign: "center" }}>
+                                      {cb(inv.status !== "draft", () => toggleCreateInvoice(inv))}
+                                    </td>
+                                    <td style={td}>
+                                      <input type="date" value={inv.invoiceDate || ""} onChange={e => updateInv(inv.id, { invoiceDate: e.target.value })}
+                                        onFocus={e => cellInputFocus(e.target, true)} onBlur={e => cellInputFocus(e.target, false)}
+                                        style={{ ...cellInput, fontFamily: "'DM Mono', monospace" }} />
+                                    </td>
+                                    <td style={{ ...td, textAlign: "center" }}>
+                                      {cb(inv.status === "paid", () => togglePaid(inv))}
+                                    </td>
+                                    <td style={td}>
+                                      <input type="date" value={inv.paidDate || ""} onChange={e => updateInv(inv.id, { paidDate: e.target.value, status: e.target.value ? "paid" : inv.status })}
+                                        onFocus={e => cellInputFocus(e.target, true)} onBlur={e => cellInputFocus(e.target, false)}
+                                        style={{ ...cellInput, fontFamily: "'DM Mono', monospace", color: inv.paidDate ? "#059669" : "#9BA3BF" }} />
+                                    </td>
+                                    <td style={{ ...td, textAlign: "center" }}>
+                                      {cb(inv.closed, () => toggleClosed(inv))}
+                                    </td>
+                                    <td style={tdMono}>{inv.vendorInvoiceNumber || "—"}</td>
+                                    <td style={td}>{inv.vendorName || "—"}</td>
+                                    <td style={{ ...td, padding: "8px 6px" }}>
+                                      <button onClick={() => { if(window.confirm("Permanently delete this invoice row?")) { setInvoices(prev=>prev.filter(i=>i.id!==inv.id)); supa.from("accounting_invoices").delete().eq("id",String(inv.id)); }}}
+                                        style={{ background: "none", border: "none", color: "#F87171", cursor: "pointer", fontSize: 13, padding: 4 }}
+                                        title="Delete row">×</button>
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
                     </div>
-                  ):(
-                    <table style={{width:"100%",borderCollapse:"collapse"}}>
-                      <thead><tr style={{background:"#F8F9FF",borderBottom:"1px solid #E8EBF5"}}>
-                        {["Invoice #","Job","Client","Amount","Invoice Date","Due Date","Paid Date","Status",""].map(h=>(
-                          <th key={h} style={{padding:"10px 16px",textAlign:"left",fontSize:10,color:"#9BA3BF",fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase"}}>{h}</th>
-                        ))}
-                      </tr></thead>
-                      <tbody>
-                        {invoices.map((inv,idx)=>(
-                          <tr key={inv.id} style={{borderBottom:"1px solid #F0F2F8",background:idx%2===0?"#fff":"#FAFBFF"}}>
-                            <td style={{padding:"12px 16px",fontSize:12,fontWeight:700,color:"#1A2240"}}>{inv.invoiceNum||"--"}</td>
-                            <td style={{padding:"12px 16px",fontSize:12,color:"#4A5278"}}>{inv.job}</td>
-                            <td style={{padding:"12px 16px",fontSize:12,color:"#4A5278"}}>{inv.client||"--"}</td>
-                            <td style={{padding:"12px 16px",fontSize:13,fontWeight:700,color:"#1A2240"}}>{fmtMoney(inv.amount)}</td>
-                            <td style={{padding:"12px 16px",fontSize:11,color:"#9BA3BF"}}>{inv.invoiceDate||"--"}</td>
-                            <td style={{padding:"12px 16px",fontSize:11,color:inv.dueDate&&new Date(inv.dueDate)<new Date()&&inv.status!=="paid"?"#F87171":"#9BA3BF"}}>{inv.dueDate||"--"}</td>
-                            <td style={{padding:"12px 16px",fontSize:11,color:inv.paidDate?"#4ADE80":"#9BA3BF"}}>{inv.paidDate||"--"}</td>
-                            <td style={{padding:"12px 16px"}}>
-                              <select value={inv.status} onChange={e=>updateStatus(inv.id,e.target.value)}
-                                style={{padding:"3px 8px",borderRadius:4,border:"1px solid "+(STATUS_COLOR[inv.status]||"#E8EBF5"),background:(STATUS_COLOR[inv.status]||"#9BA3BF")+"20",color:STATUS_COLOR[inv.status]||"#9BA3BF",fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>
-                                {["draft","sent","paid","overdue","void"].map(s=><option key={s} value={s}>{s.charAt(0).toUpperCase()+s.slice(1)}</option>)}
-                              </select>
-                            </td>
-                            <td style={{padding:"12px 16px"}}>
-                              <button onClick={()=>{if(window.confirm("Delete invoice?")){setInvoices(prev=>prev.filter(i=>i.id!==inv.id));supa.from("accounting_invoices").delete().eq("id",String(inv.id));}}}
-                                style={{background:"none",border:"none",color:"#F87171",cursor:"pointer",fontSize:13}}>X</button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  )}
-                </div>
+                  );
+                })()}
                 {showInvForm && (
                   <div className="modal-bg" onClick={e=>e.target===e.currentTarget&&setShowInvForm(false)}>
                     <div className="modal" style={{width:520}}>
