@@ -7539,16 +7539,21 @@ Example:
                             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                               {stageJobs.map(job => {
                                 const co  = companies.find(c => c.id === job.companyId);
+                                const ct  = contacts.find(c => c.id === job.approverContactId);
+                                const site = sites.find(s => s.id === job.siteId);
                                 const sub = subcontractors.find(s => s.id === job.subcontractorId);
+                                const ctName = ct ? `${ct.firstName||""} ${ct.lastName||""}`.trim() : "";
                                 const actionDate = job[st.actionKey];
                                 const overdue = actionDate && new Date(actionDate) < new Date();
                                 const soon    = actionDate && new Date(actionDate) <= new Date(Date.now() + 3*86400000);
                                 return (
                                   <div key={job.id} style={{ background: "#ECEEF8", border: "1px solid " + st.color + "25", borderRadius: 8, padding: 12, cursor: "pointer" }} onClick={() => setSelectedFmJob(job)}>
-                                    <div style={{ fontSize: 12, color: "#1A2240", fontWeight: 500, lineHeight: 1.35, marginBottom: 4 }}>{job.name}</div>
+                                    <div style={{ fontSize: 12, color: "#1A2240", fontWeight: 500, lineHeight: 1.35, marginBottom: 6 }}>{job.name}</div>
                                     {co && <div style={{ fontSize: 10, color: "#3B6FE8", marginBottom: 3 }}>🏢 {co.name}</div>}
+                                    {ctName && <div style={{ fontSize: 10, color: "#353C62", marginBottom: 3 }}>👤 {ctName}</div>}
+                                    {site && <div style={{ fontSize: 10, color: "#4A5278", marginBottom: 3 }}>📍 {site.address || site.storeNumber || "Site"}</div>}
                                     {job.storeCode && <div style={{ fontSize: 10, color: "#4A5278", marginBottom: 3 }}>#{job.storeCode}</div>}
-                                    {job.coordinator && <div style={{ fontSize: 10, color: "#353C62", marginBottom: 3 }}>👤 {job.coordinator}</div>}
+                                    {job.coordinator && <div style={{ fontSize: 10, color: "#353C62", marginBottom: 3 }}>🎯 Coord: {job.coordinator}</div>}
                                     {sub && <div style={{ fontSize: 10, color: "#353C62", marginBottom: 3 }}>🔧 {sub.name}</div>}
                                     {actionDate && <div style={{ fontSize: 10, color: overdue ? "#F87171" : soon ? "#FCD34D" : "#4A5278", marginBottom: 6 }}>📅 {st.actionLabel}: {actionDate}{overdue ? " ⚠" : ""}</div>}
                                     {job.contractValue > 0 && <div style={{ fontSize: 14, fontWeight: 700, color: st.color, marginBottom: 8 }}>{fmt(job.contractValue)}</div>}
@@ -9345,16 +9350,15 @@ window.addEventListener('message',function(e){
             const FM_COLS = [
               { key: "storeCode",           label: "Store",          w: 70  },
               { key: "projectNo",           label: "Project #",      w: 90  },
-              { key: "name",                label: "Scope of Work",  w: 220 },
-              { key: "address",             label: "Site Address",   w: 180 },
-              { key: "vendor",              label: "Vendor",         w: 140 },
-              { key: "ownersProjectNo",     label: "Owner Proj #",   w: 110 },
+              { key: "name",                label: "Scope of Work",  w: 200 },
+              { key: "company",             label: "Company",        w: 140 },
+              { key: "customer",            label: "Customer",       w: 130 },
+              { key: "site",                label: "Site",           w: 170 },
+              { key: "vendor",              label: "Vendor",         w: 130 },
               { key: "contractValue",       label: "Gross Value",    w: 100 },
               { key: "grossProfit",         label: "Gross Profit",   w: 100 },
-              { key: "vendorInvoiceAmount", label: "Vendor Invoice", w: 110 },
               { key: "startDate",           label: "Start Work",     w: 90  },
-              { key: "vendorInvoiceNumber", label: "Inv #",          w: 90  },
-              { key: "nextStep",            label: "Next Step",      w: 120 },
+              { key: "nextStep",            label: "Stage",          w: 120 },
               { key: "vendorNextStep",      label: "Vendor Next",    w: 120 },
             ];
             return (
@@ -9421,9 +9425,12 @@ window.addEventListener('message',function(e){
                       )}
                       {filtered.map((job, idx) => {
                         const st   = FM_STAGES.find(s => s.id === job.stage) || FM_STAGES[0];
+                        const co   = companies.find(c => c.id === job.companyId);
                         const site = sites.find(s => s.id === job.siteId);
+                        const ct   = contacts.find(c => c.id === job.approverContactId);
                         const sub  = subcontractors.find(s => s.id === job.subcontractorId);
                         const rowBg = idx % 2 === 0 ? "#F8F9FD" : "#F2F4FA";
+                        const ctName = ct ? `${ct.firstName||""} ${ct.lastName||""}`.trim() : "";
                         return (
                           <tr key={job.id} style={{ background: rowBg, borderBottom: "1px solid #D8DCF0", cursor: "pointer", transition: "background 0.1s" }}
                             onMouseEnter={e => e.currentTarget.style.background = "#EBF0FF"}
@@ -9438,30 +9445,34 @@ window.addEventListener('message',function(e){
                             {/* Project No */}
                             <td style={{ padding: "10px 12px", fontSize: 12, color: "#252E52", whiteSpace: "nowrap" }}>{job.projectNo || "—"}</td>
                             {/* Scope / Name */}
-                            <td style={{ padding: "10px 12px", fontSize: 12, color: "#1A2240", fontWeight: 500, maxWidth: 220 }}>
+                            <td style={{ padding: "10px 12px", fontSize: 12, color: "#1A2240", fontWeight: 500, maxWidth: 200 }}>
                               <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{job.name}</div>
                             </td>
-                            {/* Site Address */}
-                            <td style={{ padding: "10px 12px", fontSize: 11, color: "#353C62", maxWidth: 180 }}>
-                              <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{site?.address || "—"}</div>
+                            {/* Company */}
+                            <td style={{ padding: "10px 12px", fontSize: 11, maxWidth: 140 }}>
+                              {co ? <span style={{ color: "#3B6FE8", fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "block" }}>🏢 {co.name}</span> : <span style={{ color: "#8892B8" }}>—</span>}
+                            </td>
+                            {/* Customer (Contact) */}
+                            <td style={{ padding: "10px 12px", fontSize: 11, maxWidth: 130 }}>
+                              {ctName ? <span style={{ color: "#353C62", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "block" }}>👤 {ctName}</span> : <span style={{ color: "#8892B8" }}>—</span>}
+                            </td>
+                            {/* Site */}
+                            <td style={{ padding: "10px 12px", fontSize: 11, color: "#353C62", maxWidth: 170 }}>
+                              <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                {site ? `📍 ${site.address || site.storeNumber || "Site"}` : "—"}
+                              </div>
                             </td>
                             {/* Vendor */}
                             <td style={{ padding: "10px 12px", fontSize: 12 }}>
                               {sub ? <span style={{ background: "#3B6FE820", color: buColor.accent, padding: "2px 8px", borderRadius: 4, fontSize: 11, whiteSpace: "nowrap" }}>{sub.name}</span> : <span style={{ color: "#3D4570", fontSize: 11 }}>—</span>}
                             </td>
-                            {/* Owner's Project No */}
-                            <td style={{ padding: "10px 12px", fontSize: 11, color: "#353C62", whiteSpace: "nowrap" }}>{job.ownersProjectNo || "—"}</td>
                             {/* Gross Value */}
                             <td style={{ padding: "10px 12px", fontSize: 12, color: "#1A2240", fontWeight: 600, whiteSpace: "nowrap" }}>{fmt(job.contractValue)}</td>
                             {/* Gross Profit */}
                             <td style={{ padding: "10px 12px", fontSize: 12, color: "#4ADE80", fontWeight: 600, whiteSpace: "nowrap" }}>{fmt(job.grossProfit)}</td>
-                            {/* Vendor Invoice Amount */}
-                            <td style={{ padding: "10px 12px", fontSize: 12, color: "#252E52", whiteSpace: "nowrap" }}>{job.vendorInvoiceAmount ? fmt(job.vendorInvoiceAmount) : "—"}</td>
                             {/* Start Work Date */}
                             <td style={{ padding: "10px 12px", fontSize: 11, color: "#353C62", whiteSpace: "nowrap" }}>{job.startDate || "—"}</td>
-                            {/* Vendor Invoice Number */}
-                            <td style={{ padding: "10px 12px", fontSize: 11, color: "#353C62", whiteSpace: "nowrap" }}>{job.vendorInvoiceNumber || "—"}</td>
-                            {/* Next Step */}
+                            {/* Stage */}
                             <td style={{ padding: "10px 12px" }}>
                               <span style={{ fontSize: 10, fontWeight: 600, color: st.color, background: st.color + "15", padding: "3px 8px", borderRadius: 4, whiteSpace: "nowrap" }}>{st.label}</span>
                             </td>
@@ -9483,11 +9494,10 @@ window.addEventListener('message',function(e){
                     {filtered.length > 0 && (
                       <tfoot>
                         <tr style={{ background: "#F0F2F8", borderTop: "2px solid #CBD1E8" }}>
-                          <td colSpan={6} style={{ padding: "10px 12px", fontSize: 11, color: "#4A5278", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.07em" }}>Totals</td>
-                          <td style={{ padding: "10px 12px" }}></td>
+                          <td colSpan={8} style={{ padding: "10px 12px", fontSize: 11, color: "#4A5278", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.07em" }}>Totals</td>
                           <td style={{ padding: "10px 12px", fontSize: 12, color: "#1A2240", fontWeight: 700 }}>{fmt(totalGross)}</td>
                           <td style={{ padding: "10px 12px", fontSize: 12, color: "#4ADE80", fontWeight: 700 }}>{fmt(totalProfit)}</td>
-                          <td colSpan={5} style={{ padding: "10px 12px" }}></td>
+                          <td colSpan={4} style={{ padding: "10px 12px" }}></td>
                         </tr>
                       </tfoot>
                     )}
@@ -15059,7 +15069,10 @@ window.addEventListener('message',function(e){
             const st   = FM_STAGES.find(s => s.id === job.stage) || FM_STAGES[0];
             const co   = companies.find(c => c.id === job.companyId);
             const site = sites.find(s => s.id === job.siteId);
+            const ct   = contacts.find(c => c.id === job.approverContactId);
             const sub  = subcontractors.find(s => s.id === job.subcontractorId);
+            const companyContacts = job.companyId ? contacts.filter(c => c.companyId === job.companyId) : [];
+            const companySites = job.companyId ? sites.filter(s => s.companyId === job.companyId) : [];
             const actionDate = job[st.actionKey];
             const overdue = actionDate && new Date(actionDate) < new Date();
             const curStageIdx = FM_STAGES.findIndex(s => s.id === job.stage);
@@ -15068,6 +15081,28 @@ window.addEventListener('message',function(e){
               setFmJobs(fmJobs.map(j => j.id === job.id ? updated : j));
               setSelectedFmJob(updated);
               try { supa.from("fm_jobs").update(fmJobToDB(updated)).eq("id", job.id); } catch(e) {}
+            };
+            // Add a new contact tied to this job's company, persist to DB, link to job
+            const addContactToJob = () => {
+              if (!job.companyId) { alert("Please select a Company first before adding a Customer."); return; }
+              const fn = window.prompt("Customer first name:");
+              if (!fn) return;
+              const ln = window.prompt("Customer last name:") || "";
+              const title = window.prompt("Title (optional):") || "";
+              const email = window.prompt("Email (optional):") || "";
+              const phone = window.prompt("Phone (optional):") || "";
+              const newContact = {
+                id: "c" + Date.now(),
+                companyId: job.companyId,
+                firstName: fn.trim(),
+                lastName: ln.trim(),
+                title: title.trim(),
+                email: email.trim(),
+                phone: phone.trim(),
+              };
+              setContacts(prev => [...prev, newContact]);
+              try { supa.from("contacts").insert(contactToDB(newContact)); } catch(e) {}
+              update({ approverContactId: newContact.id });
             };
             return (
               <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
@@ -15081,8 +15116,112 @@ window.addEventListener('message',function(e){
                   <button className="btn-ghost" onClick={() => setSelectedFmJob(null)} style={{ flexShrink: 0 }}>✕</button>
                 </div>
 
-                {co && <div style={{ fontSize: 12, color: "#3B6FE8", cursor: "pointer" }} onClick={() => { setSelectedFmJob(null); setSelectedCompany(co); }}>🏢 {co.name}</div>}
-                {site && <div style={{ fontSize: 11, color: "#4A5278" }}>📍 {site.address}</div>}
+                {/* ── LINKED RECORDS ── Company / Customer / Site cards */}
+                <div style={{ background: "#F8F9FD", border: "1px solid #CBD1E8", borderRadius: 10, padding: "12px 14px" }}>
+                  <div style={{ fontSize: 10, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", fontWeight: 700, marginBottom: 10 }}>🔗 Linked Records</div>
+
+                  {/* COMPANY CARD */}
+                  <div style={{ background: "#FFF", border: "1px solid " + (co ? "#3B6FE830" : "#CBD1E8"), borderRadius: 8, padding: "10px 12px", marginBottom: 8 }}>
+                    <div style={{ fontSize: 9, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 4 }}>🏢 Company</div>
+                    {co ? (
+                      <div>
+                        <div style={{ fontSize: 13, color: "#3B6FE8", fontWeight: 600, cursor: "pointer", marginBottom: 4 }}
+                          onClick={() => { setSelectedFmJob(null); setSelectedCompany(co); }}>
+                          {co.name} →
+                        </div>
+                        <div style={{ display: "flex", gap: 6 }}>
+                          <select className="fi" style={{ flex: 1, fontSize: 11 }} value={job.companyId || ""}
+                            onChange={e => update({ companyId: e.target.value, approverContactId: "", siteId: "" })}>
+                            <option value="">— change company —</option>
+                            {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                          </select>
+                          <button className="btn-ghost" style={{ fontSize: 10, color: "#F87171", borderColor: "#F8717120" }}
+                            onClick={() => update({ companyId: "", approverContactId: "", siteId: "" })}>Clear</button>
+                        </div>
+                      </div>
+                    ) : (
+                      <select className="fi" style={{ width: "100%", fontSize: 11 }} value=""
+                        onChange={e => update({ companyId: e.target.value })}>
+                        <option value="">Select a company…</option>
+                        {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                      </select>
+                    )}
+                  </div>
+
+                  {/* CUSTOMER (CONTACT) CARD */}
+                  <div style={{ background: "#FFF", border: "1px solid " + (ct ? "#A78BFA30" : "#CBD1E8"), borderRadius: 8, padding: "10px 12px", marginBottom: 8 }}>
+                    <div style={{ fontSize: 9, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 4 }}>👤 Customer</div>
+                    {ct ? (
+                      <div>
+                        <div style={{ fontSize: 13, color: "#A78BFA", fontWeight: 600, cursor: co ? "pointer" : "default", marginBottom: 2 }}
+                          onClick={() => { if (co) { setSelectedFmJob(null); setSelectedContact({ contact: ct, company: co }); } }}>
+                          {`${ct.firstName||""} ${ct.lastName||""}`.trim()}{co ? " →" : ""}
+                        </div>
+                        {ct.title && <div style={{ fontSize: 10, color: "#4A5278", marginBottom: 2 }}>{ct.title}</div>}
+                        {ct.email && <div style={{ fontSize: 10, color: "#4A5278", marginBottom: 2 }}>✉ {ct.email}</div>}
+                        {ct.phone && <div style={{ fontSize: 10, color: "#4A5278", marginBottom: 4 }}>📞 {ct.phone}</div>}
+                        <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
+                          <select className="fi" style={{ flex: 1, fontSize: 11 }} value={job.approverContactId || ""}
+                            onChange={e => update({ approverContactId: e.target.value })}>
+                            <option value="">— change customer —</option>
+                            {companyContacts.map(c => <option key={c.id} value={c.id}>{`${c.firstName||""} ${c.lastName||""}`.trim()}{c.title ? " · " + c.title : ""}</option>)}
+                          </select>
+                          <button className="btn-ghost" style={{ fontSize: 10, color: "#F87171", borderColor: "#F8717120" }}
+                            onClick={() => update({ approverContactId: "" })}>Clear</button>
+                        </div>
+                      </div>
+                    ) : !job.companyId ? (
+                      <div style={{ fontSize: 11, color: "#8892B8", fontStyle: "italic" }}>Select a company first</div>
+                    ) : (
+                      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                        <select className="fi" style={{ width: "100%", fontSize: 11 }} value=""
+                          onChange={e => update({ approverContactId: e.target.value })}>
+                          <option value="">Select a customer…</option>
+                          {companyContacts.map(c => <option key={c.id} value={c.id}>{`${c.firstName||""} ${c.lastName||""}`.trim()}{c.title ? " · " + c.title : ""}</option>)}
+                          {companyContacts.length === 0 && <option disabled>No contacts at this company</option>}
+                        </select>
+                        <button className="btn-ghost" style={{ fontSize: 11, color: "#A78BFA", borderColor: "#A78BFA40" }}
+                          onClick={addContactToJob}>+ Add new customer</button>
+                      </div>
+                    )}
+                    {ct && (
+                      <div style={{ marginTop: 6 }}>
+                        <button className="btn-ghost" style={{ fontSize: 10, color: "#A78BFA", borderColor: "#A78BFA40", width: "100%" }}
+                          onClick={addContactToJob}>+ Add new customer</button>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* SITE CARD */}
+                  <div style={{ background: "#FFF", border: "1px solid " + (site ? "#60A5FA30" : "#CBD1E8"), borderRadius: 8, padding: "10px 12px" }}>
+                    <div style={{ fontSize: 9, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 4 }}>📍 Site</div>
+                    {site ? (
+                      <div>
+                        <div style={{ fontSize: 13, color: "#60A5FA", fontWeight: 600, cursor: "pointer", marginBottom: 2 }}
+                          onClick={() => { setSelectedFmJob(null); setSelectedSite(site); }}>
+                          {site.storeNumber ? `#${site.storeNumber} · ` : ""}{site.address || "Site"} →
+                        </div>
+                        {site.city && <div style={{ fontSize: 10, color: "#4A5278", marginBottom: 4 }}>{site.city}{site.state ? ", " + site.state : ""}{site.zip ? " " + site.zip : ""}</div>}
+                        <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
+                          <select className="fi" style={{ flex: 1, fontSize: 11 }} value={job.siteId || ""}
+                            onChange={e => update({ siteId: e.target.value })}>
+                            <option value="">— change site —</option>
+                            {(job.companyId ? companySites : sites).map(s => <option key={s.id} value={s.id}>{s.storeNumber ? `#${s.storeNumber} ` : ""}{s.address || "Site"}</option>)}
+                          </select>
+                          <button className="btn-ghost" style={{ fontSize: 10, color: "#F87171", borderColor: "#F8717120" }}
+                            onClick={() => update({ siteId: "" })}>Clear</button>
+                        </div>
+                      </div>
+                    ) : (
+                      <select className="fi" style={{ width: "100%", fontSize: 11 }} value=""
+                        onChange={e => update({ siteId: e.target.value })}>
+                        <option value="">Select a site…</option>
+                        {(job.companyId ? companySites : sites).map(s => <option key={s.id} value={s.id}>{s.storeNumber ? `#${s.storeNumber} ` : ""}{s.address || "Site"}</option>)}
+                        {job.companyId && companySites.length === 0 && <option disabled>No sites at this company</option>}
+                      </select>
+                    )}
+                  </div>
+                </div>
 
                 {/* Stage selector - full pipeline across all 6 stages */}
                 <div>
