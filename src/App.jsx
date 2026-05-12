@@ -153,6 +153,7 @@ const dbToFmJob = r => ({
   vendorAcceptedAt: r.vendor_accepted_at||"", vendorScheduleChangedAt: r.vendor_schedule_changed_at||"",
   vendorScheduleChangeReason: r.vendor_schedule_change_reason||"",
   bidInvites: r.bid_invites||[], estimatingPath: r.estimating_path||"",
+  completionPhotos: r.completion_photos||[], invoiceAttachment: r.invoice_attachment||null,
   photos: r.photos||[],
 });
 const fmJobToDB = j => ({
@@ -177,6 +178,7 @@ const fmJobToDB = j => ({
   vendor_accepted_at: j.vendorAcceptedAt||null, vendor_schedule_changed_at: j.vendorScheduleChangedAt||null,
   vendor_schedule_change_reason: j.vendorScheduleChangeReason||null,
   bid_invites: j.bidInvites||[], estimating_path: j.estimatingPath||null,
+  completion_photos: j.completionPhotos||[], invoice_attachment: j.invoiceAttachment||null,
   photos: j.photos||[],
 });
 
@@ -3368,8 +3370,17 @@ function VendorPortalAuthenticated({ sub, myJobs, fmJobs, setFmJobs, companies, 
       const job = fmJobs.find(j => j.id === jobId);
       // Auto-advance owner stage: do_work → bill (also accepts buyout, in case work skipped do_work)
       const advanceStage = (job?.stage === "do_work" || job?.stage === "buyout") ? "bill" : job?.stage;
-      const patch = { vendor_invoice_amount: parseFloat(fs.invAmt), vendor_invoice_number: fs.invNum || null, stage: advanceStage };
-      const updated = fmJobs.map(j => j.id === jobId ? { ...j, vendorInvoiceAmount: parseFloat(fs.invAmt), vendorInvoiceNumber: fs.invNum || "", stage: advanceStage } : j);
+      // Use latest form values, fall back to existing job values
+      const completionPhotos = fs.completionPhotos !== undefined ? fs.completionPhotos : (job?.completionPhotos || []);
+      const invoiceAttachment = fs.invoiceAttachment !== undefined ? fs.invoiceAttachment : (job?.invoiceAttachment || null);
+      const patch = {
+        vendor_invoice_amount: parseFloat(fs.invAmt),
+        vendor_invoice_number: fs.invNum || null,
+        completion_photos: completionPhotos,
+        invoice_attachment: invoiceAttachment,
+        stage: advanceStage,
+      };
+      const updated = fmJobs.map(j => j.id === jobId ? { ...j, vendorInvoiceAmount: parseFloat(fs.invAmt), vendorInvoiceNumber: fs.invNum || "", completionPhotos, invoiceAttachment, stage: advanceStage } : j);
       setFmJobs(updated);
       try { await supa.from("fm_jobs").update(patch).eq("id", jobId); } catch(e) {}
       const stageMsg = (advanceStage !== job?.stage) ? " · Stage advanced to Bill" : "";
@@ -3526,10 +3537,92 @@ function VendorPortalAuthenticated({ sub, myJobs, fmJobs, setFmJobs, companies, 
                 {isAssigned && (
                   <div className="vp-asec">
                     <h4>Submit Invoice</h4>
-                    <div style={{display:"flex",gap:8,marginBottom:8}}>
+                    <div style={{display:"flex",gap:8,marginBottom:10}}>
                       <input className="vp-input" type="number" placeholder="Amount ($)" value={fs.invAmt || job.vendorInvoiceAmount || ""} onChange={e => setForm(job.id, { invAmt: e.target.value })} />
                       <input className="vp-input" type="text" placeholder="Invoice # (optional)" value={fs.invNum || job.vendorInvoiceNumber || ""} onChange={e => setForm(job.id, { invNum: e.target.value })} style={{maxWidth:180}} />
                     </div>
+
+                    {/* Completion Photos */}
+                    <div style={{marginBottom:10}}>
+                      <label style={{display:"block",fontSize:10,fontWeight:600,textTransform:"uppercase",letterSpacing:"0.06em",color:"#8a8a92",marginBottom:6}}>📸 Completed Work Photos</label>
+                      {(() => {
+                        const photos = fs.completionPhotos || job.completionPhotos || [];
+                        return (
+                          <>
+                            {photos.length > 0 && (
+                              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(80px,1fr))",gap:6,marginBottom:8}}>
+                                {photos.map((p, i) => (
+                                  <div key={i} style={{position:"relative"}}>
+                                    <img src={p.data} alt={p.name||""} style={{width:"100%",aspectRatio:"1",objectFit:"cover",borderRadius:6,border:"1px solid rgba(24,24,26,0.1)"}} />
+                                    <button onClick={() => {
+                                      const remaining = photos.filter((_, idx) => idx !== i);
+                                      setForm(job.id, { completionPhotos: remaining });
+                                    }} style={{position:"absolute",top:2,right:2,width:18,height:18,borderRadius:"50%",border:"none",background:"rgba(0,0,0,0.7)",color:"#fff",fontSize:10,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",padding:0,fontFamily:"inherit"}}>✕</button>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                            <label style={{display:"block",padding:"10px 12px",borderRadius:8,border:"1px dashed rgba(24,24,26,0.25)",textAlign:"center",cursor:"pointer",fontSize:12,color:"#4a4a4f",background:"#fff"}}>
+                              📷 {photos.length === 0 ? "Add photos of completed work" : "Add more photos"}
+                              <input type="file" accept="image/*" multiple style={{display:"none"}} onChange={async e => {
+                                const files = Array.from(e.target.files || []);
+                                const MAX = 5 * 1024 * 1024; // 5MB per photo
+                                const oversize = files.filter(f => f.size > MAX);
+                                if (oversize.length > 0) { alert(`These photos are over 5MB and were skipped:\n${oversize.map(f => f.name).join("\n")}`); }
+                                const valid = files.filter(f => f.size <= MAX);
+                                const loaded = await Promise.all(valid.map(f => new Promise(res => {
+                                  const r = new FileReader();
+                                  r.onload = ev => res({ data: ev.target.result, name: f.name, uploadedAt: new Date().toISOString() });
+                                  r.readAsDataURL(f);
+                                })));
+                                setForm(job.id, { completionPhotos: [...photos, ...loaded] });
+                                e.target.value = "";
+                              }} />
+                            </label>
+                          </>
+                        );
+                      })()}
+                    </div>
+
+                    {/* Invoice Attachment */}
+                    <div style={{marginBottom:12}}>
+                      <label style={{display:"block",fontSize:10,fontWeight:600,textTransform:"uppercase",letterSpacing:"0.06em",color:"#8a8a92",marginBottom:6}}>📎 Invoice Attachment (PDF or image)</label>
+                      {(() => {
+                        const att = fs.invoiceAttachment !== undefined ? fs.invoiceAttachment : job.invoiceAttachment;
+                        if (att) {
+                          const isImg = (att.type || "").startsWith("image/");
+                          return (
+                            <div style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",background:"#E0F2F1",border:"1px solid #00695C30",borderRadius:8}}>
+                              {isImg ? <img src={att.data} alt="" style={{width:42,height:42,objectFit:"cover",borderRadius:5}} /> : <div style={{fontSize:22}}>📄</div>}
+                              <div style={{flex:1,minWidth:0}}>
+                                <div style={{fontSize:12,fontWeight:600,color:"#00695C",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{att.name||"invoice"}</div>
+                                <a href={att.data} target="_blank" rel="noreferrer" style={{fontSize:10,color:"#00695C",textDecoration:"underline"}}>Open / preview</a>
+                              </div>
+                              <button onClick={() => setForm(job.id, { invoiceAttachment: null })}
+                                style={{background:"transparent",border:"1px solid #F8717140",color:"#F87171",fontSize:10,padding:"4px 8px",borderRadius:5,cursor:"pointer",fontFamily:"inherit"}}>Remove</button>
+                            </div>
+                          );
+                        }
+                        return (
+                          <label style={{display:"block",padding:"10px 12px",borderRadius:8,border:"1px dashed rgba(24,24,26,0.25)",textAlign:"center",cursor:"pointer",fontSize:12,color:"#4a4a4f",background:"#fff"}}>
+                            📎 Attach invoice file
+                            <input type="file" accept="application/pdf,image/*" style={{display:"none"}} onChange={async e => {
+                              const f = e.target.files?.[0];
+                              if (!f) return;
+                              const MAX = 5 * 1024 * 1024;
+                              if (f.size > MAX) { alert(`File is over 5MB and can't be uploaded: ${f.name}`); e.target.value = ""; return; }
+                              const reader = new FileReader();
+                              reader.onload = ev => {
+                                setForm(job.id, { invoiceAttachment: { data: ev.target.result, name: f.name, type: f.type, uploadedAt: new Date().toISOString() } });
+                              };
+                              reader.readAsDataURL(f);
+                              e.target.value = "";
+                            }} />
+                          </label>
+                        );
+                      })()}
+                    </div>
+
                     <button className="vp-btn" onClick={() => submitInvoice(job.id)} disabled={fs.busy}>{fs.busy ? "Submitting…" : "Submit Invoice"}</button>
                   </div>
                 )}
@@ -17063,6 +17156,60 @@ window.addEventListener('message',function(e){
                     <div style={{ fontSize: 18, fontWeight: 700, color: "#FCD34D" }}>{fmt(Number(job.vendorNTE))}</div>
                   </div>}
                 </div>
+
+                {/* Vendor Invoice Submission — shown when vendor has submitted anything */}
+                {(job.vendorInvoiceAmount > 0 || (job.completionPhotos||[]).length > 0 || job.invoiceAttachment) && (
+                  <div style={{ background: "#FFFBEB", border: "1px solid #FCD34D40", borderRadius: 8, padding: "12px 14px" }}>
+                    <div style={{ fontSize: 10, color: "#92400E", textTransform: "uppercase", letterSpacing: "0.07em", fontWeight: 700, marginBottom: 10 }}>📋 Vendor Invoice Submission</div>
+                    <div style={{ display: "flex", gap: 20, flexWrap: "wrap", marginBottom: 10 }}>
+                      {job.vendorInvoiceAmount > 0 && (
+                        <div>
+                          <div style={{ fontSize: 9, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 3 }}>Invoice Amount</div>
+                          <div style={{ fontSize: 16, fontWeight: 700, color: "#1A2240" }}>{fmt(job.vendorInvoiceAmount)}</div>
+                        </div>
+                      )}
+                      {job.vendorInvoiceNumber && (
+                        <div>
+                          <div style={{ fontSize: 9, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 3 }}>Invoice #</div>
+                          <div style={{ fontSize: 14, fontWeight: 600, color: "#1A2240" }}>{job.vendorInvoiceNumber}</div>
+                        </div>
+                      )}
+                    </div>
+                    {/* Invoice attachment */}
+                    {job.invoiceAttachment && (
+                      <div style={{ marginBottom: 10 }}>
+                        <div style={{ fontSize: 9, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5 }}>Invoice File</div>
+                        {(() => {
+                          const att = job.invoiceAttachment;
+                          const isImg = (att.type || "").startsWith("image/");
+                          return (
+                            <a href={att.data} target="_blank" rel="noreferrer"
+                              style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", background: "#FFF", border: "1px solid #FCD34D40", borderRadius: 6, textDecoration: "none", color: "#1A2240" }}>
+                              {isImg ? <img src={att.data} alt="" style={{ width: 36, height: 36, objectFit: "cover", borderRadius: 4 }} /> : <span style={{ fontSize: 20 }}>📄</span>}
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ fontSize: 12, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{att.name || "invoice"}</div>
+                                <div style={{ fontSize: 10, color: "#92400E" }}>Click to view / download</div>
+                              </div>
+                            </a>
+                          );
+                        })()}
+                      </div>
+                    )}
+                    {/* Completion photos */}
+                    {(job.completionPhotos||[]).length > 0 && (
+                      <div>
+                        <div style={{ fontSize: 9, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5 }}>📸 Completed Work Photos ({job.completionPhotos.length})</div>
+                        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 5 }}>
+                          {job.completionPhotos.map((p, i) => (
+                            <a key={i} href={p.data} target="_blank" rel="noreferrer" style={{ display: "block" }}>
+                              <img src={p.data} alt={p.name || ""} style={{ width: "100%", aspectRatio: "1", objectFit: "cover", borderRadius: 5, border: "1px solid #FCD34D40", display: "block" }} />
+                            </a>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 {/* Notes */}
                 {job.notes && <div style={{ fontSize: 12, color: "#6B7694", lineHeight: 1.6, background: "#F0F2F8", padding: "10px 12px", borderRadius: 6, border: "1px solid #CBD1E8" }}>{job.notes}</div>}
