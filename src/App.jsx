@@ -155,6 +155,7 @@ const dbToFmJob = r => ({
   bidInvites: r.bid_invites||[], estimatingPath: r.estimating_path||"",
   completionPhotos: r.completion_photos||[], invoiceAttachment: r.invoice_attachment||null,
   photos: r.photos||[],
+  sentToAR: !!r.sent_to_ar, sentToARAt: r.sent_to_ar_at||"", status: r.status||"",
 });
 const fmJobToDB = j => ({
   id: j.id, name: j.name||"", company_id: j.companyId||null, site_id: j.siteId||null,
@@ -180,6 +181,7 @@ const fmJobToDB = j => ({
   bid_invites: j.bidInvites||[], estimating_path: j.estimatingPath||null,
   completion_photos: j.completionPhotos||[], invoice_attachment: j.invoiceAttachment||null,
   photos: j.photos||[],
+  sent_to_ar: !!j.sentToAR, sent_to_ar_at: j.sentToARAt||null, status: j.status||null,
 });
 
 const BUSINESS_UNITS = [
@@ -225,6 +227,7 @@ const NAV_ITEMS = {
     { id: "dashboard",      label: "Dashboard",      icon: "⊞" },
     { id: "pipeline",       label: "Pipeline",       icon: "◈" },
     { id: "jobs",           label: "Active Jobs",    icon: "🔨" },
+    { id: "completed",      label: "Completed",      icon: "✅" },
     { id: "sites",          label: "Sites",          icon: "📍" },
     { id: "customers",      label: "Customers",      icon: "🤝" },
     { id: "subcontractors", label: "Subcontractors", icon: "🔧" },
@@ -4501,7 +4504,7 @@ export default function App() {
   const [expenses, setExpenses] = useState([]);
   const [showInvForm, setShowInvForm] = useState(false);
   const [showExpForm, setShowExpForm] = useState(false);
-  const [invForm, setInvForm] = useState({job:"",client:"",amount:"",dueDate:"",status:"draft",notes:"",invoiceNum:""});
+  const [invForm, setInvForm] = useState({job:"",client:"",amount:"",invoiceDate:"",dueDate:"",paidDate:"",status:"draft",notes:"",invoiceNum:""});
   const [expForm, setExpForm] = useState({description:"",vendor:"",amount:"",date:"",category:"Materials",job:"",notes:""});
   const [bidStatFilter,  setBidStatFilter]  = useState(null); // null | "all" | "bidding" | "locked"
 
@@ -4684,7 +4687,7 @@ export default function App() {
           supa.from("accounting_invoices").select("*"),
           supa.from("accounting_expenses").select("*"),
         ]);
-        if (invRes.data?.length) setInvoices(invRes.data.map(r=>({ id:r.id, invoiceNum:r.invoice_num||"", job:r.job||"", client:r.client||"", amount:r.amount||0, dueDate:r.due_date||"", status:r.status||"draft", notes:r.notes||"", createdAt:r.created_at||"" })));
+        if (invRes.data?.length) setInvoices(invRes.data.map(r=>({ id:r.id, invoiceNum:r.invoice_num||"", job:r.job||"", client:r.client||"", amount:r.amount||0, dueDate:r.due_date||"", invoiceDate:r.invoice_date||"", paidDate:r.paid_date||"", status:r.status||"draft", notes:r.notes||"", createdAt:r.created_at||"", jobId:r.job_id||"", src:r.src||"", grossValue:Number(r.gross_value||0), grossProfit:Number(r.gross_profit||0), vendorCost:Number(r.vendor_cost||0) })));
         if (expRes.data?.length) setExpenses(expRes.data.map(r=>({ id:r.id, description:r.description||"", vendor:r.vendor||"", amount:r.amount||0, date:r.date||"", category:r.category||"Other", job:r.job||"", notes:r.notes||"" })));
 
         let loadedMpJobs = [];
@@ -4990,6 +4993,73 @@ export default function App() {
     setFmCompanySearch(""); setFmSiteSearch("");
   };
   const deleteFm = (id) => { setFmJobs(fmJobs.filter(j => j.id !== id)); setSelectedFmJob(null); setFmFullScreenJob(null); try { supa.from("fm_jobs").delete().eq("id", id); } catch(e) {} };
+  // Send an FM job to Accounts Receivable: marks the job sent_to_ar, hides it from coordinator lists,
+  // and auto-creates an entry in accounting_invoices so the AR team picks it up immediately.
+  const sendFmJobToAR = async (jobId) => {
+    const job = fmJobs.find(j => j.id === jobId);
+    if (!job) return { ok: false, error: "Job not found" };
+    if (job.sentToAR) return { ok: false, error: "Already sent to AR" };
+    const today = new Date().toISOString().slice(0, 10);
+    // 1) Mark job sent-to-AR and close it out for the coordinator
+    const updatedJob = { ...job, sentToAR: true, sentToARAt: new Date().toISOString(), status: "Completed" };
+    setFmJobs(prev => prev.map(j => j.id === jobId ? updatedJob : j));
+    if (fmFullScreenJob?.id === jobId) setFmFullScreenJob(null);
+    if (selectedFmJob?.id === jobId) setSelectedFmJob(null);
+    try { await supa.from("fm_jobs").update(fmJobToDB(updatedJob)).eq("id", jobId); } catch(e) {}
+
+    // 2) Build the invoice — pulled from job financials, not vendor invoice (we bill the customer the gross value)
+    const co = companies.find(c => c.id === job.companyId);
+    const ct = contacts.find(c => c.id === job.approverContactId);
+    const clientName = co ? co.name + (ct ? " · " + [ct.firstName, ct.lastName].filter(Boolean).join(" ") : "") : "";
+    // Default 30-day net terms
+    const dueDate = new Date(); dueDate.setDate(dueDate.getDate() + 30);
+    const dueDateStr = dueDate.toISOString().slice(0, 10);
+    const invId = Date.now();
+    // Auto invoice # — use owner project# if present, else vendor invoice#, else generated
+    const invNum = job.ownersProjectNo || ("AR-" + (job.storeCode || "") + "-" + new Date().getFullYear() + "-" + String(invId).slice(-5));
+    const inv = {
+      id: invId,
+      invoiceNum: invNum,
+      job: job.name,
+      jobId: String(jobId),
+      src: "FM",
+      client: clientName,
+      amount: Number(job.contractValue || 0),
+      invoiceDate: today,
+      dueDate: dueDateStr,
+      paidDate: "",
+      status: "sent",
+      notes: job.scopeOfWork || "",
+      createdAt: today,
+      grossValue: Number(job.contractValue || 0),
+      grossProfit: Number(job.grossProfit || 0) || (Number(job.contractValue||0) > 0 ? fmGrossProfit(Number(job.contractValue||0)) : 0),
+      vendorCost: Number(job.vendorInvoiceAmount || 0),
+    };
+    setInvoices(prev => [inv, ...prev]);
+    try {
+      await supa.from("accounting_invoices").insert({
+        id: String(invId),
+        invoice_num: inv.invoiceNum,
+        job: inv.job,
+        client: inv.client,
+        amount: inv.amount,
+        invoice_date: inv.invoiceDate,
+        due_date: inv.dueDate,
+        paid_date: null,
+        status: inv.status,
+        notes: inv.notes,
+        created_at: inv.createdAt,
+        job_id: inv.jobId,
+        src: inv.src,
+        gross_value: inv.grossValue,
+        gross_profit: inv.grossProfit,
+        vendor_cost: inv.vendorCost,
+      });
+    } catch (e) {
+      console.error("[sendFmJobToAR] invoice insert failed", e);
+    }
+    return { ok: true, invoiceId: invId };
+  };
   // Persist a patch to an FM job in both state and DB
   const updateFmJobPersist = (id, patch) => {
     setFmJobs(prev => prev.map(j => {
@@ -5726,12 +5796,17 @@ Return ONLY valid JSON, no markdown, no extra text:
               const inv = {...fields,id:Date.now(),createdAt:new Date().toISOString().slice(0,10)};
               setInvoices(prev=>[inv,...prev]);
               setShowInvForm(false);
-              setInvForm({job:"",client:"",amount:"",dueDate:"",status:"sent",notes:"",invoiceNum:"",jobId:"",src:""});
-              await supa.from("accounting_invoices").insert({id:String(inv.id),invoice_num:inv.invoiceNum||"",job:inv.job,client:inv.client||"",amount:inv.amount||0,due_date:inv.dueDate||null,status:inv.status||"sent",notes:inv.notes||"",created_at:inv.createdAt,job_id:inv.jobId||null,src:inv.src||""});
+              setInvForm({job:"",client:"",amount:"",invoiceDate:"",dueDate:"",paidDate:"",status:"sent",notes:"",invoiceNum:"",jobId:"",src:""});
+              await supa.from("accounting_invoices").insert({id:String(inv.id),invoice_num:inv.invoiceNum||"",job:inv.job,client:inv.client||"",amount:inv.amount||0,invoice_date:inv.invoiceDate||null,due_date:inv.dueDate||null,paid_date:inv.paidDate||null,status:inv.status||"sent",notes:inv.notes||"",created_at:inv.createdAt,job_id:inv.jobId||null,src:inv.src||""});
             };
             const updateStatus = async (id,status) => {
-              setInvoices(prev=>prev.map(i=>i.id===id?{...i,status}:i));
-              await supa.from("accounting_invoices").update({status}).eq("id",String(id));
+              const patch = { status };
+              // Auto-stamp paid_date when status flips to paid
+              if (status === "paid") patch.paidDate = new Date().toISOString().slice(0, 10);
+              setInvoices(prev=>prev.map(i=>i.id===id?{...i,...patch}:i));
+              const dbPatch = { status };
+              if (status === "paid") dbPatch.paid_date = patch.paidDate;
+              await supa.from("accounting_invoices").update(dbPatch).eq("id",String(id));
             };
             const invoicedJobIds = new Set(invoices.map(i=>i.jobId).filter(Boolean));
             const readyJobs = completedAll.filter(j=>!invoicedJobIds.has(String(j.id)));
@@ -5786,7 +5861,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                   ):(
                     <table style={{width:"100%",borderCollapse:"collapse"}}>
                       <thead><tr style={{background:"#F8F9FF",borderBottom:"1px solid #E8EBF5"}}>
-                        {["Invoice #","Job","Client","Amount","Due Date","Status",""].map(h=>(
+                        {["Invoice #","Job","Client","Amount","Invoice Date","Due Date","Paid Date","Status",""].map(h=>(
                           <th key={h} style={{padding:"10px 16px",textAlign:"left",fontSize:10,color:"#9BA3BF",fontWeight:700,letterSpacing:"0.08em",textTransform:"uppercase"}}>{h}</th>
                         ))}
                       </tr></thead>
@@ -5797,7 +5872,9 @@ Return ONLY valid JSON, no markdown, no extra text:
                             <td style={{padding:"12px 16px",fontSize:12,color:"#4A5278"}}>{inv.job}</td>
                             <td style={{padding:"12px 16px",fontSize:12,color:"#4A5278"}}>{inv.client||"--"}</td>
                             <td style={{padding:"12px 16px",fontSize:13,fontWeight:700,color:"#1A2240"}}>{fmtMoney(inv.amount)}</td>
+                            <td style={{padding:"12px 16px",fontSize:11,color:"#9BA3BF"}}>{inv.invoiceDate||"--"}</td>
                             <td style={{padding:"12px 16px",fontSize:11,color:inv.dueDate&&new Date(inv.dueDate)<new Date()&&inv.status!=="paid"?"#F87171":"#9BA3BF"}}>{inv.dueDate||"--"}</td>
+                            <td style={{padding:"12px 16px",fontSize:11,color:inv.paidDate?"#4ADE80":"#9BA3BF"}}>{inv.paidDate||"--"}</td>
                             <td style={{padding:"12px 16px"}}>
                               <select value={inv.status} onChange={e=>updateStatus(inv.id,e.target.value)}
                                 style={{padding:"3px 8px",borderRadius:4,border:"1px solid "+(STATUS_COLOR[inv.status]||"#E8EBF5"),background:(STATUS_COLOR[inv.status]||"#9BA3BF")+"20",color:STATUS_COLOR[inv.status]||"#9BA3BF",fontSize:11,fontWeight:600,cursor:"pointer",fontFamily:"inherit"}}>
@@ -5816,19 +5893,21 @@ Return ONLY valid JSON, no markdown, no extra text:
                 </div>
                 {showInvForm && (
                   <div className="modal-bg" onClick={e=>e.target===e.currentTarget&&setShowInvForm(false)}>
-                    <div className="modal" style={{width:460}}>
+                    <div className="modal" style={{width:520}}>
                       <div style={{fontSize:16,fontWeight:700,color:"#1A2240",marginBottom:18}}>{invForm.jobId?"Invoice for "+invForm.job:"New Invoice"}</div>
                       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
                         <div><label className="fi-label">Invoice # *</label><input className="fi" placeholder="INV-001" value={invForm.invoiceNum} onChange={e=>setInvForm(f=>({...f,invoiceNum:e.target.value}))}/></div>
-                        <div><label className="fi-label">Invoice Date</label><input className="fi" type="date" value={invForm.dueDate} onChange={e=>setInvForm(f=>({...f,dueDate:e.target.value}))}/></div>
-                        <div style={{gridColumn:"1/-1"}}><label className="fi-label">Job</label><input className="fi" value={invForm.job} onChange={e=>setInvForm(f=>({...f,job:e.target.value}))}/></div>
-                        <div style={{gridColumn:"1/-1"}}><label className="fi-label">Client</label><input className="fi" placeholder="Client name" value={invForm.client} onChange={e=>setInvForm(f=>({...f,client:e.target.value}))}/></div>
-                        <div><label className="fi-label">Amount ($) *</label><input className="fi" type="number" placeholder="0.00" value={invForm.amount} onChange={e=>setInvForm(f=>({...f,amount:e.target.value}))}/></div>
                         <div><label className="fi-label">Status</label>
                           <select className="fi" value={invForm.status} onChange={e=>setInvForm(f=>({...f,status:e.target.value}))}>
                             {["draft","sent","paid","overdue"].map(s=><option key={s} value={s}>{s.charAt(0).toUpperCase()+s.slice(1)}</option>)}
                           </select>
                         </div>
+                        <div style={{gridColumn:"1/-1"}}><label className="fi-label">Job</label><input className="fi" value={invForm.job} onChange={e=>setInvForm(f=>({...f,job:e.target.value}))}/></div>
+                        <div style={{gridColumn:"1/-1"}}><label className="fi-label">Client</label><input className="fi" placeholder="Client name" value={invForm.client} onChange={e=>setInvForm(f=>({...f,client:e.target.value}))}/></div>
+                        <div><label className="fi-label">Amount ($) *</label><input className="fi" type="number" placeholder="0.00" value={invForm.amount} onChange={e=>setInvForm(f=>({...f,amount:e.target.value}))}/></div>
+                        <div><label className="fi-label">Invoice Date</label><input className="fi" type="date" value={invForm.invoiceDate||""} onChange={e=>setInvForm(f=>({...f,invoiceDate:e.target.value}))}/></div>
+                        <div><label className="fi-label">Due Date</label><input className="fi" type="date" value={invForm.dueDate||""} onChange={e=>setInvForm(f=>({...f,dueDate:e.target.value}))}/></div>
+                        <div><label className="fi-label">Paid Date {invForm.status!=="paid"&&<span style={{fontSize:9,color:"#8892B8"}}>(set when paid)</span>}</label><input className="fi" type="date" value={invForm.paidDate||""} onChange={e=>setInvForm(f=>({...f,paidDate:e.target.value}))}/></div>
                         <div style={{gridColumn:"1/-1"}}><label className="fi-label">Notes</label><textarea className="fi" rows={2} value={invForm.notes} onChange={e=>setInvForm(f=>({...f,notes:e.target.value}))}/></div>
                       </div>
                       <div style={{display:"flex",gap:10,marginTop:18,justifyContent:"flex-end"}}>
@@ -8984,6 +9063,7 @@ Example:
               {activeBU === "facility" && (() => {
                 const q = search.toLowerCase();
                 const fmPipelineJobs = fmJobs.filter(j =>
+                  !j.sentToAR &&
                   FM_PIPELINE_STAGES.some(s => s.id === j.stage) &&
                   (j.name.toLowerCase().includes(q) || (j.storeCode||"").toLowerCase().includes(q) || (j.projectNo||"").toLowerCase().includes(q))
                 ).sort((a, b) => {
@@ -10920,9 +11000,10 @@ window.addEventListener('message',function(e){
             const coords = ["all", ...Array.from(new Set(fmTeam.map(m => m.name)))];
             const filtered = fmJobs.filter(j => {
               const isActive    = FM_ACTIVE_STAGES.some(s => s.id === j.stage);
+              const notSentToAR = !j.sentToAR;
               const matchCoord  = fmCoordFilter === "all" || j.coordinator === fmCoordFilter;
               const matchSearch = !fmSearch || j.name.toLowerCase().includes(fmSearch.toLowerCase()) || (j.storeCode||"").toLowerCase().includes(fmSearch.toLowerCase()) || (j.projectNo||"").toLowerCase().includes(fmSearch.toLowerCase());
-              return isActive && matchCoord && matchSearch;
+              return isActive && notSentToAR && matchCoord && matchSearch;
             }).sort((a, b) => {
               const ai = FM_ACTIVE_STAGES.findIndex(s => s.id === a.stage);
               const bi = FM_ACTIVE_STAGES.findIndex(s => s.id === b.stage);
@@ -11157,6 +11238,84 @@ window.addEventListener('message',function(e){
                     </table>
                   </div>
                 </div>
+              </div>
+            );
+          })()}
+
+          {/* -- FM COMPLETED PROJECTS -- */}
+          {activeNav === "completed" && activeBU === "facility" && !accountingMode && (() => {
+            const completedJobs = fmJobs
+              .filter(j => j.sentToAR)
+              .filter(j => !fmSearch || j.name.toLowerCase().includes(fmSearch.toLowerCase()) || (j.storeCode||"").toLowerCase().includes(fmSearch.toLowerCase()) || (j.projectNo||"").toLowerCase().includes(fmSearch.toLowerCase()))
+              .sort((a, b) => {
+                const ad = a.sentToARAt || "";
+                const bd = b.sentToARAt || "";
+                return bd.localeCompare(ad); // newest first
+              });
+            const totalRevenue  = completedJobs.reduce((s, j) => s + Number(j.contractValue || 0), 0);
+            const totalCost     = completedJobs.reduce((s, j) => s + Number(j.vendorInvoiceAmount || 0), 0);
+            const totalProfit   = totalRevenue - totalCost;
+            return (
+              <div className="fade-in" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                <div className="t-section-hdr">
+                  <div>
+                    <div className="t-h1">Completed Projects</div>
+                    <div className="t-section-meta">
+                      <span className="t-mono">{completedJobs.length}</span> sent to AR &nbsp;·&nbsp;
+                      <span className="t-mono">{fmt(totalRevenue)}</span> revenue &nbsp;·&nbsp;
+                      <span className="t-mono">{fmt(totalProfit)}</span> profit
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", gap: 10 }}>
+                    <span className="t-srch"><input className="t-input" style={{ width: 220 }} placeholder="Search…" value={fmSearch} onChange={e => setFmSearch(e.target.value)} /></span>
+                    <button className="t-btn t-btn-ghost" onClick={refreshFmJobs} disabled={fmJobsRefreshing} title="Refresh from Supabase">
+                      <span style={{ display: "inline-block", transition: "transform 0.3s", transform: fmJobsRefreshing ? "rotate(360deg)" : "none" }}>🔄</span>
+                      {fmJobsRefreshing ? "Refreshing…" : "Refresh"}
+                    </button>
+                  </div>
+                </div>
+
+                {completedJobs.length === 0 ? (
+                  <div className="t-empty">No completed projects yet. Jobs appear here after being sent to AR.</div>
+                ) : (
+                  <div className="t-card" style={{ padding: 0, overflow: "hidden" }}>
+                    <table className="t-table">
+                      <thead>
+                        <tr>
+                          <th>Store</th>
+                          <th>Project #</th>
+                          <th>Scope</th>
+                          <th>Company</th>
+                          <th>Vendor</th>
+                          <th style={{ textAlign: "right" }}>Gross Value</th>
+                          <th style={{ textAlign: "right" }}>Vendor Cost</th>
+                          <th style={{ textAlign: "right" }}>Profit</th>
+                          <th>Sent to AR</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {completedJobs.map(j => {
+                          const co = companies.find(c => c.id === j.companyId);
+                          const sb = subcontractors.find(s => s.id === j.subcontractorId);
+                          const profit = Number(j.contractValue || 0) - Number(j.vendorInvoiceAmount || 0);
+                          return (
+                            <tr key={j.id} onClick={() => setFmFullScreenJob(j)} style={{ cursor: "pointer" }}>
+                              <td><span className="t-mono">{j.storeCode || "—"}</span></td>
+                              <td><span className="t-mono">{j.projectNo || "—"}</span></td>
+                              <td>{j.name}</td>
+                              <td>{co?.name || "—"}</td>
+                              <td>{sb?.name || "—"}</td>
+                              <td style={{ textAlign: "right", fontFamily: "var(--t-mono)", fontWeight: 600 }}>{fmt(j.contractValue)}</td>
+                              <td style={{ textAlign: "right", fontFamily: "var(--t-mono)" }}>{fmt(j.vendorInvoiceAmount)}</td>
+                              <td style={{ textAlign: "right", fontFamily: "var(--t-mono)", fontWeight: 600, color: profit >= 0 ? "var(--t-dowork)" : "var(--t-warn)" }}>{fmt(profit)}</td>
+                              <td style={{ fontFamily: "var(--t-mono)", fontSize: 11, color: "var(--t-ink2)" }}>{j.sentToARAt ? new Date(j.sentToARAt).toLocaleDateString() : "—"}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
             );
           })()}
@@ -18039,6 +18198,99 @@ window.addEventListener('message',function(e){
                         </div>
                       </div>
                     )}
+                  </div>
+                )}
+
+                {/* ─── SEND TO ACCOUNTS RECEIVABLE — verification card ─── */}
+                {job.stage === "bill" && job.vendorInvoiceAmount > 0 && !job.sentToAR && (() => {
+                  const cvNum = Number(job.contractValue || 0);
+                  const gpNum = Number(job.grossProfit || 0) || (cvNum > 0 ? fmGrossProfit(cvNum) : 0);
+                  const vendorNTE = Math.max(0, cvNum - gpNum);
+                  const vendorInv = Number(job.vendorInvoiceAmount || 0);
+                  const actualProfit = cvNum - vendorInv;
+                  const profitVariance = actualProfit - gpNum;
+                  return (
+                    <div className="t-card" style={{ padding: "16px 18px", background: "var(--t-approval-bg)", borderColor: "rgba(96,165,250,0.30)" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                        <div>
+                          <div className="t-eyebrow" style={{ color: "var(--t-approval)", marginBottom: 3 }}>💼 Ready to Send to Accounts Receivable</div>
+                          <div style={{ fontSize: 12, color: "var(--t-ink2)" }}>Verify the numbers below. Edit via <strong>✎ Full Edit</strong> if anything looks wrong.</div>
+                        </div>
+                      </div>
+
+                      {/* Verification facts grid */}
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 14, paddingBottom: 14, marginBottom: 14, borderBottom: "1px solid var(--t-line2)" }}>
+                        <div>
+                          <div className="t-eyebrow" style={{ marginBottom: 4 }}>Gross Value</div>
+                          <div style={{ fontSize: 18, fontWeight: 700, color: "var(--t-ink)", fontFamily: "var(--t-mono)" }}>{fmt(cvNum)}</div>
+                          <div style={{ fontSize: 10, color: "var(--t-ink3)", marginTop: 2 }}>Billed to customer</div>
+                        </div>
+                        <div>
+                          <div className="t-eyebrow" style={{ marginBottom: 4 }}>Gross Profit</div>
+                          <div style={{ fontSize: 18, fontWeight: 700, color: "var(--t-dowork)", fontFamily: "var(--t-mono)" }}>{fmt(gpNum)}</div>
+                          <div style={{ fontSize: 10, color: "var(--t-ink3)", marginTop: 2 }}>Planned profit</div>
+                        </div>
+                        <div>
+                          <div className="t-eyebrow" style={{ marginBottom: 4 }}>Vendor NTE</div>
+                          <div style={{ fontSize: 18, fontWeight: 700, color: "var(--t-warn)", fontFamily: "var(--t-mono)" }}>{fmt(vendorNTE)}</div>
+                          <div style={{ fontSize: 10, color: "var(--t-ink3)", marginTop: 2 }}>Max vendor allowed</div>
+                        </div>
+                        <div>
+                          <div className="t-eyebrow" style={{ marginBottom: 4 }}>Vendor Invoice</div>
+                          <div style={{ fontSize: 18, fontWeight: 700, color: "var(--t-ink)", fontFamily: "var(--t-mono)" }}>{fmt(vendorInv)}</div>
+                          <div style={{ fontSize: 10, color: "var(--t-ink3)", marginTop: 2 }}>What we owe vendor</div>
+                        </div>
+                        <div>
+                          <div className="t-eyebrow" style={{ marginBottom: 4 }}>Actual Profit</div>
+                          <div style={{ fontSize: 18, fontWeight: 700, color: actualProfit >= gpNum ? "var(--t-dowork)" : "var(--t-warn)", fontFamily: "var(--t-mono)" }}>{fmt(actualProfit)}</div>
+                          <div style={{ fontSize: 10, color: "var(--t-ink3)", marginTop: 2 }}>{profitVariance >= 0 ? "+" : ""}{fmt(profitVariance)} vs planned</div>
+                        </div>
+                      </div>
+
+                      {/* Customer destination */}
+                      <div style={{ marginBottom: 14, display: "grid", gridTemplateColumns: isFullScreen ? "1fr 1fr" : "1fr", gap: 10 }}>
+                        <div className="t-card" style={{ padding: "8px 12px", background: "var(--t-paper)" }}>
+                          <div className="t-eyebrow" style={{ marginBottom: 3 }}>🏢 Customer Will Be Billed</div>
+                          <div style={{ fontSize: 13, color: "var(--t-ink)", fontWeight: 600 }}>{co?.name || "(no company)"}</div>
+                          {ct && <div style={{ fontSize: 11, color: "var(--t-ink2)", marginTop: 2 }}>via {[ct.firstName, ct.lastName].filter(Boolean).join(" ")}</div>}
+                        </div>
+                        <div className="t-card" style={{ padding: "8px 12px", background: "var(--t-paper)" }}>
+                          <div className="t-eyebrow" style={{ marginBottom: 3 }}>📅 Invoice Schedule</div>
+                          <div style={{ fontSize: 11, color: "var(--t-ink2)" }}>Invoice Date: <strong style={{ color: "var(--t-ink)" }}>today</strong> · Due: <strong style={{ color: "var(--t-ink)" }}>net 30</strong></div>
+                          <div style={{ fontSize: 10, color: "var(--t-ink3)", marginTop: 2 }}>AR can adjust before sending to customer</div>
+                        </div>
+                      </div>
+
+                      <button
+                        className="t-btn"
+                        style={{ width: "100%", justifyContent: "center", padding: "10px 16px", fontSize: 13, fontWeight: 600 }}
+                        disabled={!cvNum || cvNum <= 0}
+                        onClick={async () => {
+                          if (!cvNum || cvNum <= 0) { alert("Gross Value must be greater than 0 before sending to AR."); return; }
+                          const ok = window.confirm("Send this job to Accounts Receivable?\n\nThis will:\n• Move the job out of the coordinator's active list\n• Create an invoice in the ACCT tab for " + fmt(cvNum) + "\n• Mark this job Completed\n\nContinue?");
+                          if (!ok) return;
+                          const res = await sendFmJobToAR(job.id);
+                          if (!res.ok) { alert("Could not send to AR: " + (res.error || "unknown")); }
+                        }}>
+                        💼 Send to Accounts Receivable
+                      </button>
+                    </div>
+                  );
+                })()}
+
+                {/* If already sent to AR, show confirmation card */}
+                {job.sentToAR && (
+                  <div className="t-card" style={{ padding: "12px 16px", background: "var(--t-dowork-bg)", borderColor: "rgba(74,222,128,0.30)" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                      <div style={{ fontSize: 20 }}>✅</div>
+                      <div style={{ flex: 1 }}>
+                        <div className="t-eyebrow" style={{ color: "var(--t-dowork)", marginBottom: 2 }}>Sent to Accounts Receivable</div>
+                        <div style={{ fontSize: 12, color: "var(--t-ink2)" }}>
+                          {job.sentToARAt ? new Date(job.sentToARAt).toLocaleString([], { dateStyle: "medium", timeStyle: "short" }) : "Just now"}
+                          {" · "}Invoice in $ ACCT tab
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 )}
 
