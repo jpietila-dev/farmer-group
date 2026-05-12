@@ -3264,6 +3264,9 @@ function VendorPortalAuthenticated({ sub, myJobs, fmJobs, setFmJobs, companies, 
     if (!fs.bidAmt) { setForm(jobId, { msgEr: "Please enter a bid amount" }); flash(jobId, "msgEr"); return; }
     setForm(jobId, { busy: true });
     try {
+      const job = fmJobs.find(j => j.id === jobId);
+      // Auto-advance owner stage: estimating/waiting_quote → generate_proposal
+      const advanceStage = (job?.stage === "estimating" || job?.stage === "waiting_quote") ? "generate_proposal" : job?.stage;
       const patch = {
         vendor_quote_price: String(parseFloat(fs.bidAmt).toFixed(2)),
         vendor_quote_scope: fs.bidNotes || "",
@@ -3271,11 +3274,13 @@ function VendorPortalAuthenticated({ sub, myJobs, fmJobs, setFmJobs, companies, 
         vendor_portal_price: String(parseFloat(fs.bidAmt).toFixed(2)),
         vendor_portal_note: fs.bidNotes || "",
         vendor_portal_responded_at: new Date().toISOString(),
+        stage: advanceStage,
       };
-      const updated = fmJobs.map(j => j.id === jobId ? { ...j, vendorQuotePrice: patch.vendor_quote_price, vendorQuoteScope: patch.vendor_quote_scope, vendorPortalStatus: "quote_submitted", vendorPortalPrice: patch.vendor_portal_price, vendorPortalNote: patch.vendor_portal_note, vendorPortalRespondedAt: patch.vendor_portal_responded_at } : j);
+      const updated = fmJobs.map(j => j.id === jobId ? { ...j, vendorQuotePrice: patch.vendor_quote_price, vendorQuoteScope: patch.vendor_quote_scope, vendorPortalStatus: "quote_submitted", vendorPortalPrice: patch.vendor_portal_price, vendorPortalNote: patch.vendor_portal_note, vendorPortalRespondedAt: patch.vendor_portal_responded_at, stage: advanceStage } : j);
       setFmJobs(updated);
       try { await supa.from("fm_jobs").update(patch).eq("id", jobId); } catch(e) {}
-      setForm(jobId, { bidAmt: "", bidNotes: "", msgOk: "Bid submitted", busy: false });
+      const stageMsg = (advanceStage !== job?.stage) ? " · Stage advanced to Proposal" : "";
+      setForm(jobId, { bidAmt: "", bidNotes: "", msgOk: "Bid submitted" + stageMsg, busy: false });
       flash(jobId, "msgOk");
     } catch (e) {
       setForm(jobId, { msgEr: "Error submitting bid", busy: false }); flash(jobId, "msgEr");
@@ -3287,11 +3292,15 @@ function VendorPortalAuthenticated({ sub, myJobs, fmJobs, setFmJobs, companies, 
     if (!fs.schedDate) { setForm(jobId, { msgEr: "Please select a date" }); flash(jobId, "msgEr"); return; }
     setForm(jobId, { busy: true });
     try {
-      const patch = { start_date: fs.schedDate, vendor_portal_status: "scheduled", vendor_portal_date: fs.schedDate };
-      const updated = fmJobs.map(j => j.id === jobId ? { ...j, startDate: fs.schedDate, vendorPortalStatus: "scheduled", vendorPortalDate: fs.schedDate } : j);
+      const job = fmJobs.find(j => j.id === jobId);
+      // Auto-advance owner stage: buyout → do_work
+      const advanceStage = job?.stage === "buyout" ? "do_work" : job?.stage;
+      const patch = { start_date: fs.schedDate, vendor_portal_status: "scheduled", vendor_portal_date: fs.schedDate, stage: advanceStage };
+      const updated = fmJobs.map(j => j.id === jobId ? { ...j, startDate: fs.schedDate, vendorPortalStatus: "scheduled", vendorPortalDate: fs.schedDate, stage: advanceStage } : j);
       setFmJobs(updated);
       try { await supa.from("fm_jobs").update(patch).eq("id", jobId); } catch(e) {}
-      setForm(jobId, { msgOk: "Schedule date saved", busy: false });
+      const stageMsg = (advanceStage !== job?.stage) ? " · Stage advanced to Do Work" : "";
+      setForm(jobId, { msgOk: "Schedule date saved" + stageMsg, busy: false });
       flash(jobId, "msgOk");
     } catch (e) {
       setForm(jobId, { msgEr: "Error saving date", busy: false }); flash(jobId, "msgEr");
@@ -3322,14 +3331,35 @@ function VendorPortalAuthenticated({ sub, myJobs, fmJobs, setFmJobs, companies, 
     if (!fs.invAmt) { setForm(jobId, { msgEr: "Please enter an invoice amount" }); flash(jobId, "msgEr"); return; }
     setForm(jobId, { busy: true });
     try {
-      const patch = { vendor_invoice_amount: parseFloat(fs.invAmt), vendor_invoice_number: fs.invNum || null };
-      const updated = fmJobs.map(j => j.id === jobId ? { ...j, vendorInvoiceAmount: parseFloat(fs.invAmt), vendorInvoiceNumber: fs.invNum || "" } : j);
+      const job = fmJobs.find(j => j.id === jobId);
+      // Auto-advance owner stage: do_work → bill (also accepts buyout, in case work skipped do_work)
+      const advanceStage = (job?.stage === "do_work" || job?.stage === "buyout") ? "bill" : job?.stage;
+      const patch = { vendor_invoice_amount: parseFloat(fs.invAmt), vendor_invoice_number: fs.invNum || null, stage: advanceStage };
+      const updated = fmJobs.map(j => j.id === jobId ? { ...j, vendorInvoiceAmount: parseFloat(fs.invAmt), vendorInvoiceNumber: fs.invNum || "", stage: advanceStage } : j);
       setFmJobs(updated);
       try { await supa.from("fm_jobs").update(patch).eq("id", jobId); } catch(e) {}
-      setForm(jobId, { msgOk: "Invoice submitted", busy: false });
+      const stageMsg = (advanceStage !== job?.stage) ? " · Stage advanced to Bill" : "";
+      setForm(jobId, { msgOk: "Invoice submitted" + stageMsg, busy: false });
       flash(jobId, "msgOk");
     } catch (e) {
       setForm(jobId, { msgEr: "Error submitting invoice", busy: false }); flash(jobId, "msgEr");
+    }
+  };
+
+  // Vendor marks work complete (without invoice yet) → advances do_work → bill
+  const markComplete = async (jobId) => {
+    setForm(jobId, { busy: true });
+    try {
+      const job = fmJobs.find(j => j.id === jobId);
+      if (job?.stage !== "do_work") { setForm(jobId, { msgEr: "Job must be in Do Work stage", busy: false }); flash(jobId, "msgEr"); return; }
+      const patch = { stage: "bill" };
+      const updated = fmJobs.map(j => j.id === jobId ? { ...j, stage: "bill" } : j);
+      setFmJobs(updated);
+      try { await supa.from("fm_jobs").update(patch).eq("id", jobId); } catch(e) {}
+      setForm(jobId, { msgOk: "Work marked complete · Stage advanced to Bill", busy: false });
+      flash(jobId, "msgOk");
+    } catch (e) {
+      setForm(jobId, { msgEr: "Error", busy: false }); flash(jobId, "msgEr");
     }
   };
 
@@ -3419,6 +3449,14 @@ function VendorPortalAuthenticated({ sub, myJobs, fmJobs, setFmJobs, companies, 
                     <div className="vp-locked">🔒 Scheduling is available once this job is approved.</div>
                   )}
                 </div>
+                {/* Mark Work Complete — only shown during do_work */}
+                {job.stage === "do_work" && (
+                  <div className="vp-asec">
+                    <h4>Mark Work Complete</h4>
+                    <div style={{fontSize:12,color:"#8a8a92",marginBottom:8}}>Done with the work? Mark complete to move the job to billing. You can still submit your invoice afterward.</div>
+                    <button className="vp-btn" style={{background:"#2E7D32"}} onClick={() => markComplete(job.id)} disabled={fs.busy}>{fs.busy ? "Saving…" : "✓ Mark Work Complete"}</button>
+                  </div>
+                )}
                 {/* Add Note */}
                 <div className="vp-asec">
                   <h4>Add a Note</h4>
@@ -8189,76 +8227,166 @@ Example:
                 ))}
               </div>
 
-              {/* -- FM PIPELINE: show fmJobs in pipeline stages -- */}
+              {/* -- FM PIPELINE: list/table view matching Active Jobs -- */}
               {activeBU === "facility" && (() => {
                 const q = search.toLowerCase();
                 const fmPipelineJobs = fmJobs.filter(j =>
                   FM_PIPELINE_STAGES.some(s => s.id === j.stage) &&
-                  (j.name.toLowerCase().includes(q) || (j.storeCode||"").toLowerCase().includes(q))
+                  (j.name.toLowerCase().includes(q) || (j.storeCode||"").toLowerCase().includes(q) || (j.projectNo||"").toLowerCase().includes(q))
                 );
                 const totalFmPipeline = fmPipelineJobs.reduce((s,j) => s + (j.contractValue||0), 0);
+                const PIPE_COLS = [
+                  { key: "storeCode",      label: "Store",          w: 70  },
+                  { key: "projectNo",      label: "Project #",      w: 90  },
+                  { key: "name",           label: "Scope of Work",  w: 200 },
+                  { key: "company",        label: "Company",        w: 140 },
+                  { key: "customer",       label: "Customer",       w: 130 },
+                  { key: "site",           label: "Site",           w: 170 },
+                  { key: "vendor",         label: "Vendor",         w: 130 },
+                  { key: "contractValue",  label: "Value",          w: 90  },
+                  { key: "actionDate",     label: "Action Date",    w: 110 },
+                  { key: "stage",          label: "Stage",          w: 140 },
+                  { key: "coordinator",    label: "Coordinator",    w: 110 },
+                ];
+                // stage-grouping for the stats bar at top
                 return (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-                    <div style={{ fontSize: 11, color: "#4A5278", letterSpacing: "0.07em", textTransform: "uppercase", borderBottom: "1px solid #CBD1E8", paddingBottom: 10 }}>
-                      {fmPipelineJobs.length} jobs in pipeline · {fmt(totalFmPipeline)} total value
+                  <div className="fade-in" style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+                    {/* Header */}
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <div>
+                        <div style={{ fontSize: 22, fontWeight: 700, color: "#1A2240", letterSpacing: "-0.01em", textTransform: "uppercase" }}>Pipeline</div>
+                        <div style={{ fontSize: 11, color: "#4A5278", marginTop: 3, letterSpacing: "0.06em" }}>{fmPipelineJobs.length} JOBS · {fmt(totalFmPipeline)} TOTAL POTENTIAL</div>
+                      </div>
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <input className="fi" style={{ width: 180 }} placeholder="Search…" value={search} onChange={e => setSearch(e.target.value)} />
+                        <button className="btn-primary" onClick={openAddFm}>+ Add Job</button>
+                      </div>
                     </div>
-                    <div style={{ display: "flex", gap: 10, overflowX: "auto", paddingBottom: 8 }}>
+
+                    {/* Pipeline stage stats */}
+                    <div style={{ display: "flex", gap: 8, overflowX: "auto" }}>
                       {FM_PIPELINE_STAGES.map(st => {
-                        const stageJobs = fmPipelineJobs.filter(j => j.stage === st.id);
+                        const cnt = fmPipelineJobs.filter(j => j.stage === st.id).length;
+                        const val = fmPipelineJobs.filter(j => j.stage === st.id).reduce((s,j) => s+(j.contractValue||0),0);
                         return (
-                          <div key={st.id} style={{ minWidth: 220, flex: "0 0 220px" }}>
-                            <div style={{ background: st.color + "15", border: "1px solid " + st.color + "30", borderRadius: 7, padding: "8px 12px", marginBottom: 10 }}>
-                              <div style={{ fontSize: 10, letterSpacing: "0.07em", textTransform: "uppercase", color: st.color, fontWeight: 600, marginBottom: 2 }}>{st.label}</div>
-                              <div style={{ display: "flex", justifyContent: "space-between" }}>
-                                <span style={{ fontSize: 10, color: "#4A5278" }}>{stageJobs.length} job{stageJobs.length !== 1 ? "s" : ""}</span>
-                                <span style={{ fontSize: 11, color: st.color, fontWeight: 600 }}>{fmt(stageJobs.reduce((s,j) => s+(j.contractValue||0),0))}</span>
-                              </div>
-                            </div>
-                            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                              {stageJobs.map(job => {
-                                const co  = companies.find(c => c.id === job.companyId);
-                                const ct  = contacts.find(c => c.id === job.approverContactId);
-                                const site = sites.find(s => s.id === job.siteId);
-                                const sub = subcontractors.find(s => s.id === job.subcontractorId);
-                                const ctName = ct ? `${ct.firstName||""} ${ct.lastName||""}`.trim() : "";
-                                const actionDate = job[st.actionKey];
-                                const overdue = actionDate && new Date(actionDate) < new Date();
-                                const soon    = actionDate && new Date(actionDate) <= new Date(Date.now() + 3*86400000);
-                                return (
-                                  <div key={job.id} style={{ background: "#ECEEF8", border: "1px solid " + st.color + "25", borderRadius: 8, padding: 12, cursor: "pointer" }} onClick={() => setFmFullScreenJob(job)}>
-                                    <div style={{ fontSize: 12, color: "#1A2240", fontWeight: 500, lineHeight: 1.35, marginBottom: 6 }}>{job.name}</div>
-                                    {co && <div style={{ fontSize: 10, color: "#3B6FE8", marginBottom: 3 }}>🏢 {co.name}</div>}
-                                    {ctName && <div style={{ fontSize: 10, color: "#353C62", marginBottom: 3 }}>👤 {ctName}</div>}
-                                    {site && <div style={{ fontSize: 10, color: "#4A5278", marginBottom: 3 }}>📍 {site.address || site.storeNumber || "Site"}</div>}
-                                    {job.storeCode && <div style={{ fontSize: 10, color: "#4A5278", marginBottom: 3 }}>#{job.storeCode}</div>}
-                                    {job.coordinator && <div style={{ fontSize: 10, color: "#353C62", marginBottom: 3 }}>🎯 Coord: {job.coordinator}</div>}
-                                    {sub && <div style={{ fontSize: 10, color: "#353C62", marginBottom: 3 }}>🔧 {sub.name}</div>}
-                                    {actionDate && <div style={{ fontSize: 10, color: overdue ? "#F87171" : soon ? "#FCD34D" : "#4A5278", marginBottom: 6 }}>📅 {st.actionLabel}: {actionDate}{overdue ? " ⚠" : ""}</div>}
-                                    {job.contractValue > 0 && <div style={{ fontSize: 14, fontWeight: 700, color: st.color, marginBottom: 8 }}>{fmt(job.contractValue)}</div>}
-                                    <div style={{ display: "flex", gap: 5 }} onClick={e => e.stopPropagation()}>
-                                      {FM_PIPELINE_STAGES.map((s, i) => {
-                                        const curIdx = FM_PIPELINE_STAGES.findIndex(x => x.id === job.stage);
-                                        if (i === curIdx - 1) return <button key="prev" className="btn-ghost" style={{ flex: 1, fontSize: 11 }} onClick={() => updateFmJobPersist(job.id, { stage: s.id })}>←</button>;
-                                        if (i === curIdx + 1) return <button key="next" className="btn-ghost" style={{ flex: 1, fontSize: 11 }} onClick={() => updateFmJobPersist(job.id, { stage: s.id })}>→</button>;
-                                        return null;
-                                      })}
-                                      {/* Promote to Active */}
-                                      {job.stage === "owner_approval" && (
-                                        <button className="btn-ghost" style={{ fontSize: 10, color: "#4ADE80", borderColor: "#4ADE8040", whiteSpace: "nowrap" }}
-                                          onClick={() => updateFmJobPersist(job.id, { stage: "buyout" })}>
-                                          → Active ✓
-                                        </button>
-                                      )}
-                                      <button className="btn-ghost" style={{ fontSize: 11 }} onClick={() => openEditFm(job)}>✎</button>
-                                    </div>
-                                  </div>
-                                );
-                              })}
-                              {stageJobs.length === 0 && <div style={{ border: "1px dashed " + st.color + "20", borderRadius: 8, padding: "20px 8px", textAlign: "center", fontSize: 10, color: "#8892B8" }}>EMPTY</div>}
-                            </div>
+                          <div key={st.id} style={{ flex: "0 0 160px", background: "#ECEEF8", border: "1px solid " + st.color + "30", borderRadius: 8, padding: "10px 14px", position: "relative", overflow: "hidden" }}>
+                            <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: st.color }} />
+                            <div style={{ fontSize: 10, color: st.color, textTransform: "uppercase", letterSpacing: "0.07em", fontWeight: 600, marginBottom: 3 }}>{st.label}</div>
+                            <div style={{ fontSize: 16, fontWeight: 700, color: "#1A2240" }}>{cnt}</div>
+                            <div style={{ fontSize: 10, color: "#4A5278" }}>{fmt(val)}</div>
                           </div>
                         );
                       })}
+                    </div>
+
+                    {/* Spreadsheet table */}
+                    <div style={{ overflowX: "auto", borderRadius: 10, border: "1px solid #CBD1E8" }}>
+                      <table style={{ borderCollapse: "collapse", width: "100%", minWidth: PIPE_COLS.reduce((s,c) => s+c.w, 0) + 80 }}>
+                        <thead>
+                          <tr style={{ background: "#FFFFFF", borderBottom: "1px solid #CBD1E8" }}>
+                            <th style={{ width: 40, padding: "10px 12px", textAlign: "left" }}></th>
+                            {PIPE_COLS.map(col => (
+                              <th key={col.key} style={{ width: col.w, padding: "10px 12px", textAlign: "left", fontSize: 10, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", fontWeight: 600, whiteSpace: "nowrap" }}>{col.label}</th>
+                            ))}
+                            <th style={{ width: 80, padding: "10px 12px" }}></th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {fmPipelineJobs.length === 0 && (
+                            <tr><td colSpan={PIPE_COLS.length + 2} style={{ textAlign: "center", padding: "48px", color: "#3D4570", fontSize: 12 }}>No jobs in pipeline</td></tr>
+                          )}
+                          {fmPipelineJobs.map((job, idx) => {
+                            const st = FM_STAGES.find(s => s.id === job.stage) || FM_STAGES[0];
+                            const co = companies.find(c => c.id === job.companyId);
+                            const site = sites.find(s => s.id === job.siteId);
+                            const ct = contacts.find(c => c.id === job.approverContactId);
+                            const sub = subcontractors.find(s => s.id === job.subcontractorId);
+                            const ctName = ct ? `${ct.firstName||""} ${ct.lastName||""}`.trim() : "";
+                            const actionDate = job[st.actionKey];
+                            const overdue = actionDate && new Date(actionDate) < new Date();
+                            const soon = actionDate && !overdue && new Date(actionDate) <= new Date(Date.now() + 3*86400000);
+                            const rowBg = idx % 2 === 0 ? "#F8F9FD" : "#F2F4FA";
+                            return (
+                              <tr key={job.id} style={{ background: rowBg, borderBottom: "1px solid #D8DCF0", cursor: "pointer", transition: "background 0.1s" }}
+                                onMouseEnter={e => e.currentTarget.style.background = "#EBF0FF"}
+                                onMouseLeave={e => e.currentTarget.style.background = rowBg}
+                                onClick={() => setFmFullScreenJob(job)}>
+                                {/* Stage dot */}
+                                <td style={{ padding: "10px 12px" }}>
+                                  <div style={{ width: 8, height: 8, borderRadius: "50%", background: st.color, margin: "auto" }} title={st.label} />
+                                </td>
+                                {/* Store */}
+                                <td style={{ padding: "10px 12px", fontSize: 12, color: "#252E52", whiteSpace: "nowrap" }}>{job.storeCode || "—"}</td>
+                                {/* Project # */}
+                                <td style={{ padding: "10px 12px", fontSize: 12, color: "#252E52", whiteSpace: "nowrap" }}>{job.projectNo || "—"}</td>
+                                {/* Scope */}
+                                <td style={{ padding: "10px 12px", fontSize: 12, color: "#1A2240", fontWeight: 500, maxWidth: 200 }}>
+                                  <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{job.name}</div>
+                                </td>
+                                {/* Company */}
+                                <td style={{ padding: "10px 12px", fontSize: 11, maxWidth: 140 }}>
+                                  {co ? <span style={{ color: "#3B6FE8", fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "block" }}>🏢 {co.name}</span> : <span style={{ color: "#8892B8" }}>—</span>}
+                                </td>
+                                {/* Customer */}
+                                <td style={{ padding: "10px 12px", fontSize: 11, maxWidth: 130 }}>
+                                  {ctName ? <span style={{ color: "#353C62", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "block" }}>👤 {ctName}</span> : <span style={{ color: "#8892B8" }}>—</span>}
+                                </td>
+                                {/* Site */}
+                                <td style={{ padding: "10px 12px", fontSize: 11, color: "#353C62", maxWidth: 170 }}>
+                                  <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                    {site ? `📍 ${site.address || site.storeNumber || "Site"}` : "—"}
+                                  </div>
+                                </td>
+                                {/* Vendor */}
+                                <td style={{ padding: "10px 12px", fontSize: 12 }}>
+                                  {sub ? <span style={{ background: "#3B6FE820", color: buColor.accent, padding: "2px 8px", borderRadius: 4, fontSize: 11, whiteSpace: "nowrap" }}>{sub.name}</span> : <span style={{ color: "#3D4570", fontSize: 11 }}>—</span>}
+                                </td>
+                                {/* Value */}
+                                <td style={{ padding: "10px 12px", fontSize: 12, color: "#1A2240", fontWeight: 600, whiteSpace: "nowrap" }}>{job.contractValue ? fmt(job.contractValue) : "—"}</td>
+                                {/* Action Date */}
+                                <td style={{ padding: "10px 12px", fontSize: 11, whiteSpace: "nowrap", color: overdue ? "#F87171" : soon ? "#F97316" : "#353C62", fontWeight: overdue || soon ? 600 : 400 }}>
+                                  {actionDate ? (<>{actionDate}{overdue ? " ⚠" : soon ? " ◷" : ""}</>) : "—"}
+                                  <div style={{ fontSize: 9, color: "#8892B8", marginTop: 1, fontWeight: 400 }}>{st.actionLabel}</div>
+                                </td>
+                                {/* Stage */}
+                                <td style={{ padding: "10px 12px" }}>
+                                  <span style={{ fontSize: 10, fontWeight: 600, color: st.color, background: st.color + "15", padding: "3px 8px", borderRadius: 4, whiteSpace: "nowrap" }}>{st.label}</span>
+                                </td>
+                                {/* Coordinator */}
+                                <td style={{ padding: "10px 12px", fontSize: 11, color: "#353C62", whiteSpace: "nowrap" }}>{job.coordinator || "—"}</td>
+                                {/* Actions */}
+                                <td style={{ padding: "10px 12px" }} onClick={e => e.stopPropagation()}>
+                                  <div style={{ display: "flex", gap: 4 }}>
+                                    {/* Stage advance buttons */}
+                                    {(() => {
+                                      const curIdx = FM_PIPELINE_STAGES.findIndex(x => x.id === job.stage);
+                                      const prevStage = FM_PIPELINE_STAGES[curIdx - 1];
+                                      const nextStage = FM_PIPELINE_STAGES[curIdx + 1];
+                                      return (
+                                        <>
+                                          {prevStage && <button className="btn-ghost" style={{ fontSize: 10, padding: "3px 6px" }} title={"← " + prevStage.label} onClick={() => updateFmJobPersist(job.id, { stage: prevStage.id })}>←</button>}
+                                          {nextStage && <button className="btn-ghost" style={{ fontSize: 10, padding: "3px 6px" }} title={"→ " + nextStage.label} onClick={() => updateFmJobPersist(job.id, { stage: nextStage.id })}>→</button>}
+                                          {job.stage === "owner_approval" && <button className="btn-ghost" style={{ fontSize: 10, padding: "3px 6px", color: "#4ADE80", borderColor: "#4ADE8040" }} title="Promote to Active (Buyout)" onClick={() => updateFmJobPersist(job.id, { stage: "buyout" })}>✓</button>}
+                                          <button className="btn-ghost" style={{ fontSize: 10, padding: "3px 6px" }} onClick={() => openEditFm(job)}>✎</button>
+                                        </>
+                                      );
+                                    })()}
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                        {fmPipelineJobs.length > 0 && (
+                          <tfoot>
+                            <tr style={{ background: "#F0F2F8", borderTop: "2px solid #CBD1E8" }}>
+                              <td colSpan={8} style={{ padding: "10px 12px", fontSize: 11, color: "#4A5278", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.07em" }}>Totals</td>
+                              <td style={{ padding: "10px 12px", fontSize: 12, color: "#1A2240", fontWeight: 700 }}>{fmt(totalFmPipeline)}</td>
+                              <td colSpan={4} style={{ padding: "10px 12px" }}></td>
+                            </tr>
+                          </tfoot>
+                        )}
+                      </table>
                     </div>
                   </div>
                 );
@@ -18101,7 +18229,23 @@ window.addEventListener('message',function(e){
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
                   <div style={{ fontSize: 11, color: "#1A2240", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em" }}>🔑 Vendor Portal Access</div>
                   <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: "#4A5278", cursor: "pointer" }}>
-                    <input type="checkbox" checked={!!subForm.portalEnabled} onChange={e => setSubForm({ ...subForm, portalEnabled: e.target.checked })} />
+                    <input type="checkbox" checked={!!subForm.portalEnabled} onChange={e => {
+                      const enabling = e.target.checked;
+                      const patch = { portalEnabled: enabling };
+                      if (enabling) {
+                        // Only auto-fill if fields are currently blank — don't overwrite existing creds
+                        if (!subForm.username && subForm.name) {
+                          patch.username = subForm.name.toLowerCase().replace(/[^a-z0-9]/g, "");
+                        }
+                        // Password: first word of contact_name, lowercased
+                        const hasExistingPw = !!subForm.passwordHash || !!subForm._newPassword;
+                        const firstName = (subForm.contact_name || "").trim().split(/\s+/)[0];
+                        if (!hasExistingPw && firstName) {
+                          patch._newPassword = firstName.toLowerCase();
+                        }
+                      }
+                      setSubForm({ ...subForm, ...patch });
+                    }} />
                     Portal Enabled
                   </label>
                 </div>
