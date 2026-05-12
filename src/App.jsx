@@ -701,7 +701,9 @@ function VendorPage({ token, fmJobs, setFmJobs, subcontractors, companies, sites
   const [accepted,     setAccepted]     = useState(false);
   const [changeWarnOk, setChangeWarnOk] = useState(false);
 
-  const nte      = job ? Number(job.vendorNTE || fmVendorNTE(Number(job.contractValue || 0))) : 0;
+  const _cv = job ? Number(job.contractValue || 0) : 0;
+  const _gp = job ? (Number(job.grossProfit || 0) || (_cv > 0 ? fmGrossProfit(_cv) : 0)) : 0;
+  const nte      = job ? Math.max(0, _cv - _gp) : 0;
   const priceNum = Number(price) || 0;
   const underNTE = priceNum > 0 && priceNum <= nte;
   const overNTE  = priceNum > 0 && priceNum > nte;
@@ -1148,7 +1150,9 @@ function SubPage({ token, fmJobs, setFmJobs, subcontractors, companies, sites })
   const [quoteNote,  setQuoteNote]  = useState("");
   const [subAccepted,setSubAccepted]= useState(job?.subResponse === "accepted");
 
-  const vendorNTE = job ? (job.vendorNTE ? Number(job.vendorNTE) : fmVendorNTE(Number(job.contractValue||0))) : 0;
+  const _vCv = job ? Number(job.contractValue || 0) : 0;
+  const _vGp = job ? (Number(job.grossProfit || 0) || (_vCv > 0 ? fmGrossProfit(_vCv) : 0)) : 0;
+  const vendorNTE = job ? Math.max(0, _vCv - _vGp) : 0;
 
   const update = (patch) => {
     const updated = { ...job, ...patch };
@@ -3525,10 +3529,12 @@ function VendorPortalAuthenticated({ sub, myJobs, fmJobs, setFmJobs, companies, 
     const fs = formState[jobId] || {};
     if (!fs.invAmt) { setForm(jobId, { msgEr: "Please enter an invoice amount" }); flash(jobId, "msgEr"); return; }
     const job = fmJobs.find(j => j.id === jobId);
-    // Enforce cap: invoice ≤ quoted amount if any, else ≤ NTE
+    // Enforce cap: invoice ≤ quoted amount if any, else ≤ vendor NTE (contractValue - grossProfit)
     const myInvite = (job?.bidInvites || []).find(inv => inv.subId === sub.id);
     const quotedAmt = Number(job?.vendorQuotePrice || myInvite?.price || 0);
-    const nte = Number(job?.contractValue || job?.nte || 0);
+    const cvNum = Number(job?.contractValue || 0);
+    const gpNum = Number(job?.grossProfit || 0) || (cvNum > 0 ? fmGrossProfit(cvNum) : 0);
+    const nte = Math.max(0, cvNum - gpNum);
     const cap = quotedAmt > 0 ? quotedAmt : nte;
     const amt = parseFloat(fs.invAmt);
     if (cap > 0 && amt > cap) {
@@ -3583,7 +3589,9 @@ function VendorPortalAuthenticated({ sub, myJobs, fmJobs, setFmJobs, companies, 
     setForm(jobId, { busy: true });
     try {
       const job = fmJobs.find(j => j.id === jobId);
-      const nte = Number(job?.contractValue || job?.nte || 0);
+      const cvNum = Number(job?.contractValue || 0);
+      const gpNum = Number(job?.grossProfit || 0) || (cvNum > 0 ? fmGrossProfit(cvNum) : 0);
+      const nte = Math.max(0, cvNum - gpNum);
       if (!nte) { setForm(jobId, { msgEr: "No NTE set by coordinator yet", busy: false }); flash(jobId, "msgEr"); return; }
       const isAssigned = job?.subcontractorId === sub.id;
       const invites = job?.bidInvites || [];
@@ -3748,7 +3756,9 @@ function VendorPortalAuthenticated({ sub, myJobs, fmJobs, setFmJobs, companies, 
               const myInvite = (job.bidInvites || []).find(inv => inv.subId === sub.id);
               const isInvitee = !isAssigned && !!myInvite;
               const stage = job.stage;
-              const nte = Number(job.contractValue || job.nte || 0);
+              const cvNum = Number(job.contractValue || 0);
+              const gpNum = Number(job.grossProfit || 0) || (cvNum > 0 ? fmGrossProfit(cvNum) : 0);
+              const nte = Math.max(0, cvNum - gpNum);
               const quotedAmt = Number(job.vendorQuotePrice || myInvite?.price || 0);
               // Cap for invoice = quoted amount if vendor submitted a quote, else NTE
               const invoiceCap = quotedAmt > 0 ? quotedAmt : nte;
@@ -4914,10 +4924,22 @@ export default function App() {
 
     // FM job helpers
   const openAddFm = () => { setEditFmId(null); setFmForm({ name: "", companyId: "", siteId: "", approverContactId: "", contractValue: "", grossProfit: "", stage: "estimating", startDate: "", endDate: "", pm: "", pct: 0, bidDueDate: "", quoteDueDate: "", proposalDate: "", followUpDate: "", buyoutDate: "", invoiceDate: "", notes: "", storeCode: "", projectNo: "", ownersProjectNo: "", vendorInvoiceAmount: "", vendorInvoiceNumber: "", subcontractorId: "", vendorNextStep: "", vendorQuotePrice: "", vendorQuoteScope: "", scopeOfWork: "", coordinator: "" }); setFmCompanySearch(""); setFmSiteSearch(""); setShowFmForm(true); };
-  const openEditFm = (j) => { setEditFmId(j.id); setFmForm({ ...j, contractValue: String(j.contractValue) }); setFmCompanySearch(""); setFmSiteSearch(""); setShowFmForm(true); };
+  const openEditFm = (j) => {
+    const auto = fmGrossProfit(Number(j.contractValue||0));
+    const isOverridden = Number(j.grossProfit||0) !== auto;
+    setEditFmId(j.id);
+    setFmForm({ ...j, contractValue: String(j.contractValue), grossProfit: String(j.grossProfit||""), _gpOverridden: isOverridden });
+    setFmCompanySearch(""); setFmSiteSearch(""); setShowFmForm(true);
+  };
   const saveFm = () => {
     if (!fmForm.name.trim()) return;
-    const entry = { ...fmForm, contractValue: Number(fmForm.contractValue||0), grossProfit: Number(fmForm.grossProfit||0), vendorInvoiceAmount: Number(fmForm.vendorInvoiceAmount||0), pct: Number(fmForm.pct || 0) };
+    const cvNum = Number(fmForm.contractValue||0);
+    let gpNum = Number(fmForm.grossProfit||0);
+    // Safety net: if user left gross profit blank/zero but set a contract value, apply default
+    if (!gpNum && cvNum > 0) gpNum = fmGrossProfit(cvNum);
+    // Strip the internal override flag so it's not persisted
+    const { _gpOverridden, ...formClean } = fmForm;
+    const entry = { ...formClean, contractValue: cvNum, grossProfit: gpNum, vendorInvoiceAmount: Number(fmForm.vendorInvoiceAmount||0), pct: Number(fmForm.pct || 0) };
     if (editFmId) {
       const updated = { ...entry, id: editFmId };
       setFmJobs(fmJobs.map(j => j.id === editFmId ? updated : j));
@@ -16993,9 +17015,10 @@ window.addEventListener('message',function(e){
 
                 {/* -- ESTIMATING stage panel -- */}
                 {job.stage === "estimating" && (() => {
-                  const nte      = Number(job.contractValue || job.nte || 0);
-                  const gp       = job.grossProfit > 0 ? job.grossProfit : fmGrossProfit(nte);
-                  const vendorNTE = job.vendorNTE ? Number(job.vendorNTE) : fmVendorNTE(nte);
+                  const cvNum    = Number(job.contractValue || 0);
+                  const gp       = Number(job.grossProfit || 0) || (cvNum > 0 ? fmGrossProfit(cvNum) : 0);
+                  const nte      = cvNum; // gross value (kept as legacy variable name in this panel)
+                  const vendorNTE = Math.max(0, cvNum - gp);
                   const estPath  = job.estimatingPath || null; // "known_vendor" | "bid_out" | "self_estimate"
                   const bidInvites = job.bidInvites || []; // [{ subId, token, sentAt, price, status }]
 
@@ -17556,7 +17579,8 @@ window.addEventListener('message',function(e){
                 {/* -- WAITING FOR QUOTE panel -- */}
                 {job.stage === "waiting_quote" && (() => {
                   const nte = Number(job.contractValue || 0);
-                  const vendorNTE = job.vendorNTE ? Number(job.vendorNTE) : fmVendorNTE(nte);
+                  const gp = Number(job.grossProfit || 0) || (nte > 0 ? fmGrossProfit(nte) : 0);
+                  const vendorNTE = Math.max(0, nte - gp);
                   const quotePrice = Number(job.vendorQuotePrice || 0);
                   const withinNTE = quotePrice > 0 && quotePrice <= vendorNTE;
                   return (
@@ -17572,7 +17596,7 @@ window.addEventListener('message',function(e){
                           <div style={{ textAlign: "right" }}>
                             <div style={{ fontSize: 9, color: "#4A5278", marginBottom: 2 }}>Our Gross Value</div>
                             <div style={{ fontSize: 13, fontWeight: 600, color: "#1A2240" }}>{fmt(nte)}</div>
-                            <div style={{ fontSize: 9, color: "#4ADE80" }}>GP: {fmt(fmGrossProfit(nte))}</div>
+                            <div style={{ fontSize: 9, color: "#4ADE80" }}>GP: {fmt(gp)}</div>
                           </div>
                         </div>
                         {job.subSentAt && <div style={{ fontSize: 10, color: "#353C62" }}>📤 Sent: {new Date(job.subSentAt).toLocaleDateString()}</div>}
@@ -18044,9 +18068,43 @@ window.addEventListener('message',function(e){
                 </select>
               </div>
               <div className="g2">
-                <div><label className="lbl">Gross Value</label><input className="fi" type="number" value={fmForm.contractValue} onChange={e => setFmForm(f => ({ ...f, contractValue: e.target.value }))} /></div>
-                <div><label className="lbl">Gross Profit</label><input className="fi" type="number" value={fmForm.grossProfit} onChange={e => setFmForm(f => ({ ...f, grossProfit: e.target.value }))} /></div>
+                <div>
+                  <label className="lbl">Gross Value</label>
+                  <input className="fi" type="number" value={fmForm.contractValue} onChange={e => {
+                    const newVal = e.target.value;
+                    setFmForm(f => {
+                      const next = { ...f, contractValue: newVal };
+                      // Auto-default gross profit IF user hasn't manually overridden it
+                      // (override flag is true if grossProfit was edited and doesn't match the formula)
+                      const cv = Number(newVal || 0);
+                      if (!f._gpOverridden) {
+                        next.grossProfit = String(fmGrossProfit(cv));
+                      }
+                      return next;
+                    });
+                  }} />
+                </div>
+                <div>
+                  <label className="lbl">Gross Profit <span style={{fontWeight:400,textTransform:"none",letterSpacing:0,color:"#8892B8",fontSize:10}}>(default: max $125 or 30%)</span></label>
+                  <input className="fi" type="number" value={fmForm.grossProfit} onChange={e => {
+                    const newVal = e.target.value;
+                    setFmForm(f => {
+                      const cv = Number(f.contractValue || 0);
+                      const auto = fmGrossProfit(cv);
+                      // Mark as overridden only if user enters a value different from the auto-default
+                      const overridden = newVal !== "" && Number(newVal) !== auto;
+                      return { ...f, grossProfit: newVal, _gpOverridden: overridden };
+                    });
+                  }} />
+                </div>
               </div>
+              {/* Live NTE preview — what the vendor will see */}
+              {Number(fmForm.contractValue||0) > 0 && (
+                <div style={{padding:"8px 12px",background:"#FFF8E1",border:"1px solid #F9A82540",borderRadius:6,fontSize:11,color:"#92400E",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                  <span><strong>Vendor NTE</strong> (shown to subcontractor)</span>
+                  <span style={{fontFamily:"var(--t-mono)",fontWeight:700,fontSize:13}}>{fmt(Math.max(0, Number(fmForm.contractValue||0) - Number(fmForm.grossProfit||0)))}</span>
+                </div>
+              )}
               <div className="g2">
                 <div><label className="lbl">Vendor Invoice Amount</label><input className="fi" type="number" value={fmForm.vendorInvoiceAmount} onChange={e => setFmForm(f => ({ ...f, vendorInvoiceAmount: e.target.value }))} /></div>
                 <div><label className="lbl">Vendor Invoice Number</label><input className="fi" value={fmForm.vendorInvoiceNumber} onChange={e => setFmForm(f => ({ ...f, vendorInvoiceNumber: e.target.value }))} placeholder="e.g. INV-2024" /></div>
