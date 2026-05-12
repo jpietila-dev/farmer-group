@@ -152,6 +152,7 @@ const dbToFmJob = r => ({
   vendorPortalNote: r.vendor_portal_note||"", vendorPortalRespondedAt: r.vendor_portal_responded_at||"",
   vendorAcceptedAt: r.vendor_accepted_at||"", vendorScheduleChangedAt: r.vendor_schedule_changed_at||"",
   vendorScheduleChangeReason: r.vendor_schedule_change_reason||"",
+  bidInvites: r.bid_invites||[], estimatingPath: r.estimating_path||"",
   photos: r.photos||[],
 });
 const fmJobToDB = j => ({
@@ -175,6 +176,7 @@ const fmJobToDB = j => ({
   vendor_portal_note: j.vendorPortalNote||null, vendor_portal_responded_at: j.vendorPortalRespondedAt||null,
   vendor_accepted_at: j.vendorAcceptedAt||null, vendor_schedule_changed_at: j.vendorScheduleChangedAt||null,
   vendor_schedule_change_reason: j.vendorScheduleChangeReason||null,
+  bid_invites: j.bidInvites||[], estimating_path: j.estimatingPath||null,
   photos: j.photos||[],
 });
 
@@ -2987,7 +2989,18 @@ function VendorPortal({ adminPreviewSubId, fmJobs, setFmJobs, subcontractors, co
   const [loginBusy, setLoginBusy]    = useState(false);
 
   const sub = subcontractors.find(s => s.id === authSubId);
-  const myJobs = useMemo(() => sub ? fmJobs.filter(j => j.subcontractorId === sub.id) : [], [sub, fmJobs]);
+  const myJobs = useMemo(() => {
+    if (!sub) return [];
+    return fmJobs.filter(j => {
+      // Assigned vendor — always visible
+      if (j.subcontractorId === sub.id) return true;
+      // Invited to bid — only visible while job is in pipeline stages (not yet awarded)
+      const PIPELINE_STAGES = ["estimating", "waiting_quote", "generate_proposal", "owner_approval"];
+      const invites = j.bidInvites || [];
+      if (invites.some(inv => inv.subId === sub.id) && PIPELINE_STAGES.includes(j.stage)) return true;
+      return false;
+    });
+  }, [sub, fmJobs]);
 
   // login submit
   const submitLogin = async (e) => {
@@ -3265,23 +3278,44 @@ function VendorPortalAuthenticated({ sub, myJobs, fmJobs, setFmJobs, companies, 
     setForm(jobId, { busy: true });
     try {
       const job = fmJobs.find(j => j.id === jobId);
-      // Auto-advance owner stage: estimating/waiting_quote → generate_proposal
-      const advanceStage = (job?.stage === "estimating" || job?.stage === "waiting_quote") ? "generate_proposal" : job?.stage;
-      const patch = {
-        vendor_quote_price: String(parseFloat(fs.bidAmt).toFixed(2)),
-        vendor_quote_scope: fs.bidNotes || "",
-        vendor_portal_status: "quote_submitted",
-        vendor_portal_price: String(parseFloat(fs.bidAmt).toFixed(2)),
-        vendor_portal_note: fs.bidNotes || "",
-        vendor_portal_responded_at: new Date().toISOString(),
-        stage: advanceStage,
-      };
-      const updated = fmJobs.map(j => j.id === jobId ? { ...j, vendorQuotePrice: patch.vendor_quote_price, vendorQuoteScope: patch.vendor_quote_scope, vendorPortalStatus: "quote_submitted", vendorPortalPrice: patch.vendor_portal_price, vendorPortalNote: patch.vendor_portal_note, vendorPortalRespondedAt: patch.vendor_portal_responded_at, stage: advanceStage } : j);
-      setFmJobs(updated);
-      try { await supa.from("fm_jobs").update(patch).eq("id", jobId); } catch(e) {}
-      const stageMsg = (advanceStage !== job?.stage) ? " · Stage advanced to Proposal" : "";
-      setForm(jobId, { bidAmt: "", bidNotes: "", msgOk: "Bid submitted" + stageMsg, busy: false });
-      flash(jobId, "msgOk");
+      const isAssigned = job?.subcontractorId === sub.id;
+      const invites = job?.bidInvites || [];
+      const isInvitee = !isAssigned && invites.some(inv => inv.subId === sub.id);
+      const priceStr = parseFloat(fs.bidAmt).toFixed(2);
+
+      if (isInvitee) {
+        // Bid Out path — update only this vendor's entry in bidInvites
+        const updatedInvites = invites.map(inv =>
+          inv.subId === sub.id
+            ? { ...inv, price: priceStr, notes: fs.bidNotes || "", respondedAt: new Date().toISOString(), status: "quoted" }
+            : inv
+        );
+        const patch = { bid_invites: updatedInvites };
+        const updated = fmJobs.map(j => j.id === jobId ? { ...j, bidInvites: updatedInvites } : j);
+        setFmJobs(updated);
+        try { await supa.from("fm_jobs").update(patch).eq("id", jobId); } catch(e) {}
+        setForm(jobId, { bidAmt: "", bidNotes: "", msgOk: "Bid submitted — pending owner review", busy: false });
+        flash(jobId, "msgOk");
+      } else {
+        // Known Vendor path — assigned sub submitting their quote
+        // Auto-advance owner stage: estimating/waiting_quote → generate_proposal
+        const advanceStage = (job?.stage === "estimating" || job?.stage === "waiting_quote") ? "generate_proposal" : job?.stage;
+        const patch = {
+          vendor_quote_price: priceStr,
+          vendor_quote_scope: fs.bidNotes || "",
+          vendor_portal_status: "quote_submitted",
+          vendor_portal_price: priceStr,
+          vendor_portal_note: fs.bidNotes || "",
+          vendor_portal_responded_at: new Date().toISOString(),
+          stage: advanceStage,
+        };
+        const updated = fmJobs.map(j => j.id === jobId ? { ...j, vendorQuotePrice: priceStr, vendorQuoteScope: fs.bidNotes || "", vendorPortalStatus: "quote_submitted", vendorPortalPrice: priceStr, vendorPortalNote: fs.bidNotes || "", vendorPortalRespondedAt: patch.vendor_portal_responded_at, stage: advanceStage } : j);
+        setFmJobs(updated);
+        try { await supa.from("fm_jobs").update(patch).eq("id", jobId); } catch(e) {}
+        const stageMsg = (advanceStage !== job?.stage) ? " · Stage advanced to Proposal" : "";
+        setForm(jobId, { bidAmt: "", bidNotes: "", msgOk: "Bid submitted" + stageMsg, busy: false });
+        flash(jobId, "msgOk");
+      }
     } catch (e) {
       setForm(jobId, { msgEr: "Error submitting bid", busy: false }); flash(jobId, "msgEr");
     }
@@ -3426,54 +3460,82 @@ function VendorPortalAuthenticated({ sub, myJobs, fmJobs, setFmJobs, companies, 
                 )}
               </div>
             )}
-            {tab === "update" && (
+            {tab === "update" && (() => {
+              const isAssigned = job.subcontractorId === sub.id;
+              const myInvite = (job.bidInvites || []).find(inv => inv.subId === sub.id);
+              const isInvitee = !isAssigned && !!myInvite;
+              return (
               <div className="vp-bp">
                 {/* Submit Bid */}
                 <div className="vp-asec">
-                  <h4>Submit Bid / Estimate</h4>
-                  <input className="vp-input" type="number" placeholder="Bid amount ($)" value={fs.bidAmt || ""} onChange={e => setForm(job.id, { bidAmt: e.target.value })} style={{marginBottom:8}} />
+                  <h4>{isInvitee ? "Submit Your Bid" : "Submit Bid / Estimate"}</h4>
+                  {isInvitee && myInvite?.price ? (
+                    <div style={{padding:"10px 12px",background:"#E0F2F1",border:"1px solid #00695C30",borderRadius:8,marginBottom:8}}>
+                      <div style={{fontSize:11,fontWeight:700,color:"#00695C"}}>✓ Your bid is submitted</div>
+                      <div style={{fontSize:13,color:"#18181A",marginTop:4}}>{fmtMoney(myInvite.price)}{myInvite.respondedAt ? " · " + new Date(myInvite.respondedAt).toLocaleDateString() : ""}</div>
+                      {myInvite.notes && <div style={{fontSize:12,color:"#4a4a4f",marginTop:4,fontStyle:"italic"}}>{myInvite.notes}</div>}
+                      <div style={{fontSize:11,color:"#8a8a92",marginTop:6}}>You can submit a revised bid below if needed.</div>
+                    </div>
+                  ) : null}
+                  <input className="vp-input" type="number" placeholder={myInvite?.price ? "Revised bid amount ($)" : "Bid amount ($)"} value={fs.bidAmt || ""} onChange={e => setForm(job.id, { bidAmt: e.target.value })} style={{marginBottom:8}} />
                   <textarea className="vp-ta" placeholder="Bid notes or breakdown (optional)…" value={fs.bidNotes || ""} onChange={e => setForm(job.id, { bidNotes: e.target.value })} />
-                  <button className="vp-btn" onClick={() => submitBid(job.id)} disabled={fs.busy}>{fs.busy ? "Submitting…" : "Submit Bid"}</button>
+                  <button className="vp-btn" onClick={() => submitBid(job.id)} disabled={fs.busy}>{fs.busy ? "Submitting…" : (myInvite?.price ? "Submit Revised Bid" : "Submit Bid")}</button>
                   {fs.msgOk && <div className={"vp-msg-ok on"}>✓ {fs.msgOk}</div>}
                   {fs.msgEr && <div className={"vp-msg-er on"}>{fs.msgEr}</div>}
                 </div>
-                {/* Schedule Date */}
-                <div className="vp-asec">
-                  <h4>Schedule Date</h4>
-                  {canSchedule ? (
-                    <>
-                      <input className="vp-input" type="date" value={fs.schedDate || job.startDate || ""} onChange={e => setForm(job.id, { schedDate: e.target.value })} style={{marginBottom:8}} />
-                      <button className="vp-btn" onClick={() => submitSched(job.id)} disabled={fs.busy}>{fs.busy ? "Saving…" : "Save Schedule Date"}</button>
-                    </>
-                  ) : (
-                    <div className="vp-locked">🔒 Scheduling is available once this job is approved.</div>
-                  )}
-                </div>
-                {/* Mark Work Complete — only shown during do_work */}
-                {job.stage === "do_work" && (
-                  <div className="vp-asec">
-                    <h4>Mark Work Complete</h4>
-                    <div style={{fontSize:12,color:"#8a8a92",marginBottom:8}}>Done with the work? Mark complete to move the job to billing. You can still submit your invoice afterward.</div>
-                    <button className="vp-btn" style={{background:"#2E7D32"}} onClick={() => markComplete(job.id)} disabled={fs.busy}>{fs.busy ? "Saving…" : "✓ Mark Work Complete"}</button>
-                  </div>
+
+                {/* Invitee notice — schedule/complete/invoice not available until awarded */}
+                {isInvitee && (
+                  <div className="vp-locked" style={{marginBottom:12}}>🔒 Scheduling, work completion, and invoicing become available if you're awarded this job.</div>
                 )}
-                {/* Add Note */}
+
+                {/* Sections only available to the assigned vendor */}
+                {isAssigned && (
+                  <>
+                    {/* Schedule Date */}
+                    <div className="vp-asec">
+                      <h4>Schedule Date</h4>
+                      {canSchedule ? (
+                        <>
+                          <input className="vp-input" type="date" value={fs.schedDate || job.startDate || ""} onChange={e => setForm(job.id, { schedDate: e.target.value })} style={{marginBottom:8}} />
+                          <button className="vp-btn" onClick={() => submitSched(job.id)} disabled={fs.busy}>{fs.busy ? "Saving…" : "Save Schedule Date"}</button>
+                        </>
+                      ) : (
+                        <div className="vp-locked">🔒 Scheduling is available once this job is approved.</div>
+                      )}
+                    </div>
+                    {/* Mark Work Complete — only shown during do_work */}
+                    {job.stage === "do_work" && (
+                      <div className="vp-asec">
+                        <h4>Mark Work Complete</h4>
+                        <div style={{fontSize:12,color:"#8a8a92",marginBottom:8}}>Done with the work? Mark complete to move the job to billing. You can still submit your invoice afterward.</div>
+                        <button className="vp-btn" style={{background:"#2E7D32"}} onClick={() => markComplete(job.id)} disabled={fs.busy}>{fs.busy ? "Saving…" : "✓ Mark Work Complete"}</button>
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {/* Add Note — available to both */}
                 <div className="vp-asec">
                   <h4>Add a Note</h4>
                   <textarea className="vp-ta" placeholder="Visible to your PM…" value={fs.note || ""} onChange={e => setForm(job.id, { note: e.target.value })} />
                   <button className="vp-btn" onClick={() => submitNote(job.id)} disabled={fs.busy}>{fs.busy ? "Posting…" : "Post Note"}</button>
                 </div>
-                {/* Submit Invoice */}
-                <div className="vp-asec">
-                  <h4>Submit Invoice</h4>
-                  <div style={{display:"flex",gap:8,marginBottom:8}}>
-                    <input className="vp-input" type="number" placeholder="Amount ($)" value={fs.invAmt || job.vendorInvoiceAmount || ""} onChange={e => setForm(job.id, { invAmt: e.target.value })} />
-                    <input className="vp-input" type="text" placeholder="Invoice # (optional)" value={fs.invNum || job.vendorInvoiceNumber || ""} onChange={e => setForm(job.id, { invNum: e.target.value })} style={{maxWidth:180}} />
+
+                {/* Submit Invoice — assigned only */}
+                {isAssigned && (
+                  <div className="vp-asec">
+                    <h4>Submit Invoice</h4>
+                    <div style={{display:"flex",gap:8,marginBottom:8}}>
+                      <input className="vp-input" type="number" placeholder="Amount ($)" value={fs.invAmt || job.vendorInvoiceAmount || ""} onChange={e => setForm(job.id, { invAmt: e.target.value })} />
+                      <input className="vp-input" type="text" placeholder="Invoice # (optional)" value={fs.invNum || job.vendorInvoiceNumber || ""} onChange={e => setForm(job.id, { invNum: e.target.value })} style={{maxWidth:180}} />
+                    </div>
+                    <button className="vp-btn" onClick={() => submitInvoice(job.id)} disabled={fs.busy}>{fs.busy ? "Submitting…" : "Submit Invoice"}</button>
                   </div>
-                  <button className="vp-btn" onClick={() => submitInvoice(job.id)} disabled={fs.busy}>{fs.busy ? "Submitting…" : "Submit Invoice"}</button>
-                </div>
+                )}
               </div>
-            )}
+              );
+            })()}
           </div>
         )}
       </div>
@@ -16353,7 +16415,9 @@ window.addEventListener('message',function(e){
                               {subcontractors.map(s => <option key={s.id} value={s.id}>{s.name}{s.trade ? " — " + s.trade : ""}</option>)}
                             </select>
                           </div>
-                          {job.subcontractorId && (
+                          {job.subcontractorId && (() => {
+                            const assignedSub = subcontractors.find(s => s.id === job.subcontractorId);
+                            return (
                             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                               {/* Vendor portal status */}
                               {job.vendorPortalStatus === "scheduled" ? (
@@ -16367,53 +16431,46 @@ window.addEventListener('message',function(e){
                                   </button>
                                 </div>
                               ) : job.vendorPortalStatus === "quote_submitted" ? (
-                                <div style={{ background: "#F8717115", border: "1px solid #F8717130", borderRadius: 6, padding: "10px 12px" }}>
-                                  <div style={{ fontSize: 11, color: "#F87171", fontWeight: 700 }}>⚠ Over NTE — Quote Needs Review</div>
-                                  <div style={{ fontSize: 11, color: "#1A2240", marginTop: 3 }}>Vendor price: <strong>{fmt(Number(job.vendorPortalPrice||0))}</strong> vs NTE: {fmt(vendorNTE)}</div>
+                                <div style={{ background: Number(job.vendorPortalPrice||0) > vendorNTE ? "#F8717115" : "#4ADE8015", border: "1px solid " + (Number(job.vendorPortalPrice||0) > vendorNTE ? "#F8717130" : "#4ADE8030"), borderRadius: 6, padding: "10px 12px" }}>
+                                  <div style={{ fontSize: 11, color: Number(job.vendorPortalPrice||0) > vendorNTE ? "#F87171" : "#4ADE80", fontWeight: 700 }}>
+                                    {Number(job.vendorPortalPrice||0) > vendorNTE ? "⚠ Over NTE — Quote Needs Review" : "✓ Quote Submitted"}
+                                  </div>
+                                  <div style={{ fontSize: 11, color: "#1A2240", marginTop: 3 }}>Vendor price: <strong>{fmt(Number(job.vendorPortalPrice||0))}</strong>{vendorNTE > 0 ? " vs NTE: " + fmt(vendorNTE) : ""}</div>
                                   {job.vendorPortalNote && <div style={{ fontSize: 10, color: "#4A5278", marginTop: 3 }}>{job.vendorPortalNote}</div>}
                                   <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
                                     <button onClick={() => update({ stage: "generate_proposal", vendorQuotePrice: job.vendorPortalPrice })}
                                       style={{ flex: 1, padding: "7px", borderRadius: 5, border: "none", background: "#3B6FE8", color: "#FFF", fontSize: 10, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
                                       → Generate Proposal
                                     </button>
-                                    <button onClick={() => update({ vendorPortalStatus: null, vendorToken: null, vendorSentAt: null })}
+                                    <button onClick={() => update({ vendorPortalStatus: null })}
                                       style={{ flex: 0, padding: "7px 10px", borderRadius: 5, border: "1px solid #CBD1E8", background: "transparent", color: "#4A5278", fontSize: 10, cursor: "pointer", fontFamily: "inherit" }}>
                                       ↩ Reset
                                     </button>
                                   </div>
                                 </div>
-                              ) : job.vendorSentAt && job.vendorToken ? (
-                                <div style={{ background: "#FCD34D10", border: "1px solid #FCD34D30", borderRadius: 6, padding: "10px 12px" }}>
-                                  <div style={{ fontSize: 11, color: "#FCD34D", fontWeight: 600 }}>⏳ Awaiting vendor response</div>
-                                  <div style={{ fontSize: 10, color: "#4A5278", marginTop: 2 }}>Sent {new Date(job.vendorSentAt).toLocaleDateString()}</div>
-                                  <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
-                                    <button onClick={() => navigator.clipboard?.writeText(window.location.origin + "/?vendortoken=" + job.vendorToken)}
-                                      style={{ flex: 1, fontSize: 10, background: "transparent", border: "1px solid #FCD34D30", borderRadius: 4, color: "#FCD34D", padding: "4px 8px", cursor: "pointer", fontFamily: "inherit" }}>
-                                      📋 Copy Link
-                                    </button>
-                                    <button onClick={() => window.open(window.location.origin + "/?vendortoken=" + job.vendorToken, "_blank")}
-                                      style={{ flex: 1, fontSize: 10, background: "#3B6FE820", border: "1px solid #3B6FE840", borderRadius: 4, color: "#3B6FE8", padding: "4px 8px", cursor: "pointer", fontFamily: "inherit" }}>
-                                      👁 Preview Portal
-                                    </button>
-                                  </div>
-                                </div>
                               ) : (
-                                <button
-                                  onClick={() => {
-                                    const vt = "vendor" + Math.random().toString(36).slice(2, 10);
-                                    const link = window.location.origin + "/?vendortoken=" + vt;
-                                    update({ vendorToken: vt, vendorSentAt: new Date().toISOString(), vendorPortalStatus: "pending", stage: "waiting_quote" });
-                                    navigator.clipboard?.writeText(link);
-                                    if (window.confirm("✅ Link copied!\n\nOpen a preview of the vendor portal now?")) {
-                                      window.open(link, "_blank");
-                                    }
-                                  }}
-                                  style={{ width: "100%", padding: "10px", borderRadius: 6, border: "none", cursor: "pointer", fontFamily: "inherit", fontSize: 12, fontWeight: 700, background: "#3B6FE8", color: "#FFF" }}>
-                                  🔗 Send Vendor Portal Link
-                                </button>
+                                // Vendor has been assigned but hasn't responded yet
+                                <div style={{ background: assignedSub?.portalEnabled ? "#3B6FE810" : "#FCD34D10", border: "1px solid " + (assignedSub?.portalEnabled ? "#3B6FE830" : "#FCD34D30"), borderRadius: 6, padding: "10px 12px" }}>
+                                  {assignedSub?.portalEnabled ? (
+                                    <>
+                                      <div style={{ fontSize: 11, color: "#3B6FE8", fontWeight: 700 }}>✓ Job sent to {assignedSub.name}'s portal</div>
+                                      <div style={{ fontSize: 10, color: "#4A5278", marginTop: 3 }}>They'll see this job in their vendor portal under "Need Estimates". Awaiting their quote.</div>
+                                      <button onClick={() => window.open(`/?vendor=preview&subId=${assignedSub.id}`, "_blank")}
+                                        style={{ marginTop: 8, padding: "5px 10px", borderRadius: 5, border: "1px solid #3B6FE840", background: "transparent", color: "#3B6FE8", fontSize: 10, cursor: "pointer", fontFamily: "inherit" }}>
+                                        👁 Preview their portal
+                                      </button>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <div style={{ fontSize: 11, color: "#FCD34D", fontWeight: 700 }}>⚠ {assignedSub?.name || "Vendor"} doesn't have portal access</div>
+                                      <div style={{ fontSize: 10, color: "#4A5278", marginTop: 3 }}>Enable portal access for this vendor in the Subcontractors tab so they can manage this job.</div>
+                                    </>
+                                  )}
+                                </div>
                               )}
                             </div>
-                          )}
+                            );
+                          })()}
                           {!job.subcontractorId && <div style={{ fontSize: 10, color: "#3D4570", fontStyle: "italic" }}>Select a vendor above to send them the job</div>}
                         </div>
                       )}
@@ -16423,9 +16480,22 @@ window.addEventListener('message',function(e){
                         const invites = job.bidInvites || [];
                         const responded = invites.filter(i => i.price);
                         const lowestBid = responded.length ? responded.reduce((a, b) => Number(a.price) < Number(b.price) ? a : b) : null;
+                        // Helper: pick a winner — sets subcontractorId, clears bidInvites so losers stop seeing the job
+                        const pickWinner = (inv) => {
+                          update({
+                            subcontractorId: inv.subId,
+                            vendorQuotePrice: inv.price,
+                            vendorPortalPrice: inv.price,
+                            vendorPortalStatus: "quote_submitted",
+                            vendorPortalNote: inv.notes || "",
+                            estimatingPath: "known_vendor",
+                            bidInvites: [], // Clear invites so non-winners lose portal visibility
+                            stage: "generate_proposal",
+                          });
+                        };
                         return (
                           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                            <div style={{ fontSize: 10, color: "#4A5278" }}>Add vendors to the bid list. Each gets their own portal link.</div>
+                            <div style={{ fontSize: 10, color: "#4A5278" }}>Add vendors to the bid list. The job auto-appears in each invited vendor's portal under "Need Estimates".</div>
 
                             {/* Invite list */}
                             {invites.map((inv, idx) => {
@@ -16434,45 +16504,44 @@ window.addEventListener('message',function(e){
                               return (
                                 <div key={inv.subId} style={{ background: isLow ? "#4ADE8010" : "#ECEEF8", border: "1px solid " + (isLow ? "#4ADE8040" : "#CBD1E8"), borderRadius: 6, padding: "10px 12px" }}>
                                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                                    <div>
+                                    <div style={{ flex: 1 }}>
                                       <div style={{ fontSize: 11, fontWeight: 700, color: "#1A2240" }}>{s?.name || "Unknown"}{isLow && <span style={{ marginLeft: 6, fontSize: 9, background: "#4ADE8020", color: "#4ADE80", padding: "1px 6px", borderRadius: 3 }}>LOWEST</span>}</div>
-                                      {inv.sentAt && <div style={{ fontSize: 10, color: "#4A5278", marginTop: 1 }}>Sent {new Date(inv.sentAt).toLocaleDateString()}</div>}
-                                    </div>
-                                    <div style={{ textAlign: "right" }}>
+                                      {/* Status line */}
                                       {inv.price ? (
-                                        <div style={{ fontSize: 13, fontWeight: 700, color: isLow ? "#4ADE80" : "#1A2240" }}>{fmt(Number(inv.price))}</div>
-                                      ) : inv.sentAt ? (
-                                        <span style={{ fontSize: 10, color: "#FCD34D" }}>⏳ Waiting</span>
-                                      ) : null}
+                                        <div style={{ fontSize: 10, color: "#4ADE80", marginTop: 2, fontWeight: 600 }}>✓ Quote submitted{inv.respondedAt ? " · " + new Date(inv.respondedAt).toLocaleDateString() : ""}</div>
+                                      ) : s?.portalEnabled ? (
+                                        <div style={{ fontSize: 10, color: "#3B6FE8", marginTop: 2 }}>✓ In their portal · awaiting quote</div>
+                                      ) : (
+                                        <div style={{ fontSize: 10, color: "#FCD34D", marginTop: 2 }}>⚠ Portal not enabled for this vendor</div>
+                                      )}
+                                      {inv.notes && <div style={{ fontSize: 10, color: "#4A5278", marginTop: 4, fontStyle: "italic" }}>{inv.notes}</div>}
+                                    </div>
+                                    <div style={{ textAlign: "right", marginLeft: 10 }}>
+                                      {inv.price && (
+                                        <div style={{ fontSize: 14, fontWeight: 700, color: isLow ? "#4ADE80" : "#1A2240" }}>{fmt(Number(inv.price))}</div>
+                                      )}
                                     </div>
                                   </div>
                                   <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
-                                    {!inv.sentAt ? (
-                                      <button onClick={() => {
-                                        const vt = "vendor" + Math.random().toString(36).slice(2, 10);
-                                        const link = window.location.origin + "/?vendortoken=" + vt;
-                                        const updated = invites.map((x, i) => i === idx ? { ...x, token: vt, sentAt: new Date().toISOString() } : x);
-                                        update({ bidInvites: updated });
-                                        navigator.clipboard?.writeText(link);
-                                        alert("✅ Link copied for " + (s?.name || "vendor") + ":\n\n" + link);
-                                      }} style={{ flex: 1, padding: "6px", borderRadius: 5, border: "none", background: "#3B6FE8", color: "#FFF", fontSize: 10, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
-                                        🔗 Send Link
-                                      </button>
-                                    ) : inv.sentAt && !inv.price ? (
-                                      <button onClick={() => navigator.clipboard?.writeText(window.location.origin + "/?vendortoken=" + inv.token)}
-                                        style={{ flex: 1, padding: "6px", borderRadius: 5, border: "1px solid #FCD34D30", background: "transparent", color: "#FCD34D", fontSize: 10, cursor: "pointer", fontFamily: "inherit" }}>
-                                        📋 Resend Link
-                                      </button>
-                                    ) : isLow ? (
-                                      <button onClick={() => update({ subcontractorId: inv.subId, vendorPortalPrice: inv.price, vendorPortalStatus: "scheduled", estimatingPath: "known_vendor", bidInvites: invites })}
-                                        style={{ flex: 1, padding: "6px", borderRadius: 5, border: "none", background: "#4ADE80", color: "#0A1F0A", fontSize: 10, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
-                                        ✅ Select Winner
+                                    {inv.price ? (
+                                      isLow ? (
+                                        <button onClick={() => pickWinner(inv)}
+                                          style={{ flex: 1, padding: "6px", borderRadius: 5, border: "none", background: "#4ADE80", color: "#0A1F0A", fontSize: 10, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
+                                          ✅ Select Winner
+                                        </button>
+                                      ) : (
+                                        <button onClick={() => pickWinner(inv)}
+                                          style={{ flex: 1, padding: "6px", borderRadius: 5, border: "1px solid #CBD1E8", background: "transparent", color: "#4A5278", fontSize: 10, cursor: "pointer", fontFamily: "inherit" }}>
+                                          Select
+                                        </button>
+                                      )
+                                    ) : s?.portalEnabled ? (
+                                      <button onClick={() => window.open(`/?vendor=preview&subId=${inv.subId}`, "_blank")}
+                                        style={{ flex: 1, padding: "6px", borderRadius: 5, border: "1px solid #3B6FE830", background: "transparent", color: "#3B6FE8", fontSize: 10, cursor: "pointer", fontFamily: "inherit" }}>
+                                        👁 Preview their portal
                                       </button>
                                     ) : (
-                                      <button onClick={() => update({ subcontractorId: inv.subId, vendorPortalPrice: inv.price, vendorPortalStatus: "scheduled", estimatingPath: "known_vendor", bidInvites: invites })}
-                                        style={{ flex: 1, padding: "6px", borderRadius: 5, border: "1px solid #CBD1E8", background: "transparent", color: "#4A5278", fontSize: 10, cursor: "pointer", fontFamily: "inherit" }}>
-                                        Select
-                                      </button>
+                                      <div style={{ flex: 1, fontSize: 10, color: "#8a8a92", fontStyle: "italic", padding: "6px 0" }}>Enable portal for {s?.name} in Subcontractors</div>
                                     )}
                                     <button onClick={() => update({ bidInvites: invites.filter((_, i) => i !== idx) })}
                                       style={{ padding: "6px 8px", borderRadius: 5, border: "1px solid #F8717130", background: "transparent", color: "#F87171", fontSize: 10, cursor: "pointer", fontFamily: "inherit" }}>
@@ -16486,14 +16555,15 @@ window.addEventListener('message',function(e){
                             {/* Add vendor to bid */}
                             {(() => {
                               const alreadyAdded = new Set(invites.map(i => i.subId));
-                              const available = subcontractors.filter(s => !alreadyAdded.has(s.id));
+                              const available = subcontractors.filter(s => !alreadyAdded.has(s.id) && !s.archived);
                               return available.length > 0 ? (
                                 <select className="fi" value="" onChange={e => {
                                   if (!e.target.value) return;
-                                  update({ bidInvites: [...invites, { subId: e.target.value, token: null, sentAt: null, price: null, status: "pending" }] });
+                                  // Add invite — vendor immediately sees this job in their portal (bidInvites filter)
+                                  update({ bidInvites: [...invites, { subId: e.target.value, invitedAt: new Date().toISOString(), price: null, notes: "", status: "invited" }] });
                                 }}>
                                   <option value="">+ Add vendor to bid list…</option>
-                                  {available.map(s => <option key={s.id} value={s.id}>{s.name}{s.trade ? " — " + s.trade : ""}</option>)}
+                                  {available.map(s => <option key={s.id} value={s.id}>{s.name}{s.trade ? " — " + s.trade : ""}{!s.portalEnabled ? " ⚠ no portal" : ""}</option>)}
                                 </select>
                               ) : <div style={{ fontSize: 10, color: "#4A5278", fontStyle: "italic" }}>All vendors added</div>;
                             })()}
