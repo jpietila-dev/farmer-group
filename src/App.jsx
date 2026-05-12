@@ -3237,7 +3237,7 @@ function vpStepCls(stage) {
 function vpStepLbl(stage) {
   if (stage === "estimating")        return "Need Estimate";
   if (stage === "waiting_quote")     return "Waiting on Quotes";
-  if (stage === "generate_proposal") return "Proposal Pending";
+  if (stage === "generate_proposal") return "Waiting for Approval";
   if (stage === "owner_approval")    return "Waiting for Approval";
   if (stage === "buyout")            return "Approved";
   if (stage === "do_work")           return "Scheduled";
@@ -3273,7 +3273,7 @@ function VendorPortalAuthenticated({ sub, myJobs, fmJobs, setFmJobs, companies, 
   const setForm = (jobId, patch) => setFormState(prev => ({ ...prev, [jobId]: { ...(prev[jobId]||{}), ...patch } }));
 
   // visible jobs = filter out owner_approval (vendor doesn't act on those yet)
-  const visibleJobs = useMemo(() => myJobs.filter(j => j.stage !== "owner_approval"), [myJobs]);
+  const visibleJobs = useMemo(() => myJobs.filter(j => j.stage !== "owner_approval" && j.stage !== "waiting_quote"), [myJobs]);
 
   // stats
   const stat = {
@@ -3405,22 +3405,33 @@ function VendorPortalAuthenticated({ sub, myJobs, fmJobs, setFmJobs, companies, 
   const submitInvoice = async (jobId) => {
     const fs = formState[jobId] || {};
     if (!fs.invAmt) { setForm(jobId, { msgEr: "Please enter an invoice amount" }); flash(jobId, "msgEr"); return; }
+    const job = fmJobs.find(j => j.id === jobId);
+    // Enforce cap: invoice ≤ quoted amount if any, else ≤ NTE
+    const myInvite = (job?.bidInvites || []).find(inv => inv.subId === sub.id);
+    const quotedAmt = Number(job?.vendorQuotePrice || myInvite?.price || 0);
+    const nte = Number(job?.contractValue || job?.nte || 0);
+    const cap = quotedAmt > 0 ? quotedAmt : nte;
+    const amt = parseFloat(fs.invAmt);
+    if (cap > 0 && amt > cap) {
+      setForm(jobId, { msgEr: "Amount exceeds maximum of " + fmtMoney(cap) });
+      flash(jobId, "msgEr");
+      return;
+    }
     setForm(jobId, { busy: true });
     try {
-      const job = fmJobs.find(j => j.id === jobId);
       // Auto-advance owner stage: do_work → bill (also accepts buyout, in case work skipped do_work)
       const advanceStage = (job?.stage === "do_work" || job?.stage === "buyout") ? "bill" : job?.stage;
       // Use latest form values, fall back to existing job values
       const completionPhotos = fs.completionPhotos !== undefined ? fs.completionPhotos : (job?.completionPhotos || []);
       const invoiceAttachment = fs.invoiceAttachment !== undefined ? fs.invoiceAttachment : (job?.invoiceAttachment || null);
       const patch = {
-        vendor_invoice_amount: parseFloat(fs.invAmt),
+        vendor_invoice_amount: amt,
         vendor_invoice_number: fs.invNum || null,
         completion_photos: completionPhotos,
         invoice_attachment: invoiceAttachment,
         stage: advanceStage,
       };
-      const updated = fmJobs.map(j => j.id === jobId ? { ...j, vendorInvoiceAmount: parseFloat(fs.invAmt), vendorInvoiceNumber: fs.invNum || "", completionPhotos, invoiceAttachment, stage: advanceStage } : j);
+      const updated = fmJobs.map(j => j.id === jobId ? { ...j, vendorInvoiceAmount: amt, vendorInvoiceNumber: fs.invNum || "", completionPhotos, invoiceAttachment, stage: advanceStage } : j);
       setFmJobs(updated);
       try { await supa.from("fm_jobs").update(patch).eq("id", jobId); } catch(e) {}
       const stageMsg = (advanceStage !== job?.stage) ? " · Stage advanced to Bill" : "";
@@ -3445,6 +3456,108 @@ function VendorPortalAuthenticated({ sub, myJobs, fmJobs, setFmJobs, companies, 
       flash(jobId, "msgOk");
     } catch (e) {
       setForm(jobId, { msgEr: "Error", busy: false }); flash(jobId, "msgEr");
+    }
+  };
+
+  // Vendor accepts at the coordinator's NTE — locks in NTE as the agreed price + skips Need Estimate → goes straight to Approved (buyout)
+  const acceptAtNTE = async (jobId) => {
+    setForm(jobId, { busy: true });
+    try {
+      const job = fmJobs.find(j => j.id === jobId);
+      const nte = Number(job?.contractValue || job?.nte || 0);
+      if (!nte) { setForm(jobId, { msgEr: "No NTE set by coordinator yet", busy: false }); flash(jobId, "msgEr"); return; }
+      const isAssigned = job?.subcontractorId === sub.id;
+      const invites = job?.bidInvites || [];
+      const isInvitee = !isAssigned && invites.some(inv => inv.subId === sub.id);
+      const acceptedAmt = nte.toFixed(2);
+      const patch = {
+        vendor_quote_price: acceptedAmt,
+        vendor_portal_price: acceptedAmt,
+        vendor_portal_status: "accepted_nte",
+        vendor_portal_note: "Accepted at NTE",
+        vendor_portal_responded_at: new Date().toISOString(),
+        vendor_accepted_at: new Date().toISOString(),
+        stage: "buyout", // skip estimate, waiting, proposal — straight to Approved
+      };
+      // If this was an invite, promote to assigned + clear other invites
+      if (isInvitee) {
+        patch.subcontractor_id = sub.id;
+        patch.bid_invites = [];
+        patch.estimating_path = "known_vendor";
+      }
+      const updated = fmJobs.map(j => j.id === jobId ? { ...j,
+        vendorQuotePrice: acceptedAmt, vendorPortalPrice: acceptedAmt, vendorPortalStatus: "accepted_nte",
+        vendorPortalNote: "Accepted at NTE", vendorPortalRespondedAt: patch.vendor_portal_responded_at,
+        vendorAcceptedAt: patch.vendor_accepted_at, stage: "buyout",
+        ...(isInvitee ? { subcontractorId: sub.id, bidInvites: [], estimatingPath: "known_vendor" } : {}),
+      } : j);
+      setFmJobs(updated);
+      try { await supa.from("fm_jobs").update(patch).eq("id", jobId); } catch(e) {}
+      setForm(jobId, { msgOk: "Accepted at NTE · Job moved to Approved", busy: false });
+      flash(jobId, "msgOk");
+    } catch (e) {
+      setForm(jobId, { msgEr: "Error accepting job", busy: false }); flash(jobId, "msgEr");
+    }
+  };
+
+  // Vendor declines the job — removes their assignment / bid invite
+  const declineJob = async (jobId) => {
+    if (!window.confirm("Decline this job? You will no longer see it in your portal and the coordinator will be notified.")) return;
+    setForm(jobId, { busy: true });
+    try {
+      const job = fmJobs.find(j => j.id === jobId);
+      const isAssigned = job?.subcontractorId === sub.id;
+      const invites = job?.bidInvites || [];
+      const isInvitee = !isAssigned && invites.some(inv => inv.subId === sub.id);
+      const patch = {};
+      const localPatch = {};
+      if (isAssigned) {
+        // Clear vendor assignment
+        patch.subcontractor_id = null;
+        patch.vendor_portal_status = "declined";
+        patch.vendor_portal_note = "Vendor declined the job";
+        patch.vendor_portal_responded_at = new Date().toISOString();
+        // Reset stage back to estimating so coordinator can reassign
+        patch.stage = "estimating";
+        Object.assign(localPatch, { subcontractorId: "", vendorPortalStatus: "declined", vendorPortalNote: "Vendor declined the job", vendorPortalRespondedAt: patch.vendor_portal_responded_at, stage: "estimating" });
+      } else if (isInvitee) {
+        // Remove this vendor's entry from bidInvites
+        const filtered = invites.filter(inv => inv.subId !== sub.id);
+        patch.bid_invites = filtered;
+        localPatch.bidInvites = filtered;
+      }
+      const updated = fmJobs.map(j => j.id === jobId ? { ...j, ...localPatch } : j);
+      setFmJobs(updated);
+      try { await supa.from("fm_jobs").update(patch).eq("id", jobId); } catch(e) {}
+      // Card will disappear because vendor is no longer assigned/invited
+    } catch (e) {
+      setForm(jobId, { msgEr: "Error declining job", busy: false }); flash(jobId, "msgEr");
+    }
+  };
+
+  // Vendor accepts a job at Approved/Buyout stage with a schedule date → moves to Scheduled (do_work)
+  const acceptAndSchedule = async (jobId) => {
+    const fs = formState[jobId] || {};
+    if (!fs.schedDate) { setForm(jobId, { msgEr: "Please select a schedule date to accept" }); flash(jobId, "msgEr"); return; }
+    setForm(jobId, { busy: true });
+    try {
+      const patch = {
+        start_date: fs.schedDate,
+        vendor_portal_status: "scheduled",
+        vendor_portal_date: fs.schedDate,
+        vendor_accepted_at: new Date().toISOString(),
+        stage: "do_work",
+      };
+      const updated = fmJobs.map(j => j.id === jobId ? { ...j,
+        startDate: fs.schedDate, vendorPortalStatus: "scheduled", vendorPortalDate: fs.schedDate,
+        vendorAcceptedAt: patch.vendor_accepted_at, stage: "do_work",
+      } : j);
+      setFmJobs(updated);
+      try { await supa.from("fm_jobs").update(patch).eq("id", jobId); } catch(e) {}
+      setForm(jobId, { msgOk: "Accepted · Scheduled for " + fs.schedDate, busy: false });
+      flash(jobId, "msgOk");
+    } catch (e) {
+      setForm(jobId, { msgEr: "Error accepting job", busy: false }); flash(jobId, "msgEr");
     }
   };
 
@@ -3515,156 +3628,269 @@ function VendorPortalAuthenticated({ sub, myJobs, fmJobs, setFmJobs, companies, 
               const isAssigned = job.subcontractorId === sub.id;
               const myInvite = (job.bidInvites || []).find(inv => inv.subId === sub.id);
               const isInvitee = !isAssigned && !!myInvite;
-              return (
-              <div className="vp-bp">
-                {/* Submit Bid */}
-                <div className="vp-asec">
-                  <h4>{isInvitee ? "Submit Your Bid" : "Submit Bid / Estimate"}</h4>
-                  {isInvitee && myInvite?.price ? (
-                    <div style={{padding:"10px 12px",background:"#E0F2F1",border:"1px solid #00695C30",borderRadius:8,marginBottom:8}}>
-                      <div style={{fontSize:11,fontWeight:700,color:"#00695C"}}>✓ Your bid is submitted</div>
-                      <div style={{fontSize:13,color:"#18181A",marginTop:4}}>{fmtMoney(myInvite.price)}{myInvite.respondedAt ? " · " + new Date(myInvite.respondedAt).toLocaleDateString() : ""}</div>
-                      {myInvite.notes && <div style={{fontSize:12,color:"#4a4a4f",marginTop:4,fontStyle:"italic"}}>{myInvite.notes}</div>}
-                      <div style={{fontSize:11,color:"#8a8a92",marginTop:6}}>You can submit a revised bid below if needed.</div>
-                    </div>
-                  ) : null}
-                  <input className="vp-input" type="number" placeholder={myInvite?.price ? "Revised bid amount ($)" : "Bid amount ($)"} value={fs.bidAmt || ""} onChange={e => setForm(job.id, { bidAmt: e.target.value })} style={{marginBottom:8}} />
-                  <textarea className="vp-ta" placeholder="Bid notes or breakdown (optional)…" value={fs.bidNotes || ""} onChange={e => setForm(job.id, { bidNotes: e.target.value })} />
-                  <button className="vp-btn" onClick={() => submitBid(job.id)} disabled={fs.busy}>{fs.busy ? "Submitting…" : (myInvite?.price ? "Submit Revised Bid" : "Submit Bid")}</button>
-                  {fs.msgOk && <div className={"vp-msg-ok on"}>✓ {fs.msgOk}</div>}
-                  {fs.msgEr && <div className={"vp-msg-er on"}>{fs.msgEr}</div>}
-                </div>
+              const stage = job.stage;
+              const nte = Number(job.contractValue || job.nte || 0);
+              const quotedAmt = Number(job.vendorQuotePrice || myInvite?.price || 0);
+              // Cap for invoice = quoted amount if vendor submitted a quote, else NTE
+              const invoiceCap = quotedAmt > 0 ? quotedAmt : nte;
 
-                {/* Invitee notice — schedule/complete/invoice not available until awarded */}
-                {isInvitee && (
-                  <div className="vp-locked" style={{marginBottom:12}}>🔒 Scheduling, work completion, and invoicing become available if you're awarded this job.</div>
-                )}
-
-                {/* Sections only available to the assigned vendor */}
-                {isAssigned && (
-                  <>
-                    {/* Schedule Date */}
-                    <div className="vp-asec">
-                      <h4>Schedule Date</h4>
-                      {canSchedule ? (
-                        <>
-                          <input className="vp-input" type="date" value={fs.schedDate || job.startDate || ""} onChange={e => setForm(job.id, { schedDate: e.target.value })} style={{marginBottom:8}} />
-                          <button className="vp-btn" onClick={() => submitSched(job.id)} disabled={fs.busy}>{fs.busy ? "Saving…" : "Save Schedule Date"}</button>
-                        </>
-                      ) : (
-                        <div className="vp-locked">🔒 Scheduling is available once this job is approved.</div>
-                      )}
-                    </div>
-                    {/* Mark Work Complete — only shown during do_work */}
-                    {job.stage === "do_work" && (
-                      <div className="vp-asec">
-                        <h4>Mark Work Complete</h4>
-                        <div style={{fontSize:12,color:"#8a8a92",marginBottom:8}}>Done with the work? Mark complete to move the job to billing. You can still submit your invoice afterward.</div>
-                        <button className="vp-btn" style={{background:"#2E7D32"}} onClick={() => markComplete(job.id)} disabled={fs.busy}>{fs.busy ? "Saving…" : "✓ Mark Work Complete"}</button>
-                      </div>
-                    )}
-                  </>
-                )}
-
-                {/* Add Note — available to both */}
+              // Reusable add-note section (available at every stage)
+              const noteSection = (
                 <div className="vp-asec">
                   <h4>Add a Note</h4>
                   <textarea className="vp-ta" placeholder="Visible to your PM…" value={fs.note || ""} onChange={e => setForm(job.id, { note: e.target.value })} />
                   <button className="vp-btn" onClick={() => submitNote(job.id)} disabled={fs.busy}>{fs.busy ? "Posting…" : "Post Note"}</button>
                 </div>
+              );
 
-                {/* Submit Invoice — assigned only */}
-                {isAssigned && (
-                  <div className="vp-asec">
-                    <h4>Submit Invoice</h4>
-                    <div style={{display:"flex",gap:8,marginBottom:10}}>
-                      <input className="vp-input" type="number" placeholder="Amount ($)" value={fs.invAmt || job.vendorInvoiceAmount || ""} onChange={e => setForm(job.id, { invAmt: e.target.value })} />
-                      <input className="vp-input" type="text" placeholder="Invoice # (optional)" value={fs.invNum || job.vendorInvoiceNumber || ""} onChange={e => setForm(job.id, { invNum: e.target.value })} style={{maxWidth:180}} />
+              return (
+              <div className="vp-bp">
+                {/* ─── NEED ESTIMATE (estimating) ─── */}
+                {stage === "estimating" && (
+                  <>
+                    {/* NTE display */}
+                    {nte > 0 && (
+                      <div className="vp-asec" style={{background:"#FFF8E1",border:"1px solid #F9A82540"}}>
+                        <h4 style={{color:"#92400E"}}>📋 Not-to-Exceed (NTE) Set by Coordinator</h4>
+                        <div style={{fontSize:24,fontWeight:700,color:"#18181A",margin:"6px 0"}}>{fmtMoney(nte)}</div>
+                        <div style={{fontSize:12,color:"#4a4a4f"}}>You can accept the job at this amount to skip estimating and move straight to scheduling. Otherwise submit your own bid below.</div>
+                      </div>
+                    )}
+
+                    {/* Action choices */}
+                    <div className="vp-asec">
+                      <h4>What would you like to do?</h4>
+                      {nte > 0 && (
+                        <button className="vp-btn" style={{background:"#2E7D32",marginBottom:8,width:"100%"}} onClick={() => acceptAtNTE(job.id)} disabled={fs.busy}>
+                          {fs.busy ? "Accepting…" : "✓ Accept Job at NTE (" + fmtMoney(nte) + ")"}
+                        </button>
+                      )}
+
+                      {/* Submit bid */}
+                      <div style={{marginTop:nte > 0 ? 14 : 0, paddingTop: nte > 0 ? 14 : 0, borderTop: nte > 0 ? "1px solid rgba(24,24,26,0.08)" : "none"}}>
+                        <div style={{fontSize:12,fontWeight:600,marginBottom:8,color:"#18181A"}}>{nte > 0 ? "Or submit your own bid:" : "Submit your bid:"}</div>
+                        {isInvitee && myInvite?.price ? (
+                          <div style={{padding:"10px 12px",background:"#E0F2F1",border:"1px solid #00695C30",borderRadius:8,marginBottom:8}}>
+                            <div style={{fontSize:11,fontWeight:700,color:"#00695C"}}>✓ Your bid is submitted</div>
+                            <div style={{fontSize:13,color:"#18181A",marginTop:4}}>{fmtMoney(myInvite.price)}{myInvite.respondedAt ? " · " + new Date(myInvite.respondedAt).toLocaleDateString() : ""}</div>
+                            {myInvite.notes && <div style={{fontSize:12,color:"#4a4a4f",marginTop:4,fontStyle:"italic"}}>{myInvite.notes}</div>}
+                          </div>
+                        ) : null}
+                        <input className="vp-input" type="number" placeholder="Bid amount ($)" value={fs.bidAmt || ""} onChange={e => setForm(job.id, { bidAmt: e.target.value })} style={{marginBottom:8}} />
+                        <textarea className="vp-ta" placeholder="Bid notes or breakdown (optional)…" value={fs.bidNotes || ""} onChange={e => setForm(job.id, { bidNotes: e.target.value })} />
+                        <button className="vp-btn" onClick={() => submitBid(job.id)} disabled={fs.busy}>{fs.busy ? "Submitting…" : (myInvite?.price ? "Submit Revised Bid" : "Submit Bid")}</button>
+                      </div>
+
+                      {/* Decline */}
+                      <div style={{marginTop:14,paddingTop:14,borderTop:"1px solid rgba(24,24,26,0.08)"}}>
+                        <button onClick={() => declineJob(job.id)} disabled={fs.busy}
+                          style={{width:"100%",padding:"10px 14px",borderRadius:8,border:"1px solid #DC262640",background:"transparent",color:"#DC2626",fontSize:13,fontWeight:500,cursor:"pointer",fontFamily:"inherit"}}>
+                          ✕ Decline This Job
+                        </button>
+                      </div>
+
+                      {fs.msgOk && <div className={"vp-msg-ok on"}>✓ {fs.msgOk}</div>}
+                      {fs.msgEr && <div className={"vp-msg-er on"}>{fs.msgEr}</div>}
                     </div>
 
-                    {/* Completion Photos */}
-                    <div style={{marginBottom:10}}>
-                      <label style={{display:"block",fontSize:10,fontWeight:600,textTransform:"uppercase",letterSpacing:"0.06em",color:"#8a8a92",marginBottom:6}}>📸 Completed Work Photos</label>
-                      {(() => {
-                        const photos = fs.completionPhotos || job.completionPhotos || [];
-                        return (
-                          <>
-                            {photos.length > 0 && (
-                              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(80px,1fr))",gap:6,marginBottom:8}}>
-                                {photos.map((p, i) => (
-                                  <div key={i} style={{position:"relative"}}>
-                                    <img src={p.data} alt={p.name||""} style={{width:"100%",aspectRatio:"1",objectFit:"cover",borderRadius:6,border:"1px solid rgba(24,24,26,0.1)"}} />
-                                    <button onClick={() => {
-                                      const remaining = photos.filter((_, idx) => idx !== i);
-                                      setForm(job.id, { completionPhotos: remaining });
-                                    }} style={{position:"absolute",top:2,right:2,width:18,height:18,borderRadius:"50%",border:"none",background:"rgba(0,0,0,0.7)",color:"#fff",fontSize:10,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",padding:0,fontFamily:"inherit"}}>✕</button>
-                                  </div>
-                                ))}
+                    {noteSection}
+                  </>
+                )}
+
+                {/* ─── WAITING FOR APPROVAL (generate_proposal) ─── */}
+                {stage === "generate_proposal" && (
+                  <>
+                    <div className="vp-asec" style={{background:"#E3F2FD",border:"1px solid #1565C040"}}>
+                      <h4 style={{color:"#1565C0"}}>⏳ Waiting for Approval</h4>
+                      <div style={{fontSize:13,color:"#18181A",marginTop:6}}>Your bid is being reviewed by the customer. We'll notify you when it's approved.</div>
+                      {quotedAmt > 0 && (
+                        <div style={{marginTop:10,padding:"8px 10px",background:"#fff",borderRadius:6}}>
+                          <div style={{fontSize:10,color:"#8a8a92",textTransform:"uppercase",letterSpacing:"0.06em",fontWeight:600}}>Your submitted bid</div>
+                          <div style={{fontSize:18,fontWeight:700,color:"#18181A",marginTop:2}}>{fmtMoney(quotedAmt)}</div>
+                        </div>
+                      )}
+                    </div>
+                    {noteSection}
+                  </>
+                )}
+
+                {/* ─── APPROVED (buyout) — must accept + enter schedule date ─── */}
+                {stage === "buyout" && (
+                  <>
+                    <div className="vp-asec" style={{background:"#E8F5E9",border:"1px solid #2E7D3240"}}>
+                      <h4 style={{color:"#2E7D32"}}>✓ Job Approved — Action Required</h4>
+                      <div style={{fontSize:13,color:"#18181A",marginTop:6}}>The customer approved your bid. Accept the job and enter your scheduled start date to begin work.</div>
+                      <div style={{marginTop:10,padding:"8px 10px",background:"#fff",borderRadius:6}}>
+                        <div style={{fontSize:10,color:"#8a8a92",textTransform:"uppercase",letterSpacing:"0.06em",fontWeight:600}}>Agreed Price</div>
+                        <div style={{fontSize:20,fontWeight:700,color:"#18181A",marginTop:2}}>{fmtMoney(quotedAmt > 0 ? quotedAmt : nte)}</div>
+                      </div>
+                    </div>
+
+                    <div className="vp-asec">
+                      <h4>Accept & Schedule</h4>
+                      <label style={{display:"block",fontSize:11,fontWeight:600,color:"#4a4a4f",marginBottom:6}}>Scheduled start date</label>
+                      <input className="vp-input" type="date" value={fs.schedDate || ""} onChange={e => setForm(job.id, { schedDate: e.target.value })} style={{marginBottom:10}} />
+                      <button className="vp-btn" style={{background:"#2E7D32",width:"100%"}} onClick={() => acceptAndSchedule(job.id)} disabled={fs.busy}>
+                        {fs.busy ? "Accepting…" : "✓ Accept & Confirm Schedule"}
+                      </button>
+                      {fs.msgOk && <div className={"vp-msg-ok on"}>✓ {fs.msgOk}</div>}
+                      {fs.msgEr && <div className={"vp-msg-er on"}>{fs.msgEr}</div>}
+                    </div>
+
+                    {noteSection}
+                  </>
+                )}
+
+                {/* ─── SCHEDULED (do_work) — read-only date + mark complete ─── */}
+                {stage === "do_work" && (
+                  <>
+                    <div className="vp-asec" style={{background:"#E8F5E9",border:"1px solid #2E7D3240"}}>
+                      <h4 style={{color:"#2E7D32"}}>📅 Scheduled</h4>
+                      <div style={{marginTop:6,padding:"8px 10px",background:"#fff",borderRadius:6}}>
+                        <div style={{fontSize:10,color:"#8a8a92",textTransform:"uppercase",letterSpacing:"0.06em",fontWeight:600}}>Start Date</div>
+                        <div style={{fontSize:18,fontWeight:700,color:"#18181A",marginTop:2}}>{job.startDate ? fmtDate(job.startDate) : "—"}</div>
+                      </div>
+                    </div>
+
+                    <div className="vp-asec">
+                      <h4>Mark Work Complete</h4>
+                      <div style={{fontSize:12,color:"#8a8a92",marginBottom:8}}>Done with the work? Mark complete to move the job to billing.</div>
+                      <button className="vp-btn" style={{background:"#2E7D32"}} onClick={() => markComplete(job.id)} disabled={fs.busy}>{fs.busy ? "Saving…" : "✓ Mark Work Complete"}</button>
+                      {fs.msgOk && <div className={"vp-msg-ok on"}>✓ {fs.msgOk}</div>}
+                      {fs.msgEr && <div className={"vp-msg-er on"}>{fs.msgEr}</div>}
+                    </div>
+
+                    {noteSection}
+                  </>
+                )}
+
+                {/* ─── BILL — submit invoice (capped at quoted amount or NTE) ─── */}
+                {stage === "bill" && (
+                  <>
+                    <div className="vp-asec" style={{background:"#FFFBEB",border:"1px solid #FCD34D60"}}>
+                      <h4 style={{color:"#92400E"}}>💵 Ready to Bill</h4>
+                      <div style={{fontSize:13,color:"#18181A",marginTop:6}}>Submit your invoice below. Amount must be at or below the {quotedAmt > 0 ? "quoted price" : "NTE"}.</div>
+                      <div style={{marginTop:10,padding:"8px 10px",background:"#fff",borderRadius:6}}>
+                        <div style={{fontSize:10,color:"#8a8a92",textTransform:"uppercase",letterSpacing:"0.06em",fontWeight:600}}>Maximum invoice amount</div>
+                        <div style={{fontSize:18,fontWeight:700,color:"#18181A",marginTop:2}}>{fmtMoney(invoiceCap)}</div>
+                      </div>
+                    </div>
+
+                    <div className="vp-asec">
+                      <h4>Submit Invoice</h4>
+                      <div style={{display:"flex",gap:8,marginBottom:10}}>
+                        <input className="vp-input" type="number" placeholder={"Amount ($) — max " + fmtMoney(invoiceCap)} value={fs.invAmt || job.vendorInvoiceAmount || ""} max={invoiceCap} onChange={e => {
+                          const v = e.target.value;
+                          // Soft-clamp typing — but enforce on submit too
+                          setForm(job.id, { invAmt: v });
+                        }} />
+                        <input className="vp-input" type="text" placeholder="Invoice #" value={fs.invNum || job.vendorInvoiceNumber || ""} onChange={e => setForm(job.id, { invNum: e.target.value })} style={{maxWidth:180}} />
+                      </div>
+                      {/* Live cap warning */}
+                      {fs.invAmt && Number(fs.invAmt) > invoiceCap && (
+                        <div style={{fontSize:11,color:"#DC2626",padding:"6px 10px",background:"#FEF2F2",border:"1px solid #DC262630",borderRadius:6,marginBottom:10}}>
+                          ⚠ Amount exceeds maximum of {fmtMoney(invoiceCap)} — please reduce.
+                        </div>
+                      )}
+
+                      {/* Completion Photos */}
+                      <div style={{marginBottom:10}}>
+                        <label style={{display:"block",fontSize:10,fontWeight:600,textTransform:"uppercase",letterSpacing:"0.06em",color:"#8a8a92",marginBottom:6}}>📸 Completed Work Photos</label>
+                        {(() => {
+                          const photos = fs.completionPhotos || job.completionPhotos || [];
+                          return (
+                            <>
+                              {photos.length > 0 && (
+                                <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(80px,1fr))",gap:6,marginBottom:8}}>
+                                  {photos.map((p, i) => (
+                                    <div key={i} style={{position:"relative"}}>
+                                      <img src={p.data} alt={p.name||""} style={{width:"100%",aspectRatio:"1",objectFit:"cover",borderRadius:6,border:"1px solid rgba(24,24,26,0.1)"}} />
+                                      <button onClick={() => {
+                                        const remaining = photos.filter((_, idx) => idx !== i);
+                                        setForm(job.id, { completionPhotos: remaining });
+                                      }} style={{position:"absolute",top:2,right:2,width:18,height:18,borderRadius:"50%",border:"none",background:"rgba(0,0,0,0.7)",color:"#fff",fontSize:10,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",padding:0,fontFamily:"inherit"}}>✕</button>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                              <label style={{display:"block",padding:"10px 12px",borderRadius:8,border:"1px dashed rgba(24,24,26,0.25)",textAlign:"center",cursor:"pointer",fontSize:12,color:"#4a4a4f",background:"#fff"}}>
+                                📷 {photos.length === 0 ? "Add photos of completed work" : "Add more photos"}
+                                <input type="file" accept="image/*" multiple style={{display:"none"}} onChange={async e => {
+                                  const files = Array.from(e.target.files || []);
+                                  const MAX = 5 * 1024 * 1024;
+                                  const oversize = files.filter(f => f.size > MAX);
+                                  if (oversize.length > 0) { alert(`These photos are over 5MB and were skipped:\n${oversize.map(f => f.name).join("\n")}`); }
+                                  const valid = files.filter(f => f.size <= MAX);
+                                  const loaded = await Promise.all(valid.map(f => new Promise(res => {
+                                    const r = new FileReader();
+                                    r.onload = ev => res({ data: ev.target.result, name: f.name, uploadedAt: new Date().toISOString() });
+                                    r.readAsDataURL(f);
+                                  })));
+                                  setForm(job.id, { completionPhotos: [...photos, ...loaded] });
+                                  e.target.value = "";
+                                }} />
+                              </label>
+                            </>
+                          );
+                        })()}
+                      </div>
+
+                      {/* Invoice Attachment */}
+                      <div style={{marginBottom:12}}>
+                        <label style={{display:"block",fontSize:10,fontWeight:600,textTransform:"uppercase",letterSpacing:"0.06em",color:"#8a8a92",marginBottom:6}}>📎 Invoice Attachment (PDF or image)</label>
+                        {(() => {
+                          const att = fs.invoiceAttachment !== undefined ? fs.invoiceAttachment : job.invoiceAttachment;
+                          if (att) {
+                            const isImg = (att.type || "").startsWith("image/");
+                            return (
+                              <div style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",background:"#E0F2F1",border:"1px solid #00695C30",borderRadius:8}}>
+                                {isImg ? <img src={att.data} alt="" style={{width:42,height:42,objectFit:"cover",borderRadius:5}} /> : <div style={{fontSize:22}}>📄</div>}
+                                <div style={{flex:1,minWidth:0}}>
+                                  <div style={{fontSize:12,fontWeight:600,color:"#00695C",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{att.name||"invoice"}</div>
+                                  <a href={att.data} target="_blank" rel="noreferrer" style={{fontSize:10,color:"#00695C",textDecoration:"underline"}}>Open / preview</a>
+                                </div>
+                                <button onClick={() => setForm(job.id, { invoiceAttachment: null })}
+                                  style={{background:"transparent",border:"1px solid #F8717140",color:"#F87171",fontSize:10,padding:"4px 8px",borderRadius:5,cursor:"pointer",fontFamily:"inherit"}}>Remove</button>
                               </div>
-                            )}
+                            );
+                          }
+                          return (
                             <label style={{display:"block",padding:"10px 12px",borderRadius:8,border:"1px dashed rgba(24,24,26,0.25)",textAlign:"center",cursor:"pointer",fontSize:12,color:"#4a4a4f",background:"#fff"}}>
-                              📷 {photos.length === 0 ? "Add photos of completed work" : "Add more photos"}
-                              <input type="file" accept="image/*" multiple style={{display:"none"}} onChange={async e => {
-                                const files = Array.from(e.target.files || []);
-                                const MAX = 5 * 1024 * 1024; // 5MB per photo
-                                const oversize = files.filter(f => f.size > MAX);
-                                if (oversize.length > 0) { alert(`These photos are over 5MB and were skipped:\n${oversize.map(f => f.name).join("\n")}`); }
-                                const valid = files.filter(f => f.size <= MAX);
-                                const loaded = await Promise.all(valid.map(f => new Promise(res => {
-                                  const r = new FileReader();
-                                  r.onload = ev => res({ data: ev.target.result, name: f.name, uploadedAt: new Date().toISOString() });
-                                  r.readAsDataURL(f);
-                                })));
-                                setForm(job.id, { completionPhotos: [...photos, ...loaded] });
+                              📎 Attach invoice file
+                              <input type="file" accept="application/pdf,image/*" style={{display:"none"}} onChange={async e => {
+                                const f = e.target.files?.[0];
+                                if (!f) return;
+                                const MAX = 5 * 1024 * 1024;
+                                if (f.size > MAX) { alert(`File is over 5MB and can't be uploaded: ${f.name}`); e.target.value = ""; return; }
+                                const reader = new FileReader();
+                                reader.onload = ev => {
+                                  setForm(job.id, { invoiceAttachment: { data: ev.target.result, name: f.name, type: f.type, uploadedAt: new Date().toISOString() } });
+                                };
+                                reader.readAsDataURL(f);
                                 e.target.value = "";
                               }} />
                             </label>
-                          </>
-                        );
-                      })()}
-                    </div>
-
-                    {/* Invoice Attachment */}
-                    <div style={{marginBottom:12}}>
-                      <label style={{display:"block",fontSize:10,fontWeight:600,textTransform:"uppercase",letterSpacing:"0.06em",color:"#8a8a92",marginBottom:6}}>📎 Invoice Attachment (PDF or image)</label>
-                      {(() => {
-                        const att = fs.invoiceAttachment !== undefined ? fs.invoiceAttachment : job.invoiceAttachment;
-                        if (att) {
-                          const isImg = (att.type || "").startsWith("image/");
-                          return (
-                            <div style={{display:"flex",alignItems:"center",gap:10,padding:"10px 12px",background:"#E0F2F1",border:"1px solid #00695C30",borderRadius:8}}>
-                              {isImg ? <img src={att.data} alt="" style={{width:42,height:42,objectFit:"cover",borderRadius:5}} /> : <div style={{fontSize:22}}>📄</div>}
-                              <div style={{flex:1,minWidth:0}}>
-                                <div style={{fontSize:12,fontWeight:600,color:"#00695C",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{att.name||"invoice"}</div>
-                                <a href={att.data} target="_blank" rel="noreferrer" style={{fontSize:10,color:"#00695C",textDecoration:"underline"}}>Open / preview</a>
-                              </div>
-                              <button onClick={() => setForm(job.id, { invoiceAttachment: null })}
-                                style={{background:"transparent",border:"1px solid #F8717140",color:"#F87171",fontSize:10,padding:"4px 8px",borderRadius:5,cursor:"pointer",fontFamily:"inherit"}}>Remove</button>
-                            </div>
                           );
-                        }
-                        return (
-                          <label style={{display:"block",padding:"10px 12px",borderRadius:8,border:"1px dashed rgba(24,24,26,0.25)",textAlign:"center",cursor:"pointer",fontSize:12,color:"#4a4a4f",background:"#fff"}}>
-                            📎 Attach invoice file
-                            <input type="file" accept="application/pdf,image/*" style={{display:"none"}} onChange={async e => {
-                              const f = e.target.files?.[0];
-                              if (!f) return;
-                              const MAX = 5 * 1024 * 1024;
-                              if (f.size > MAX) { alert(`File is over 5MB and can't be uploaded: ${f.name}`); e.target.value = ""; return; }
-                              const reader = new FileReader();
-                              reader.onload = ev => {
-                                setForm(job.id, { invoiceAttachment: { data: ev.target.result, name: f.name, type: f.type, uploadedAt: new Date().toISOString() } });
-                              };
-                              reader.readAsDataURL(f);
-                              e.target.value = "";
-                            }} />
-                          </label>
-                        );
-                      })()}
+                        })()}
+                      </div>
+
+                      <button className="vp-btn" onClick={() => submitInvoice(job.id)} disabled={fs.busy || (fs.invAmt && Number(fs.invAmt) > invoiceCap)}>
+                        {fs.busy ? "Submitting…" : "Submit Invoice"}
+                      </button>
+                      {fs.msgOk && <div className={"vp-msg-ok on"}>✓ {fs.msgOk}</div>}
+                      {fs.msgEr && <div className={"vp-msg-er on"}>{fs.msgEr}</div>}
                     </div>
 
-                    <button className="vp-btn" onClick={() => submitInvoice(job.id)} disabled={fs.busy}>{fs.busy ? "Submitting…" : "Submit Invoice"}</button>
-                  </div>
+                    {noteSection}
+                  </>
+                )}
+
+                {/* Fallback: any other stage (shouldn't happen, but just in case) */}
+                {!["estimating", "generate_proposal", "buyout", "do_work", "bill"].includes(stage) && (
+                  <>
+                    <div className="vp-locked">No actions available for this job's current stage ({stage}).</div>
+                    {noteSection}
+                  </>
                 )}
               </div>
               );
@@ -3844,10 +4070,10 @@ function VendorPortalAuthenticated({ sub, myJobs, fmJobs, setFmJobs, companies, 
               <div className="vp-est-hdr-title">Jobs Needing Estimates</div>
               <div className="vp-est-hdr-sub">Submit your bid for these jobs. Scope and site details included.</div>
             </div>
-            <div className="vp-est-cnt">{stat.estimating + visibleJobs.filter(j => j.stage === "waiting_quote").length}</div>
+            <div className="vp-est-cnt">{stat.estimating}</div>
           </div>
           {(() => {
-            const est = visibleJobs.filter(j => j.stage === "estimating" || j.stage === "waiting_quote");
+            const est = visibleJobs.filter(j => j.stage === "estimating");
             return est.length === 0
               ? <div className="vp-empty">No jobs currently need estimates. You're all caught up!</div>
               : est.map(j => <div key={j.id} data-vp-jobid={j.id}>{renderCard(j)}</div>);
@@ -10543,7 +10769,7 @@ window.addEventListener('message',function(e){
                           <th style={{ width: 150 }}>Vendor</th>
                           <th style={{ width: 110 }}>Value</th>
                           <th style={{ width: 110 }}>Profit</th>
-                          <th style={{ width: 100 }}>Start</th>
+                          <th style={{ width: 110 }}>Schedule</th>
                           <th style={{ width: 140 }}>Stage</th>
                           <th style={{ width: 140 }}>Vendor Next</th>
                           <th style={{ width: 80 }}></th>
@@ -10641,7 +10867,14 @@ window.addEventListener('message',function(e){
                               {/* Profit */}
                               <td style={{ fontWeight: 600, color: "var(--t-dowork)" }}>{fmt(job.grossProfit)}</td>
                               {/* Start */}
-                              <td style={{ color: "var(--t-ink2)", fontFamily: "var(--t-mono)", fontSize: 12 }}>{job.startDate || "—"}</td>
+                              <td style={{ fontFamily: "var(--t-mono)", fontSize: 12, color: job.stage === "do_work" && job.startDate ? "var(--t-dowork)" : "var(--t-ink2)", fontWeight: job.stage === "do_work" && job.startDate ? 600 : 400 }}>
+                                {job.startDate ? (
+                                  <>
+                                    {job.startDate}
+                                    {job.stage === "do_work" && <span style={{ marginLeft: 4, fontSize: 10 }}>📅</span>}
+                                  </>
+                                ) : "—"}
+                              </td>
                               {/* Stage */}
                               <td><span className={"t-pill " + fmStagePill(job.stage)}>{stMeta.label}</span></td>
                               {/* Vendor Next */}
