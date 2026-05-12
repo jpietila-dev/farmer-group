@@ -5666,7 +5666,13 @@ Return ONLY valid JSON, no markdown, no extra text:
         </div>
         <div className="t-nav">
           {navItems.map(item => (
-            <button key={item.id} className={"t-nav-item" + (activeNav === item.id ? " active" : "")} onClick={() => { setActiveNav(item.id); setSelectedCoord(null); }}>
+            <button key={item.id} className={"t-nav-item" + (activeNav === item.id ? " active" : "")} onClick={() => {
+              setActiveNav(item.id);
+              setSelectedCoord(null);
+              // Close any open FM detail view so nav goes straight to the target section
+              setFmFullScreenJob(null);
+              setSelectedFmJob(null);
+            }}>
               <span className="t-nav-icon">{item.icon}</span>
               {!sidebarCollapsed && <span className="t-nav-label">{item.label}</span>}
             </button>
@@ -5686,11 +5692,11 @@ Return ONLY valid JSON, no markdown, no extra text:
         <div className="t-topbar">
           <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
             {BUSINESS_UNITS.map(bu => (
-              <button key={bu.id} className={"t-bu-tab" + (activeBU === bu.id && !crmMode && !accountingMode ? " active" : "")} onClick={() => { setCrmMode(false); setAccountingMode(false); handleBUChange(bu.id); }}>{bu.short}</button>
+              <button key={bu.id} className={"t-bu-tab" + (activeBU === bu.id && !crmMode && !accountingMode ? " active" : "")} onClick={() => { setCrmMode(false); setAccountingMode(false); handleBUChange(bu.id); setFmFullScreenJob(null); setSelectedFmJob(null); }}>{bu.short}</button>
             ))}
             <div style={{ width: 1, height: 20, background: "var(--t-line)", margin: "0 6px" }} />
-            <button className={"t-bu-tab k-crm" + (crmMode ? " active" : "")} onClick={() => { setCrmMode(true); setAccountingMode(false); }}>CRM</button>
-            <button className={"t-bu-tab k-acct" + (accountingMode ? " active" : "")} onClick={() => { setAccountingMode(true); setCrmMode(false); }}>$ ACCT</button>
+            <button className={"t-bu-tab k-crm" + (crmMode ? " active" : "")} onClick={() => { setCrmMode(true); setAccountingMode(false); setFmFullScreenJob(null); setSelectedFmJob(null); }}>CRM</button>
+            <button className={"t-bu-tab k-acct" + (accountingMode ? " active" : "")} onClick={() => { setAccountingMode(true); setCrmMode(false); setFmFullScreenJob(null); setSelectedFmJob(null); }}>$ ACCT</button>
           </div>
           <div className="t-topbar-meta">{BUSINESS_UNITS.find(b => b.id === activeBU)?.label}</div>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -17980,28 +17986,7 @@ window.addEventListener('message',function(e){
                   );
                 })()}
 
-                {/* Financials */}
-                <div className="t-card" style={{ padding: "14px 16px", display: "flex", gap: 28 }}>
-                  <div>
-                    <div className="t-eyebrow" style={{ marginBottom: 3 }}>Gross Value</div>
-                    <div style={{ fontSize: 18, fontWeight: 600, color: "var(--t-ink)", fontFamily: "var(--t-mono)" }}>{fmt(job.contractValue)}</div>
-                  </div>
-                  <div>
-                    <div className="t-eyebrow" style={{ marginBottom: 3 }}>Gross Profit</div>
-                    <div style={{ fontSize: 18, fontWeight: 600, color: "var(--t-dowork)", fontFamily: "var(--t-mono)" }}>{fmt(job.grossProfit)}</div>
-                  </div>
-                  {(() => {
-                    const cvNum = Number(job.contractValue || 0);
-                    const gpNum = Number(job.grossProfit || 0) || (cvNum > 0 ? fmGrossProfit(cvNum) : 0);
-                    const vendorNTE = Math.max(0, cvNum - gpNum);
-                    return vendorNTE > 0 ? (
-                      <div>
-                        <div className="t-eyebrow" style={{ marginBottom: 3 }}>Vendor NTE</div>
-                        <div style={{ fontSize: 18, fontWeight: 600, color: "var(--t-warn)", fontFamily: "var(--t-mono)" }}>{fmt(vendorNTE)}</div>
-                      </div>
-                    ) : null;
-                  })()}
-                </div>
+                {/* Financials moved into the top Stage Status Card (which has accurate computed values) */}
 
                 {/* Vendor Invoice Submission — only shown once stage is at Bill (or later) */}
                 {job.stage === "bill" && (job.vendorInvoiceAmount > 0 || (job.completionPhotos||[]).length > 0 || job.invoiceAttachment) && (
