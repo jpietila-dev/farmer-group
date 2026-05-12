@@ -502,6 +502,46 @@ const FM_STAGES = [
 const FM_PIPELINE_STAGES = FM_STAGES.filter(s => s.phase === "pipeline");
 const FM_ACTIVE_STAGES   = FM_STAGES.filter(s => s.phase === "active");
 
+// FM stage → theme pill class (vendor-portal aesthetic, used for restyled sections)
+const fmStagePill = stage => {
+  switch (stage) {
+    case "estimating":         return "t-pill-pending";
+    case "waiting_quote":      return "t-pill-approved";
+    case "generate_proposal":  return "t-pill-approval";
+    case "owner_approval":     return "t-pill-approval";
+    case "buyout":             return "t-pill-buyout";
+    case "do_work":            return "t-pill-dowork";
+    case "bill":               return "t-pill-warn";
+    default:                   return "t-pill-hold";
+  }
+};
+// FM stage → stat-tile color key (for the active stat tile background)
+const fmStageStatKey = stage => {
+  switch (stage) {
+    case "estimating":         return "k-pending";
+    case "waiting_quote":      return "k-approved";
+    case "generate_proposal":  return "k-approval";
+    case "owner_approval":     return "k-approval";
+    case "buyout":             return "k-buyout";
+    case "do_work":            return "k-dowork";
+    case "bill":               return "k-buyout";
+    default:                   return "k-ink";
+  }
+};
+// FM stage → solid dot color (for table row indicator)
+const fmStageDotColor = stage => {
+  switch (stage) {
+    case "estimating":         return "#880E4F";
+    case "waiting_quote":      return "#00695C";
+    case "generate_proposal":  return "#1565C0";
+    case "owner_approval":     return "#1565C0";
+    case "buyout":             return "#E65100";
+    case "do_work":            return "#2E7D32";
+    case "bill":               return "#92400E";
+    default:                   return "#616161";
+  }
+};
+
 // Keep CAPEX_FM_STAGES as alias for CapEx (uses same 5-stage system)
 const CAPEX_FM_STAGES = CAPEX_STAGES;
 
@@ -5039,6 +5079,107 @@ Return ONLY valid JSON, no markdown, no extra text:
     .company-card{background:#FFFFFF;border:1px solid #D4D9EE;border-radius:10px;padding:18px 20px;cursor:pointer;transition:all 0.15s;box-shadow:0 1px 3px rgba(0,0,0,0.04)}
     .company-card:hover{border-color:#3B6FE8;background:#F5F7FE}
     .contact-chip{background:#F5F7FC;border:1px solid #D4D9EE;border-radius:6px;padding:8px 12px;display:flex;align-items:center;justify-content:space-between}
+
+    /* ═══════════════════════════════════════════════════════════════════════
+       NEW THEME — Vendor Portal aesthetic (DM Sans + cream/ink palette)
+       Prefix: t-*  Use these classes on newly-restyled sections.
+       Tokens defined here can be reused everywhere via var(--t-*).
+       ═══════════════════════════════════════════════════════════════════════ */
+    @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap');
+    :root {
+      --t-ink:#18181A; --t-ink2:#4a4a4f; --t-ink3:#8a8a92;
+      --t-paper:#F7F6F2; --t-surface:#FFFFFF;
+      --t-line:rgba(24,24,26,0.10); --t-line2:rgba(24,24,26,0.06); --t-line3:rgba(24,24,26,0.22);
+      --t-r:8px; --t-rlg:12px; --t-rxl:14px;
+      --t-font:'DM Sans',system-ui,sans-serif; --t-mono:'DM Mono',monospace;
+      /* Stage / status palette — pastel bg + dark text, mirroring vendor portal */
+      --t-buyout-bg:#FFF3E0; --t-buyout:#E65100;
+      --t-approval-bg:#E3F2FD; --t-approval:#1565C0;
+      --t-dowork-bg:#E8F5E9; --t-dowork:#2E7D32;
+      --t-pending-bg:#FCE4EC; --t-pending:#880E4F;
+      --t-approved-bg:#E0F2F1; --t-approved:#00695C;
+      --t-hold-bg:#F5F5F5; --t-hold:#616161;
+      --t-warn-bg:#FFFBEB; --t-warn:#92400E;
+      --t-danger-bg:#FEF2F2; --t-danger:#991B1B;
+    }
+    .t-page { font-family:var(--t-font); color:var(--t-ink); background:var(--t-paper); min-height:100%; }
+    .t-shell { max-width:1280px; margin:0 auto; padding:24px 28px; }
+    .t-h1 { font-size:24px; font-weight:600; letter-spacing:-0.4px; color:var(--t-ink); }
+    .t-h2 { font-size:18px; font-weight:600; letter-spacing:-0.2px; color:var(--t-ink); }
+    .t-h3 { font-size:14px; font-weight:600; color:var(--t-ink); }
+    .t-eyebrow { font-size:11px; font-weight:500; color:var(--t-ink3); letter-spacing:0.06em; text-transform:uppercase; }
+    .t-mono { font-family:var(--t-mono); }
+    /* Buttons */
+    .t-btn { display:inline-flex; align-items:center; gap:6px; padding:9px 16px; border:none; border-radius:var(--t-r); font-family:inherit; font-size:13px; font-weight:500; cursor:pointer; background:var(--t-ink); color:#fff; transition:background 0.15s, transform 0.05s; }
+    .t-btn:hover { background:#000; }
+    .t-btn:active { transform:translateY(1px); }
+    .t-btn:disabled { opacity:0.5; cursor:default; }
+    .t-btn-ghost { background:transparent; color:var(--t-ink); border:1px solid var(--t-line); }
+    .t-btn-ghost:hover { background:var(--t-paper); border-color:var(--t-line3); }
+    .t-btn-sm { padding:5px 10px; font-size:11px; }
+    .t-btn-danger { color:#DC2626; border-color:rgba(220,38,38,0.25); }
+    .t-btn-danger:hover { background:#FEF2F2; border-color:#DC2626; }
+    /* Inputs */
+    .t-input { width:100%; padding:9px 12px; border:1px solid var(--t-line); border-radius:var(--t-r); font-size:13px; font-family:inherit; background:var(--t-surface); color:var(--t-ink); outline:none; transition:border-color 0.15s; }
+    .t-input:focus { border-color:var(--t-ink); }
+    .t-input::placeholder { color:var(--t-ink3); }
+    .t-srch { position:relative; display:inline-block; }
+    .t-srch input { padding-left:34px; }
+    .t-srch::before { content:"🔍"; position:absolute; left:11px; top:50%; transform:translateY(-50%); font-size:12px; opacity:0.55; pointer-events:none; }
+    /* Cards / surfaces */
+    .t-card { background:var(--t-surface); border:1px solid var(--t-line); border-radius:var(--t-rlg); }
+    .t-card-hover { transition:border-color 0.15s, box-shadow 0.15s; }
+    .t-card-hover:hover { border-color:var(--t-line3); box-shadow:0 2px 14px rgba(0,0,0,0.06); }
+    /* Stat tiles */
+    .t-stat { background:var(--t-surface); border:1px solid var(--t-line); border-radius:var(--t-rlg); padding:14px 16px; cursor:pointer; transition:border-color 0.15s, box-shadow 0.15s, transform 0.1s; }
+    .t-stat:hover { border-color:var(--t-line3); box-shadow:0 3px 12px rgba(0,0,0,0.07); transform:translateY(-1px); }
+    .t-stat.t-stat-on { box-shadow:0 2px 8px rgba(0,0,0,0.1); }
+    .t-stat.t-stat-on.k-ink { background:var(--t-ink); border-color:var(--t-ink); }
+    .t-stat.t-stat-on.k-ink .t-stat-n, .t-stat.t-stat-on.k-ink .t-stat-l { color:#fff; }
+    .t-stat.t-stat-on.k-ink .t-stat-l { color:rgba(255,255,255,0.5); }
+    .t-stat.t-stat-on.k-buyout   { background:var(--t-buyout);   border-color:var(--t-buyout); }
+    .t-stat.t-stat-on.k-dowork   { background:var(--t-dowork);   border-color:var(--t-dowork); }
+    .t-stat.t-stat-on.k-approval { background:var(--t-approval); border-color:var(--t-approval); }
+    .t-stat.t-stat-on.k-approved { background:var(--t-approved); border-color:var(--t-approved); }
+    .t-stat.t-stat-on.k-pending  { background:var(--t-pending);  border-color:var(--t-pending); }
+    .t-stat.t-stat-on:not(.k-ink) .t-stat-n, .t-stat.t-stat-on:not(.k-ink) .t-stat-l { color:#fff; }
+    .t-stat-n { font-size:24px; font-weight:600; letter-spacing:-0.6px; color:var(--t-ink); }
+    .t-stat-l { font-size:11px; color:var(--t-ink3); margin-top:2px; }
+    .t-stat-sub { font-size:10px; color:var(--t-ink3); margin-top:1px; font-family:var(--t-mono); }
+    /* Pill badges */
+    .t-pill { display:inline-flex; align-items:center; padding:3px 9px; border-radius:20px; font-size:11px; font-weight:500; white-space:nowrap; }
+    .t-pill-buyout   { background:var(--t-buyout-bg);   color:var(--t-buyout); }
+    .t-pill-approval { background:var(--t-approval-bg); color:var(--t-approval); }
+    .t-pill-dowork   { background:var(--t-dowork-bg);   color:var(--t-dowork); }
+    .t-pill-pending  { background:var(--t-pending-bg);  color:var(--t-pending); }
+    .t-pill-approved { background:var(--t-approved-bg); color:var(--t-approved); }
+    .t-pill-hold     { background:var(--t-hold-bg);     color:var(--t-hold); }
+    .t-pill-warn     { background:var(--t-warn-bg);     color:var(--t-warn); }
+    /* Filter chips (like coordinator pills) */
+    .t-chip { padding:6px 14px; border-radius:20px; border:1px solid var(--t-line); background:var(--t-surface); cursor:pointer; font-size:12px; font-family:inherit; color:var(--t-ink2); transition:all 0.15s; display:inline-flex; align-items:center; gap:6px; }
+    .t-chip:hover { border-color:var(--t-line3); color:var(--t-ink); }
+    .t-chip.on { background:var(--t-ink); color:#fff; border-color:var(--t-ink); }
+    .t-chip-count { font-family:var(--t-mono); font-size:10px; opacity:0.65; }
+    .t-chip.on .t-chip-count { opacity:0.85; }
+    /* Tables */
+    .t-table-wrap { background:var(--t-surface); border:1px solid var(--t-line); border-radius:var(--t-rlg); overflow:hidden; }
+    .t-table-scroll { overflow-x:auto; }
+    .t-table { border-collapse:collapse; width:100%; }
+    .t-table thead { background:var(--t-paper); }
+    .t-table thead th { padding:10px 14px; text-align:left; font-size:10px; color:var(--t-ink3); text-transform:uppercase; letter-spacing:0.06em; font-weight:600; white-space:nowrap; border-bottom:1px solid var(--t-line); }
+    .t-table tbody tr { border-bottom:1px solid var(--t-line2); cursor:pointer; transition:background 0.1s; }
+    .t-table tbody tr:hover { background:var(--t-paper); }
+    .t-table tbody tr:last-child { border-bottom:none; }
+    .t-table tbody td { padding:11px 14px; font-size:13px; color:var(--t-ink); white-space:nowrap; }
+    .t-table tbody td.t-td-wrap { max-width:240px; overflow:hidden; text-overflow:ellipsis; }
+    .t-table tfoot { background:var(--t-paper); }
+    .t-table tfoot td { padding:11px 14px; font-size:12px; font-weight:600; border-top:1px solid var(--t-line); }
+    .t-stage-dot { width:8px; height:8px; border-radius:50%; display:inline-block; }
+    .t-mono-tag { font-family:var(--t-mono); font-size:11px; color:var(--t-ink3); background:var(--t-paper); padding:2px 7px; border-radius:5px; }
+    /* Section header (page title row) */
+    .t-section-hdr { display:flex; justify-content:space-between; align-items:center; margin-bottom:18px; }
+    .t-section-meta { font-size:11px; color:var(--t-ink3); letter-spacing:0.06em; margin-top:4px; }
+    .t-empty { text-align:center; padding:60px 20px; color:var(--t-ink3); font-size:14px; }
   `;
 
   const panelOpen = selectedJob || selectedOpp || selectedCompany || selectedSite || selectedCapexJob || selectedFmJob;
@@ -8388,7 +8529,18 @@ Example:
                 const fmPipelineJobs = fmJobs.filter(j =>
                   FM_PIPELINE_STAGES.some(s => s.id === j.stage) &&
                   (j.name.toLowerCase().includes(q) || (j.storeCode||"").toLowerCase().includes(q) || (j.projectNo||"").toLowerCase().includes(q))
-                );
+                ).sort((a, b) => {
+                  const ai = FM_PIPELINE_STAGES.findIndex(s => s.id === a.stage);
+                  const bi = FM_PIPELINE_STAGES.findIndex(s => s.id === b.stage);
+                  if (ai !== bi) return ai - bi;
+                  // Within same stage, sort by action date (soonest first), nulls last
+                  const ad = a[FM_PIPELINE_STAGES[ai]?.actionKey] || "";
+                  const bd = b[FM_PIPELINE_STAGES[bi]?.actionKey] || "";
+                  if (!ad && !bd) return 0;
+                  if (!ad) return 1;
+                  if (!bd) return -1;
+                  return ad.localeCompare(bd);
+                });
                 const totalFmPipeline = fmPipelineJobs.reduce((s,j) => s + (j.contractValue||0), 0);
                 const PIPE_COLS = [
                   { key: "storeCode",      label: "Store",          w: 70  },
@@ -10305,218 +10457,208 @@ window.addEventListener('message',function(e){
               const matchCoord  = fmCoordFilter === "all" || j.coordinator === fmCoordFilter;
               const matchSearch = !fmSearch || j.name.toLowerCase().includes(fmSearch.toLowerCase()) || (j.storeCode||"").toLowerCase().includes(fmSearch.toLowerCase()) || (j.projectNo||"").toLowerCase().includes(fmSearch.toLowerCase());
               return isActive && matchCoord && matchSearch;
+            }).sort((a, b) => {
+              const ai = FM_ACTIVE_STAGES.findIndex(s => s.id === a.stage);
+              const bi = FM_ACTIVE_STAGES.findIndex(s => s.id === b.stage);
+              if (ai !== bi) return ai - bi;
+              const ad = a.startDate || "";
+              const bd = b.startDate || "";
+              if (!ad && !bd) return 0;
+              if (!ad) return 1;
+              if (!bd) return -1;
+              return ad.localeCompare(bd);
             });
             const totalGross  = filtered.reduce((s,j) => s + (j.contractValue||0), 0);
             const totalProfit = filtered.reduce((s,j) => s + (j.grossProfit||0), 0);
-            const FM_COLS = [
-              { key: "storeCode",           label: "Store",          w: 70  },
-              { key: "projectNo",           label: "Project #",      w: 90  },
-              { key: "name",                label: "Scope of Work",  w: 200 },
-              { key: "company",             label: "Company",        w: 140 },
-              { key: "customer",            label: "Customer",       w: 130 },
-              { key: "site",                label: "Site",           w: 170 },
-              { key: "vendor",              label: "Vendor",         w: 130 },
-              { key: "contractValue",       label: "Gross Value",    w: 100 },
-              { key: "grossProfit",         label: "Gross Profit",   w: 100 },
-              { key: "startDate",           label: "Start Work",     w: 90  },
-              { key: "nextStep",            label: "Stage",          w: 120 },
-              { key: "vendorNextStep",      label: "Vendor Next",    w: 120 },
-            ];
             return (
-              <div className="fade-in" style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+              <div className="t-page fade-in" style={{ background: "transparent" }}>
                 {/* Header */}
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div className="t-section-hdr">
                   <div>
-                    <div style={{ fontSize: 22, fontWeight: 700, color: "#1A2240", letterSpacing: "-0.01em", textTransform: "uppercase" }}>Active Jobs</div>
-                    <div style={{ fontSize: 11, color: "#4A5278", marginTop: 3, letterSpacing: "0.06em" }}>{filtered.length} JOBS · {fmt(totalGross)} GROSS · {fmt(totalProfit)} PROFIT</div>
+                    <div className="t-h1">Active Jobs</div>
+                    <div className="t-section-meta">
+                      <span className="t-mono">{filtered.length}</span> jobs &nbsp;·&nbsp;
+                      <span className="t-mono">{fmt(totalGross)}</span> gross &nbsp;·&nbsp;
+                      <span className="t-mono">{fmt(totalProfit)}</span> profit
+                    </div>
                   </div>
-                  <div style={{ display: "flex", gap: 8 }}>
-                    <input className="fi" style={{ width: 180 }} placeholder="Search…" value={fmSearch} onChange={e => setFmSearch(e.target.value)} />
-                    <button className="btn-primary" onClick={openAddFm}>+ Add Job</button>
+                  <div style={{ display: "flex", gap: 10 }}>
+                    <span className="t-srch"><input className="t-input" style={{ width: 220 }} placeholder="Search…" value={fmSearch} onChange={e => setFmSearch(e.target.value)} /></span>
+                    <button className="t-btn" onClick={openAddFm}>+ Add Job</button>
                   </div>
                 </div>
 
                 {/* Stage stats - active phase only */}
-                <div style={{ display: "flex", gap: 8, overflowX: "auto" }}>
+                <div style={{ display: "grid", gridTemplateColumns: `repeat(${FM_ACTIVE_STAGES.length}, 1fr)`, gap: 10, marginBottom: 18 }}>
                   {FM_ACTIVE_STAGES.map(st => {
                     const cnt = filtered.filter(j => j.stage === st.id).length;
-                    const val = filtered.filter(j => j.stage === st.id).reduce((s,j) => s+j.contractValue,0);
+                    const val = filtered.filter(j => j.stage === st.id).reduce((s,j) => s+(j.contractValue||0),0);
                     return (
-                      <div key={st.id} style={{ flex: "0 0 140px", background: "#ECEEF8", border: "1px solid " + st.color + "30", borderRadius: 8, padding: "10px 14px", position: "relative", overflow: "hidden" }}>
-                        <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 2, background: st.color }} />
-                        <div style={{ fontSize: 10, color: st.color, textTransform: "uppercase", letterSpacing: "0.07em", fontWeight: 600, marginBottom: 3 }}>{st.label}</div>
-                        <div style={{ fontSize: 16, fontWeight: 700, color: "#1A2240" }}>{cnt}</div>
-                        <div style={{ fontSize: 10, color: "#4A5278" }}>{fmt(val)}</div>
+                      <div key={st.id} className="t-stat">
+                        <div className="t-stat-n">{cnt}</div>
+                        <div className="t-stat-l">{st.label}</div>
+                        <div className="t-stat-sub">{fmt(val)}</div>
                       </div>
                     );
                   })}
                 </div>
 
-                {/* Coordinator filter tabs */}
-                <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                  {coords.map(c => (
-                    <button key={c} onClick={() => setFmCoordFilter(c)}
-                      style={{ padding: "6px 14px", borderRadius: 20, border: "1px solid", cursor: "pointer", fontSize: 11, fontFamily: "inherit", fontWeight: 500, transition: "all 0.15s",
-                        borderColor: fmCoordFilter === c ? buColor.accent : "#CBD1E8",
-                        background:  fmCoordFilter === c ? buColor.light  : "transparent",
-                        color:       fmCoordFilter === c ? buColor.accent  : "#4A5278" }}>
-                      {c === "all" ? "All Jobs" : c}
-                      <span style={{ marginLeft: 6, fontSize: 10, opacity: 0.7 }}>
-                        {c === "all" ? fmJobs.length : fmJobs.filter(j => j.coordinator === c).length}
-                      </span>
-                    </button>
-                  ))}
+                {/* Coordinator filter chips */}
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 18 }}>
+                  {coords.map(c => {
+                    const isOn = fmCoordFilter === c;
+                    const cnt = c === "all" ? fmJobs.length : fmJobs.filter(j => j.coordinator === c).length;
+                    return (
+                      <button key={c} className={"t-chip" + (isOn ? " on" : "")} onClick={() => setFmCoordFilter(c)}>
+                        {c === "all" ? "All Jobs" : c}
+                        <span className="t-chip-count">{cnt}</span>
+                      </button>
+                    );
+                  })}
                 </div>
 
-                {/* Spreadsheet table */}
-                <div style={{ overflowX: "auto", borderRadius: 10, border: "1px solid #CBD1E8" }}>
-                  <table style={{ borderCollapse: "collapse", width: "100%", minWidth: FM_COLS.reduce((s,c) => s+c.w, 0) + 80 }}>
-                    <thead>
-                      <tr style={{ background: "#FFFFFF", borderBottom: "1px solid #CBD1E8" }}>
-                        <th style={{ width: 40, padding: "10px 12px", textAlign: "left" }}></th>
-                        {FM_COLS.map(col => (
-                          <th key={col.key} style={{ width: col.w, padding: "10px 12px", textAlign: "left", fontSize: 10, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", fontWeight: 600, whiteSpace: "nowrap" }}>{col.label}</th>
-                        ))}
-                        <th style={{ width: 80, padding: "10px 12px" }}></th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filtered.length === 0 && (
-                        <tr><td colSpan={FM_COLS.length + 2} style={{ textAlign: "center", padding: "48px", color: "#3D4570", fontSize: 12 }}>No jobs found</td></tr>
-                      )}
-                      {filtered.map((job, idx) => {
-                        const st   = FM_STAGES.find(s => s.id === job.stage) || FM_STAGES[0];
-                        const co   = companies.find(c => c.id === job.companyId);
-                        const site = sites.find(s => s.id === job.siteId);
-                        const ct   = contacts.find(c => c.id === job.approverContactId);
-                        const sub  = subcontractors.find(s => s.id === job.subcontractorId);
-                        const rowBg = idx % 2 === 0 ? "#F8F9FD" : "#F2F4FA";
-                        const ctName = ct ? `${ct.firstName||""} ${ct.lastName||""}`.trim() : "";
-                        const pickerOpen = showVendorPickerForJob === job.id;
-                        const activeSubs = subcontractors.filter(s => !s.archived);
-                        const filteredSubs = vendorPickerSearch
-                          ? activeSubs.filter(s =>
-                              (s.name||"").toLowerCase().includes(vendorPickerSearch.toLowerCase()) ||
-                              (s.trade||"").toLowerCase().includes(vendorPickerSearch.toLowerCase()) ||
-                              (s.services||[]).some(sv => (sv||"").toLowerCase().includes(vendorPickerSearch.toLowerCase()))
-                            )
-                          : activeSubs;
-                        return (
-                          <tr key={job.id} style={{ background: rowBg, borderBottom: "1px solid #D8DCF0", cursor: "pointer", transition: "background 0.1s" }}
-                            onMouseEnter={e => e.currentTarget.style.background = "#EBF0FF"}
-                            onMouseLeave={e => e.currentTarget.style.background = rowBg}
-                            onClick={() => setFmFullScreenJob(job)}>
-                            {/* Stage dot */}
-                            <td style={{ padding: "10px 12px" }}>
-                              <div style={{ width: 8, height: 8, borderRadius: "50%", background: st.color, margin: "auto" }} title={st.label} />
-                            </td>
-                            {/* Store Code */}
-                            <td style={{ padding: "10px 12px", fontSize: 12, color: "#252E52", whiteSpace: "nowrap" }}>{job.storeCode || "—"}</td>
-                            {/* Project No */}
-                            <td style={{ padding: "10px 12px", fontSize: 12, color: "#252E52", whiteSpace: "nowrap" }}>{job.projectNo || "—"}</td>
-                            {/* Scope / Name */}
-                            <td style={{ padding: "10px 12px", fontSize: 12, color: "#1A2240", fontWeight: 500, maxWidth: 200 }}>
-                              <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{job.name}</div>
-                            </td>
-                            {/* Company */}
-                            <td style={{ padding: "10px 12px", fontSize: 11, maxWidth: 140 }}>
-                              {co ? <span style={{ color: "#3B6FE8", fontWeight: 500, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "block" }}>🏢 {co.name}</span> : <span style={{ color: "#8892B8" }}>—</span>}
-                            </td>
-                            {/* Customer (Contact) */}
-                            <td style={{ padding: "10px 12px", fontSize: 11, maxWidth: 130 }}>
-                              {ctName ? <span style={{ color: "#353C62", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "block" }}>👤 {ctName}</span> : <span style={{ color: "#8892B8" }}>—</span>}
-                            </td>
-                            {/* Site */}
-                            <td style={{ padding: "10px 12px", fontSize: 11, color: "#353C62", maxWidth: 170 }}>
-                              <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                                {site ? `📍 ${site.address || site.storeNumber || "Site"}` : "—"}
-                              </div>
-                            </td>
-                            {/* Vendor — searchable picker */}
-                            <td style={{ padding: "10px 12px", fontSize: 12, position: "relative" }} onClick={e => e.stopPropagation()}>
-                              {pickerOpen ? (
-                                <div style={{ position: "absolute", top: "calc(100% - 2px)", left: 6, zIndex: 50, width: 280, background: "#FFF", border: "1px solid #3B6FE860", borderRadius: 8, boxShadow: "0 8px 24px rgba(30,38,80,0.18)", padding: 10 }}>
-                                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                                    <div style={{ fontSize: 10, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", fontWeight: 700 }}>Assign Vendor</div>
-                                    <button onClick={() => { setShowVendorPickerForJob(null); setVendorPickerSearch(""); }}
-                                      style={{ background: "transparent", border: "none", color: "#8892B8", cursor: "pointer", fontSize: 14, padding: 0 }}>✕</button>
-                                  </div>
-                                  <input autoFocus className="fi" style={{ width: "100%", fontSize: 11, marginBottom: 8 }} placeholder="Search vendor name, trade, service…"
-                                    value={vendorPickerSearch} onChange={e => setVendorPickerSearch(e.target.value)} />
-                                  <div style={{ maxHeight: 240, overflowY: "auto", display: "flex", flexDirection: "column", gap: 3 }}>
-                                    {filteredSubs.length === 0 && (
-                                      <div style={{ fontSize: 11, color: "#8892B8", textAlign: "center", padding: "16px 8px", fontStyle: "italic" }}>No vendors match</div>
-                                    )}
-                                    {filteredSubs.slice(0, 50).map(s => (
-                                      <div key={s.id} onClick={() => { updateFmJobPersist(job.id, { subcontractorId: s.id }); setShowVendorPickerForJob(null); setVendorPickerSearch(""); }}
-                                        style={{ padding: "7px 10px", borderRadius: 5, cursor: "pointer", background: job.subcontractorId === s.id ? "#3B6FE815" : "transparent", border: "1px solid " + (job.subcontractorId === s.id ? "#3B6FE840" : "transparent") }}
-                                        onMouseEnter={e => { if (job.subcontractorId !== s.id) e.currentTarget.style.background = "#F0F2F8"; }}
-                                        onMouseLeave={e => { if (job.subcontractorId !== s.id) e.currentTarget.style.background = "transparent"; }}>
-                                        <div style={{ fontSize: 12, color: "#1A2240", fontWeight: 600 }}>{s.name}</div>
-                                        {(s.trade || (s.services||[]).length > 0) && (
-                                          <div style={{ fontSize: 10, color: "#4A5278", marginTop: 2 }}>
-                                            {s.trade}{s.trade && (s.services||[]).length > 0 ? " · " : ""}{(s.services||[]).slice(0,3).join(", ")}
-                                          </div>
-                                        )}
-                                      </div>
-                                    ))}
-                                  </div>
-                                  {job.subcontractorId && (
-                                    <button onClick={() => { updateFmJobPersist(job.id, { subcontractorId: "" }); setShowVendorPickerForJob(null); setVendorPickerSearch(""); }}
-                                      style={{ width: "100%", marginTop: 8, padding: "6px", borderRadius: 5, border: "1px solid #F8717140", background: "transparent", color: "#F87171", fontSize: 10, cursor: "pointer", fontFamily: "inherit" }}>
-                                      Clear vendor
-                                    </button>
-                                  )}
-                                </div>
-                              ) : null}
-                              {sub ? (
-                                <button onClick={() => { setShowVendorPickerForJob(job.id); setVendorPickerSearch(""); }}
-                                  style={{ background: "#3B6FE820", color: buColor.accent, padding: "3px 9px", borderRadius: 4, fontSize: 11, whiteSpace: "nowrap", border: "1px solid #3B6FE830", cursor: "pointer", fontFamily: "inherit" }}>
-                                  {sub.name}
-                                </button>
-                              ) : (
-                                <button onClick={() => { setShowVendorPickerForJob(job.id); setVendorPickerSearch(""); }}
-                                  style={{ background: "transparent", color: "#3B6FE8", padding: "3px 9px", borderRadius: 4, fontSize: 11, whiteSpace: "nowrap", border: "1px dashed #3B6FE860", cursor: "pointer", fontFamily: "inherit" }}>
-                                  + Add Vendor
-                                </button>
-                              )}
-                            </td>
-                            {/* Gross Value */}
-                            <td style={{ padding: "10px 12px", fontSize: 12, color: "#1A2240", fontWeight: 600, whiteSpace: "nowrap" }}>{fmt(job.contractValue)}</td>
-                            {/* Gross Profit */}
-                            <td style={{ padding: "10px 12px", fontSize: 12, color: "#4ADE80", fontWeight: 600, whiteSpace: "nowrap" }}>{fmt(job.grossProfit)}</td>
-                            {/* Start Work Date */}
-                            <td style={{ padding: "10px 12px", fontSize: 11, color: "#353C62", whiteSpace: "nowrap" }}>{job.startDate || "—"}</td>
-                            {/* Stage */}
-                            <td style={{ padding: "10px 12px" }}>
-                              <span style={{ fontSize: 10, fontWeight: 600, color: st.color, background: st.color + "15", padding: "3px 8px", borderRadius: 4, whiteSpace: "nowrap" }}>{st.label}</span>
-                            </td>
-                            {/* Vendor Next Step */}
-                            <td style={{ padding: "10px 12px", fontSize: 11, color: "#353C62", maxWidth: 120 }}>
-                              <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{VENDOR_NEXT_STEPS.find(v => v.id === job.vendorNextStep)?.label || job.vendorNextStep || "—"}</div>
-                            </td>
-                            {/* Actions */}
-                            <td style={{ padding: "10px 12px" }} onClick={e => e.stopPropagation()}>
-                              <div style={{ display: "flex", gap: 4 }}>
-                                <button className="btn-ghost" style={{ fontSize: 10, padding: "3px 7px" }} onClick={() => openEditFm(job)}>✎</button>
-                                <button className="btn-ghost" style={{ fontSize: 10, padding: "3px 7px", color: "#F87171", borderColor: "#F8717120" }} onClick={() => deleteFm(job.id)}>✕</button>
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                    {filtered.length > 0 && (
-                      <tfoot>
-                        <tr style={{ background: "#F0F2F8", borderTop: "2px solid #CBD1E8" }}>
-                          <td colSpan={8} style={{ padding: "10px 12px", fontSize: 11, color: "#4A5278", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.07em" }}>Totals</td>
-                          <td style={{ padding: "10px 12px", fontSize: 12, color: "#1A2240", fontWeight: 700 }}>{fmt(totalGross)}</td>
-                          <td style={{ padding: "10px 12px", fontSize: 12, color: "#4ADE80", fontWeight: 700 }}>{fmt(totalProfit)}</td>
-                          <td colSpan={4} style={{ padding: "10px 12px" }}></td>
+                {/* Table */}
+                <div className="t-table-wrap">
+                  <div className="t-table-scroll">
+                    <table className="t-table" style={{ minWidth: 1340 }}>
+                      <thead>
+                        <tr>
+                          <th style={{ width: 32 }}></th>
+                          <th style={{ width: 80 }}>Store</th>
+                          <th style={{ width: 100 }}>Project #</th>
+                          <th style={{ width: 240 }}>Scope of Work</th>
+                          <th style={{ width: 160 }}>Company</th>
+                          <th style={{ width: 140 }}>Customer</th>
+                          <th style={{ width: 200 }}>Site</th>
+                          <th style={{ width: 150 }}>Vendor</th>
+                          <th style={{ width: 110 }}>Value</th>
+                          <th style={{ width: 110 }}>Profit</th>
+                          <th style={{ width: 100 }}>Start</th>
+                          <th style={{ width: 140 }}>Stage</th>
+                          <th style={{ width: 140 }}>Vendor Next</th>
+                          <th style={{ width: 80 }}></th>
                         </tr>
-                      </tfoot>
-                    )}
-                  </table>
+                      </thead>
+                      <tbody>
+                        {filtered.length === 0 && (
+                          <tr style={{ cursor: "default" }}><td colSpan={14} className="t-empty">No jobs found</td></tr>
+                        )}
+                        {filtered.map(job => {
+                          const co   = companies.find(c => c.id === job.companyId);
+                          const site = sites.find(s => s.id === job.siteId);
+                          const ct   = contacts.find(c => c.id === job.approverContactId);
+                          const sub  = subcontractors.find(s => s.id === job.subcontractorId);
+                          const stMeta = FM_STAGES.find(s => s.id === job.stage) || FM_STAGES[0];
+                          const ctName = ct ? `${ct.firstName||""} ${ct.lastName||""}`.trim() : "";
+                          const pickerOpen = showVendorPickerForJob === job.id;
+                          const activeSubs = subcontractors.filter(s => !s.archived);
+                          const filteredSubs = vendorPickerSearch
+                            ? activeSubs.filter(s =>
+                                (s.name||"").toLowerCase().includes(vendorPickerSearch.toLowerCase()) ||
+                                (s.trade||"").toLowerCase().includes(vendorPickerSearch.toLowerCase()) ||
+                                (s.services||[]).some(sv => (sv||"").toLowerCase().includes(vendorPickerSearch.toLowerCase()))
+                              )
+                            : activeSubs;
+                          return (
+                            <tr key={job.id} onClick={() => setFmFullScreenJob(job)}>
+                              {/* Stage dot */}
+                              <td>
+                                <span className="t-stage-dot" style={{ background: fmStageDotColor(job.stage) }} title={stMeta.label} />
+                              </td>
+                              {/* Store */}
+                              <td><span className="t-mono-tag">{job.storeCode || "—"}</span></td>
+                              {/* Project # */}
+                              <td><span className="t-mono-tag">{job.projectNo || "—"}</span></td>
+                              {/* Scope */}
+                              <td className="t-td-wrap" style={{ fontWeight: 500 }}>{job.name}</td>
+                              {/* Company */}
+                              <td className="t-td-wrap">{co ? <span style={{ color: "var(--t-ink)" }}>🏢 {co.name}</span> : <span style={{ color: "var(--t-ink3)" }}>—</span>}</td>
+                              {/* Customer */}
+                              <td className="t-td-wrap">{ctName ? <span>👤 {ctName}</span> : <span style={{ color: "var(--t-ink3)" }}>—</span>}</td>
+                              {/* Site */}
+                              <td className="t-td-wrap" style={{ color: "var(--t-ink2)" }}>{site ? `📍 ${site.address || site.storeNumber || "Site"}` : "—"}</td>
+                              {/* Vendor — searchable picker */}
+                              <td style={{ position: "relative" }} onClick={e => e.stopPropagation()}>
+                                {pickerOpen && (
+                                  <div style={{ position: "absolute", top: "calc(100% - 4px)", left: 8, zIndex: 50, width: 300, background: "var(--t-surface)", border: "1px solid var(--t-line3)", borderRadius: "var(--t-rlg)", boxShadow: "0 12px 32px rgba(0,0,0,0.14)", padding: 12 }}>
+                                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                                      <div className="t-eyebrow">Assign Vendor</div>
+                                      <button onClick={() => { setShowVendorPickerForJob(null); setVendorPickerSearch(""); }}
+                                        style={{ background: "transparent", border: "none", color: "var(--t-ink3)", cursor: "pointer", fontSize: 14, padding: 0 }}>✕</button>
+                                    </div>
+                                    <input autoFocus className="t-input" style={{ fontSize: 12, marginBottom: 8 }} placeholder="Search name, trade, service…"
+                                      value={vendorPickerSearch} onChange={e => setVendorPickerSearch(e.target.value)} />
+                                    <div style={{ maxHeight: 260, overflowY: "auto", display: "flex", flexDirection: "column", gap: 3 }}>
+                                      {filteredSubs.length === 0 && (
+                                        <div className="t-empty" style={{ padding: 16, fontSize: 12 }}>No vendors match</div>
+                                      )}
+                                      {filteredSubs.slice(0, 50).map(s => (
+                                        <div key={s.id} onClick={() => { updateFmJobPersist(job.id, { subcontractorId: s.id }); setShowVendorPickerForJob(null); setVendorPickerSearch(""); }}
+                                          style={{ padding: "8px 10px", borderRadius: 6, cursor: "pointer", background: job.subcontractorId === s.id ? "var(--t-paper)" : "transparent", border: "1px solid " + (job.subcontractorId === s.id ? "var(--t-line3)" : "transparent") }}
+                                          onMouseEnter={e => { if (job.subcontractorId !== s.id) e.currentTarget.style.background = "var(--t-paper)"; }}
+                                          onMouseLeave={e => { if (job.subcontractorId !== s.id) e.currentTarget.style.background = "transparent"; }}>
+                                          <div style={{ fontSize: 13, fontWeight: 600 }}>{s.name}</div>
+                                          {(s.trade || (s.services||[]).length > 0) && (
+                                            <div style={{ fontSize: 11, color: "var(--t-ink3)", marginTop: 2 }}>
+                                              {s.trade}{s.trade && (s.services||[]).length > 0 ? " · " : ""}{(s.services||[]).slice(0,3).join(", ")}
+                                            </div>
+                                          )}
+                                        </div>
+                                      ))}
+                                    </div>
+                                    {job.subcontractorId && (
+                                      <button onClick={() => { updateFmJobPersist(job.id, { subcontractorId: "" }); setShowVendorPickerForJob(null); setVendorPickerSearch(""); }}
+                                        className="t-btn t-btn-ghost t-btn-danger t-btn-sm" style={{ width: "100%", marginTop: 8, justifyContent: "center" }}>
+                                        Clear vendor
+                                      </button>
+                                    )}
+                                  </div>
+                                )}
+                                {sub ? (
+                                  <button onClick={() => { setShowVendorPickerForJob(job.id); setVendorPickerSearch(""); }}
+                                    className="t-pill t-pill-approval" style={{ border: "none", cursor: "pointer", fontFamily: "inherit" }}>
+                                    {sub.name}
+                                  </button>
+                                ) : (
+                                  <button onClick={() => { setShowVendorPickerForJob(job.id); setVendorPickerSearch(""); }}
+                                    style={{ background: "transparent", color: "var(--t-ink2)", padding: "4px 10px", borderRadius: 6, fontSize: 11, whiteSpace: "nowrap", border: "1px dashed var(--t-line3)", cursor: "pointer", fontFamily: "inherit" }}>
+                                    + Add Vendor
+                                  </button>
+                                )}
+                              </td>
+                              {/* Value */}
+                              <td style={{ fontWeight: 600 }}>{fmt(job.contractValue)}</td>
+                              {/* Profit */}
+                              <td style={{ fontWeight: 600, color: "var(--t-dowork)" }}>{fmt(job.grossProfit)}</td>
+                              {/* Start */}
+                              <td style={{ color: "var(--t-ink2)", fontFamily: "var(--t-mono)", fontSize: 12 }}>{job.startDate || "—"}</td>
+                              {/* Stage */}
+                              <td><span className={"t-pill " + fmStagePill(job.stage)}>{stMeta.label}</span></td>
+                              {/* Vendor Next */}
+                              <td className="t-td-wrap" style={{ color: "var(--t-ink2)", fontSize: 12, maxWidth: 140 }}>{VENDOR_NEXT_STEPS.find(v => v.id === job.vendorNextStep)?.label || job.vendorNextStep || "—"}</td>
+                              {/* Actions */}
+                              <td onClick={e => e.stopPropagation()}>
+                                <div style={{ display: "flex", gap: 4 }}>
+                                  <button className="t-btn t-btn-ghost t-btn-sm" onClick={() => openEditFm(job)}>✎</button>
+                                  <button className="t-btn t-btn-ghost t-btn-sm t-btn-danger" onClick={() => deleteFm(job.id)}>✕</button>
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                      {filtered.length > 0 && (
+                        <tfoot>
+                          <tr>
+                            <td colSpan={8} className="t-eyebrow">Totals</td>
+                            <td style={{ fontWeight: 700 }}>{fmt(totalGross)}</td>
+                            <td style={{ fontWeight: 700, color: "var(--t-dowork)" }}>{fmt(totalProfit)}</td>
+                            <td colSpan={4}></td>
+                          </tr>
+                        </tfoot>
+                      )}
+                    </table>
+                  </div>
                 </div>
               </div>
             );
