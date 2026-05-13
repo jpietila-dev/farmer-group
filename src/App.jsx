@@ -653,16 +653,20 @@ function useColumnVisibility(tableId, defaultIds) {
           for (const id of defaultIds) {
             next[id] = id in parsed ? !!parsed[id] : true;
           }
+          if (typeof console !== "undefined" && console.debug) console.debug("[colvis] loaded for", tableId, next);
           return next;
         }
       }
-    } catch(e) {}
+    } catch(e) { console.warn("[colvis] read failed for " + tableId, e); }
     return Object.fromEntries(defaultIds.map(id => [id, true]));
   });
   const toggleVisible = React.useCallback((colId) => {
     setVisible(prev => {
       const next = { ...prev, [colId]: !prev[colId] };
-      try { localStorage.setItem("colvis:" + tableId, JSON.stringify(next)); } catch(e) {}
+      try {
+        localStorage.setItem("colvis:" + tableId, JSON.stringify(next));
+        if (typeof console !== "undefined" && console.debug) console.debug("[colvis] saved for", tableId, colId, "=", next[colId]);
+      } catch(e) { console.warn("[colvis] save failed for " + tableId, e); }
       return next;
     });
   }, [tableId]);
@@ -17690,6 +17694,150 @@ window.addEventListener('message',function(e){
                           ))}
                         </div>
                       )}
+                    </div>
+                  );
+                })()}
+
+                {/* ── ALL JOB DETAILS ── Every field, always visible, inline-editable ── */}
+                {(() => {
+                  // Define proper components so we can use hooks legally.
+                  const InlineRow = function InlineRow({ label, value, onSave, type = "text", options = null, placeholder = "—", mono, color }) {
+                    const [editing, setEditing] = React.useState(false);
+                    const [local, setLocal] = React.useState(value == null ? "" : String(value));
+                    React.useEffect(() => { setLocal(value == null ? "" : String(value)); }, [value]);
+                    const commit = () => {
+                      const v = type === "number" ? (local === "" ? 0 : Number(local) || 0) : local;
+                      if (v !== (type === "number" ? Number(value || 0) : (value || ""))) onSave(v);
+                      setEditing(false);
+                    };
+                    const valueDisplay = value
+                      ? <span style={{ fontFamily: mono ? "var(--t-mono)" : "inherit", color: color || "var(--t-ink)", fontWeight: mono ? 600 : 500, fontSize: 13 }}>
+                          {type === "number" && mono ? fmt(value) : (options ? options.find(o => o.v === String(value))?.l || value : value)}
+                        </span>
+                      : <span style={{ color: "var(--t-ink3)", fontStyle: "italic", fontSize: 12 }}>{placeholder}</span>;
+                    return (
+                      <div style={{ display: "grid", gridTemplateColumns: "minmax(140px, 0.6fr) 1fr", gap: 12, alignItems: "center", padding: "8px 0", borderBottom: "1px solid var(--t-line2)" }}>
+                        <div style={{ fontSize: 11, color: "var(--t-ink2)", fontWeight: 500 }}>{label}</div>
+                        {editing ? (
+                          options ? (
+                            <select autoFocus value={local}
+                              onChange={e => { setLocal(e.target.value); onSave(type === "number" ? Number(e.target.value) || 0 : e.target.value); setEditing(false); }}
+                              onBlur={() => setEditing(false)}
+                              style={{ width: "100%", padding: "5px 8px", border: "1px solid var(--t-ink3)", borderRadius: 4, fontFamily: "inherit", fontSize: 12, background: "var(--t-surface)" }}>
+                              <option value="">—</option>
+                              {options.map(o => <option key={o.v} value={o.v}>{o.l}</option>)}
+                            </select>
+                          ) : (
+                            <input autoFocus type={type === "number" ? "number" : (type === "date" ? "date" : "text")} value={local}
+                              onChange={e => setLocal(e.target.value)} onBlur={commit}
+                              onKeyDown={e => { if (e.key === "Enter") e.target.blur(); if (e.key === "Escape") setEditing(false); }}
+                              style={{ width: "100%", padding: "5px 8px", border: "1px solid var(--t-ink3)", borderRadius: 4, fontFamily: "inherit", fontSize: 12, background: "var(--t-surface)" }} />
+                          )
+                        ) : (
+                          <div onClick={() => setEditing(true)} style={{ cursor: "pointer", padding: "2px 4px", borderRadius: 3, minHeight: 18 }}>
+                            {valueDisplay}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  };
+                  const ReadRow = function ReadRow({ label, value, color, placeholder = "—", muted }) {
+                    return (
+                      <div style={{ display: "grid", gridTemplateColumns: "minmax(140px, 0.6fr) 1fr", gap: 12, alignItems: "center", padding: "8px 0", borderBottom: "1px solid var(--t-line2)" }}>
+                        <div style={{ fontSize: 11, color: "var(--t-ink2)", fontWeight: 500 }}>{label}</div>
+                        <div style={{ fontSize: muted ? 11 : 13, color: color || (value ? "var(--t-ink)" : "var(--t-ink3)"), fontWeight: value && !muted ? 500 : 400, fontStyle: !value ? "italic" : "normal" }}>
+                          {value || placeholder}
+                        </div>
+                      </div>
+                    );
+                  };
+                  const ScopeEditor = function ScopeEditor() {
+                    const [editing, setEditing] = React.useState(false);
+                    const [local, setLocal] = React.useState(job.scopeOfWork || "");
+                    React.useEffect(() => { setLocal(job.scopeOfWork || ""); }, [job.scopeOfWork]);
+                    return editing ? (
+                      <textarea autoFocus rows={4} value={local}
+                        onChange={e => setLocal(e.target.value)}
+                        onBlur={() => { update({ scopeOfWork: local }); setEditing(false); }}
+                        style={{ width: "100%", padding: "8px 10px", border: "1px solid var(--t-ink3)", borderRadius: 6, fontFamily: "inherit", fontSize: 13, background: "var(--t-surface)", resize: "vertical", boxSizing: "border-box" }} />
+                    ) : (
+                      <div onClick={() => setEditing(true)} style={{ cursor: "pointer", padding: "8px 10px", borderRadius: 6, background: "var(--t-paper)", border: "1px solid var(--t-line)", fontSize: 13, color: job.scopeOfWork ? "var(--t-ink)" : "var(--t-ink3)", fontStyle: job.scopeOfWork ? "normal" : "italic", whiteSpace: "pre-wrap", minHeight: 40 }}>
+                        {job.scopeOfWork || "(click to add scope of work)"}
+                      </div>
+                    );
+                  };
+                  const cvNum = Number(job.contractValue || 0);
+                  const gpNum = Number(job.grossProfit || 0) || (cvNum > 0 ? fmGrossProfit(cvNum) : 0);
+                  const vendorNTE = Math.max(0, cvNum - gpNum);
+                  return (
+                    <div className="t-card" style={{ padding: "14px 16px", background: "var(--t-surface)" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                        <div className="t-eyebrow">📋 All Job Details</div>
+                        <span style={{ fontSize: 10, color: "var(--t-ink3)" }}>Click any field to edit</span>
+                      </div>
+                      <div style={{ display: "grid", gridTemplateColumns: isFullScreen ? "1fr 1fr" : "1fr", gap: isFullScreen ? "0 28px" : 0 }}>
+                        {/* Identity */}
+                        <InlineRow label="Project Name" value={job.name} onSave={v => update({ name: v })} placeholder="(no name)" />
+                        <InlineRow label="Project #" value={job.projectNo} onSave={v => update({ projectNo: v })} mono />
+                        <InlineRow label="Owners Project #" value={job.ownersProjectNo} onSave={v => update({ ownersProjectNo: v })} mono />
+                        <InlineRow label="Store Code" value={job.storeCode} onSave={v => update({ storeCode: v })} mono />
+                        <InlineRow label="Category" value={job.category || "FM"} onSave={v => update({ category: v })}
+                          options={[{ v: "FM", l: "FM" }, { v: "CapEx", l: "CapEx" }, { v: "Lawn", l: "Lawn" }, { v: "Snow", l: "Snow" }]} />
+                        <InlineRow label="Priority" value={job.priority} onSave={v => update({ priority: v })}
+                          options={[{ v: "Red", l: "🔴 Red" }, { v: "Yellow", l: "🟡 Yellow" }, { v: "Green", l: "🟢 Green" }]} />
+
+                        {/* Stage / status */}
+                        <InlineRow label="Next Step (Stage)" value={job.stage} onSave={v => update({ stage: v })}
+                          options={FM_STAGES.map(s => ({ v: s.id, l: s.label }))} />
+                        <InlineRow label="Odds" value={job.odds ? String(job.odds) : ""} onSave={v => update({ odds: Number(v) || 0 })}
+                          options={[0.2, 0.4, 0.5, 0.6, 0.8, 1.0].map(o => ({ v: String(o), l: Math.round(o*100) + "%" }))} />
+                        <InlineRow label="Hot?" value={job.hot ? "Yes" : "No"} onSave={v => update({ hot: v === "Yes" })}
+                          options={[{ v: "Yes", l: "🔥 Yes" }, { v: "No", l: "No" }]} />
+                        <ReadRow label="PRP Sent" value={job.prpSent} />
+
+                        {/* Financials */}
+                        <InlineRow label="Gross Value" value={job.contractValue || 0} onSave={v => {
+                          const patch = { contractValue: v };
+                          if (v > 0 && (!job.grossProfit || Number(job.grossProfit) === fmGrossProfit(Number(job.contractValue || 0)))) {
+                            patch.grossProfit = fmGrossProfit(v);
+                          }
+                          update(patch);
+                        }} type="number" mono />
+                        <InlineRow label="Gross Profit" value={job.grossProfit || 0} onSave={v => update({ grossProfit: v })} type="number" mono color="var(--t-dowork)" />
+                        <ReadRow label="Vendor NTE (computed)" value={vendorNTE > 0 ? fmt(vendorNTE) : "—"} color="var(--t-warn)" />
+                        <InlineRow label="Vendor Invoice Amount" value={job.vendorInvoiceAmount || 0} onSave={v => update({ vendorInvoiceAmount: v })} type="number" mono />
+                        <InlineRow label="Vendor Invoice #" value={job.vendorInvoiceNumber} onSave={v => update({ vendorInvoiceNumber: v })} mono />
+
+                        {/* Vendor / Customer */}
+                        <ReadRow label="Vendor" value={sub ? sub.name : ""} placeholder="(none assigned — use the Estimating or Vendor card to assign)" />
+                        <ReadRow label="Customer" value={ct ? [ct.firstName, ct.lastName].filter(Boolean).join(" ") : ""} placeholder="(none assigned)" />
+                        <ReadRow label="Vendor Next Step" value={VENDOR_NEXT_STEPS.find(v => v.id === job.vendorNextStep)?.label || job.vendorNextStep} />
+
+                        {/* Schedule / dates */}
+                        <InlineRow label="Start Date" value={job.startDate} onSave={v => update({ startDate: v })} type="date" mono />
+                        <InlineRow label="End Date" value={job.endDate} onSave={v => update({ endDate: v })} type="date" mono />
+                        <InlineRow label="Bid Due Date" value={job.bidDueDate} onSave={v => update({ bidDueDate: v })} type="date" mono />
+                        <InlineRow label="Quote Due Date" value={job.quoteDueDate} onSave={v => update({ quoteDueDate: v })} type="date" mono />
+                        <InlineRow label="Proposal Date" value={job.proposalDate} onSave={v => update({ proposalDate: v })} type="date" mono />
+                        <InlineRow label="Follow Up Date" value={job.followUpDate} onSave={v => update({ followUpDate: v })} type="date" mono />
+                        <InlineRow label="Buyout Date (Approved)" value={job.buyoutDate} onSave={v => update({ buyoutDate: v })} type="date" mono />
+
+                        {/* Team */}
+                        <InlineRow label="Coordinator" value={job.coordinator} onSave={v => update({ coordinator: v })} />
+                        <InlineRow label="PM" value={job.pm} onSave={v => update({ pm: v })} />
+                        <InlineRow label="Account Manager" value={job.accountManager} onSave={v => update({ accountManager: v })} />
+
+                        {/* Location */}
+                        <InlineRow label="Market Area" value={job.marketArea} onSave={v => update({ marketArea: v })} />
+                        <ReadRow label="Company" value={co ? co.name : ""} />
+                        <ReadRow label="Site" value={site ? (site.storeNumber ? "#" + site.storeNumber + " · " : "") + (site.address || "Site") : ""} muted />
+                      </div>
+
+                      {/* Scope of Work — full-width textarea */}
+                      <div style={{ marginTop: 14, paddingTop: 14, borderTop: "1px solid var(--t-line)" }}>
+                        <div style={{ fontSize: 11, color: "var(--t-ink2)", fontWeight: 500, marginBottom: 6 }}>Scope of Work</div>
+                        <ScopeEditor />
+                      </div>
                     </div>
                   );
                 })()}
