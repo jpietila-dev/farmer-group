@@ -4332,6 +4332,30 @@ export default function App() {
   const [fmJobs,        setFmJobs]        = useState(INIT_FM_JOBS);
   const [fmJobsRefreshing, setFmJobsRefreshing] = useState(false);
   const [fmJobsRefreshedAt, setFmJobsRefreshedAt] = useState(null);
+  // FM Dashboard report visibility — persists in localStorage
+  const FM_DASH_REPORTS = [
+    { id: "kpis",        label: "YTD KPIs + GP by Quarter" },
+    { id: "charts",      label: "Monthly Charts (Opportunities / Revenue / GP)" },
+    { id: "projections", label: "Projection Cards (This Month / Year)" },
+  ];
+  const [fmDashReportsVisible, setFmDashReportsVisible] = useState(() => {
+    try {
+      const raw = localStorage.getItem("fm_dash_reports");
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === "object") return parsed;
+      }
+    } catch(e) {}
+    return Object.fromEntries(FM_DASH_REPORTS.map(r => [r.id, true]));
+  });
+  const [showFmDashCustomize, setShowFmDashCustomize] = useState(false);
+  const toggleFmDashReport = (id) => {
+    setFmDashReportsVisible(prev => {
+      const next = { ...prev, [id]: !prev[id] };
+      try { localStorage.setItem("fm_dash_reports", JSON.stringify(next)); } catch(e) {}
+      return next;
+    });
+  };
   const refreshFmJobs = useCallback(async () => {
     setFmJobsRefreshing(true);
     try {
@@ -4422,7 +4446,7 @@ export default function App() {
   const [showInboxForm, setShowInboxForm] = useState(false);
   const [inboxParseText,setInboxParseText]= useState("");
   const [inboxParsing,  setInboxParsing]  = useState(false);
-  const [inboxForm,     setInboxForm]     = useState({ name: "", companyId: "", storeId: "", address: "", scopeOfWork: "", ownersProjectNo: "", bidDueDate: "", authorizedAmount: "", contactName: "", contactPhone: "", notes: "", source: "manual" });
+  const [inboxForm,     setInboxForm]     = useState({ name: "", companyId: "", storeId: "", address: "", scopeOfWork: "", ownersProjectNo: "", bidDueDate: "", authorizedAmount: "", contactId: "", contactName: "", contactPhone: "", notes: "", source: "manual" });
   const [inboxStoreSearch,   setInboxStoreSearch]   = useState("");
   const [inboxShowParser,    setInboxShowParser]    = useState(false);
   const [showProposal,  setShowProposal]  = useState(false);
@@ -5020,13 +5044,20 @@ export default function App() {
     const updatedJob = { ...job, sentToAR: true, sentToARAt: new Date().toISOString(), status: "Completed" };
     setFmJobs(prev => prev.map(j => j.id === jobId ? updatedJob : j));
     // Persist FM job first — verify it stuck before doing the invoice
-    const fmRes = await supa.from("fm_jobs").update(fmJobToDB(updatedJob)).eq("id", jobId);
+    let fmRes = await supa.from("fm_jobs").update(fmJobToDB(updatedJob)).eq("id", jobId);
+    // If it failed because sent_to_ar / status columns don't exist, we can't actually mark this job sent.
+    // Surface that clearly — there's no graceful fallback because the whole point is to mark it sent.
+    if (fmRes && fmRes.error && (fmRes.error?.message || "").toLowerCase().includes("could not find") && (fmRes.error?.message || "").toLowerCase().includes("column")) {
+      console.error("[sendFmJobToAR] fm_jobs missing columns", fmRes.error);
+      setFmJobs(originalFmJobs);
+      return { ok: false, error: "The fm_jobs table is missing the sent_to_ar / status columns. Run VENDOR_PORTAL_MIGRATION.md in Supabase, then try again.\n\nException: " + (fmRes.error?.message || "") };
+    }
     if (fmRes && fmRes.error) {
       // Roll back local state — DB write failed
       console.error("[sendFmJobToAR] fm_jobs update failed", fmRes.error);
       setFmJobs(originalFmJobs);
       const msg = fmRes.error?.message || JSON.stringify(fmRes.error);
-      return { ok: false, error: "Couldn't save to fm_jobs. Migration likely not run.\n\n" + msg };
+      return { ok: false, error: "Couldn't save to fm_jobs.\n\n" + msg };
     }
     // FM update succeeded — close the panel
     if (fmFullScreenJob?.id === jobId) setFmFullScreenJob(null);
@@ -5074,7 +5105,8 @@ export default function App() {
       })(),
     };
     setInvoices(prev => [inv, ...prev]);
-    const invRes = await supa.from("accounting_invoices").insert({
+    // Full payload — includes all newer columns from the latest migration
+    const fullPayload = {
       id: String(invId),
       invoice_num: inv.invoiceNum,
       job: inv.job,
@@ -5100,7 +5132,28 @@ export default function App() {
       owners_project_no: inv.ownersProjectNo,
       vendor_invoice_number: inv.vendorInvoiceNumber,
       vendor_name: inv.vendorName,
-    });
+    };
+    let invRes = await supa.from("accounting_invoices").insert(fullPayload);
+    // If it failed due to a missing column, retry with only the legacy columns so the save still works.
+    // (This means: if migration hasn't been run, send-to-AR still works, but the AR sheet won't have the new fields.)
+    if (invRes && invRes.error && (invRes.error?.message || "").toLowerCase().includes("could not find") && (invRes.error?.message || "").toLowerCase().includes("column")) {
+      console.warn("[sendFmJobToAR] retrying with legacy columns — newer migration likely not run");
+      const legacyPayload = {
+        id: String(invId),
+        invoice_num: inv.invoiceNum,
+        job: inv.job,
+        client: inv.client,
+        amount: inv.amount,
+        due_date: inv.dueDate,
+        status: inv.status,
+        notes: inv.notes,
+        created_at: inv.createdAt,
+      };
+      invRes = await supa.from("accounting_invoices").insert(legacyPayload);
+      if (invRes && !invRes.error) {
+        return { ok: true, invoiceId: invId, warning: "Invoice saved with limited fields. To enable the full AR sheet (Invoice Date, Paid Date, Category, AR QBO ID, etc.), run VENDOR_PORTAL_MIGRATION.md in Supabase." };
+      }
+    }
     if (invRes && invRes.error) {
       // Roll back local invoice + roll back FM job — keep state consistent
       console.error("[sendFmJobToAR] accounting_invoices insert failed", invRes.error);
@@ -5173,7 +5226,7 @@ Return ONLY valid JSON, no markdown, no extra text:
       address:     inboxForm.address || site?.address || "",
       id: "inbox" + Date.now(), createdAt: new Date().toISOString()
     }]);
-    setInboxForm({ name: "", companyId: "", storeId: "", address: "", scopeOfWork: "", ownersProjectNo: "", bidDueDate: "", authorizedAmount: "", contactName: "", contactPhone: "", notes: "", source: "manual" });
+    setInboxForm({ name: "", companyId: "", storeId: "", address: "", scopeOfWork: "", ownersProjectNo: "", bidDueDate: "", authorizedAmount: "", contactId: "", contactName: "", contactPhone: "", notes: "", source: "manual" });
     setShowInboxForm(false);
   };
 
@@ -5185,6 +5238,7 @@ Return ONLY valid JSON, no markdown, no extra text:
     const vendorNTE = fmVendorNTE(nte);
     setFmJobs(prev => [...prev, {
       id: "fm" + Date.now(), name: lead.name, companyId, siteId: lead.storeId || "",
+      approverContactId: lead.contactId || "",
       contractValue: nte, grossProfit: gp, nte: String(nte), vendorNTE: String(vendorNTE),
       stage: "estimating", startDate: "", endDate: "", pm: "", pct: 0,
       bidDueDate: lead.bidDueDate || "", quoteDueDate: "", proposalDate: "", followUpDate: "", buyoutDate: "", invoiceDate: "",
@@ -6834,16 +6888,36 @@ Return ONLY valid JSON, no markdown, no extra text:
                         <div style={{ fontSize: 26, fontWeight: 800, color: "#1A2240", letterSpacing: "-0.02em" }}>FM DASHBOARD</div>
                         <div style={{ fontSize: 11, color: "#4A5278", marginTop: 3, letterSpacing: "0.06em" }}>FACILITY MAINTENANCE · {new Date().toLocaleDateString("en-US", { weekday:"long", month:"long", day:"numeric" }).toUpperCase()}</div>
                       </div>
-                      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                      <div style={{ display: "flex", gap: 8, alignItems: "center", position: "relative" }}>
                         <select value={selectedPM || ""} onChange={e => setSelectedPM(e.target.value || null)}
                           style={{ fontSize: 11, padding: "6px 12px", borderRadius: 6, border: "1px solid #CBD1E8", background: selectedPM ? "#3B6FE8" : "#fff", color: selectedPM ? "#fff" : "#4A5278", fontFamily: "inherit", cursor: "pointer" }}>
                           <option value="">👥 Org View</option>
                           {pms.map(pm => <option key={pm} value={pm}>👤 {pm}</option>)}
                         </select>
+                        <button onClick={() => setShowFmDashCustomize(s => !s)}
+                          style={{ fontSize: 11, padding: "6px 12px", borderRadius: 6, border: "1px solid #CBD1E8", background: "#fff", color: "#4A5278", fontFamily: "inherit", cursor: "pointer" }}>
+                          ⚙ Customize
+                        </button>
+                        {showFmDashCustomize && (
+                          <div style={{ position: "absolute", top: "calc(100% + 6px)", right: 0, background: "#fff", border: "1px solid #CBD1E8", borderRadius: 8, padding: "10px 12px", boxShadow: "0 4px 14px rgba(0,0,0,0.08)", zIndex: 20, minWidth: 240 }}>
+                            <div style={{ fontSize: 10, color: "#9BA3BF", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 8, fontWeight: 700 }}>Show reports</div>
+                            {FM_DASH_REPORTS.map(r => (
+                              <label key={r.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 4px", cursor: "pointer", fontSize: 12, color: "#1A2240" }}>
+                                <input type="checkbox" checked={!!fmDashReportsVisible[r.id]} onChange={() => toggleFmDashReport(r.id)} />
+                                {r.label}
+                              </label>
+                            ))}
+                            <div style={{ borderTop: "1px solid #F0F2F8", marginTop: 8, paddingTop: 8, display: "flex", justifyContent: "flex-end" }}>
+                              <button onClick={() => setShowFmDashCustomize(false)}
+                                style={{ fontSize: 11, padding: "4px 10px", borderRadius: 5, border: "none", background: "#3B6FE8", color: "#fff", cursor: "pointer", fontFamily: "inherit" }}>Done</button>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </div>
 
                     {/* -- TOP ROW: KPIs left + GP by Quarter right -- */}
+                    {fmDashReportsVisible.kpis && (
                     <div style={{ display: "grid", gridTemplateColumns: "280px 1fr", gap: 16 }}>
 
                       {/* KPI stack */}
@@ -6870,60 +6944,70 @@ Return ONLY valid JSON, no markdown, no extra text:
                         <QBarChart data={quarters} />
                       </div>
                     </div>
+                    )}
 
-                    {/* -- CHARTS ROW 1: FM Opportunities YOY (count by month) -- */}
-                    <div className="stat-card" style={{ padding: 20 }}>
-                      <div style={{ fontSize: 11, fontWeight: 700, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 8 }}>FM Opportunities YOY</div>
-                      <LineChart
-                        labels={MONTHS}
-                        series={[
-                          { label: "Last Year",  color: "#3B6FE8", data: months12.map(m => m.lastRev > 0 ? Math.round(m.lastRev/500) : 0) },
-                          { label: "This Year",  color: "#F87171", isCurrent: true, data: months12.map(m => m.thisCount) },
-                        ]}
-                        height={110}
-                        yFmt={v => v}
-                      />
-                      <div style={{ display: "flex", gap: 16, marginTop: 4, fontSize: 10, color: "#4A5278" }}>
-                        <span><span style={{ display: "inline-block", width: 16, height: 2, background: "#3B6FE8", marginRight: 4, verticalAlign: "middle" }}></span>Total FM Opportunities Last Year</span>
-                        <span><span style={{ display: "inline-block", width: 16, height: 2, background: "#F87171", marginRight: 4, verticalAlign: "middle" }}></span>Total FM Opportunities This Year</span>
+                    {/* -- CHARTS ROW: 3 equal-size charts side-by-side -- */}
+                    {fmDashReportsVisible.charts && (
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
+                      <div className="stat-card" style={{ padding: 20, display: "flex", flexDirection: "column" }}>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 8 }}>FM Opportunities YOY</div>
+                        <div style={{ flex: 1 }}>
+                          <LineChart
+                            labels={MONTHS}
+                            series={[
+                              { label: "Last Year",  color: "#3B6FE8", data: months12.map(m => m.lastRev > 0 ? Math.round(m.lastRev/500) : 0) },
+                              { label: "This Year",  color: "#F87171", isCurrent: true, data: months12.map(m => m.thisCount) },
+                            ]}
+                            height={140}
+                            yFmt={v => v}
+                          />
+                        </div>
+                        <div style={{ display: "flex", gap: 12, marginTop: 8, fontSize: 10, color: "#4A5278", flexWrap: "wrap" }}>
+                          <span><span style={{ display: "inline-block", width: 16, height: 2, background: "#3B6FE8", marginRight: 4, verticalAlign: "middle" }}></span>Last Year</span>
+                          <span><span style={{ display: "inline-block", width: 16, height: 2, background: "#F87171", marginRight: 4, verticalAlign: "middle" }}></span>This Year</span>
+                        </div>
+                      </div>
+
+                      <div className="stat-card" style={{ padding: 20, display: "flex", flexDirection: "column" }}>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 8 }}>FM Revenue per Month</div>
+                        <div style={{ flex: 1 }}>
+                          <LineChart
+                            labels={MONTHS}
+                            series={[
+                              { label: "2025", color: "#BCC6D8", data: months12.map(m => m.lastRev) },
+                              { label: "2026", color: "#F87171", isCurrent: true, data: months12.map(m => m.thisRev) },
+                            ]}
+                            height={140}
+                          />
+                        </div>
+                        <div style={{ display: "flex", gap: 12, marginTop: 8, fontSize: 10, color: "#4A5278", flexWrap: "wrap" }}>
+                          <span><span style={{ display: "inline-block", width: 16, height: 2, background: "#BCC6D8", marginRight: 4, verticalAlign: "middle" }}></span>2025</span>
+                          <span><span style={{ display: "inline-block", width: 16, height: 2, background: "#F87171", marginRight: 4, verticalAlign: "middle" }}></span>2026</span>
+                        </div>
+                      </div>
+
+                      <div className="stat-card" style={{ padding: 20, display: "flex", flexDirection: "column" }}>
+                        <div style={{ fontSize: 11, fontWeight: 700, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 8 }}>FM Gross Profit per Month</div>
+                        <div style={{ flex: 1 }}>
+                          <LineChart
+                            labels={MONTHS}
+                            series={[
+                              { label: "2025", color: "#3B6FE8", data: months12.map(m => m.lastGP) },
+                              { label: "2026", color: "#F87171", isCurrent: true, data: months12.map(m => m.thisGP) },
+                            ]}
+                            height={140}
+                          />
+                        </div>
+                        <div style={{ display: "flex", gap: 12, marginTop: 8, fontSize: 10, color: "#4A5278", flexWrap: "wrap" }}>
+                          <span><span style={{ display: "inline-block", width: 16, height: 2, background: "#3B6FE8", marginRight: 4, verticalAlign: "middle" }}></span>2025</span>
+                          <span><span style={{ display: "inline-block", width: 16, height: 2, background: "#F87171", marginRight: 4, verticalAlign: "middle" }}></span>2026</span>
+                        </div>
                       </div>
                     </div>
-
-                    {/* -- CHARTS ROW 2: Revenue per month -- */}
-                    <div className="stat-card" style={{ padding: 20 }}>
-                      <div style={{ fontSize: 11, fontWeight: 700, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 8 }}>FM Revenue per Month</div>
-                      <LineChart
-                        labels={MONTHS}
-                        series={[
-                          { label: "2024", color: "#BCC6D8", data: months12.map(m => m.lastRev) },
-                          { label: "2026", color: "#F87171", isCurrent: true, data: months12.map(m => m.thisRev) },
-                        ]}
-                        height={120}
-                      />
-                      <div style={{ display: "flex", gap: 16, marginTop: 4, fontSize: 10, color: "#4A5278" }}>
-                        <span><span style={{ display: "inline-block", width: 16, height: 2, background: "#BCC6D8", marginRight: 4, verticalAlign: "middle" }}></span>FM Revenue 2025</span>
-                        <span><span style={{ display: "inline-block", width: 16, height: 2, background: "#F87171", marginRight: 4, verticalAlign: "middle" }}></span>FM Revenue 2026</span>
-                      </div>
-                    </div>
-
-                    {/* -- CHARTS ROW 3: GP per month -- */}
-                    <div className="stat-card" style={{ padding: 20 }}>
-                      <div style={{ fontSize: 11, fontWeight: 700, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 8 }}>FM Gross Profit per Month</div>
-                      <LineChart
-                        labels={MONTHS}
-                        series={[
-                          { label: "2025", color: "#3B6FE8", data: months12.map(m => m.lastGP) },
-                          { label: "2026", color: "#F87171", isCurrent: true, data: months12.map(m => m.thisGP) },
-                        ]}
-                        height={120}
-                      />
-                      <div style={{ display: "flex", gap: 16, marginTop: 4, fontSize: 10, color: "#4A5278" }}>
-                        <span><span style={{ display: "inline-block", width: 16, height: 2, background: "#3B6FE8", marginRight: 4, verticalAlign: "middle" }}></span>FM GP 2025</span>
-                        <span><span style={{ display: "inline-block", width: 16, height: 2, background: "#F87171", marginRight: 4, verticalAlign: "middle" }}></span>FM GP 2026</span>
-                      </div>
-                    </div>
+                    )}
 
                     {/* -- PROJECTION CARDS -- */}
+                    {fmDashReportsVisible.projections && (
                     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
                       <div className="stat-card" style={{ padding: 16 }}>
                         <div style={{ fontSize: 10, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 10, fontWeight: 600 }}>This Month Projection ({MONTHS[curMonth]})</div>
@@ -6968,6 +7052,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                         </table>
                       </div>
                     </div>
+                    )}
 
 
                   </div>
@@ -9219,6 +9304,40 @@ Example:
                           {/* Row 3: Address auto-fill */}
                           <div><label className="lbl">Site Address {inboxForm.storeId && <span style={{ color: "#4ADE80", fontSize: 9 }}>● AUTO-FILLED</span>}</label>
                             <input className="fi" value={inboxForm.address} onChange={e => setInboxForm(f => ({ ...f, address: e.target.value }))} placeholder="Auto-fills from store selection" />
+                          </div>
+
+                          {/* Row 3.5: Customer (contact at the company) */}
+                          <div><label className="lbl">Customer {!inboxForm.companyId && <span style={{ color: "#8892B8", fontSize: 9, fontWeight: 400, textTransform: "none", letterSpacing: 0 }}>· select a company first</span>}</label>
+                            {(() => {
+                              const companyContacts = inboxForm.companyId ? contacts.filter(c => c.companyId === inboxForm.companyId) : [];
+                              return (
+                                <div style={{ display: "flex", gap: 6 }}>
+                                  <select className="fi" style={{ flex: 1 }} value={inboxForm.contactId || ""}
+                                    disabled={!inboxForm.companyId}
+                                    onChange={e => {
+                                      const ct = contacts.find(c => c.id === e.target.value);
+                                      const name = ct ? [ct.firstName, ct.lastName].filter(Boolean).join(" ") : "";
+                                      setInboxForm(f => ({ ...f, contactId: e.target.value, contactName: name, contactPhone: ct?.phone || f.contactPhone || "" }));
+                                    }}>
+                                    <option value="">{inboxForm.companyId ? (companyContacts.length === 0 ? "No contacts at this company" : "Select customer…") : "—"}</option>
+                                    {companyContacts.map(c => <option key={c.id} value={c.id}>{[c.firstName, c.lastName].filter(Boolean).join(" ")}{c.title ? " · " + c.title : ""}</option>)}
+                                  </select>
+                                  <button className="btn-ghost" style={{ fontSize: 11, padding: "0 12px", whiteSpace: "nowrap" }}
+                                    disabled={!inboxForm.companyId}
+                                    onClick={() => {
+                                      const fn = window.prompt("Customer first name:"); if (!fn) return;
+                                      const ln = window.prompt("Customer last name:") || "";
+                                      const title = window.prompt("Title (optional):") || "";
+                                      const email = window.prompt("Email (optional):") || "";
+                                      const phone = window.prompt("Phone (optional):") || "";
+                                      const newC = { id: "c" + Date.now(), companyId: inboxForm.companyId, firstName: fn.trim(), lastName: ln.trim(), title: title.trim(), email: email.trim(), phone: phone.trim() };
+                                      setContacts(prev => [...prev, newC]);
+                                      try { supa.from("contacts").insert(contactToDB(newC)); } catch(e) {}
+                                      setInboxForm(f => ({ ...f, contactId: newC.id, contactName: [fn,ln].filter(Boolean).join(" ").trim(), contactPhone: phone.trim() }));
+                                    }}>+ New</button>
+                                </div>
+                              );
+                            })()}
                           </div>
 
                           {/* Row 4: Scope */}
@@ -11992,14 +12111,18 @@ window.addEventListener('message',function(e){
                         <div style={{ display:"flex", flexDirection:"column" }}>
                           {g.jobs.map((j, ji) => {
                             const co = companies.find(c=>c.id===j.companyId);
+                            const sb = subcontractors.find(s => s.id === j.subcontractorId);
                             return (
                               <div key={j.id} style={{ display:"flex", alignItems:"center", gap:12, padding:"10px 16px", borderTop:"1px solid #F0F2F8", background: ji%2===0?"#fff":"#FAFBFD", cursor:"pointer" }}
                                 onClick={() => setSelectedFmJob(j)}>
                                 <span style={{ fontSize:11, fontWeight:600, color:"#4A5278", minWidth:70 }}>{j.storeCode || j.projectNo}</span>
                                 <span style={{ fontSize:12, color:"#1A2240", flex:1, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{j.name}</span>
-                                <span style={{ fontSize:11, color:"#4A5278" }}>{co?.name?.split(" ")[0]}</span>
-                                <span style={{ fontSize:11, fontWeight:700, color:"#3B6FE8" }}>${(j.contractValue||0).toLocaleString()}</span>
-                                <span style={{ fontSize:11, fontWeight:700, color:"#4ADE80" }}>${(j.grossProfit||0).toLocaleString()}</span>
+                                <span style={{ fontSize:11, color:"#4A5278", minWidth:80, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{co?.name?.split(" ")[0] || "—"}</span>
+                                <span style={{ fontSize:11, color: sb ? "#1A2240" : "#9BA3BF", minWidth: 120, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }} title={sb?.name || ""}>
+                                  {sb ? "👤 " + sb.name : "— no vendor"}
+                                </span>
+                                <span style={{ fontSize:11, fontWeight:700, color:"#3B6FE8", minWidth:80, textAlign:"right" }}>${(j.contractValue||0).toLocaleString()}</span>
+                                <span style={{ fontSize:11, fontWeight:700, color:"#4ADE80", minWidth:70, textAlign:"right" }}>${(j.grossProfit||0).toLocaleString()}</span>
                               </div>
                             );
                           })}
@@ -17641,24 +17764,51 @@ window.addEventListener('message',function(e){
                         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                           <div>
                             <div style={{ fontSize: 10, color: "#4A5278", marginBottom: 4 }}>Assign Vendor</div>
-                            <select className="fi" value={job.subcontractorId || ""} onChange={e => {
-                              const subId = e.target.value;
-                              // Auto-advance to waiting_quote when a vendor is first assigned
-                              const stagePatch = (subId && job.stage === "estimating") ? { stage: "waiting_quote" } : {};
-                              update({ subcontractorId: subId, ...stagePatch });
-                              // Auto-tag sub as FM division when assigned from FM jobs
-                              if (subId) {
-                                const sub = subcontractors.find(s => s.id === subId);
-                                if (sub && !(sub.services||[]).includes("fm")) {
-                                  const updated = { ...sub, services: [...(sub.services||[]), "fm"] };
-                                  setSubcontractors(prev => prev.map(s => s.id === subId ? updated : s));
-                                  try { supa.from("subcontractors").update(subToDB(updated)).eq("id", subId); } catch(e) {}
+                            <div style={{ display: "flex", gap: 6 }}>
+                              <select className="fi" style={{ flex: 1 }} value={job.subcontractorId || ""} onChange={async e => {
+                                const subId = e.target.value;
+                                if (subId === "__add_new__") {
+                                  // Open the new-vendor form pre-tied to this job
+                                  setAddSubForFmJobId(job.id);
+                                  setEditSubId(null);
+                                  setSubForm({
+                                    name: "", trade: "", phone: "", email: "",
+                                    msaStatus: "missing", coiExpiry: "", w9: false, notes: "",
+                                    services: ["fm"], address: "", city: "", state: "",
+                                    contact_name: "", coverage: "",
+                                    w9FileUrl: "", w9FileData: null, w9FileName: "",
+                                    coiFileUrl: "", coiFileData: null, coiFileName: "",
+                                    portalEnabled: true,
+                                  });
+                                  setShowSubForm(true);
+                                  return;
                                 }
-                              }
-                            }}>
-                              <option value="">Select vendor…</option>
-                              {subcontractors.map(s => <option key={s.id} value={s.id}>{s.name}{s.trade ? " — " + s.trade : ""}</option>)}
-                            </select>
+                                // Auto-advance to waiting_quote when a vendor is first assigned
+                                const stagePatch = (subId && job.stage === "estimating") ? { stage: "waiting_quote" } : {};
+                                update({ subcontractorId: subId, ...stagePatch });
+                                // Auto-tag sub as FM division when assigned from FM jobs — check the response
+                                if (subId) {
+                                  const sub = subcontractors.find(s => s.id === subId);
+                                  if (sub && !(sub.services||[]).includes("fm")) {
+                                    const updatedSub = { ...sub, services: [...(sub.services||[]), "fm"] };
+                                    setSubcontractors(prev => prev.map(s => s.id === subId ? updatedSub : s));
+                                    const res = await supa.from("subcontractors").update(subToDB(updatedSub)).eq("id", subId);
+                                    if (res && res.error) {
+                                      console.error("[knownVendor auto-tag] failed", res.error);
+                                      // Roll back local services so what the user sees matches DB
+                                      setSubcontractors(prev => prev.map(s => s.id === subId ? sub : s));
+                                      alert("⚠️ Couldn't tag this vendor for FM. Their assignment to the job saved, but they may not appear in the FM Subcontractors list.\n\n" + (res.error?.message || ""));
+                                    }
+                                  }
+                                }
+                              }}>
+                                <option value="">Select vendor…</option>
+                                {subcontractors.filter(s => !s.archived).map(s => (
+                                  <option key={s.id} value={s.id}>{s.name}{s.trade ? " — " + s.trade : ""}</option>
+                                ))}
+                                <option value="__add_new__">+ Add new vendor…</option>
+                              </select>
+                            </div>
                           </div>
                           {job.subcontractorId && (() => {
                             const assignedSub = subcontractors.find(s => s.id === job.subcontractorId);
@@ -18188,9 +18338,10 @@ window.addEventListener('message',function(e){
 
                 {/* -- WAITING FOR QUOTE panel: now folded into the Estimating panel above (which renders on both estimating + waiting_quote stages) -- */}
 
-                {/* -- VENDOR PICKER for buyout / do_work when no vendor is assigned -- */}
-                {(job.stage === "buyout" || job.stage === "do_work") && !job.subcontractorId && (() => {
+                {/* -- VENDOR PICKER for buyout / do_work / bill — adds OR changes the assigned vendor -- */}
+                {(job.stage === "buyout" || job.stage === "do_work" || job.stage === "bill") && (() => {
                   const pickerOpen = vendorPickerJobOpen === job.id;
+                  const currentSub = subcontractors.find(s => s.id === job.subcontractorId);
                   const q = (vendorPickerJobSearch || "").toLowerCase();
                   const activeSubs = subcontractors.filter(s => !s.archived);
                   const filteredSubs = q
@@ -18201,19 +18352,24 @@ window.addEventListener('message',function(e){
                         (s.services||[]).some(sv => (sv||"").toLowerCase().includes(q))
                       )
                     : activeSubs;
-                  // Assign + auto-tag as FM division if needed
-                  const assignSub = (subId) => {
+                  // Assign or change vendor — auto-tag as FM
+                  const assignSub = async (subId) => {
+                    const isChange = !!job.subcontractorId && job.subcontractorId !== subId;
+                    if (isChange) {
+                      const oldSub = subcontractors.find(s => s.id === job.subcontractorId);
+                      if (!window.confirm(`Replace vendor on this job?\n\nCurrent: ${oldSub?.name || "(unknown)"}\nNew: ${subcontractors.find(s => s.id === subId)?.name || "(unknown)"}\n\nThe job stays on its current stage. Existing schedule/quote values are kept.`)) return;
+                    }
                     const updated = { ...job, subcontractorId: subId };
                     setFmJobs(prev => prev.map(j => j.id === job.id ? updated : j));
                     if (fmFullScreenJob?.id === job.id) setFmFullScreenJob(updated);
                     if (selectedFmJob?.id === job.id) setSelectedFmJob(updated);
-                    try { supa.from("fm_jobs").update({ subcontractor_id: subId }).eq("id", job.id); } catch(e) {}
+                    try { await supa.from("fm_jobs").update({ subcontractor_id: subId }).eq("id", job.id); } catch(e) {}
                     // Auto-tag sub as FM division
                     const sb = subcontractors.find(s => s.id === subId);
                     if (sb && !(sb.services||[]).includes("fm")) {
                       const updatedSub = { ...sb, services: [...(sb.services||[]), "fm"] };
                       setSubcontractors(prev => prev.map(s => s.id === subId ? updatedSub : s));
-                      try { supa.from("subcontractors").update(subToDB(updatedSub)).eq("id", subId); } catch(e) {}
+                      try { await supa.from("subcontractors").update(subToDB(updatedSub)).eq("id", subId); } catch(e) {}
                     }
                     setVendorPickerJobOpen(null);
                     setVendorPickerJobSearch("");
@@ -18228,21 +18384,43 @@ window.addEventListener('message',function(e){
                       contact_name: "", coverage: "",
                       w9FileUrl: "", w9FileData: null, w9FileName: "",
                       coiFileUrl: "", coiFileData: null, coiFileName: "",
-                      portalEnabled: true, // Default checked per your spec — coordinator can uncheck
+                      portalEnabled: true,
                     });
                     setShowSubForm(true);
                     setVendorPickerJobOpen(null);
                   };
+                  // Different card tones: amber if missing, neutral if assigned
+                  const hasVendor = !!currentSub;
                   return (
-                    <div className="t-card" style={{ padding: "14px 16px", background: "var(--t-buyout-bg)", borderColor: "rgba(230,81,0,0.25)" }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-                        <div>
-                          <div className="t-eyebrow" style={{ color: "var(--t-buyout)", marginBottom: 3 }}>👤 Vendor Assignment Needed</div>
-                          <div style={{ fontSize: 12, color: "var(--t-ink2)" }}>This job doesn't have a vendor yet. Pick from existing subs or add a new one.</div>
+                    <div className="t-card" style={{
+                      padding: "14px 16px",
+                      background: hasVendor ? "var(--t-paper)" : "var(--t-buyout-bg)",
+                      borderColor: hasVendor ? "var(--t-line)" : "rgba(230,81,0,0.25)"
+                    }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: pickerOpen ? 10 : 0 }}>
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          {hasVendor ? (
+                            <>
+                              <div className="t-eyebrow" style={{ marginBottom: 4 }}>👤 Assigned Vendor</div>
+                              <div style={{ fontSize: 14, fontWeight: 600, color: "var(--t-ink)" }}>{currentSub.name}</div>
+                              {(currentSub.trade || currentSub.contact_name) && (
+                                <div style={{ fontSize: 11, color: "var(--t-ink2)", marginTop: 2 }}>
+                                  {currentSub.trade}{currentSub.trade && currentSub.contact_name ? " · " : ""}{currentSub.contact_name || ""}
+                                  {currentSub.phone ? " · 📞 " + currentSub.phone : ""}
+                                </div>
+                              )}
+                            </>
+                          ) : (
+                            <>
+                              <div className="t-eyebrow" style={{ color: "var(--t-buyout)", marginBottom: 3 }}>👤 Vendor Assignment Needed</div>
+                              <div style={{ fontSize: 12, color: "var(--t-ink2)" }}>This job doesn't have a vendor yet. Pick from existing subs or add a new one.</div>
+                            </>
+                          )}
                         </div>
                         {!pickerOpen && (
-                          <button className="t-btn" onClick={() => { setVendorPickerJobOpen(job.id); setVendorPickerJobSearch(""); }}>
-                            + Vendor
+                          <button className={hasVendor ? "t-btn t-btn-ghost t-btn-sm" : "t-btn"}
+                            onClick={() => { setVendorPickerJobOpen(job.id); setVendorPickerJobSearch(""); }}>
+                            {hasVendor ? "Change vendor" : "+ Vendor"}
                           </button>
                         )}
                       </div>
@@ -18520,7 +18698,11 @@ window.addEventListener('message',function(e){
                           const ok = window.confirm("Send this job to Accounts Receivable?\n\nThis will:\n• Move the job out of the coordinator's active list\n• Create an invoice in the ACCT tab for " + fmt(cvNum) + "\n• Mark this job Completed\n\nContinue?");
                           if (!ok) return;
                           const res = await sendFmJobToAR(job.id);
-                          if (!res.ok) { alert("⚠️ Could not send to AR\n\n" + (res.error || "unknown error") + "\n\nIf you haven't run the latest SQL migration yet, do that first (VENDOR_PORTAL_MIGRATION.md). Open the browser console for full details."); }
+                          if (!res.ok) {
+                            alert("⚠️ Could not send to AR\n\n" + (res.error || "unknown error") + "\n\nIf you haven't run the latest SQL migration yet, do that first (VENDOR_PORTAL_MIGRATION.md). Open the browser console for full details.");
+                          } else if (res.warning) {
+                            alert("✅ Sent to AR\n\n" + res.warning);
+                          }
                         }}>
                         💼 Send to Accounts Receivable
                       </button>
