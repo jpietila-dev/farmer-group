@@ -164,6 +164,14 @@ const dbToFmJob = r => ({
   completionPhotos: r.completion_photos||[], invoiceAttachment: r.invoice_attachment||null,
   photos: r.photos||[],
   sentToAR: !!r.sent_to_ar, sentToARAt: r.sent_to_ar_at||"", status: r.status||"",
+  // NEW columns (matching the AR pipeline spreadsheet)
+  priority: r.priority||"",        // Red | Yellow | Green
+  hot: !!r.hot,
+  odds: Number(r.odds||0),         // 0..1
+  prpSent: r.prp_sent||"",
+  accountManager: r.account_manager||"",
+  marketArea: r.market_area||"",
+  category: r.category||"FM",
 });
 const fmJobToDB = j => ({
   id: j.id, name: j.name||"", company_id: j.companyId||null, site_id: j.siteId||null,
@@ -190,6 +198,9 @@ const fmJobToDB = j => ({
   completion_photos: j.completionPhotos||[], invoice_attachment: j.invoiceAttachment||null,
   photos: j.photos||[],
   sent_to_ar: !!j.sentToAR, sent_to_ar_at: j.sentToARAt||null, status: j.status||null,
+  priority: j.priority||null, hot: !!j.hot, odds: j.odds||0,
+  prp_sent: j.prpSent||null, account_manager: j.accountManager||null,
+  market_area: j.marketArea||null, category: j.category||"FM",
 });
 
 const BUSINESS_UNITS = [
@@ -626,6 +637,41 @@ function useColumnOrder(tableId, defaultIds) {
   }, [tableId]);
 
   return [order, setOrder];
+}
+
+// Manages which columns are visible. Persists in localStorage (single-tenant for now).
+// Returns [visible, toggleVisible] — visible is an object { colId: bool }.
+function useColumnVisibility(tableId, defaultIds) {
+  const [visible, setVisible] = React.useState(() => {
+    try {
+      const raw = localStorage.getItem("colvis:" + tableId);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === "object") {
+          // Reconcile: any default not present in stored map is visible by default (true).
+          const next = {};
+          for (const id of defaultIds) {
+            next[id] = id in parsed ? !!parsed[id] : true;
+          }
+          return next;
+        }
+      }
+    } catch(e) {}
+    return Object.fromEntries(defaultIds.map(id => [id, true]));
+  });
+  const toggleVisible = React.useCallback((colId) => {
+    setVisible(prev => {
+      const next = { ...prev, [colId]: !prev[colId] };
+      try { localStorage.setItem("colvis:" + tableId, JSON.stringify(next)); } catch(e) {}
+      return next;
+    });
+  }, [tableId]);
+  const resetVisible = React.useCallback(() => {
+    const next = Object.fromEntries(defaultIds.map(id => [id, true]));
+    try { localStorage.setItem("colvis:" + tableId, JSON.stringify(next)); } catch(e) {}
+    setVisible(next);
+  }, [tableId, defaultIds.join("|")]);
+  return [visible, toggleVisible, resetVisible];
 }
 
 // Helper: drag handlers used by the headers in restyled tables.
@@ -4241,16 +4287,49 @@ export default function App() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   // ── Column-order prefs (drag-to-reorder table columns) ────────────
-  const [fmActiveJobsColOrder, setFmActiveJobsColOrder] = useColumnOrder(
-    "fm_active_jobs",
-    ["store", "project", "ownersProject", "scope", "company", "customer", "site", "vendor", "value", "profit", "schedule", "stage", "vendorNext"]
-  );
+  // Full set of columns matches the AR/PBR pipeline spreadsheet shape.
+  // Both Active Jobs and Pipeline share most columns; coordinator vs. actionDate differ slightly.
+  const FM_TABLE_COLS_FULL = [
+    "primary",          // {projectNo} - {name}
+    "priority",         // Red/Yellow/Green
+    "hot",              // hot flag
+    "storeCode",        // PS 1234
+    "vendor",           // sub name
+    "project",          // project no
+    "ownersProject",    // owners proj no
+    "value",            // gross value
+    "profit",           // gross profit
+    "stage",            // next step / stage
+    "odds",             // probability
+    "prpSent",          // PRP sent date
+    "vendorNext",       // vendor next step
+    "schedule",         // start work date
+    "vendorInvAmt",     // vendor invoice amount
+    "vendorInvNum",     // vendor invoice number
+    "approvedDate",     // approval date
+    "scope",            // scope of work
+    "pm",               // PM
+    "customer",         // customer contact
+    "category",         // FM / CapEx / Lawn / Snow
+    "company",          // company
+    "site",             // site address
+    "marketArea",       // market area
+    "accountManager",   // account manager
+    "createdAt",        // created date
+    "coordinator",      // assigned coordinator
+  ];
+  const [fmActiveJobsColOrder, setFmActiveJobsColOrder] = useColumnOrder("fm_active_jobs", FM_TABLE_COLS_FULL);
   const fmActiveJobsDrag = useDragColumns(fmActiveJobsColOrder, setFmActiveJobsColOrder);
-  const [fmPipelineColOrder, setFmPipelineColOrder] = useColumnOrder(
-    "fm_pipeline",
-    ["store", "project", "ownersProject", "scope", "company", "customer", "site", "vendor", "value", "actionDate", "stage", "coordinator"]
-  );
+  const [fmActiveJobsColVisible, toggleFmActiveJobsCol, resetFmActiveJobsCol] = useColumnVisibility("fm_active_jobs", FM_TABLE_COLS_FULL);
+  const [fmActiveJobsCustomize, setFmActiveJobsCustomize] = useState(false);
+
+  const [fmPipelineColOrder, setFmPipelineColOrder] = useColumnOrder("fm_pipeline", FM_TABLE_COLS_FULL);
   const fmPipelineDrag = useDragColumns(fmPipelineColOrder, setFmPipelineColOrder);
+  const [fmPipelineColVisible, toggleFmPipelineCol, resetFmPipelineCol] = useColumnVisibility("fm_pipeline", FM_TABLE_COLS_FULL);
+  const [fmPipelineCustomize, setFmPipelineCustomize] = useState(false);
+
+  // Inline-edit popup state (used by the table cells for vendor / customer pickers and other complex editors)
+  const [fmInlineEdit, setFmInlineEdit] = useState(null); // { jobId, field, anchorRect? }
 
   const [crmMode, setCrmMode] = useState(false); // top-level CRM/Sales view
   const [salesTab, setSalesTab] = useState("major"); // major | capex | acquisition
@@ -9446,54 +9525,147 @@ Example:
                 });
                 const totalFmPipeline = fmPipelineJobs.reduce((s,j) => s + (j.contractValue||0), 0);
 
-                // Column definitions
+                // Column definitions — shares the same full set used by Active Jobs.
+                const persistJob = (id, patch) => updateFmJobPersist(id, patch);
+                const EditableCell = ({ job, field, value, placeholder, numeric, mono, weight, color, postSave }) => {
+                  const [local, setLocal] = React.useState(value == null ? "" : String(value));
+                  const [editing, setEditing] = React.useState(false);
+                  React.useEffect(() => { setLocal(value == null ? "" : String(value)); }, [value]);
+                  const commit = () => {
+                    const v = numeric ? (local === "" ? 0 : Number(local) || 0) : local;
+                    if (v !== (numeric ? Number(value || 0) : (value || ""))) {
+                      const patch = { [field]: v };
+                      if (postSave) postSave(patch, job);
+                      persistJob(job.id, patch);
+                    }
+                    setEditing(false);
+                  };
+                  return editing ? (
+                    <input autoFocus type={numeric ? "number" : "text"} value={local}
+                      onChange={e => setLocal(e.target.value)} onBlur={commit}
+                      onKeyDown={e => { if (e.key === "Enter") e.target.blur(); if (e.key === "Escape") { setLocal(value == null ? "" : String(value)); setEditing(false); } }}
+                      onClick={e => e.stopPropagation()}
+                      style={{ width: "100%", padding: "4px 6px", border: "1px solid var(--t-ink3)", borderRadius: 4, fontFamily: "inherit", fontSize: 12, background: "var(--t-surface)", color: "var(--t-ink)", boxSizing: "border-box" }} />
+                  ) : (
+                    <span onClick={e => { e.stopPropagation(); setEditing(true); }}
+                      style={{ cursor: "text", padding: "2px 4px", borderRadius: 3, fontFamily: mono ? "var(--t-mono)" : "inherit", fontWeight: weight || (mono ? 600 : 400), color: color || "var(--t-ink)", display: "inline-block", minWidth: 30 }}
+                      title="Click to edit">
+                      {value ? (mono && numeric ? fmt(value) : value) : <span style={{ color: "var(--t-ink3)" }}>{placeholder || "—"}</span>}
+                    </span>
+                  );
+                };
+                const StageDropdown = ({ job }) => (
+                  <select value={job.stage} onChange={e => { e.stopPropagation(); persistJob(job.id, { stage: e.target.value }); }}
+                    onClick={e => e.stopPropagation()}
+                    className={"t-pill " + fmStagePill(job.stage)}
+                    style={{ border: "none", appearance: "none", padding: "3px 8px", borderRadius: 999, cursor: "pointer", fontFamily: "inherit", fontWeight: 600, fontSize: 11, minWidth: 110 }}>
+                    {FM_STAGES.map(st => <option key={st.id} value={st.id}>{st.label}</option>)}
+                  </select>
+                );
+                const openPanel = (e, jobId, field) => {
+                  e.stopPropagation();
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  setFmInlineEdit({ jobId, field, x: rect.left, y: rect.bottom + 4 });
+                  setVendorPickerSearch("");
+                };
                 const COLS = {
-                  store: { label: "Store", width: 80, render: j => <span className="t-mono-tag">{j.storeCode || "—"}</span> },
+                  primary: { label: "Primary", width: 240, className: "t-td-wrap", style: { fontWeight: 500 }, render: j => (
+                    <span><span style={{ color: "var(--t-ink3)", fontFamily: "var(--t-mono)", fontSize: 11 }}>{j.projectNo || "—"}</span>{" "}{j.name || "(no name)"}</span>
+                  )},
+                  priority: { label: "Priority", width: 90, stopPropagation: true, render: j => {
+                    const colors = { Red: { bg: "#FEE2E2", fg: "#B91C1C" }, Yellow: { bg: "#FEF3C7", fg: "#92400E" }, Green: { bg: "#D1FAE5", fg: "#065F46" } };
+                    return (
+                      <select value={j.priority || ""} onChange={e => { e.stopPropagation(); persistJob(j.id, { priority: e.target.value }); }}
+                        onClick={e => e.stopPropagation()}
+                        style={{ ...(colors[j.priority] ? { background: colors[j.priority].bg, color: colors[j.priority].fg } : { background: "transparent", color: "var(--t-ink3)" }), border: "none", padding: "3px 8px", borderRadius: 12, fontSize: 11, fontWeight: 600, fontFamily: "inherit", cursor: "pointer" }}>
+                        <option value="">—</option>
+                        <option value="Red">Red</option>
+                        <option value="Yellow">Yellow</option>
+                        <option value="Green">Green</option>
+                      </select>
+                    );
+                  }},
+                  hot: { label: "Hot?", width: 50, stopPropagation: true, render: j => (
+                    <input type="checkbox" checked={!!j.hot} onClick={e => e.stopPropagation()} onChange={e => persistJob(j.id, { hot: e.target.checked })} style={{ cursor: "pointer" }} />
+                  )},
+                  storeCode: { label: "Store", width: 80, render: j => <span className="t-mono-tag">{j.storeCode || "—"}</span> },
+                  vendor: { label: "Vendor", width: 150, stopPropagation: true, render: j => {
+                    const sub = subcontractors.find(s => s.id === j.subcontractorId);
+                    return sub ? (
+                      <span onClick={e => openPanel(e, j.id, "vendor")}
+                        style={{ cursor: "pointer", padding: "2px 4px", borderRadius: 3, display: "inline-block", maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                        title="Click to change vendor">👤 {sub.name}</span>
+                    ) : (
+                      <button onClick={e => openPanel(e, j.id, "vendor")}
+                        style={{ background: "transparent", border: "1px dashed var(--t-line3)", borderRadius: 6, padding: "3px 8px", fontSize: 11, color: "var(--t-ink2)", cursor: "pointer", fontFamily: "inherit" }}>+ Vendor</button>
+                    );
+                  }},
                   project: { label: "Project #", width: 100, render: j => <span className="t-mono-tag">{j.projectNo || "—"}</span> },
-                  ownersProject: { label: "Owners Proj #", width: 140, render: j => j.ownersProjectNo ? <span className="t-mono-tag">{j.ownersProjectNo}</span> : <span style={{ color: "var(--t-ink3)" }}>—</span> },
-                  scope: { label: "Scope of Work", width: 240, className: "t-td-wrap", style: { fontWeight: 500 }, render: j => j.name },
+                  ownersProject: { label: "Owners Proj #", width: 150, render: j => (
+                    <EditableCell job={j} field="ownersProjectNo" value={j.ownersProjectNo} placeholder="—" mono />
+                  )},
+                  value: { label: "Gross Value", width: 110, render: j => (
+                    <EditableCell job={j} field="contractValue" value={j.contractValue || 0} numeric mono weight={600}
+                      postSave={(patch) => {
+                        const cv = Number(patch.contractValue || 0);
+                        if (cv > 0 && (!j.grossProfit || Number(j.grossProfit) === fmGrossProfit(Number(j.contractValue || 0)))) {
+                          patch.grossProfit = fmGrossProfit(cv);
+                        }
+                      }} />
+                  )},
+                  profit: { label: "Gross Profit", width: 110, render: j => (
+                    <EditableCell job={j} field="grossProfit" value={j.grossProfit || 0} numeric mono weight={600} color="var(--t-dowork)" />
+                  )},
+                  stage: { label: "Next Step", width: 150, stopPropagation: true, render: j => <StageDropdown job={j} /> },
+                  odds: { label: "Odds", width: 70, stopPropagation: true, render: j => (
+                    <select value={String(j.odds || "")} onChange={e => { e.stopPropagation(); persistJob(j.id, { odds: Number(e.target.value) || 0 }); }}
+                      onClick={e => e.stopPropagation()}
+                      style={{ border: "none", background: "transparent", padding: "2px 4px", fontFamily: "var(--t-mono)", fontSize: 12, cursor: "pointer" }}>
+                      <option value="">—</option>
+                      {[0.2, 0.4, 0.5, 0.6, 0.8, 1.0].map(o => <option key={o} value={o}>{Math.round(o*100)}%</option>)}
+                    </select>
+                  )},
+                  prpSent: { label: "PRP Sent", width: 110, render: j => (
+                    <EditableCell job={j} field="prpSent" value={j.prpSent} placeholder="—" mono />
+                  )},
+                  vendorNext: { label: "Vendor Next", width: 140, className: "t-td-wrap", style: { color: "var(--t-ink2)", fontSize: 12 }, render: j => VENDOR_NEXT_STEPS.find(v => v.id === j.vendorNextStep)?.label || j.vendorNextStep || "—" },
+                  schedule: { label: "Schedule", width: 120, render: j => (
+                    <span style={{ fontFamily: "var(--t-mono)", fontSize: 12, color: j.stage === "do_work" && j.startDate ? "var(--t-dowork)" : "var(--t-ink2)" }}>
+                      {j.startDate || "—"}
+                    </span>
+                  )},
+                  vendorInvAmt: { label: "Vendor Inv Amt", width: 110, style: { color: "var(--t-warn)" }, render: j => j.vendorInvoiceAmount > 0 ? <span style={{ fontFamily: "var(--t-mono)", fontWeight: 600 }}>{fmt(j.vendorInvoiceAmount)}</span> : <span style={{ color: "var(--t-ink3)" }}>—</span> },
+                  vendorInvNum: { label: "Vendor Inv #", width: 110, render: j => j.vendorInvoiceNumber ? <span className="t-mono-tag">{j.vendorInvoiceNumber}</span> : <span style={{ color: "var(--t-ink3)" }}>—</span> },
+                  approvedDate: { label: "Approved Date", width: 110, render: j => j.buyoutDate ? <span style={{ fontFamily: "var(--t-mono)", fontSize: 12 }}>{j.buyoutDate}</span> : <span style={{ color: "var(--t-ink3)" }}>—</span> },
+                  scope: { label: "Scope of Work", width: 240, className: "t-td-wrap", render: j => (
+                    <EditableCell job={j} field="scopeOfWork" value={j.scopeOfWork || j.name} placeholder="—" />
+                  )},
+                  pm: { label: "PM", width: 110, render: j => j.pm || <span style={{ color: "var(--t-ink3)" }}>—</span> },
+                  customer: { label: "Customer", width: 140, className: "t-td-wrap", stopPropagation: true, render: j => {
+                    const ct = contacts.find(c => c.id === j.approverContactId);
+                    const ctName = ct ? `${ct.firstName||""} ${ct.lastName||""}`.trim() : "";
+                    return (
+                      <span onClick={e => openPanel(e, j.id, "customer")} style={{ cursor: "pointer", padding: "2px 4px", borderRadius: 3 }} title="Click to change customer">
+                        {ctName ? <>👤 {ctName}</> : <span style={{ color: "var(--t-ink3)", fontStyle: "italic" }}>+ Customer</span>}
+                      </span>
+                    );
+                  }},
+                  category: { label: "Category", width: 90, render: j => <span style={{ fontSize: 11, color: "var(--t-ink2)" }}>{j.category || "FM"}</span> },
                   company: { label: "Company", width: 160, className: "t-td-wrap", render: j => {
                     const co = companies.find(c => c.id === j.companyId);
                     return co ? <span>🏢 {co.name}</span> : <span style={{ color: "var(--t-ink3)" }}>—</span>;
                   }},
-                  customer: { label: "Customer", width: 140, className: "t-td-wrap", render: j => {
-                    const ct = contacts.find(c => c.id === j.approverContactId);
-                    const ctName = ct ? `${ct.firstName||""} ${ct.lastName||""}`.trim() : "";
-                    return ctName ? <span>👤 {ctName}</span> : <span style={{ color: "var(--t-ink3)" }}>—</span>;
-                  }},
-                  site: { label: "Site", width: 200, className: "t-td-wrap", style: { color: "var(--t-ink2)" }, render: j => {
+                  site: { label: "Site", width: 200, className: "t-td-wrap", style: { color: "var(--t-ink2)", fontSize: 11 }, render: j => {
                     const site = sites.find(s => s.id === j.siteId);
                     return site ? `📍 ${site.address || site.storeNumber || "Site"}` : "—";
                   }},
-                  vendor: { label: "Vendor", width: 150, render: j => {
-                    const sub = subcontractors.find(s => s.id === j.subcontractorId);
-                    return sub ? <span className="t-pill t-pill-approval">{sub.name}</span> : <span style={{ color: "var(--t-ink3)" }}>—</span>;
-                  }},
-                  value: { label: "Value", width: 100, style: { fontWeight: 600 }, render: j => j.contractValue ? fmt(j.contractValue) : "—" },
-                  actionDate: { label: "Action Date", width: 130, render: j => {
-                    const st = FM_STAGES.find(s => s.id === j.stage) || FM_STAGES[0];
-                    const actionDate = j[st.actionKey];
-                    const overdue = actionDate && new Date(actionDate) < new Date();
-                    const soon = actionDate && !overdue && new Date(actionDate) <= new Date(Date.now() + 3*86400000);
-                    return (
-                      <span style={{ color: overdue ? "var(--t-danger)" : soon ? "var(--t-warn)" : "var(--t-ink2)", fontWeight: overdue || soon ? 600 : 400 }}>
-                        {actionDate ? (
-                          <>
-                            <div style={{ fontFamily: "var(--t-mono)", fontSize: 12 }}>{actionDate}{overdue ? " ⚠" : soon ? " ◷" : ""}</div>
-                            <div style={{ fontSize: 10, color: "var(--t-ink3)", marginTop: 1, fontWeight: 400 }}>{st.actionLabel}</div>
-                          </>
-                        ) : "—"}
-                      </span>
-                    );
-                  }},
-                  stage: { label: "Stage", width: 150, render: j => {
-                    const st = FM_STAGES.find(s => s.id === j.stage) || FM_STAGES[0];
-                    return <span className={"t-pill " + fmStagePill(j.stage)}>{st.label}</span>;
-                  }},
-                  coordinator: { label: "Coordinator", width: 120, style: { color: "var(--t-ink2)", fontSize: 12 }, render: j => j.coordinator || "—" },
+                  marketArea: { label: "Market Area", width: 110, render: j => j.marketArea || <span style={{ color: "var(--t-ink3)" }}>—</span> },
+                  accountManager: { label: "Account Mgr", width: 130, render: j => j.accountManager || <span style={{ color: "var(--t-ink3)" }}>—</span> },
+                  createdAt: { label: "Created", width: 100, render: j => j.createdAt ? <span style={{ fontFamily: "var(--t-mono)", fontSize: 11, color: "var(--t-ink3)" }}>{String(j.createdAt).slice(0,10)}</span> : <span style={{ color: "var(--t-ink3)" }}>—</span> },
+                  coordinator: { label: "Coordinator", width: 120, render: j => j.coordinator || <span style={{ color: "var(--t-ink3)" }}>—</span> },
                 };
 
-                const order = fmPipelineColOrder;
+                const order = fmPipelineColOrder.filter(id => COLS[id] && fmPipelineColVisible[id]);
                 const dragHandlers = fmPipelineDrag;
 
                 return (
@@ -9509,12 +9681,28 @@ Example:
                           {fmJobsRefreshedAt && <span style={{ marginLeft: 12, fontSize: 10, color: "var(--t-ink3)", textTransform: "none", letterSpacing: 0 }}>refreshed {fmJobsRefreshedAt.toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit" })}</span>}
                         </div>
                       </div>
-                      <div style={{ display: "flex", gap: 10 }}>
+                      <div style={{ display: "flex", gap: 10, position: "relative" }}>
                         <span className="t-srch"><input className="t-input" style={{ width: 220 }} placeholder="Search…" value={search} onChange={e => setSearch(e.target.value)} /></span>
                         <button className="t-btn t-btn-ghost" onClick={refreshFmJobs} disabled={fmJobsRefreshing} title="Refresh from Supabase (pulls vendor updates)">
                           <span style={{ display: "inline-block", transition: "transform 0.3s", transform: fmJobsRefreshing ? "rotate(360deg)" : "none" }}>🔄</span>
                           {fmJobsRefreshing ? "Refreshing…" : "Refresh"}
                         </button>
+                        <button className="t-btn t-btn-ghost" onClick={() => setFmPipelineCustomize(s => !s)}>⚙ Columns</button>
+                        {fmPipelineCustomize && (
+                          <div style={{ position: "absolute", top: "calc(100% + 6px)", right: 0, background: "var(--t-surface)", border: "1px solid var(--t-line3)", borderRadius: 8, padding: 12, boxShadow: "0 12px 32px rgba(0,0,0,0.14)", zIndex: 200, minWidth: 240, maxHeight: 480, overflowY: "auto" }}>
+                            <div className="t-eyebrow" style={{ marginBottom: 8 }}>Visible columns</div>
+                            {fmPipelineColOrder.filter(id => COLS[id]).map(id => (
+                              <label key={id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 4px", fontSize: 12, color: "var(--t-ink)", cursor: "pointer" }}>
+                                <input type="checkbox" checked={!!fmPipelineColVisible[id]} onChange={() => toggleFmPipelineCol(id)} />
+                                {COLS[id].label}
+                              </label>
+                            ))}
+                            <div style={{ borderTop: "1px solid var(--t-line)", marginTop: 8, paddingTop: 8, display: "flex", justifyContent: "space-between", gap: 6 }}>
+                              <button className="t-btn t-btn-ghost t-btn-sm" onClick={() => resetFmPipelineCol()}>Show all</button>
+                              <button className="t-btn t-btn-sm" onClick={() => setFmPipelineCustomize(false)}>Done</button>
+                            </div>
+                          </div>
+                        )}
                         <button className="t-btn" onClick={openAddFm}>+ Add Job</button>
                       </div>
                     </div>
@@ -11387,100 +11575,151 @@ window.addEventListener('message',function(e){
             const totalProfit = filtered.reduce((s,j) => s + (j.grossProfit||0), 0);
 
             // ── Column definitions (id, label, width, render) ──
+            // Builds an ALL-FIELDS column set matching the AR/PBR pipeline spreadsheet.
+            // Editable cells: vendor/customer use popup panels; scope/owners proj are inline text; gross value/profit are inline numbers with auto-defaults.
+            const persistJob = (id, patch) => updateFmJobPersist(id, patch);
+            // Inline-editable text/number cell. `numeric` controls input type & whether to coerce to Number on save.
+            const EditableCell = ({ job, field, value, placeholder, numeric, mono, weight, color, postSave }) => {
+              const [local, setLocal] = React.useState(value == null ? "" : String(value));
+              const [editing, setEditing] = React.useState(false);
+              React.useEffect(() => { setLocal(value == null ? "" : String(value)); }, [value]);
+              const commit = () => {
+                const v = numeric ? (local === "" ? 0 : Number(local) || 0) : local;
+                if (v !== (numeric ? Number(value || 0) : (value || ""))) {
+                  const patch = { [field]: v };
+                  if (postSave) postSave(patch, job);
+                  persistJob(job.id, patch);
+                }
+                setEditing(false);
+              };
+              return editing ? (
+                <input autoFocus type={numeric ? "number" : "text"} value={local}
+                  onChange={e => setLocal(e.target.value)} onBlur={commit}
+                  onKeyDown={e => { if (e.key === "Enter") e.target.blur(); if (e.key === "Escape") { setLocal(value == null ? "" : String(value)); setEditing(false); } }}
+                  onClick={e => e.stopPropagation()}
+                  style={{ width: "100%", padding: "4px 6px", border: "1px solid var(--t-ink3)", borderRadius: 4, fontFamily: "inherit", fontSize: 12, background: "var(--t-surface)", color: "var(--t-ink)", boxSizing: "border-box" }} />
+              ) : (
+                <span onClick={e => { e.stopPropagation(); setEditing(true); }}
+                  style={{ cursor: "text", padding: "2px 4px", borderRadius: 3, fontFamily: mono ? "var(--t-mono)" : "inherit", fontWeight: weight || (mono ? 600 : 400), color: color || "var(--t-ink)", display: "inline-block", minWidth: 30 }}
+                  title="Click to edit">
+                  {value ? (mono && numeric ? fmt(value) : value) : <span style={{ color: "var(--t-ink3)" }}>{placeholder || "—"}</span>}
+                </span>
+              );
+            };
+            // Stage dropdown (inline)
+            const StageDropdown = ({ job }) => (
+              <select value={job.stage} onChange={e => { e.stopPropagation(); persistJob(job.id, { stage: e.target.value }); }}
+                onClick={e => e.stopPropagation()}
+                className={"t-pill " + fmStagePill(job.stage)}
+                style={{ border: "none", appearance: "none", padding: "3px 8px", borderRadius: 999, cursor: "pointer", fontFamily: "inherit", fontWeight: 600, fontSize: 11, minWidth: 110 }}>
+                {FM_STAGES.map(st => <option key={st.id} value={st.id}>{st.label}</option>)}
+              </select>
+            );
+            // Open the small inline-edit panel for complex pickers
+            const openPanel = (e, jobId, field) => {
+              e.stopPropagation();
+              const rect = e.currentTarget.getBoundingClientRect();
+              setFmInlineEdit({ jobId, field, x: rect.left, y: rect.bottom + 4 });
+              setVendorPickerSearch("");
+            };
             const COLS = {
-              store: { label: "Store", width: 80, render: j => <span className="t-mono-tag">{j.storeCode || "—"}</span> },
-              project: { label: "Project #", width: 100, render: j => <span className="t-mono-tag">{j.projectNo || "—"}</span> },
-              ownersProject: { label: "Owners Proj #", width: 140, render: j => j.ownersProjectNo ? <span className="t-mono-tag">{j.ownersProjectNo}</span> : <span style={{ color: "var(--t-ink3)" }}>—</span> },
-              scope: { label: "Scope of Work", width: 240, className: "t-td-wrap", style: { fontWeight: 500 }, render: j => j.name },
-              company: { label: "Company", width: 160, className: "t-td-wrap", render: j => {
-                const co = companies.find(c => c.id === j.companyId);
-                return co ? <span>🏢 {co.name}</span> : <span style={{ color: "var(--t-ink3)" }}>—</span>;
-              }},
-              customer: { label: "Customer", width: 140, className: "t-td-wrap", render: j => {
-                const ct = contacts.find(c => c.id === j.approverContactId);
-                const ctName = ct ? `${ct.firstName||""} ${ct.lastName||""}`.trim() : "";
-                return ctName ? <span>👤 {ctName}</span> : <span style={{ color: "var(--t-ink3)" }}>—</span>;
-              }},
-              site: { label: "Site", width: 200, className: "t-td-wrap", style: { color: "var(--t-ink2)" }, render: j => {
-                const site = sites.find(s => s.id === j.siteId);
-                return site ? `📍 ${site.address || site.storeNumber || "Site"}` : "—";
-              }},
-              vendor: { label: "Vendor", width: 150, stopPropagation: true, style: { position: "relative" }, render: j => {
-                const sub = subcontractors.find(s => s.id === j.subcontractorId);
-                const pickerOpen = showVendorPickerForJob === j.id;
-                const activeSubs = subcontractors.filter(s => !s.archived);
-                const filteredSubs = vendorPickerSearch
-                  ? activeSubs.filter(s =>
-                      (s.name||"").toLowerCase().includes(vendorPickerSearch.toLowerCase()) ||
-                      (s.trade||"").toLowerCase().includes(vendorPickerSearch.toLowerCase()) ||
-                      (s.services||[]).some(sv => (sv||"").toLowerCase().includes(vendorPickerSearch.toLowerCase()))
-                    )
-                  : activeSubs;
+              primary: { label: "Primary", width: 240, className: "t-td-wrap", style: { fontWeight: 500 }, render: j => (
+                <span><span style={{ color: "var(--t-ink3)", fontFamily: "var(--t-mono)", fontSize: 11 }}>{j.projectNo || "—"}</span>{" "}{j.name || "(no name)"}</span>
+              )},
+              priority: { label: "Priority", width: 90, stopPropagation: true, render: j => {
+                const colors = { Red: { bg: "#FEE2E2", fg: "#B91C1C" }, Yellow: { bg: "#FEF3C7", fg: "#92400E" }, Green: { bg: "#D1FAE5", fg: "#065F46" } };
                 return (
-                  <>
-                    {pickerOpen && (
-                      <div style={{ position: "absolute", top: "calc(100% - 4px)", left: 8, zIndex: 50, width: 300, background: "var(--t-surface)", border: "1px solid var(--t-line3)", borderRadius: "var(--t-rlg)", boxShadow: "0 12px 32px rgba(0,0,0,0.14)", padding: 12 }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                          <div className="t-eyebrow">Assign Vendor</div>
-                          <button onClick={() => { setShowVendorPickerForJob(null); setVendorPickerSearch(""); }}
-                            style={{ background: "transparent", border: "none", color: "var(--t-ink3)", cursor: "pointer", fontSize: 14, padding: 0 }}>✕</button>
-                        </div>
-                        <input autoFocus className="t-input" style={{ fontSize: 12, marginBottom: 8 }} placeholder="Search name, trade, service…"
-                          value={vendorPickerSearch} onChange={e => setVendorPickerSearch(e.target.value)} />
-                        <div style={{ maxHeight: 260, overflowY: "auto", display: "flex", flexDirection: "column", gap: 3 }}>
-                          {filteredSubs.length === 0 && (
-                            <div className="t-empty" style={{ padding: 16, fontSize: 12 }}>No vendors match</div>
-                          )}
-                          {filteredSubs.slice(0, 50).map(s => (
-                            <div key={s.id} onClick={() => { updateFmJobPersist(j.id, { subcontractorId: s.id }); setShowVendorPickerForJob(null); setVendorPickerSearch(""); }}
-                              style={{ padding: "8px 10px", borderRadius: 6, cursor: "pointer", background: j.subcontractorId === s.id ? "var(--t-paper)" : "transparent", border: "1px solid " + (j.subcontractorId === s.id ? "var(--t-line3)" : "transparent") }}
-                              onMouseEnter={e => { if (j.subcontractorId !== s.id) e.currentTarget.style.background = "var(--t-paper)"; }}
-                              onMouseLeave={e => { if (j.subcontractorId !== s.id) e.currentTarget.style.background = "transparent"; }}>
-                              <div style={{ fontSize: 13, fontWeight: 600 }}>{s.name}</div>
-                              {(s.trade || (s.services||[]).length > 0) && (
-                                <div style={{ fontSize: 11, color: "var(--t-ink3)", marginTop: 2 }}>
-                                  {s.trade}{s.trade && (s.services||[]).length > 0 ? " · " : ""}{(s.services||[]).slice(0,3).join(", ")}
-                                </div>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                        {j.subcontractorId && (
-                          <button onClick={() => { updateFmJobPersist(j.id, { subcontractorId: "" }); setShowVendorPickerForJob(null); setVendorPickerSearch(""); }}
-                            className="t-btn t-btn-ghost t-btn-danger t-btn-sm" style={{ width: "100%", marginTop: 8, justifyContent: "center" }}>
-                            Clear vendor
-                          </button>
-                        )}
-                      </div>
-                    )}
-                    {sub ? (
-                      <button onClick={() => { setShowVendorPickerForJob(j.id); setVendorPickerSearch(""); }}
-                        className="t-pill t-pill-approval" style={{ border: "none", cursor: "pointer", fontFamily: "inherit" }}>
-                        {sub.name}
-                      </button>
-                    ) : (
-                      <button onClick={() => { setShowVendorPickerForJob(j.id); setVendorPickerSearch(""); }}
-                        style={{ background: "transparent", color: "var(--t-ink2)", padding: "4px 10px", borderRadius: 6, fontSize: 11, whiteSpace: "nowrap", border: "1px dashed var(--t-line3)", cursor: "pointer", fontFamily: "inherit" }}>
-                        + Add Vendor
-                      </button>
-                    )}
-                  </>
+                  <select value={j.priority || ""} onChange={e => { e.stopPropagation(); persistJob(j.id, { priority: e.target.value }); }}
+                    onClick={e => e.stopPropagation()}
+                    style={{ ...(colors[j.priority] ? { background: colors[j.priority].bg, color: colors[j.priority].fg } : { background: "transparent", color: "var(--t-ink3)" }), border: "none", padding: "3px 8px", borderRadius: 12, fontSize: 11, fontWeight: 600, fontFamily: "inherit", cursor: "pointer" }}>
+                    <option value="">—</option>
+                    <option value="Red">Red</option>
+                    <option value="Yellow">Yellow</option>
+                    <option value="Green">Green</option>
+                  </select>
                 );
               }},
-              value: { label: "Value", width: 110, style: { fontWeight: 600 }, render: j => fmt(j.contractValue) },
-              profit: { label: "Profit", width: 110, style: { fontWeight: 600, color: "var(--t-dowork)" }, render: j => fmt(j.grossProfit) },
+              hot: { label: "Hot?", width: 50, stopPropagation: true, render: j => (
+                <input type="checkbox" checked={!!j.hot} onClick={e => e.stopPropagation()} onChange={e => persistJob(j.id, { hot: e.target.checked })} style={{ cursor: "pointer" }} />
+              )},
+              storeCode: { label: "Store", width: 80, render: j => <span className="t-mono-tag">{j.storeCode || "—"}</span> },
+              vendor: { label: "Vendor", width: 150, stopPropagation: true, render: j => {
+                const sub = subcontractors.find(s => s.id === j.subcontractorId);
+                return sub ? (
+                  <span onClick={e => openPanel(e, j.id, "vendor")}
+                    style={{ cursor: "pointer", padding: "2px 4px", borderRadius: 3, display: "inline-block", maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                    title="Click to change vendor">👤 {sub.name}</span>
+                ) : (
+                  <button onClick={e => openPanel(e, j.id, "vendor")}
+                    style={{ background: "transparent", border: "1px dashed var(--t-line3)", borderRadius: 6, padding: "3px 8px", fontSize: 11, color: "var(--t-ink2)", cursor: "pointer", fontFamily: "inherit" }}>+ Vendor</button>
+                );
+              }},
+              project: { label: "Project #", width: 100, render: j => <span className="t-mono-tag">{j.projectNo || "—"}</span> },
+              ownersProject: { label: "Owners Proj #", width: 150, render: j => (
+                <EditableCell job={j} field="ownersProjectNo" value={j.ownersProjectNo} placeholder="—" mono />
+              )},
+              value: { label: "Gross Value", width: 110, render: j => (
+                <EditableCell job={j} field="contractValue" value={j.contractValue || 0} numeric mono weight={600}
+                  postSave={(patch) => {
+                    // When gross value changes, auto-default gross profit IF it's still at 0 OR matches the old formula
+                    const cv = Number(patch.contractValue || 0);
+                    if (cv > 0 && (!j.grossProfit || Number(j.grossProfit) === fmGrossProfit(Number(j.contractValue || 0)))) {
+                      patch.grossProfit = fmGrossProfit(cv);
+                    }
+                  }} />
+              )},
+              profit: { label: "Gross Profit", width: 110, render: j => (
+                <EditableCell job={j} field="grossProfit" value={j.grossProfit || 0} numeric mono weight={600} color="var(--t-dowork)" />
+              )},
+              stage: { label: "Next Step", width: 150, stopPropagation: true, render: j => <StageDropdown job={j} /> },
+              odds: { label: "Odds", width: 70, stopPropagation: true, render: j => (
+                <select value={String(j.odds || "")} onChange={e => { e.stopPropagation(); persistJob(j.id, { odds: Number(e.target.value) || 0 }); }}
+                  onClick={e => e.stopPropagation()}
+                  style={{ border: "none", background: "transparent", padding: "2px 4px", fontFamily: "var(--t-mono)", fontSize: 12, cursor: "pointer" }}>
+                  <option value="">—</option>
+                  {[0.2, 0.4, 0.5, 0.6, 0.8, 1.0].map(o => <option key={o} value={o}>{Math.round(o*100)}%</option>)}
+                </select>
+              )},
+              prpSent: { label: "PRP Sent", width: 110, render: j => (
+                <EditableCell job={j} field="prpSent" value={j.prpSent} placeholder="—" mono />
+              )},
+              vendorNext: { label: "Vendor Next", width: 140, className: "t-td-wrap", style: { color: "var(--t-ink2)", fontSize: 12 }, render: j => VENDOR_NEXT_STEPS.find(v => v.id === j.vendorNextStep)?.label || j.vendorNextStep || "—" },
               schedule: { label: "Schedule", width: 120, render: j => (
                 <span style={{ fontFamily: "var(--t-mono)", fontSize: 12, color: j.stage === "do_work" && j.startDate ? "var(--t-dowork)" : "var(--t-ink2)", fontWeight: j.stage === "do_work" && j.startDate ? 600 : 400 }}>
                   {j.startDate ? (<>{j.startDate}{j.stage === "do_work" && <span style={{ marginLeft: 4, fontSize: 10 }}>📅</span>}</>) : "—"}
                 </span>
               )},
-              stage: { label: "Stage", width: 140, render: j => {
-                const st = FM_STAGES.find(s => s.id === j.stage) || FM_STAGES[0];
-                return <span className={"t-pill " + fmStagePill(j.stage)}>{st.label}</span>;
+              vendorInvAmt: { label: "Vendor Inv Amt", width: 110, style: { color: "var(--t-warn)" }, render: j => j.vendorInvoiceAmount > 0 ? <span style={{ fontFamily: "var(--t-mono)", fontWeight: 600 }}>{fmt(j.vendorInvoiceAmount)}</span> : <span style={{ color: "var(--t-ink3)" }}>—</span> },
+              vendorInvNum: { label: "Vendor Inv #", width: 110, render: j => j.vendorInvoiceNumber ? <span className="t-mono-tag">{j.vendorInvoiceNumber}</span> : <span style={{ color: "var(--t-ink3)" }}>—</span> },
+              approvedDate: { label: "Approved Date", width: 110, render: j => j.buyoutDate ? <span style={{ fontFamily: "var(--t-mono)", fontSize: 12 }}>{j.buyoutDate}</span> : <span style={{ color: "var(--t-ink3)" }}>—</span> },
+              scope: { label: "Scope of Work", width: 240, className: "t-td-wrap", render: j => (
+                <EditableCell job={j} field="scopeOfWork" value={j.scopeOfWork || j.name} placeholder="—" />
+              )},
+              pm: { label: "PM", width: 110, render: j => j.pm || <span style={{ color: "var(--t-ink3)" }}>—</span> },
+              customer: { label: "Customer", width: 140, className: "t-td-wrap", stopPropagation: true, render: j => {
+                const ct = contacts.find(c => c.id === j.approverContactId);
+                const ctName = ct ? `${ct.firstName||""} ${ct.lastName||""}`.trim() : "";
+                return (
+                  <span onClick={e => openPanel(e, j.id, "customer")} style={{ cursor: "pointer", padding: "2px 4px", borderRadius: 3 }} title="Click to change customer">
+                    {ctName ? <>👤 {ctName}</> : <span style={{ color: "var(--t-ink3)", fontStyle: "italic" }}>+ Customer</span>}
+                  </span>
+                );
               }},
-              vendorNext: { label: "Vendor Next", width: 140, className: "t-td-wrap", style: { color: "var(--t-ink2)", fontSize: 12, maxWidth: 140 }, render: j => VENDOR_NEXT_STEPS.find(v => v.id === j.vendorNextStep)?.label || j.vendorNextStep || "—" },
+              category: { label: "Category", width: 90, render: j => <span style={{ fontSize: 11, color: "var(--t-ink2)" }}>{j.category || "FM"}</span> },
+              company: { label: "Company", width: 160, className: "t-td-wrap", render: j => {
+                const co = companies.find(c => c.id === j.companyId);
+                return co ? <span>🏢 {co.name}</span> : <span style={{ color: "var(--t-ink3)" }}>—</span>;
+              }},
+              site: { label: "Site", width: 200, className: "t-td-wrap", style: { color: "var(--t-ink2)", fontSize: 11 }, render: j => {
+                const site = sites.find(s => s.id === j.siteId);
+                return site ? `📍 ${site.address || site.storeNumber || "Site"}` : "—";
+              }},
+              marketArea: { label: "Market Area", width: 110, render: j => j.marketArea || <span style={{ color: "var(--t-ink3)" }}>—</span> },
+              accountManager: { label: "Account Mgr", width: 130, render: j => j.accountManager || <span style={{ color: "var(--t-ink3)" }}>—</span> },
+              createdAt: { label: "Created", width: 100, render: j => j.createdAt ? <span style={{ fontFamily: "var(--t-mono)", fontSize: 11, color: "var(--t-ink3)" }}>{String(j.createdAt).slice(0,10)}</span> : <span style={{ color: "var(--t-ink3)" }}>—</span> },
+              coordinator: { label: "Coordinator", width: 120, render: j => j.coordinator || <span style={{ color: "var(--t-ink3)" }}>—</span> },
             };
-            const order = fmActiveJobsColOrder;
+            const order = fmActiveJobsColOrder.filter(id => COLS[id] && fmActiveJobsColVisible[id]);
             const dragHandlers = fmActiveJobsDrag;
 
             return (
@@ -11497,12 +11736,28 @@ window.addEventListener('message',function(e){
                       {fmJobsRefreshedAt && <span style={{ marginLeft: 12, fontSize: 10, color: "var(--t-ink3)", textTransform: "none", letterSpacing: 0 }}>refreshed {fmJobsRefreshedAt.toLocaleTimeString([], { hour: "numeric", minute: "2-digit", second: "2-digit" })}</span>}
                     </div>
                   </div>
-                  <div style={{ display: "flex", gap: 10 }}>
+                  <div style={{ display: "flex", gap: 10, position: "relative" }}>
                     <span className="t-srch"><input className="t-input" style={{ width: 220 }} placeholder="Search…" value={fmSearch} onChange={e => setFmSearch(e.target.value)} /></span>
                     <button className="t-btn t-btn-ghost" onClick={refreshFmJobs} disabled={fmJobsRefreshing} title="Refresh from Supabase (pulls vendor updates)">
                       <span style={{ display: "inline-block", transition: "transform 0.3s", transform: fmJobsRefreshing ? "rotate(360deg)" : "none" }}>🔄</span>
                       {fmJobsRefreshing ? "Refreshing…" : "Refresh"}
                     </button>
+                    <button className="t-btn t-btn-ghost" onClick={() => setFmActiveJobsCustomize(s => !s)}>⚙ Columns</button>
+                    {fmActiveJobsCustomize && (
+                      <div style={{ position: "absolute", top: "calc(100% + 6px)", right: 0, background: "var(--t-surface)", border: "1px solid var(--t-line3)", borderRadius: 8, padding: 12, boxShadow: "0 12px 32px rgba(0,0,0,0.14)", zIndex: 200, minWidth: 240, maxHeight: 480, overflowY: "auto" }}>
+                        <div className="t-eyebrow" style={{ marginBottom: 8 }}>Visible columns</div>
+                        {fmActiveJobsColOrder.filter(id => COLS[id]).map(id => (
+                          <label key={id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 4px", fontSize: 12, color: "var(--t-ink)", cursor: "pointer" }}>
+                            <input type="checkbox" checked={!!fmActiveJobsColVisible[id]} onChange={() => toggleFmActiveJobsCol(id)} />
+                            {COLS[id].label}
+                          </label>
+                        ))}
+                        <div style={{ borderTop: "1px solid var(--t-line)", marginTop: 8, paddingTop: 8, display: "flex", justifyContent: "space-between", gap: 6 }}>
+                          <button className="t-btn t-btn-ghost t-btn-sm" onClick={() => resetFmActiveJobsCol()}>Show all</button>
+                          <button className="t-btn t-btn-sm" onClick={() => setFmActiveJobsCustomize(false)}>Done</button>
+                        </div>
+                      </div>
+                    )}
                     <button className="t-btn" onClick={openAddFm}>+ Add Job</button>
                   </div>
                 </div>
@@ -20541,6 +20796,128 @@ window.addEventListener('message',function(e){
               </div>
             </div>
           </div>
+        );
+      })()}
+
+      {/* ── Global inline-edit popup (for vendor/customer pickers from FM tables) ── */}
+      {fmInlineEdit && (() => {
+        const job = fmJobs.find(j => j.id === fmInlineEdit.jobId);
+        if (!job) return null;
+        const close = () => setFmInlineEdit(null);
+        return (
+          <>
+            {/* backdrop */}
+            <div onClick={close} style={{ position: "fixed", inset: 0, background: "transparent", zIndex: 998 }} />
+            <div style={{ position: "fixed", top: Math.min(fmInlineEdit.y, window.innerHeight - 360), left: Math.min(fmInlineEdit.x, window.innerWidth - 320), background: "var(--t-surface)", border: "1px solid var(--t-line3)", borderRadius: "var(--t-rlg)", boxShadow: "0 20px 48px rgba(0,0,0,0.18)", padding: 12, width: 320, zIndex: 999 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                <div className="t-eyebrow">{fmInlineEdit.field === "vendor" ? "Assign Vendor" : "Assign Customer"}</div>
+                <button onClick={close} style={{ background: "transparent", border: "none", color: "var(--t-ink3)", cursor: "pointer", fontSize: 14, padding: 0 }}>✕</button>
+              </div>
+
+              {fmInlineEdit.field === "vendor" && (() => {
+                const search = vendorPickerSearch || "";
+                const q = search.toLowerCase();
+                const activeSubs = subcontractors.filter(s => !s.archived);
+                const filteredSubs = q
+                  ? activeSubs.filter(s => (s.name||"").toLowerCase().includes(q) || (s.trade||"").toLowerCase().includes(q) || (s.contact_name||"").toLowerCase().includes(q))
+                  : activeSubs;
+                return (
+                  <>
+                    <input autoFocus className="t-input" style={{ fontSize: 12, marginBottom: 8 }} placeholder="Search vendor…"
+                      value={search} onChange={e => setVendorPickerSearch(e.target.value)} />
+                    <div style={{ maxHeight: 260, overflowY: "auto", display: "flex", flexDirection: "column", gap: 3 }}>
+                      {filteredSubs.length === 0 && <div className="t-empty" style={{ padding: 14, fontSize: 12 }}>No vendors match</div>}
+                      {filteredSubs.slice(0, 50).map(s => (
+                        <div key={s.id} onClick={async () => {
+                            const isChange = !!job.subcontractorId && job.subcontractorId !== s.id;
+                            if (isChange) {
+                              const oldSub = subcontractors.find(x => x.id === job.subcontractorId);
+                              if (!window.confirm(`Replace vendor?\n\nCurrent: ${oldSub?.name || "(unknown)"}\nNew: ${s.name}`)) return;
+                            }
+                            updateFmJobPersist(job.id, { subcontractorId: s.id });
+                            // Auto-tag fm service if missing
+                            if (!(s.services||[]).includes("fm")) {
+                              const updatedSub = { ...s, services: [...(s.services||[]), "fm"] };
+                              setSubcontractors(prev => prev.map(x => x.id === s.id ? updatedSub : x));
+                              try { await supa.from("subcontractors").update(subToDB(updatedSub)).eq("id", s.id); } catch(_) {}
+                            }
+                            close(); setVendorPickerSearch("");
+                          }}
+                          style={{ padding: "8px 10px", borderRadius: 6, cursor: "pointer", background: job.subcontractorId === s.id ? "var(--t-paper)" : "transparent", border: "1px solid " + (job.subcontractorId === s.id ? "var(--t-line3)" : "transparent") }}
+                          onMouseEnter={e => { if (job.subcontractorId !== s.id) e.currentTarget.style.background = "var(--t-paper)"; }}
+                          onMouseLeave={e => { if (job.subcontractorId !== s.id) e.currentTarget.style.background = "transparent"; }}>
+                          <div style={{ fontSize: 13, fontWeight: 600, color: "var(--t-ink)" }}>{s.name}</div>
+                          {(s.trade || s.contact_name) && (
+                            <div style={{ fontSize: 11, color: "var(--t-ink3)", marginTop: 2 }}>{s.trade}{s.trade && s.contact_name ? " · " : ""}{s.contact_name || ""}</div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                    {job.subcontractorId && (
+                      <button onClick={() => { updateFmJobPersist(job.id, { subcontractorId: "" }); close(); setVendorPickerSearch(""); }}
+                        className="t-btn t-btn-ghost t-btn-danger t-btn-sm" style={{ width: "100%", marginTop: 8, justifyContent: "center" }}>
+                        Clear vendor
+                      </button>
+                    )}
+                  </>
+                );
+              })()}
+
+              {fmInlineEdit.field === "customer" && (() => {
+                // Customers are contacts belonging to the job's company
+                const companyContacts = job.companyId ? contacts.filter(c => c.companyId === job.companyId) : [];
+                const search = vendorPickerSearch || "";
+                const q = search.toLowerCase();
+                const filtered = q
+                  ? companyContacts.filter(c => `${c.firstName||""} ${c.lastName||""} ${c.title||""}`.toLowerCase().includes(q))
+                  : companyContacts;
+                if (!job.companyId) {
+                  return <div className="t-empty" style={{ padding: 14, fontSize: 12 }}>This job has no company yet. Open the job to set company first.</div>;
+                }
+                return (
+                  <>
+                    <input autoFocus className="t-input" style={{ fontSize: 12, marginBottom: 8 }} placeholder="Search customer…"
+                      value={search} onChange={e => setVendorPickerSearch(e.target.value)} />
+                    <div style={{ maxHeight: 260, overflowY: "auto", display: "flex", flexDirection: "column", gap: 3 }}>
+                      {filtered.length === 0 && (
+                        <div className="t-empty" style={{ padding: 14, fontSize: 12 }}>No contacts at this company yet</div>
+                      )}
+                      {filtered.slice(0, 50).map(c => (
+                        <div key={c.id} onClick={() => { updateFmJobPersist(job.id, { approverContactId: c.id }); close(); setVendorPickerSearch(""); }}
+                          style={{ padding: "8px 10px", borderRadius: 6, cursor: "pointer", background: job.approverContactId === c.id ? "var(--t-paper)" : "transparent", border: "1px solid " + (job.approverContactId === c.id ? "var(--t-line3)" : "transparent") }}
+                          onMouseEnter={e => { if (job.approverContactId !== c.id) e.currentTarget.style.background = "var(--t-paper)"; }}
+                          onMouseLeave={e => { if (job.approverContactId !== c.id) e.currentTarget.style.background = "transparent"; }}>
+                          <div style={{ fontSize: 13, fontWeight: 600, color: "var(--t-ink)" }}>{[c.firstName, c.lastName].filter(Boolean).join(" ") || "(no name)"}</div>
+                          {c.title && <div style={{ fontSize: 11, color: "var(--t-ink3)", marginTop: 2 }}>{c.title}</div>}
+                        </div>
+                      ))}
+                    </div>
+                    <button onClick={() => {
+                        const fn = window.prompt("Customer first name:"); if (!fn) return;
+                        const ln = window.prompt("Last name:") || "";
+                        const title = window.prompt("Title (optional):") || "";
+                        const email = window.prompt("Email (optional):") || "";
+                        const phone = window.prompt("Phone (optional):") || "";
+                        const newC = { id: "c" + Date.now(), companyId: job.companyId, firstName: fn.trim(), lastName: ln.trim(), title: title.trim(), email: email.trim(), phone: phone.trim() };
+                        setContacts(prev => [...prev, newC]);
+                        try { supa.from("contacts").insert(contactToDB(newC)); } catch(e) {}
+                        updateFmJobPersist(job.id, { approverContactId: newC.id });
+                        close(); setVendorPickerSearch("");
+                      }}
+                      className="t-btn t-btn-sm" style={{ width: "100%", marginTop: 8, justifyContent: "center" }}>
+                      + Add new customer
+                    </button>
+                    {job.approverContactId && (
+                      <button onClick={() => { updateFmJobPersist(job.id, { approverContactId: "" }); close(); setVendorPickerSearch(""); }}
+                        className="t-btn t-btn-ghost t-btn-danger t-btn-sm" style={{ width: "100%", marginTop: 6, justifyContent: "center" }}>
+                        Clear customer
+                      </button>
+                    )}
+                  </>
+                );
+              })()}
+            </div>
+          </>
         );
       })()}
 
