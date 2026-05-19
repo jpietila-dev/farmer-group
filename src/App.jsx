@@ -5993,11 +5993,65 @@ Return ONLY valid JSON, no markdown, no extra text:
             const totalOutstanding = invoices.filter(i=>i.status==="sent"||i.status==="overdue").reduce((s,i)=>s+(i.amount||0),0);
             const STATUS_COLOR = {draft:"#9BA3BF",sent:"#60A5FA",paid:"#4ADE80",overdue:"#F87171",void:"#CBD1E8"};
             const saveInvoice = async (fields) => {
-              const inv = {...fields,id:Date.now(),createdAt:new Date().toISOString().slice(0,10)};
-              setInvoices(prev=>[inv,...prev]);
+              const inv = {
+                ...fields,
+                id: Date.now(),
+                createdAt: new Date().toISOString().slice(0,10),
+                status: fields.status || "sent",
+                category: fields.category || "FM",
+                closed: false,
+                closedAt: "",
+                grossValue: Number(fields.grossValue || fields.amount || 0),
+                grossProfit: Number(fields.grossProfit || 0),
+                vendorCost: Number(fields.vendorCost || 0),
+                arQboId: fields.arQboId || "",
+              };
+              setInvoices(prev => [inv, ...prev]);
               setShowInvForm(false);
               setInvForm({job:"",client:"",amount:"",invoiceDate:"",dueDate:"",paidDate:"",status:"sent",notes:"",invoiceNum:"",jobId:"",src:""});
-              await supa.from("accounting_invoices").insert({id:String(inv.id),invoice_num:inv.invoiceNum||"",job:inv.job,client:inv.client||"",amount:inv.amount||0,invoice_date:inv.invoiceDate||null,due_date:inv.dueDate||null,paid_date:inv.paidDate||null,status:inv.status||"sent",notes:inv.notes||"",created_at:inv.createdAt,job_id:inv.jobId||null,src:inv.src||""});
+              const payload = {
+                id: String(inv.id),
+                invoice_num: inv.invoiceNum || "",
+                job: inv.job,
+                client: inv.client || "",
+                amount: inv.amount || 0,
+                invoice_date: inv.invoiceDate || null,
+                due_date: inv.dueDate || null,
+                paid_date: inv.paidDate || null,
+                status: inv.status,
+                notes: inv.notes || "",
+                created_at: inv.createdAt,
+                job_id: inv.jobId || null,
+                src: inv.src || "",
+                gross_value: inv.grossValue,
+                gross_profit: inv.grossProfit,
+                vendor_cost: inv.vendorCost,
+                category: inv.category,
+                ar_qbo_id: inv.arQboId,
+                closed: false,
+                closed_at: null,
+                project_no: inv.projectNo || "",
+                store_code: inv.storeCode || "",
+                owners_project_no: inv.ownersProjectNo || "",
+                vendor_invoice_number: inv.vendorInvoiceNumber || "",
+                vendor_name: inv.vendorName || "",
+              };
+              // Try full insert first; fall back to legacy columns if migration not run
+              let res = await supa.from("accounting_invoices").insert(payload);
+              if (res && res.error && (res.error?.message || "").toLowerCase().includes("could not find") && (res.error?.message || "").toLowerCase().includes("column")) {
+                console.warn("[saveInvoice] retrying with legacy columns — newer migration likely not run");
+                const legacy = { id: payload.id, invoice_num: payload.invoice_num, job: payload.job, client: payload.client, amount: payload.amount, due_date: payload.due_date, status: payload.status, notes: payload.notes, created_at: payload.created_at };
+                res = await supa.from("accounting_invoices").insert(legacy);
+                if (res && res.error) {
+                  console.error("[saveInvoice] insert failed even with legacy columns", res.error);
+                  alert("⚠️ Couldn't save invoice\n\n" + (res.error?.message || "") + "\n\nRun VENDOR_PORTAL_MIGRATION.md in Supabase.");
+                  setInvoices(prev => prev.filter(i => i.id !== inv.id));
+                }
+              } else if (res && res.error) {
+                console.error("[saveInvoice] insert failed", res.error);
+                alert("⚠️ Couldn't save invoice\n\n" + (res.error?.message || ""));
+                setInvoices(prev => prev.filter(i => i.id !== inv.id));
+              }
             };
             const updateStatus = async (id,status) => {
               const patch = { status };
@@ -6093,7 +6147,41 @@ Return ONLY valid JSON, no markdown, no extra text:
                               <div style={{fontSize:11,color:"#9BA3BF"}}>{j.client||""}{j.contractValue?" - $"+Number(j.contractValue).toLocaleString():""}</div>
                             </div>
                           </div>
-                          <button onClick={()=>{setInvForm({job:j.name,client:j.client||"",amount:j.contractValue||"",dueDate:"",status:"sent",notes:"",invoiceNum:"",jobId:String(j.id),src:j._src});setShowInvForm(true);}}
+                          <button onClick={() => {
+                            // Pre-fill the form with everything we know from the FM job
+                            const co = companies.find(c => c.id === j.companyId);
+                            const ct = contacts.find(c => c.id === j.approverContactId);
+                            const sb = subcontractors.find(s => s.id === j.subcontractorId);
+                            const customerName = ct ? [ct.firstName, ct.lastName].filter(Boolean).join(" ") : (co ? co.name : "");
+                            const today = new Date().toISOString().slice(0, 10);
+                            const due = new Date(); due.setDate(due.getDate() + 30);
+                            const dueStr = due.toISOString().slice(0, 10);
+                            // Auto invoice # — owners project# if present, else AR-{store}-{year}-{rand}
+                            const invNum = j.ownersProjectNo || ("AR-" + (j.storeCode || "") + "-" + new Date().getFullYear() + "-" + String(Date.now()).slice(-5));
+                            setInvForm({
+                              job: j.name,
+                              client: customerName,
+                              amount: j.contractValue || "",
+                              invoiceDate: today,
+                              dueDate: dueStr,
+                              paidDate: "",
+                              status: "sent",
+                              notes: j.scopeOfWork || "",
+                              invoiceNum: invNum,
+                              jobId: String(j.id),
+                              src: j._src,
+                              category: j._src === "FM" ? "FM" : (j.category || "FM"),
+                              grossValue: j.contractValue || 0,
+                              grossProfit: j.grossProfit || 0,
+                              vendorCost: j.vendorInvoiceAmount || 0,
+                              projectNo: j.projectNo || "",
+                              storeCode: j.storeCode || "",
+                              ownersProjectNo: j.ownersProjectNo || "",
+                              vendorInvoiceNumber: j.vendorInvoiceNumber || "",
+                              vendorName: sb ? sb.name : "",
+                            });
+                            setShowInvForm(true);
+                          }}
                             style={{padding:"6px 14px",background:"#059669",border:"none",color:"#fff",borderRadius:6,cursor:"pointer",fontFamily:"inherit",fontSize:11,fontWeight:700}}>Create Invoice</button>
                         </div>
                       ))}
@@ -6290,25 +6378,44 @@ Return ONLY valid JSON, no markdown, no extra text:
                 {showInvForm && (
                   <div className="modal-bg" onClick={e=>e.target===e.currentTarget&&setShowInvForm(false)}>
                     <div className="modal" style={{width:520}}>
-                      <div style={{fontSize:16,fontWeight:700,color:"#1A2240",marginBottom:18}}>{invForm.jobId?"Invoice for "+invForm.job:"New Invoice"}</div>
+                      <div style={{fontSize:16,fontWeight:700,color:"#1A2240",marginBottom:6}}>{invForm.jobId?"Invoice for "+invForm.job:"New Invoice"}</div>
+                      {invForm.jobId && invForm.client && (
+                        <div style={{fontSize:11,color:"#6B7694",marginBottom:18}}>Customer: <strong style={{color:"#1A2240"}}>{invForm.client}</strong></div>
+                      )}
+                      {!invForm.jobId && <div style={{marginBottom:18}}></div>}
                       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-                        <div><label className="fi-label">Invoice # *</label><input className="fi" placeholder="INV-001" value={invForm.invoiceNum} onChange={e=>setInvForm(f=>({...f,invoiceNum:e.target.value}))}/></div>
-                        <div><label className="fi-label">Status</label>
-                          <select className="fi" value={invForm.status} onChange={e=>setInvForm(f=>({...f,status:e.target.value}))}>
-                            {["draft","sent","paid","overdue"].map(s=><option key={s} value={s}>{s.charAt(0).toUpperCase()+s.slice(1)}</option>)}
-                          </select>
+                        <div style={{gridColumn:"1/-1"}}>
+                          <label className="fi-label">Invoice Number *</label>
+                          <input className="fi" placeholder="INV-001" value={invForm.invoiceNum} onChange={e=>setInvForm(f=>({...f,invoiceNum:e.target.value}))}/>
                         </div>
-                        <div style={{gridColumn:"1/-1"}}><label className="fi-label">Job</label><input className="fi" value={invForm.job} onChange={e=>setInvForm(f=>({...f,job:e.target.value}))}/></div>
-                        <div style={{gridColumn:"1/-1"}}><label className="fi-label">Client</label><input className="fi" placeholder="Client name" value={invForm.client} onChange={e=>setInvForm(f=>({...f,client:e.target.value}))}/></div>
-                        <div><label className="fi-label">Amount ($) *</label><input className="fi" type="number" placeholder="0.00" value={invForm.amount} onChange={e=>setInvForm(f=>({...f,amount:e.target.value}))}/></div>
-                        <div><label className="fi-label">Invoice Date</label><input className="fi" type="date" value={invForm.invoiceDate||""} onChange={e=>setInvForm(f=>({...f,invoiceDate:e.target.value}))}/></div>
-                        <div><label className="fi-label">Due Date</label><input className="fi" type="date" value={invForm.dueDate||""} onChange={e=>setInvForm(f=>({...f,dueDate:e.target.value}))}/></div>
-                        <div><label className="fi-label">Paid Date {invForm.status!=="paid"&&<span style={{fontSize:9,color:"#8892B8"}}>(set when paid)</span>}</label><input className="fi" type="date" value={invForm.paidDate||""} onChange={e=>setInvForm(f=>({...f,paidDate:e.target.value}))}/></div>
-                        <div style={{gridColumn:"1/-1"}}><label className="fi-label">Notes</label><textarea className="fi" rows={2} value={invForm.notes} onChange={e=>setInvForm(f=>({...f,notes:e.target.value}))}/></div>
+                        {!invForm.jobId && (
+                          <>
+                            <div style={{gridColumn:"1/-1"}}><label className="fi-label">Job</label><input className="fi" value={invForm.job} onChange={e=>setInvForm(f=>({...f,job:e.target.value}))}/></div>
+                            <div style={{gridColumn:"1/-1"}}><label className="fi-label">Customer</label><input className="fi" placeholder="Customer name" value={invForm.client} onChange={e=>setInvForm(f=>({...f,client:e.target.value}))}/></div>
+                          </>
+                        )}
+                        <div>
+                          <label className="fi-label">Amount ($) *{invForm.grossValue && Number(invForm.amount) === Number(invForm.grossValue) ? <span style={{fontSize:9,color:"#059669",marginLeft:4}}>● from FM</span> : null}</label>
+                          <input className="fi" type="number" placeholder="0.00" value={invForm.amount} onChange={e=>setInvForm(f=>({...f,amount:e.target.value}))}/>
+                        </div>
+                        <div></div>
+                        <div>
+                          <label className="fi-label">Invoice Date</label>
+                          <input className="fi" type="date" value={invForm.invoiceDate||""} onChange={e=>setInvForm(f=>({...f,invoiceDate:e.target.value}))}/>
+                        </div>
+                        <div>
+                          <label className="fi-label">Due Date <span style={{fontSize:9,color:"#8892B8"}}>(default net 30)</span></label>
+                          <input className="fi" type="date" value={invForm.dueDate||""} onChange={e=>setInvForm(f=>({...f,dueDate:e.target.value}))}/>
+                        </div>
+                        <div style={{gridColumn:"1/-1"}}><label className="fi-label">Notes <span style={{fontSize:9,color:"#8892B8"}}>(optional)</span></label><textarea className="fi" rows={2} value={invForm.notes} onChange={e=>setInvForm(f=>({...f,notes:e.target.value}))}/></div>
                       </div>
                       <div style={{display:"flex",gap:10,marginTop:18,justifyContent:"flex-end"}}>
                         <button className="btn-ghost" onClick={()=>setShowInvForm(false)}>Cancel</button>
-                        <button onClick={()=>saveInvoice({...invForm,amount:parseFloat(invForm.amount)||0})}
+                        <button onClick={()=>{
+                          if(!invForm.invoiceNum||!invForm.invoiceNum.trim()){alert("Invoice number is required");return;}
+                          if(!invForm.amount||Number(invForm.amount)<=0){alert("Amount must be greater than 0");return;}
+                          saveInvoice({...invForm,amount:parseFloat(invForm.amount)||0,status:invForm.status||"sent"});
+                        }}
                           style={{padding:"9px 20px",background:"#059669",border:"none",color:"#fff",borderRadius:7,cursor:"pointer",fontFamily:"inherit",fontSize:12,fontWeight:700}}>Save Invoice</button>
                       </div>
                     </div>
