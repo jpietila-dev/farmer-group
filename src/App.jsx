@@ -6934,39 +6934,43 @@ Return ONLY valid JSON, no markdown, no extra text:
 
                 // ── Horizontal Bar Chart for Quarters ──
                 const QBarChart = ({ data }) => {
+                  // Theme-aligned chart: HTML/CSS-based bars (not SVG) so they scale naturally
+                  // and labels render with the same DM Sans/DM Mono as the rest of the app.
                   const maxV = Math.max(...data.flatMap(q => [q.thisGP, q.lastGP, q.target]), 1);
-                  const BAR_H = 14, GAP = 6, GROUP = BAR_H*3 + GAP*4, W = 480, LABEL_W = 30;
-                  const toW = v => Math.round((v/maxV)*(W-LABEL_W-80));
-                  const colors = { last: "#BCC6D8", this: "#F87171", target: "#4ADE80" };
+                  const pct = (v) => Math.max(0, (v / maxV) * 100);
+                  const Bar = ({ value, label, color, muted }) => (
+                    <div style={{ display: "grid", gridTemplateColumns: "70px 1fr 80px", alignItems: "center", gap: 10, marginBottom: 4 }}>
+                      <div style={{ fontSize: 10, color: "var(--t-ink3)", textTransform: "uppercase", letterSpacing: "0.06em", fontWeight: 500 }}>{label}</div>
+                      <div style={{ position: "relative", height: 18, background: "var(--t-paper)", borderRadius: 4, overflow: "hidden" }}>
+                        <div style={{ width: pct(value) + "%", height: "100%", background: color, opacity: muted ? 0.5 : 1, transition: "width 0.4s ease" }} />
+                      </div>
+                      <div style={{ fontSize: 12, color: "var(--t-ink)", fontFamily: "var(--t-mono)", fontWeight: 600, textAlign: "right" }}>
+                        {value > 0 ? "$" + Math.round(value).toLocaleString() : "—"}
+                      </div>
+                    </div>
+                  );
                   return (
-                    <svg viewBox={`0 0 ${W} ${data.length*GROUP+30}`} style={{width:"100%"}}>
-                      {data.map((q, qi) => {
-                        const y0 = qi * GROUP + 10;
-                        return (
-                          <g key={q.q}>
-                            <text x={0} y={y0 + BAR_H} fontSize={11} fill="#4A5278" fontWeight={600}>Q{q.q}</text>
-                            {/* Last year */}
-                            <rect x={LABEL_W} y={y0} width={toW(q.lastGP)} height={BAR_H} fill={colors.last} rx={2} />
-                            {q.lastGP > 0 && <text x={LABEL_W + toW(q.lastGP) + 4} y={y0+BAR_H-2} fontSize={9} fill="#4A5278">${q.lastGP.toLocaleString()}</text>}
-                            {/* This year */}
-                            <rect x={LABEL_W} y={y0+BAR_H+GAP} width={toW(q.thisGP)} height={BAR_H} fill={colors.this} rx={2} />
-                            {q.thisGP > 0 && <text x={LABEL_W + toW(q.thisGP) + 4} y={y0+BAR_H*2+GAP-2} fontSize={9} fill="#1A2240">${q.thisGP.toLocaleString()}</text>}
-                            {/* Target */}
-                            <rect x={LABEL_W} y={y0+BAR_H*2+GAP*2} width={toW(q.target)} height={BAR_H} fill={colors.target} rx={2} opacity={0.7} />
-                            {<text x={LABEL_W + toW(q.target) + 4} y={y0+BAR_H*3+GAP*2-2} fontSize={9} fill="#4A5278">${q.target.toLocaleString()}</text>}
-                          </g>
-                        );
-                      })}
+                    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+                      {data.map((q) => (
+                        <div key={q.q} style={{ borderBottom: q.q < 4 ? "1px dashed var(--t-line2)" : "none", paddingBottom: q.q < 4 ? 10 : 0 }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 6 }}>
+                            <div style={{ fontSize: 13, fontWeight: 700, color: "var(--t-ink)", letterSpacing: "0.02em" }}>Q{q.q}</div>
+                            <div style={{ fontSize: 10, color: "var(--t-ink3)" }}>
+                              vs target: <span style={{ fontFamily: "var(--t-mono)", color: q.thisGP >= q.target ? "var(--t-dowork)" : "var(--t-ink2)", fontWeight: 600 }}>{q.target > 0 ? Math.round((q.thisGP / q.target) * 100) : 0}%</span>
+                            </div>
+                          </div>
+                          <Bar value={q.lastGP}  label="Last Year"  color="#94A3B8" muted />
+                          <Bar value={q.thisGP}  label="This Year"  color="var(--t-ink)" />
+                          <Bar value={q.target}  label="Target"     color="var(--t-dowork)" muted />
+                        </div>
+                      ))}
                       {/* Legend */}
-                      <g transform={`translate(0, ${data.length*GROUP+5})`}>
-                        {[["#BCC6D8","Last Year"],["#F87171","This Year"],["#4ADE80","Target"]].map(([c,l],i) => (
-                          <g key={i} transform={`translate(${i*110},0)`}>
-                            <rect width={10} height={10} fill={c} rx={2} />
-                            <text x={14} y={9} fontSize={9} fill="#4A5278">{l}</text>
-                          </g>
-                        ))}
-                      </g>
-                    </svg>
+                      <div style={{ display: "flex", gap: 18, paddingTop: 10, borderTop: "1px solid var(--t-line)", fontSize: 11, color: "var(--t-ink2)" }}>
+                        <span style={{ display: "flex", alignItems: "center", gap: 6 }}><span style={{ display: "inline-block", width: 14, height: 8, background: "#94A3B8", opacity: 0.5, borderRadius: 2 }} /> Last Year</span>
+                        <span style={{ display: "flex", alignItems: "center", gap: 6 }}><span style={{ display: "inline-block", width: 14, height: 8, background: "var(--t-ink)", borderRadius: 2 }} /> This Year</span>
+                        <span style={{ display: "flex", alignItems: "center", gap: 6 }}><span style={{ display: "inline-block", width: 14, height: 8, background: "var(--t-dowork)", opacity: 0.5, borderRadius: 2 }} /> Target</span>
+                      </div>
+                    </div>
                   );
                 };
 
