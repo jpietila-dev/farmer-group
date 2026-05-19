@@ -4721,7 +4721,21 @@ export default function App() {
   const navItems = NAV_ITEMS[activeBU] || NAV_ITEMS.all;
   const buColor  = BU_COLORS[activeBU];
 
-  const handleBUChange = (id) => { setActiveBU(id); setActiveNav("dashboard"); setSelectedCoord(null); setCrmTagFilter(null); setSelectedCustomer(null); setCrmMode(false); setAccountingMode(false); };
+  // Closes every "selected X" / "detail view" state so navigation goes straight to the target section.
+  const closeAllPanels = () => {
+    setSelectedCoord(null);
+    setFmFullScreenJob(null);
+    setSelectedFmJob(null);
+    setSelectedCompany(null);
+    setSelectedContact(null);
+    setSelectedSite(null);
+    setSelectedSiteDetail(null);
+    setSelectedCustomer(null);
+    setSelectedJob(null);
+    setSelectedCapexJob(null);
+    setSelectedCrmContact(null);
+  };
+  const handleBUChange = (id) => { setActiveBU(id); setActiveNav("dashboard"); setCrmTagFilter(null); setCrmMode(false); setAccountingMode(false); closeAllPanels(); };
 
   // Punch list
 
@@ -5927,10 +5941,7 @@ Return ONLY valid JSON, no markdown, no extra text:
           {navItems.map(item => (
             <button key={item.id} className={"t-nav-item" + (activeNav === item.id ? " active" : "")} onClick={() => {
               setActiveNav(item.id);
-              setSelectedCoord(null);
-              // Close any open FM detail view so nav goes straight to the target section
-              setFmFullScreenJob(null);
-              setSelectedFmJob(null);
+              closeAllPanels();
             }}>
               <span className="t-nav-icon">{item.icon}</span>
               {!sidebarCollapsed && <span className="t-nav-label">{item.label}</span>}
@@ -5951,11 +5962,11 @@ Return ONLY valid JSON, no markdown, no extra text:
         <div className="t-topbar">
           <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
             {BUSINESS_UNITS.map(bu => (
-              <button key={bu.id} className={"t-bu-tab" + (activeBU === bu.id && !crmMode && !accountingMode ? " active" : "")} onClick={() => { setCrmMode(false); setAccountingMode(false); handleBUChange(bu.id); setFmFullScreenJob(null); setSelectedFmJob(null); }}>{bu.short}</button>
+              <button key={bu.id} className={"t-bu-tab" + (activeBU === bu.id && !crmMode && !accountingMode ? " active" : "")} onClick={() => { setCrmMode(false); setAccountingMode(false); handleBUChange(bu.id); closeAllPanels(); }}>{bu.short}</button>
             ))}
             <div style={{ width: 1, height: 20, background: "var(--t-line)", margin: "0 6px" }} />
-            <button className={"t-bu-tab k-crm" + (crmMode ? " active" : "")} onClick={() => { setCrmMode(true); setAccountingMode(false); setFmFullScreenJob(null); setSelectedFmJob(null); }}>CRM</button>
-            <button className={"t-bu-tab k-acct" + (accountingMode ? " active" : "")} onClick={() => { setAccountingMode(true); setCrmMode(false); setFmFullScreenJob(null); setSelectedFmJob(null); }}>$ ACCT</button>
+            <button className={"t-bu-tab k-crm" + (crmMode ? " active" : "")} onClick={() => { setCrmMode(true); setAccountingMode(false); closeAllPanels(); }}>CRM</button>
+            <button className={"t-bu-tab k-acct" + (accountingMode ? " active" : "")} onClick={() => { setAccountingMode(true); setCrmMode(false); closeAllPanels(); }}>$ ACCT</button>
           </div>
           <div className="t-topbar-meta">{BUSINESS_UNITS.find(b => b.id === activeBU)?.label}</div>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -6963,36 +6974,32 @@ Return ONLY valid JSON, no markdown, no extra text:
                 const pms = [...new Set(fmJobs.map(j => j.pm||"").filter(Boolean))];
 
                 return (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+                  <div className="t-page fade-in" style={{ background: "transparent", display: "flex", flexDirection: "column", gap: 24 }}>
 
                     {/* Header */}
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end" }}>
+                    <div className="t-section-hdr">
                       <div>
-                        <div style={{ fontSize: 26, fontWeight: 800, color: "#1A2240", letterSpacing: "-0.02em" }}>FM DASHBOARD</div>
-                        <div style={{ fontSize: 11, color: "#4A5278", marginTop: 3, letterSpacing: "0.06em" }}>FACILITY MAINTENANCE · {new Date().toLocaleDateString("en-US", { weekday:"long", month:"long", day:"numeric" }).toUpperCase()}</div>
+                        <div className="t-eyebrow" style={{ marginBottom: 4 }}>Facility Maintenance · {new Date().toLocaleDateString("en-US", { weekday:"long", month:"long", day:"numeric" })}</div>
+                        <div className="t-h1">Dashboard</div>
                       </div>
                       <div style={{ display: "flex", gap: 8, alignItems: "center", position: "relative" }}>
                         <select value={selectedPM || ""} onChange={e => setSelectedPM(e.target.value || null)}
-                          style={{ fontSize: 11, padding: "6px 12px", borderRadius: 6, border: "1px solid #CBD1E8", background: selectedPM ? "#3B6FE8" : "#fff", color: selectedPM ? "#fff" : "#4A5278", fontFamily: "inherit", cursor: "pointer" }}>
+                          className="t-input" style={{ fontSize: 12, padding: "8px 12px", background: selectedPM ? "var(--t-ink)" : "var(--t-surface)", color: selectedPM ? "var(--t-paper)" : "var(--t-ink)", cursor: "pointer", minWidth: 160 }}>
                           <option value="">👥 Org View</option>
                           {pms.map(pm => <option key={pm} value={pm}>👤 {pm}</option>)}
                         </select>
-                        <button onClick={() => setShowFmDashCustomize(s => !s)}
-                          style={{ fontSize: 11, padding: "6px 12px", borderRadius: 6, border: "1px solid #CBD1E8", background: "#fff", color: "#4A5278", fontFamily: "inherit", cursor: "pointer" }}>
-                          ⚙ Customize
-                        </button>
+                        <button className="t-btn t-btn-ghost" onClick={() => setShowFmDashCustomize(s => !s)}>⚙ Customize</button>
                         {showFmDashCustomize && (
-                          <div style={{ position: "absolute", top: "calc(100% + 6px)", right: 0, background: "#fff", border: "1px solid #CBD1E8", borderRadius: 8, padding: "10px 12px", boxShadow: "0 4px 14px rgba(0,0,0,0.08)", zIndex: 20, minWidth: 240 }}>
-                            <div style={{ fontSize: 10, color: "#9BA3BF", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 8, fontWeight: 700 }}>Show reports</div>
+                          <div style={{ position: "absolute", top: "calc(100% + 6px)", right: 0, background: "var(--t-surface)", border: "1px solid var(--t-line3)", borderRadius: 8, padding: "10px 12px", boxShadow: "0 12px 32px rgba(0,0,0,0.14)", zIndex: 200, minWidth: 280 }}>
+                            <div className="t-eyebrow" style={{ marginBottom: 8 }}>Show reports</div>
                             {FM_DASH_REPORTS.map(r => (
-                              <label key={r.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 4px", cursor: "pointer", fontSize: 12, color: "#1A2240" }}>
+                              <label key={r.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 4px", cursor: "pointer", fontSize: 12, color: "var(--t-ink)" }}>
                                 <input type="checkbox" checked={!!fmDashReportsVisible[r.id]} onChange={() => toggleFmDashReport(r.id)} />
                                 {r.label}
                               </label>
                             ))}
-                            <div style={{ borderTop: "1px solid #F0F2F8", marginTop: 8, paddingTop: 8, display: "flex", justifyContent: "flex-end" }}>
-                              <button onClick={() => setShowFmDashCustomize(false)}
-                                style={{ fontSize: 11, padding: "4px 10px", borderRadius: 5, border: "none", background: "#3B6FE8", color: "#fff", cursor: "pointer", fontFamily: "inherit" }}>Done</button>
+                            <div style={{ borderTop: "1px solid var(--t-line)", marginTop: 8, paddingTop: 8, display: "flex", justifyContent: "flex-end" }}>
+                              <button className="t-btn t-btn-sm" onClick={() => setShowFmDashCustomize(false)}>Done</button>
                             </div>
                           </div>
                         )}
@@ -7001,29 +7008,29 @@ Return ONLY valid JSON, no markdown, no extra text:
 
                     {/* -- TOP ROW: KPIs left + GP by Quarter right -- */}
                     {fmDashReportsVisible.kpis && (
-                    <div style={{ display: "grid", gridTemplateColumns: "280px 1fr", gap: 16 }}>
+                    <div style={{ display: "grid", gridTemplateColumns: "minmax(280px, 320px) 1fr", gap: 18 }}>
 
-                      {/* KPI stack */}
+                      {/* KPI stack — theme-toned cards */}
                       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
                         {[
-                          { label: "FM Revenue",         value: "$" + Math.round(ytdRev).toLocaleString(),          sub: "ACTUAL YTD",         accent: "#4ADE80",  bg: "#4ADE8012" },
-                          { label: "FM Profit",          value: "$" + Math.round(ytdGP).toLocaleString(),           sub: "ACTUAL YTD",         accent: "#3B6FE8",  bg: "#3B6FE812" },
-                          { label: "FM Pipeline Potential", value: "$" + Math.round(pipelineVal).toLocaleString(),  sub: "CURRENT POTENTIAL",  accent: "#60A5FA",  bg: "#60A5FA12" },
-                          { label: "FM Average Margin",  value: ytdMargin + "%",                                   sub: "ACTUAL YTD",         accent: "#FCD34D",  bg: "#FCD34D12" },
+                          { label: "Revenue",            value: "$" + Math.round(ytdRev).toLocaleString(),         sub: "Actual YTD",          accent: "var(--t-dowork)" },
+                          { label: "Profit",             value: "$" + Math.round(ytdGP).toLocaleString(),          sub: "Actual YTD",          accent: "var(--t-approval)" },
+                          { label: "Pipeline Potential", value: "$" + Math.round(pipelineVal).toLocaleString(),    sub: "Current potential",   accent: "var(--t-approved)" },
+                          { label: "Average Margin",     value: ytdMargin + "%",                                   sub: "Actual YTD",          accent: "var(--t-warn)" },
                         ].map(s => (
-                          <div key={s.label} style={{ background: s.bg, border: "1px solid " + s.accent + "30", borderRadius: 8, padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                            <div style={{ fontSize: 10, color: s.accent, textTransform: "uppercase", letterSpacing: "0.07em", fontWeight: 700, background: s.accent+"20", padding: "2px 8px", borderRadius: 4 }}>{s.label}</div>
-                            <div style={{ textAlign: "right" }}>
-                              <div style={{ fontSize: 20, fontWeight: 800, color: "#1A2240" }}>{s.value}</div>
-                              <div style={{ fontSize: 9, color: "#4A5278", letterSpacing: "0.08em" }}>{s.sub}</div>
+                          <div key={s.label} className="t-card" style={{ padding: "12px 14px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                            <div>
+                              <div className="t-eyebrow" style={{ color: s.accent }}>{s.label}</div>
+                              <div style={{ fontSize: 10, color: "var(--t-ink3)", marginTop: 2 }}>{s.sub}</div>
                             </div>
+                            <div style={{ fontSize: 22, fontWeight: 700, color: "var(--t-ink)", fontFamily: "var(--t-mono)" }}>{s.value}</div>
                           </div>
                         ))}
                       </div>
 
                       {/* GP per Quarter horizontal bars */}
-                      <div className="stat-card" style={{ padding: 20 }}>
-                        <div style={{ fontSize: 11, fontWeight: 700, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 16 }}>2026 FM Gross Profit per QTR</div>
+                      <div className="t-card" style={{ padding: 20 }}>
+                        <div className="t-eyebrow" style={{ marginBottom: 16 }}>2026 Gross Profit per Quarter</div>
                         <QBarChart data={quarters} />
                       </div>
                     </div>
@@ -7031,59 +7038,59 @@ Return ONLY valid JSON, no markdown, no extra text:
 
                     {/* -- CHARTS ROW: 3 equal-size charts side-by-side -- */}
                     {fmDashReportsVisible.charts && (
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16 }}>
-                      <div className="stat-card" style={{ padding: 20, display: "flex", flexDirection: "column" }}>
-                        <div style={{ fontSize: 11, fontWeight: 700, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 8 }}>FM Opportunities YOY</div>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 18 }}>
+                      <div className="t-card" style={{ padding: 22, display: "flex", flexDirection: "column" }}>
+                        <div className="t-eyebrow" style={{ marginBottom: 10 }}>Opportunities YOY</div>
                         <div style={{ flex: 1 }}>
                           <LineChart
                             labels={MONTHS}
                             series={[
-                              { label: "Last Year",  color: "#3B6FE8", data: months12.map(m => m.lastRev > 0 ? Math.round(m.lastRev/500) : 0) },
-                              { label: "This Year",  color: "#F87171", isCurrent: true, data: months12.map(m => m.thisCount) },
+                              { label: "Last Year", color: "#94A3B8", data: months12.map(m => m.lastRev > 0 ? Math.round(m.lastRev/500) : 0) },
+                              { label: "This Year", color: "var(--t-ink)", isCurrent: true, data: months12.map(m => m.thisCount) },
                             ]}
                             height={140}
                             yFmt={v => v}
                           />
                         </div>
-                        <div style={{ display: "flex", gap: 12, marginTop: 8, fontSize: 10, color: "#4A5278", flexWrap: "wrap" }}>
-                          <span><span style={{ display: "inline-block", width: 16, height: 2, background: "#3B6FE8", marginRight: 4, verticalAlign: "middle" }}></span>Last Year</span>
-                          <span><span style={{ display: "inline-block", width: 16, height: 2, background: "#F87171", marginRight: 4, verticalAlign: "middle" }}></span>This Year</span>
+                        <div style={{ display: "flex", gap: 14, marginTop: 10, fontSize: 11, color: "var(--t-ink2)", flexWrap: "wrap" }}>
+                          <span><span style={{ display: "inline-block", width: 16, height: 2, background: "#94A3B8", marginRight: 6, verticalAlign: "middle" }}></span>Last Year</span>
+                          <span><span style={{ display: "inline-block", width: 16, height: 2, background: "var(--t-ink)", marginRight: 6, verticalAlign: "middle" }}></span>This Year</span>
                         </div>
                       </div>
 
-                      <div className="stat-card" style={{ padding: 20, display: "flex", flexDirection: "column" }}>
-                        <div style={{ fontSize: 11, fontWeight: 700, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 8 }}>FM Revenue per Month</div>
+                      <div className="t-card" style={{ padding: 22, display: "flex", flexDirection: "column" }}>
+                        <div className="t-eyebrow" style={{ marginBottom: 10 }}>Revenue per Month</div>
                         <div style={{ flex: 1 }}>
                           <LineChart
                             labels={MONTHS}
                             series={[
-                              { label: "2025", color: "#BCC6D8", data: months12.map(m => m.lastRev) },
-                              { label: "2026", color: "#F87171", isCurrent: true, data: months12.map(m => m.thisRev) },
+                              { label: "2025", color: "#94A3B8", data: months12.map(m => m.lastRev) },
+                              { label: "2026", color: "var(--t-dowork)", isCurrent: true, data: months12.map(m => m.thisRev) },
                             ]}
                             height={140}
                           />
                         </div>
-                        <div style={{ display: "flex", gap: 12, marginTop: 8, fontSize: 10, color: "#4A5278", flexWrap: "wrap" }}>
-                          <span><span style={{ display: "inline-block", width: 16, height: 2, background: "#BCC6D8", marginRight: 4, verticalAlign: "middle" }}></span>2025</span>
-                          <span><span style={{ display: "inline-block", width: 16, height: 2, background: "#F87171", marginRight: 4, verticalAlign: "middle" }}></span>2026</span>
+                        <div style={{ display: "flex", gap: 14, marginTop: 10, fontSize: 11, color: "var(--t-ink2)", flexWrap: "wrap" }}>
+                          <span><span style={{ display: "inline-block", width: 16, height: 2, background: "#94A3B8", marginRight: 6, verticalAlign: "middle" }}></span>2025</span>
+                          <span><span style={{ display: "inline-block", width: 16, height: 2, background: "var(--t-dowork)", marginRight: 6, verticalAlign: "middle" }}></span>2026</span>
                         </div>
                       </div>
 
-                      <div className="stat-card" style={{ padding: 20, display: "flex", flexDirection: "column" }}>
-                        <div style={{ fontSize: 11, fontWeight: 700, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 8 }}>FM Gross Profit per Month</div>
+                      <div className="t-card" style={{ padding: 22, display: "flex", flexDirection: "column" }}>
+                        <div className="t-eyebrow" style={{ marginBottom: 10 }}>Gross Profit per Month</div>
                         <div style={{ flex: 1 }}>
                           <LineChart
                             labels={MONTHS}
                             series={[
-                              { label: "2025", color: "#3B6FE8", data: months12.map(m => m.lastGP) },
-                              { label: "2026", color: "#F87171", isCurrent: true, data: months12.map(m => m.thisGP) },
+                              { label: "2025", color: "#94A3B8", data: months12.map(m => m.lastGP) },
+                              { label: "2026", color: "var(--t-approval)", isCurrent: true, data: months12.map(m => m.thisGP) },
                             ]}
                             height={140}
                           />
                         </div>
-                        <div style={{ display: "flex", gap: 12, marginTop: 8, fontSize: 10, color: "#4A5278", flexWrap: "wrap" }}>
-                          <span><span style={{ display: "inline-block", width: 16, height: 2, background: "#3B6FE8", marginRight: 4, verticalAlign: "middle" }}></span>2025</span>
-                          <span><span style={{ display: "inline-block", width: 16, height: 2, background: "#F87171", marginRight: 4, verticalAlign: "middle" }}></span>2026</span>
+                        <div style={{ display: "flex", gap: 14, marginTop: 10, fontSize: 11, color: "var(--t-ink2)", flexWrap: "wrap" }}>
+                          <span><span style={{ display: "inline-block", width: 16, height: 2, background: "#94A3B8", marginRight: 6, verticalAlign: "middle" }}></span>2025</span>
+                          <span><span style={{ display: "inline-block", width: 16, height: 2, background: "var(--t-approval)", marginRight: 6, verticalAlign: "middle" }}></span>2026</span>
                         </div>
                       </div>
                     </div>
@@ -7091,29 +7098,29 @@ Return ONLY valid JSON, no markdown, no extra text:
 
                     {/* -- PROJECTION CARDS -- */}
                     {fmDashReportsVisible.projections && (
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-                      <div className="stat-card" style={{ padding: 16 }}>
-                        <div style={{ fontSize: 10, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 10, fontWeight: 600 }}>This Month Projection ({MONTHS[curMonth]})</div>
-                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18 }}>
+                      <div className="t-card" style={{ padding: 22 }}>
+                        <div className="t-eyebrow" style={{ marginBottom: 14 }}>This Month Projection · {MONTHS[curMonth]}</div>
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                           {[
-                            { label: "Actual Rev", value: "$" + Math.round(curMthRev).toLocaleString(), color: "#3B6FE8" },
-                            { label: "Projected Rev", value: "$" + projRev.toLocaleString(), color: "#60A5FA" },
-                            { label: "Actual GP", value: "$" + Math.round(curMthGP).toLocaleString(), color: "#4ADE80" },
-                            { label: "Projected GP", value: "$" + projGP.toLocaleString(), color: "#86EFAC" },
+                            { label: "Actual Rev",     value: "$" + Math.round(curMthRev).toLocaleString(), color: "var(--t-ink)" },
+                            { label: "Projected Rev",  value: "$" + projRev.toLocaleString(),               color: "var(--t-ink2)" },
+                            { label: "Actual GP",      value: "$" + Math.round(curMthGP).toLocaleString(), color: "var(--t-dowork)" },
+                            { label: "Projected GP",   value: "$" + projGP.toLocaleString(),                color: "var(--t-dowork)", muted: true },
                           ].map(s => (
-                            <div key={s.label} style={{ background: "#F5F7FC", borderRadius: 6, padding: "10px 12px" }}>
-                              <div style={{ fontSize: 9, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 4 }}>{s.label}</div>
-                              <div style={{ fontSize: 18, fontWeight: 800, color: s.color }}>{s.value}</div>
+                            <div key={s.label} style={{ background: "var(--t-paper)", borderRadius: 8, padding: "12px 14px", border: "1px solid var(--t-line)" }}>
+                              <div className="t-eyebrow">{s.label}</div>
+                              <div style={{ fontSize: 20, fontWeight: 700, color: s.color, fontFamily: "var(--t-mono)", marginTop: 4, opacity: s.muted ? 0.7 : 1 }}>{s.value}</div>
                             </div>
                           ))}
                         </div>
                       </div>
-                      <div className="stat-card" style={{ padding: 16 }}>
-                        <div style={{ fontSize: 10, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 10, fontWeight: 600 }}>PM Breakdown</div>
-                        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
+                      <div className="t-card" style={{ padding: 22 }}>
+                        <div className="t-eyebrow" style={{ marginBottom: 14 }}>PM Breakdown</div>
+                        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
                           <thead>
-                            <tr style={{ borderBottom: "1px solid #EEF0F8" }}>
-                              {["PM","Jobs","Rev","GP","GP%"].map(h => <th key={h} style={{ textAlign:"left", padding:"4px 8px", fontSize:9, color:"#4A5278", textTransform:"uppercase", letterSpacing:"0.07em" }}>{h}</th>)}
+                            <tr style={{ borderBottom: "1px solid var(--t-line)" }}>
+                              {["PM","Jobs","Rev","GP","GP%"].map(h => <th key={h} style={{ textAlign:"left", padding:"6px 8px", fontSize:10, color:"var(--t-ink3)", textTransform:"uppercase", letterSpacing:"0.07em", fontWeight: 600 }}>{h}</th>)}
                             </tr>
                           </thead>
                           <tbody>
@@ -7122,12 +7129,12 @@ Return ONLY valid JSON, no markdown, no extra text:
                               const r = j.reduce((s,x)=>s+(x.contractValue||0),0);
                               const g = j.reduce((s,x)=>s+(x.grossProfit||0),0);
                               return (
-                                <tr key={pm} style={{ borderBottom: "1px solid #F5F7FC", cursor:"pointer" }} onClick={() => setSelectedPM(pm === selectedPM ? null : pm)}>
-                                  <td style={{ padding:"6px 8px", fontWeight:600, color:"#1A2240" }}>{pm.split(" ")[0]}</td>
-                                  <td style={{ padding:"6px 8px", color:"#4A5278" }}>{j.length}</td>
-                                  <td style={{ padding:"6px 8px", color:"#1A2240" }}>${(r/1000).toFixed(0)}k</td>
-                                  <td style={{ padding:"6px 8px", color:"#4ADE80", fontWeight:600 }}>${(g/1000).toFixed(0)}k</td>
-                                  <td style={{ padding:"6px 8px", color:"#818CF8" }}>{r>0?Math.round((g/r)*100):0}%</td>
+                                <tr key={pm} style={{ borderBottom: "1px solid var(--t-line2)", cursor:"pointer", background: pm === selectedPM ? "var(--t-paper)" : "transparent" }} onClick={() => setSelectedPM(pm === selectedPM ? null : pm)}>
+                                  <td style={{ padding:"8px", fontWeight:600, color:"var(--t-ink)" }}>{pm.split(" ")[0]}</td>
+                                  <td style={{ padding:"8px", color:"var(--t-ink2)", fontFamily: "var(--t-mono)" }}>{j.length}</td>
+                                  <td style={{ padding:"8px", color:"var(--t-ink)", fontFamily: "var(--t-mono)" }}>${(r/1000).toFixed(0)}k</td>
+                                  <td style={{ padding:"8px", color:"var(--t-dowork)", fontWeight:600, fontFamily: "var(--t-mono)" }}>${(g/1000).toFixed(0)}k</td>
+                                  <td style={{ padding:"8px", color:"var(--t-approval)", fontFamily: "var(--t-mono)" }}>{r>0?Math.round((g/r)*100):0}%</td>
                                 </tr>
                               );
                             })}
