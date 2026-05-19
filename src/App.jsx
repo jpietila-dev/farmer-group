@@ -5126,142 +5126,34 @@ export default function App() {
     setFmCompanySearch(""); setFmSiteSearch("");
   };
   const deleteFm = (id) => { setFmJobs(fmJobs.filter(j => j.id !== id)); setSelectedFmJob(null); setFmFullScreenJob(null); try { supa.from("fm_jobs").delete().eq("id", id); } catch(e) {} };
-  // Send an FM job to Accounts Receivable: marks the job sent_to_ar, hides it from coordinator lists,
-  // and auto-creates an entry in accounting_invoices so the AR team picks it up immediately.
+  // Send an FM job to Accounts Receivable: marks the job sent_to_ar so it appears in
+  // the Ready-to-Invoice queue. AR creates the actual invoice from there.
   const sendFmJobToAR = async (jobId) => {
     const job = fmJobs.find(j => j.id === jobId);
     if (!job) return { ok: false, error: "Job not found" };
     if (job.sentToAR) return { ok: false, error: "Already sent to AR" };
-    const today = new Date().toISOString().slice(0, 10);
-    // Snapshot the original job in case we need to roll back
-    const originalJob = job;
     const originalFmJobs = fmJobs;
-
-    // 1) Mark job sent-to-AR and close it out for the coordinator (LOCAL STATE)
     const updatedJob = { ...job, sentToAR: true, sentToARAt: new Date().toISOString(), status: "Completed" };
     setFmJobs(prev => prev.map(j => j.id === jobId ? updatedJob : j));
-    // Persist FM job first — verify it stuck before doing the invoice
-    let fmRes = await supa.from("fm_jobs").update(fmJobToDB(updatedJob)).eq("id", jobId);
-    // If it failed because sent_to_ar / status columns don't exist, we can't actually mark this job sent.
-    // Surface that clearly — there's no graceful fallback because the whole point is to mark it sent.
+    const fmRes = await supa.from("fm_jobs").update(fmJobToDB(updatedJob)).eq("id", jobId);
     if (fmRes && fmRes.error && (fmRes.error?.message || "").toLowerCase().includes("could not find") && (fmRes.error?.message || "").toLowerCase().includes("column")) {
       console.error("[sendFmJobToAR] fm_jobs missing columns", fmRes.error);
       setFmJobs(originalFmJobs);
       return { ok: false, error: "The fm_jobs table is missing the sent_to_ar / status columns. Run VENDOR_PORTAL_MIGRATION.md in Supabase, then try again.\n\nException: " + (fmRes.error?.message || "") };
     }
     if (fmRes && fmRes.error) {
-      // Roll back local state — DB write failed
       console.error("[sendFmJobToAR] fm_jobs update failed", fmRes.error);
       setFmJobs(originalFmJobs);
       const msg = fmRes.error?.message || JSON.stringify(fmRes.error);
       return { ok: false, error: "Couldn't save to fm_jobs.\n\n" + msg };
     }
-    // FM update succeeded — close the panel
+    // FM update succeeded — close any open panel for this job and return success.
+    // The AR person will create the actual invoice from the Ready-to-Invoice queue in $ ACCT.
     if (fmFullScreenJob?.id === jobId) setFmFullScreenJob(null);
     if (selectedFmJob?.id === jobId) setSelectedFmJob(null);
-
-    // 2) Build the invoice — pulled from job financials, not vendor invoice (we bill the customer the gross value)
-    const co = companies.find(c => c.id === job.companyId);
-    const ct = contacts.find(c => c.id === job.approverContactId);
-    const clientName = co ? co.name + (ct ? " · " + [ct.firstName, ct.lastName].filter(Boolean).join(" ") : "") : "";
-    // Default 30-day net terms
-    const dueDate = new Date(); dueDate.setDate(dueDate.getDate() + 30);
-    const dueDateStr = dueDate.toISOString().slice(0, 10);
-    const invId = Date.now();
-    // Auto invoice # — use owner project# if present, else vendor invoice#, else generated
-    const invNum = job.ownersProjectNo || ("AR-" + (job.storeCode || "") + "-" + new Date().getFullYear() + "-" + String(invId).slice(-5));
-    const inv = {
-      id: invId,
-      invoiceNum: invNum,
-      job: job.name,
-      jobId: String(jobId),
-      src: "FM",
-      client: clientName,
-      amount: Number(job.contractValue || 0),
-      invoiceDate: today,
-      dueDate: dueDateStr,
-      paidDate: "",
-      status: "sent",
-      notes: job.scopeOfWork || "",
-      createdAt: today,
-      grossValue: Number(job.contractValue || 0),
-      grossProfit: Number(job.grossProfit || 0) || (Number(job.contractValue||0) > 0 ? fmGrossProfit(Number(job.contractValue||0)) : 0),
-      vendorCost: Number(job.vendorInvoiceAmount || 0),
-      // AR-sheet denormalized fields (so the row keeps making sense even if the FM job is later edited)
-      category: "FM",
-      arQboId: "",
-      closed: false,
-      closedAt: "",
-      projectNo: job.projectNo || "",
-      storeCode: job.storeCode || "",
-      ownersProjectNo: job.ownersProjectNo || "",
-      vendorInvoiceNumber: job.vendorInvoiceNumber || "",
-      vendorName: (() => {
-        const sb = subcontractors.find(s => s.id === job.subcontractorId);
-        return sb ? sb.name : "";
-      })(),
-    };
-    setInvoices(prev => [inv, ...prev]);
-    // Full payload — includes all newer columns from the latest migration
-    const fullPayload = {
-      id: String(invId),
-      invoice_num: inv.invoiceNum,
-      job: inv.job,
-      client: inv.client,
-      amount: inv.amount,
-      invoice_date: inv.invoiceDate,
-      due_date: inv.dueDate,
-      paid_date: null,
-      status: inv.status,
-      notes: inv.notes,
-      created_at: inv.createdAt,
-      job_id: inv.jobId,
-      src: inv.src,
-      gross_value: inv.grossValue,
-      gross_profit: inv.grossProfit,
-      vendor_cost: inv.vendorCost,
-      category: inv.category,
-      ar_qbo_id: inv.arQboId,
-      closed: inv.closed,
-      closed_at: null,
-      project_no: inv.projectNo,
-      store_code: inv.storeCode,
-      owners_project_no: inv.ownersProjectNo,
-      vendor_invoice_number: inv.vendorInvoiceNumber,
-      vendor_name: inv.vendorName,
-    };
-    let invRes = await supa.from("accounting_invoices").insert(fullPayload);
-    // If it failed due to a missing column, retry with only the legacy columns so the save still works.
-    // (This means: if migration hasn't been run, send-to-AR still works, but the AR sheet won't have the new fields.)
-    if (invRes && invRes.error && (invRes.error?.message || "").toLowerCase().includes("could not find") && (invRes.error?.message || "").toLowerCase().includes("column")) {
-      console.warn("[sendFmJobToAR] retrying with legacy columns — newer migration likely not run");
-      const legacyPayload = {
-        id: String(invId),
-        invoice_num: inv.invoiceNum,
-        job: inv.job,
-        client: inv.client,
-        amount: inv.amount,
-        due_date: inv.dueDate,
-        status: inv.status,
-        notes: inv.notes,
-        created_at: inv.createdAt,
-      };
-      invRes = await supa.from("accounting_invoices").insert(legacyPayload);
-      if (invRes && !invRes.error) {
-        return { ok: true, invoiceId: invId, warning: "Invoice saved with limited fields. To enable the full AR sheet (Invoice Date, Paid Date, Category, AR QBO ID, etc.), run VENDOR_PORTAL_MIGRATION.md in Supabase." };
-      }
-    }
-    if (invRes && invRes.error) {
-      // Roll back local invoice + roll back FM job — keep state consistent
-      console.error("[sendFmJobToAR] accounting_invoices insert failed", invRes.error);
-      setInvoices(prev => prev.filter(i => i.id !== invId));
-      setFmJobs(originalFmJobs);
-      try { await supa.from("fm_jobs").update(fmJobToDB(originalJob)).eq("id", jobId); } catch (e) {}
-      const msg = invRes.error?.message || JSON.stringify(invRes.error);
-      return { ok: false, error: "Saved FM job, but couldn't create the AR invoice. Rolled back.\n\n" + msg };
-    }
-    return { ok: true, invoiceId: invId };
+    return { ok: true };
   };
+
   // Persist a patch to an FM job in both state and DB
   const updateFmJobPersist = (id, patch) => {
     setFmJobs(prev => prev.map(j => {
@@ -19216,13 +19108,11 @@ window.addEventListener('message',function(e){
                         disabled={!cvNum || cvNum <= 0}
                         onClick={async () => {
                           if (!cvNum || cvNum <= 0) { alert("Gross Value must be greater than 0 before sending to AR."); return; }
-                          const ok = window.confirm("Send this job to Accounts Receivable?\n\nThis will:\n• Move the job out of the coordinator's active list\n• Create an invoice in the ACCT tab for " + fmt(cvNum) + "\n• Mark this job Completed\n\nContinue?");
+                          const ok = window.confirm("Send this job to Accounts Receivable?\n\nThis will:\n• Move the job out of the coordinator's active list\n• Add it to the AR \"Ready to Invoice\" queue\n• Mark this job Completed\n\nAccounting will create the actual invoice from the $ ACCT tab.\n\nContinue?");
                           if (!ok) return;
                           const res = await sendFmJobToAR(job.id);
                           if (!res.ok) {
                             alert("⚠️ Could not send to AR\n\n" + (res.error || "unknown error") + "\n\nIf you haven't run the latest SQL migration yet, do that first (VENDOR_PORTAL_MIGRATION.md). Open the browser console for full details.");
-                          } else if (res.warning) {
-                            alert("✅ Sent to AR\n\n" + res.warning);
                           }
                         }}>
                         💼 Send to Accounts Receivable
