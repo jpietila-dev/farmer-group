@@ -4820,7 +4820,7 @@ export default function App() {
           supa.from("accounting_invoices").select("*"),
           supa.from("accounting_expenses").select("*"),
         ]);
-        if (invRes.data?.length) setInvoices(invRes.data.map(r=>({ id:r.id, invoiceNum:r.invoice_num||"", job:r.job||"", client:r.client||"", amount:r.amount||0, dueDate:r.due_date||"", invoiceDate:r.invoice_date||"", paidDate:r.paid_date||"", status:r.status||"draft", notes:r.notes||"", createdAt:r.created_at||"", jobId:r.job_id||"", src:r.src||"", grossValue:Number(r.gross_value||0), grossProfit:Number(r.gross_profit||0), vendorCost:Number(r.vendor_cost||0), category:r.category||"", arQboId:r.ar_qbo_id||"", closed:!!r.closed, closedAt:r.closed_at||"", projectNo:r.project_no||"", storeCode:r.store_code||"", ownersProjectNo:r.owners_project_no||"", vendorInvoiceNumber:r.vendor_invoice_number||"", vendorName:r.vendor_name||"" })));
+        if (invRes.data?.length) setInvoices(invRes.data.map(r=>({ id:r.id, invoiceNum:r.invoice_num||"", job:r.job||"", client:r.client||"", amount:r.amount||0, dueDate:r.due_date||"", invoiceDate:r.invoice_date||"", paidDate:r.paid_date||"", status:r.status||"draft", notes:r.notes||"", createdAt:r.created_at||"", jobId:r.job_id||"", src:r.src||"", grossValue:Number(r.gross_value||0), grossProfit:Number(r.gross_profit||0), vendorCost:Number(r.vendor_cost||0), category:r.category||"", arQboId:r.ar_qbo_id||"", closed:!!r.closed, closedAt:r.closed_at||"", projectNo:r.project_no||"", storeCode:r.store_code||"", ownersProjectNo:r.owners_project_no||"", vendorInvoiceNumber:r.vendor_invoice_number||"", vendorName:r.vendor_name||"", vendorPaid:!!r.vendor_paid, vendorPaidDate:r.vendor_paid_date||"" })));
         if (expRes.data?.length) setExpenses(expRes.data.map(r=>({ id:r.id, description:r.description||"", vendor:r.vendor||"", amount:r.amount||0, date:r.date||"", category:r.category||"Other", job:r.job||"", notes:r.notes||"" })));
 
         let loadedMpJobs = [];
@@ -5927,6 +5927,8 @@ Return ONLY valid JSON, no markdown, no extra text:
                 owners_project_no: inv.ownersProjectNo || "",
                 vendor_invoice_number: inv.vendorInvoiceNumber || "",
                 vendor_name: inv.vendorName || "",
+                vendor_paid: false,
+                vendor_paid_date: null,
               };
               // Try full insert first; fall back to legacy columns if migration not run
               let res = await supa.from("accounting_invoices").insert(payload);
@@ -5964,6 +5966,7 @@ Return ONLY valid JSON, no markdown, no extra text:
               closed: "closed", closedAt: "closed_at", projectNo: "project_no",
               storeCode: "store_code", ownersProjectNo: "owners_project_no",
               vendorInvoiceNumber: "vendor_invoice_number", vendorName: "vendor_name",
+              vendorPaid: "vendor_paid", vendorPaidDate: "vendor_paid_date",
               grossValue: "gross_value", grossProfit: "gross_profit", vendorCost: "vendor_cost",
             };
             const updateInv = async (id, patch) => {
@@ -5983,17 +5986,20 @@ Return ONLY valid JSON, no markdown, no extra text:
                 alert("⚠️ Couldn't save change\n\n" + msg + "\n\nThis usually means the database is missing a column. Check VENDOR_PORTAL_MIGRATION.md.");
               }
             };
-            // Toggle "Create Invoice" — moves status draft → sent
-            const toggleCreateInvoice = (inv) => {
-              const isCreated = inv.status !== "draft";
-              updateInv(inv.id, { status: isCreated ? "draft" : "sent" });
-            };
             // Toggle PAID — moves status to paid (and stamps paid_date) or back to sent
             const togglePaid = (inv) => {
               if (inv.status === "paid") {
                 updateInv(inv.id, { status: "sent", paidDate: "" });
               } else {
                 updateInv(inv.id, { status: "paid", paidDate: new Date().toISOString().slice(0, 10) });
+              }
+            };
+            // Toggle VENDOR PAID — auto-stamps today's date when checked, clears when unchecked
+            const toggleVendorPaid = (inv) => {
+              if (inv.vendorPaid) {
+                updateInv(inv.id, { vendorPaid: false, vendorPaidDate: "" });
+              } else {
+                updateInv(inv.id, { vendorPaid: true, vendorPaidDate: new Date().toISOString().slice(0, 10) });
               }
             };
             // Toggle CLOSED — soft-archives the invoice. Hidden from default view.
@@ -6172,12 +6178,13 @@ Return ONLY valid JSON, no markdown, no extra text:
                                 <th style={th}>Owners Proj. No.</th>
                                 <th style={th}>AR QBO ID</th>
                                 <th style={th}>Invoice Number</th>
-                                <th style={{ ...th, textAlign: "center" }}>Create Invoice</th>
                                 <th style={th}>Invoice Date</th>
                                 <th style={{ ...th, textAlign: "center" }}>PAID</th>
                                 <th style={th}>Paid Date</th>
                                 <th style={{ ...th, textAlign: "center" }}>CLOSED</th>
                                 <th style={th}>Vendor Invoice Number</th>
+                                <th style={{ ...th, textAlign: "center" }}>Vendor Paid</th>
+                                <th style={th}>Vendor Paid Date</th>
                                 <th style={th}>Vendor</th>
                                 <th style={th}></th>
                               </tr>
@@ -6231,9 +6238,6 @@ Return ONLY valid JSON, no markdown, no extra text:
                                         onFocus={e => cellInputFocus(e.target, true)} onBlur={e => cellInputFocus(e.target, false)}
                                         placeholder="—" style={cellInput} />
                                     </td>
-                                    <td style={{ ...td, textAlign: "center" }}>
-                                      {cb(inv.status !== "draft", () => toggleCreateInvoice(inv))}
-                                    </td>
                                     <td style={td}>
                                       <input type="date" value={inv.invoiceDate || ""} onChange={e => updateInv(inv.id, { invoiceDate: e.target.value })}
                                         onFocus={e => cellInputFocus(e.target, true)} onBlur={e => cellInputFocus(e.target, false)}
@@ -6250,7 +6254,35 @@ Return ONLY valid JSON, no markdown, no extra text:
                                     <td style={{ ...td, textAlign: "center" }}>
                                       {cb(inv.closed, () => toggleClosed(inv))}
                                     </td>
-                                    <td style={tdMono}>{inv.vendorInvoiceNumber || "—"}</td>
+                                    <td style={td}>
+                                      <input value={(() => {
+                                        // Prefer the live FM job's vendor invoice # if it still exists (in case it was updated after send-to-AR)
+                                        const liveJob = inv.src === "FM" && inv.jobId ? fmJobs.find(j => String(j.id) === String(inv.jobId)) : null;
+                                        return liveJob && liveJob.vendorInvoiceNumber ? liveJob.vendorInvoiceNumber : (inv.vendorInvoiceNumber || "");
+                                      })()}
+                                        onChange={e => {
+                                          updateInv(inv.id, { vendorInvoiceNumber: e.target.value });
+                                          // Also sync back to the source FM job so it stays consistent
+                                          if (inv.src === "FM" && inv.jobId) {
+                                            const liveJob = fmJobs.find(j => String(j.id) === String(inv.jobId));
+                                            if (liveJob) {
+                                              const updated = { ...liveJob, vendorInvoiceNumber: e.target.value };
+                                              setFmJobs(prev => prev.map(j => String(j.id) === String(inv.jobId) ? updated : j));
+                                              try { supa.from("fm_jobs").update({ vendor_invoice_number: e.target.value || null }).eq("id", inv.jobId); } catch(err) {}
+                                            }
+                                          }
+                                        }}
+                                        onFocus={e => cellInputFocus(e.target, true)} onBlur={e => cellInputFocus(e.target, false)}
+                                        placeholder="—" style={{ ...cellInput, fontFamily: "'DM Mono', monospace" }} />
+                                    </td>
+                                    <td style={{ ...td, textAlign: "center" }}>
+                                      {cb(inv.vendorPaid, () => toggleVendorPaid(inv))}
+                                    </td>
+                                    <td style={td}>
+                                      <input type="date" value={inv.vendorPaidDate || ""} onChange={e => updateInv(inv.id, { vendorPaidDate: e.target.value, vendorPaid: e.target.value ? true : inv.vendorPaid })}
+                                        onFocus={e => cellInputFocus(e.target, true)} onBlur={e => cellInputFocus(e.target, false)}
+                                        style={{ ...cellInput, fontFamily: "'DM Mono', monospace", color: inv.vendorPaidDate ? "#059669" : "#9BA3BF" }} />
+                                    </td>
                                     <td style={td}>{inv.vendorName || "—"}</td>
                                     <td style={{ ...td, padding: "8px 6px" }}>
                                       <button onClick={() => { if(window.confirm("Permanently delete this invoice row?")) { setInvoices(prev=>prev.filter(i=>i.id!==inv.id)); supa.from("accounting_invoices").delete().eq("id",String(inv.id)); }}}
