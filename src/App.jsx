@@ -9662,12 +9662,24 @@ Example:
                     <input type="checkbox" checked={!!j.hot} onClick={e => e.stopPropagation()} onChange={e => persistJob(j.id, { hot: e.target.checked })} style={{ cursor: "pointer" }} />
                   )},
                   storeCode: { label: "Store", width: 80, render: j => <span className="t-mono-tag">{j.storeCode || "—"}</span> },
-                  vendor: { label: "Vendor", width: 150, stopPropagation: true, render: j => {
+                  vendor: { label: "Vendor", width: 170, stopPropagation: true, render: j => {
                     const sub = subcontractors.find(s => s.id === j.subcontractorId);
                     return sub ? (
-                      <span onClick={e => openPanel(e, j.id, "vendor")}
-                        style={{ cursor: "pointer", padding: "2px 4px", borderRadius: 3, display: "inline-block", maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
-                        title="Click to change vendor">👤 {sub.name}</span>
+                      <span style={{ display: "inline-flex", alignItems: "center", gap: 4, maxWidth: "100%" }}>
+                        <span onClick={e => openPanel(e, j.id, "vendor")}
+                          style={{ cursor: "pointer", padding: "2px 4px", borderRadius: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, minWidth: 0 }}
+                          title="Click to change vendor">👤 {sub.name}</span>
+                        <button onClick={e => {
+                            e.stopPropagation();
+                            if (window.confirm(`Remove ${sub.name} from this job?`)) {
+                              persistJob(j.id, { subcontractorId: "" });
+                            }
+                          }}
+                          title="Remove vendor"
+                          style={{ background: "transparent", border: "none", color: "var(--t-ink3)", cursor: "pointer", fontSize: 12, padding: "0 4px", lineHeight: 1, borderRadius: 3, flexShrink: 0 }}
+                          onMouseEnter={e => e.currentTarget.style.color = "var(--t-danger)"}
+                          onMouseLeave={e => e.currentTarget.style.color = "var(--t-ink3)"}>×</button>
+                      </span>
                     ) : (
                       <button onClick={e => openPanel(e, j.id, "vendor")}
                         style={{ background: "transparent", border: "1px dashed var(--t-line3)", borderRadius: 6, padding: "3px 8px", fontSize: 11, color: "var(--t-ink2)", cursor: "pointer", fontFamily: "inherit" }}>+ Vendor</button>
@@ -11716,12 +11728,24 @@ window.addEventListener('message',function(e){
                 <input type="checkbox" checked={!!j.hot} onClick={e => e.stopPropagation()} onChange={e => persistJob(j.id, { hot: e.target.checked })} style={{ cursor: "pointer" }} />
               )},
               storeCode: { label: "Store", width: 80, render: j => <span className="t-mono-tag">{j.storeCode || "—"}</span> },
-              vendor: { label: "Vendor", width: 150, stopPropagation: true, render: j => {
+              vendor: { label: "Vendor", width: 170, stopPropagation: true, render: j => {
                 const sub = subcontractors.find(s => s.id === j.subcontractorId);
                 return sub ? (
-                  <span onClick={e => openPanel(e, j.id, "vendor")}
-                    style={{ cursor: "pointer", padding: "2px 4px", borderRadius: 3, display: "inline-block", maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
-                    title="Click to change vendor">👤 {sub.name}</span>
+                  <span style={{ display: "inline-flex", alignItems: "center", gap: 4, maxWidth: "100%" }}>
+                    <span onClick={e => openPanel(e, j.id, "vendor")}
+                      style={{ cursor: "pointer", padding: "2px 4px", borderRadius: 3, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, minWidth: 0 }}
+                      title="Click to change vendor">👤 {sub.name}</span>
+                    <button onClick={e => {
+                        e.stopPropagation();
+                        if (window.confirm(`Remove ${sub.name} from this job?`)) {
+                          persistJob(j.id, { subcontractorId: "" });
+                        }
+                      }}
+                      title="Remove vendor"
+                      style={{ background: "transparent", border: "none", color: "var(--t-ink3)", cursor: "pointer", fontSize: 12, padding: "0 4px", lineHeight: 1, borderRadius: 3, flexShrink: 0 }}
+                      onMouseEnter={e => e.currentTarget.style.color = "var(--t-danger)"}
+                      onMouseLeave={e => e.currentTarget.style.color = "var(--t-ink3)"}>×</button>
+                  </span>
                 ) : (
                   <button onClick={e => openPanel(e, j.id, "vendor")}
                     style={{ background: "transparent", border: "1px dashed var(--t-line3)", borderRadius: 6, padding: "3px 8px", fontSize: 11, color: "var(--t-ink2)", cursor: "pointer", fontFamily: "inherit" }}>+ Vendor</button>
