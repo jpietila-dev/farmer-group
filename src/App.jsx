@@ -164,6 +164,7 @@ const dbToFmJob = r => ({
   completionPhotos: r.completion_photos||[], invoiceAttachment: r.invoice_attachment||null,
   photos: r.photos||[],
   sentToAR: !!r.sent_to_ar, sentToARAt: r.sent_to_ar_at||"", status: r.status||"",
+  invoicedAt: r.invoiced_at||"",
   // NEW columns (matching the AR pipeline spreadsheet)
   priority: r.priority||"",        // Red | Yellow | Green
   hot: !!r.hot,
@@ -198,6 +199,7 @@ const fmJobToDB = j => ({
   completion_photos: j.completionPhotos||[], invoice_attachment: j.invoiceAttachment||null,
   photos: j.photos||[],
   sent_to_ar: !!j.sentToAR, sent_to_ar_at: j.sentToARAt||null, status: j.status||null,
+  invoiced_at: j.invoicedAt||null,
   priority: j.priority||null, hot: !!j.hot, odds: j.odds||0,
   prp_sent: j.prpSent||null, account_manager: j.accountManager||null,
   market_area: j.marketArea||null, category: j.category||"FM",
@@ -5901,6 +5903,13 @@ Return ONLY valid JSON, no markdown, no extra text:
               setInvoices(prev => [inv, ...prev]);
               setShowInvForm(false);
               setInvForm({job:"",client:"",amount:"",invoiceDate:"",dueDate:"",paidDate:"",status:"sent",notes:"",invoiceNum:"",jobId:"",src:""});
+              // If this invoice is linked to an FM job, stamp `invoicedAt` on the job so it disappears
+              // from the Ready-to-Invoice queue immediately and stays gone after refresh.
+              if (inv.src === "FM" && inv.jobId) {
+                const nowISO = new Date().toISOString();
+                setFmJobs(prev => prev.map(j => String(j.id) === String(inv.jobId) ? { ...j, invoicedAt: nowISO } : j));
+                try { await supa.from("fm_jobs").update({ invoiced_at: nowISO }).eq("id", inv.jobId); } catch(e) { console.warn("[saveInvoice] could not stamp invoiced_at on fm_job", e); }
+              }
               const payload = {
                 id: String(inv.id),
                 invoice_num: inv.invoiceNum || "",
@@ -6010,8 +6019,16 @@ Return ONLY valid JSON, no markdown, no extra text:
                 updateInv(inv.id, { closed: true, closedAt: new Date().toISOString().slice(0, 10) });
               }
             };
+            // A job is "ready to invoice" when:
+            //   - it's been sent to AR (in completedAll already)
+            //   - AND we don't have an invoice that links to it
+            //   - AND the FM job itself hasn't been marked invoiced (the bidirectional flag survives refreshes
+            //     even if the invoice row's job_id column was dropped or migrations weren't run)
             const invoicedJobIds = new Set(invoices.map(i=>i.jobId).filter(Boolean));
-            const readyJobs = completedAll.filter(j=>!invoicedJobIds.has(String(j.id)));
+            const readyJobs = completedAll.filter(j => {
+              if (j.invoicedAt) return false;
+              return !invoicedJobIds.has(String(j.id));
+            });
             return (
               <div className="fade-in" style={{display:"flex",flexDirection:"column",gap:20}}>
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
@@ -6285,7 +6302,17 @@ Return ONLY valid JSON, no markdown, no extra text:
                                     </td>
                                     <td style={td}>{inv.vendorName || "—"}</td>
                                     <td style={{ ...td, padding: "8px 6px" }}>
-                                      <button onClick={() => { if(window.confirm("Permanently delete this invoice row?")) { setInvoices(prev=>prev.filter(i=>i.id!==inv.id)); supa.from("accounting_invoices").delete().eq("id",String(inv.id)); }}}
+                                      <button onClick={() => {
+                                        if (!window.confirm("Permanently delete this invoice row?")) return;
+                                        setInvoices(prev => prev.filter(i => i.id !== inv.id));
+                                        supa.from("accounting_invoices").delete().eq("id", String(inv.id));
+                                        // If this invoice was linked to an FM job, clear that job's invoicedAt
+                                        // so it returns to the Ready-to-Invoice queue.
+                                        if (inv.src === "FM" && inv.jobId) {
+                                          setFmJobs(prev => prev.map(j => String(j.id) === String(inv.jobId) ? { ...j, invoicedAt: "" } : j));
+                                          try { supa.from("fm_jobs").update({ invoiced_at: null }).eq("id", inv.jobId); } catch(e) {}
+                                        }
+                                      }}
                                         style={{ background: "none", border: "none", color: "#F87171", cursor: "pointer", fontSize: 13, padding: 4 }}
                                         title="Delete row">×</button>
                                     </td>
