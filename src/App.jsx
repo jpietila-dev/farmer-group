@@ -4903,6 +4903,26 @@ export default function App() {
     load();
   }, []);
 
+  // Auto-categorize subs as FM: any sub assigned to an FM job (subcontractorId)
+  // must carry the "fm" service tag so they appear under the Facility Maintenance
+  // subcontractors tab. Covers every assignment path centrally.
+  React.useEffect(() => {
+    if (!subcontractors.length || !fmJobs.length) return;
+    const assignedSubIds = new Set(fmJobs.map(j => j.subcontractorId).filter(Boolean));
+    const needsTag = subcontractors.filter(
+      s => assignedSubIds.has(s.id) && !(s.services || []).includes("fm")
+    );
+    if (!needsTag.length) return;
+    const tagIds = new Set(needsTag.map(s => s.id));
+    setSubcontractors(prev =>
+      prev.map(s => tagIds.has(s.id) ? { ...s, services: [...(s.services || []), "fm"] } : s)
+    );
+    needsTag.forEach(s => {
+      const updated = { ...s, services: [...(s.services || []), "fm"] };
+      try { supa.from("subcontractors").update(subToDB(updated)).eq("id", s.id); } catch (_) {}
+    });
+  }, [fmJobs, subcontractors]);
+
   // Site helpers
   const openAddSite = () => { setEditSiteId(null); setSiteForm({ companyId: "", contactIds: [], storeNumber: "", address: "", phone: "", accessCode: "", notes: "" }); setShowSiteForm(true); };
   const openEditSite = (s) => { setEditSiteId(s.id); setSiteForm({ ...s }); setShowSiteForm(true); };
@@ -12056,7 +12076,7 @@ window.addEventListener('message',function(e){
           )}
 
           {/* -- TEAM -- */}
-          {activeNav === "team" && !selectedCoord && (() => {
+          {activeNav === "team" && !selectedCoord && !accountingMode && !crmMode && (() => {
             // Filter team by division — ALL shows everyone, other BUs filter to matching division
             const BU_TO_DIV = { facility:"facility", major:"major", capital:"capital", lawn:"lawn", snow:"snow" };
             const curDiv = BU_TO_DIV[activeBU];
@@ -12173,7 +12193,7 @@ window.addEventListener('message',function(e){
           })()}
 
           {/* -- PM PERSONAL DASHBOARD -- */}
-          {activeNav === "team" && selectedCoord && (() => {
+          {activeNav === "team" && selectedCoord && !accountingMode && !crmMode && (() => {
             const now = new Date();
             const curYear = now.getFullYear();
             const curMonth = now.getMonth();
