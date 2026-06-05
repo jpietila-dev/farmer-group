@@ -513,6 +513,58 @@ const CAPEX_STAGES = [
 const CAPEX_PIPELINE_STAGES = CAPEX_STAGES.filter(s => s.phase === "pipeline");
 const CAPEX_ACTIVE_STAGES   = CAPEX_STAGES.filter(s => s.phase === "active");
 
+// ── CapEx Kickoff Sheet schema ──
+// Filled when a job is approved and advanced into Buyout. `auto` marks fields
+// the app pre-fills from the job/site/company; `req` marks fields required to
+// finalize (which gates the Buyout advance).
+const KICKOFF_SECTIONS = [
+  { title: "Job Overview", fields: [
+    { key: "storageCompany", label: "Storage Company (Myplace, PS, etc.)", auto: true, req: true },
+    { key: "jobName",        label: "Job Name (from PBR)",                  auto: true, req: true },
+    { key: "jobDescription", label: "Brief Job Description", type: "area",  auto: true, req: true },
+    { key: "siteVisited",    label: "Has anyone from FDI been to the site?", type: "yesno", req: true },
+  ]},
+  { title: "Site Details & Access", fields: [
+    { key: "siteAddress",    label: "Job Site Address",            auto: true, req: true },
+    { key: "sitePhone",      label: "Site Phone Number",           auto: true },
+    { key: "gateCode",       label: "Gate Code",                   auto: true },
+    { key: "accessHours",    label: "Access hours of code use (e.g. 6am–10pm or 24 hr)" },
+    { key: "lockBoxCode",    label: "Lock Box Code" },
+  ]},
+  { title: "Property Manager Information", fields: [
+    { key: "pmName",         label: "Property Manager",            auto: true },
+    { key: "pmEmail",        label: "Property Manager or Site Email", auto: true },
+    { key: "pmPhone",        label: "PM Contact Cell or Direct Office Phone", auto: true },
+    { key: "pmHours",        label: "Hours of Operation (when site manager is there)" },
+    { key: "pmClosedDays",   label: "Days they are closed where we can't work" },
+  ]},
+  { title: "Project Financials & Scope", fields: [
+    { key: "unitMix",        label: "Site Unit Mix Numbered Layout", type: "area" },
+    { key: "contractRevenue",label: "Total Contract Revenue",      auto: true, type: "money", req: true },
+    { key: "projectedCogs",  label: "Projected COGs",              auto: true, type: "money" },
+    { key: "projectedGp",    label: "Projected $ and GP % (Margin)", auto: true },
+    { key: "divisions",      label: "Divisions of work to be bought out", type: "area", req: true },
+    { key: "tradeBuyout",    label: "Potential Trade Buyout and what trade", type: "area" },
+    { key: "alternates",     label: "Does the job have alternates and which were accepted?", type: "area" },
+  ]},
+  { title: "Risks & Notes", fields: [
+    { key: "jobNotes",       label: "Special Job Specific Notes", type: "area" },
+    { key: "risks",          label: "Potential Risks",            type: "area" },
+    { key: "unknowns",       label: "Unknowns",                   type: "area" },
+  ]},
+];
+const KICKOFF_CHECKLIST = [
+  "All updated/latest revision info in Drop Box",
+  "Job memo",
+  "Vendor quotes",
+  "Owner contract",
+  "Site map number plan",
+  "Files stored in SS or emails",
+  "Existing site pictures",
+  "Bid quote take-off PDF",
+];
+const KICKOFF_REQUIRED = KICKOFF_SECTIONS.flatMap(s => s.fields.filter(f => f.req).map(f => f.key));
+
 const FM_STAGES = [
   { id: "estimating",         label: "Estimating",          actionLabel: "Bid Due Date",    actionKey: "bidDueDate",    color: "#818CF8", phase: "pipeline" },
   { id: "waiting_quote",      label: "Waiting on Quotes",   actionLabel: "Quote Due",       actionKey: "quoteDueDate",  color: "#A78BFA", phase: "pipeline" },
@@ -4406,7 +4458,7 @@ export default function App() {
   const [selectedCapexFull,setSelectedCapexFull]= useState(null); // full-page detail view
   const [showCapexBuyoutGate, setShowCapexBuyoutGate] = useState(false);
   const [capexBuyoutJob,      setCapexBuyoutJob]      = useState(null);
-  const [capexBuyoutForm,     setCapexBuyoutForm]     = useState({startDate:"",endDate:"",pm:"",contractValue:""});
+  const [capexBuyoutForm,     setCapexBuyoutForm]     = useState({startDate:"",endDate:"",pm:"",contractValue:"",kickoff:{}});
   const [capexWonHandoff,     setCapexWonHandoff]     = useState(null); // {job, noahOk, bradOk}
   const [selectedOppFull,     setSelectedOppFull]     = useState(null); // opp id for full-page deal view
   const [addSubForItem,       setAddSubForItem]       = useState(null); // {oppId, itemId} — which line we're adding a sub to
@@ -5025,6 +5077,81 @@ export default function App() {
     return patch;
   };
 
+  // Build a Kickoff Sheet draft, auto-filling from the job + its linked site + company.
+  // Preserves any already-saved kickoff values (so re-opening doesn't clobber edits).
+  const buildKickoffDraft = (job) => {
+    const co   = companies.find(c => c.id === job.companyId);
+    const site = sites.find(s => s.id === job.siteId);
+    const saved = job.kickoff || {};
+    const cogs = job.subCost || job.ownerCost || (job.contractValue && job.grossProfit ? job.contractValue - job.grossProfit : "");
+    const gpPct = job.contractValue ? Math.round(((job.contractValue - (Number(cogs)||0)) / job.contractValue) * 100) : "";
+    const auto = {
+      storageCompany:  co?.name || "",
+      jobName:         job.name || "",
+      jobDescription:  job.notes || "",
+      siteAddress:     site?.address || "",
+      sitePhone:       site?.phone || "",
+      gateCode:        site?.gateCode || site?.accessCode || "",
+      pmName:          site?.managerName || "",
+      pmEmail:         site?.managerEmail || "",
+      pmPhone:         site?.managerPhone || "",
+      contractRevenue: job.contractValue ? String(job.contractValue) : "",
+      projectedCogs:   cogs !== "" ? String(cogs) : "",
+      projectedGp:     gpPct !== "" ? gpPct + "%" : "",
+    };
+    // Saved values win over auto-fill; checklist defaults to all-false
+    const checklist = saved.checklist || Object.fromEntries(KICKOFF_CHECKLIST.map(c => [c, false]));
+    return { ...auto, ...saved, checklist };
+  };
+
+  // Export a finalized Kickoff Sheet to PDF via a print window (no external deps).
+  const exportKickoffPDF = (job) => {
+    const k = job.kickoff || {};
+    const co = companies.find(c => c.id === job.companyId);
+    const esc = (s) => String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+    const sectionsHtml = KICKOFF_SECTIONS.map(sec => {
+      const rows = sec.fields.map(f => {
+        const v = k[f.key];
+        return `<tr><td class="lbl">${esc(f.label)}</td><td class="val">${esc(v)||"<span class='empty'>—</span>"}</td></tr>`;
+      }).join("");
+      return `<h3>${esc(sec.title)}</h3><table>${rows}</table>`;
+    }).join("");
+    const checkHtml = KICKOFF_CHECKLIST.map(item => {
+      const on = !!((k.checklist||{})[item]);
+      return `<div class="chk"><span class="box">${on?"&#10003;":""}</span>${esc(item)}</div>`;
+    }).join("");
+    const html = `<!doctype html><html><head><meta charset="utf-8"><title>Kickoff — ${esc(job.name)}</title>
+      <style>
+        *{box-sizing:border-box} body{font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#1A2240;margin:0;padding:32px;font-size:12px}
+        .hd{border-bottom:3px solid #D97706;padding-bottom:12px;margin-bottom:16px}
+        .hd .t{font-size:20px;font-weight:800} .hd .s{font-size:12px;color:#6B7280;margin-top:3px}
+        .meta{display:flex;gap:24px;font-size:11px;color:#4A5278;margin-bottom:18px}
+        h3{font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:#D97706;margin:18px 0 6px;border-bottom:1px solid #E8EBF4;padding-bottom:3px}
+        table{width:100%;border-collapse:collapse;margin-bottom:4px}
+        td{padding:5px 8px;vertical-align:top;border-bottom:1px solid #F0F2F8}
+        td.lbl{width:42%;color:#4A5278;font-weight:600} td.val{color:#1A2240;white-space:pre-wrap}
+        .empty{color:#C0C6D6} .chk{display:flex;align-items:center;gap:8px;padding:3px 0}
+        .box{display:inline-flex;width:15px;height:15px;border:1.5px solid #059669;border-radius:3px;align-items:center;justify-content:center;color:#059669;font-size:11px;flex-shrink:0}
+        .ft{margin-top:24px;padding-top:10px;border-top:1px solid #E8EBF4;font-size:9px;color:#9BA3BF;text-align:center}
+        @media print{body{padding:0}}
+      </style></head><body>
+      <div class="hd"><div class="t">Project Kickoff Sheet</div><div class="s">${esc(job.name)}${co?" · "+esc(co.name):""}</div></div>
+      <div class="meta">
+        <div><strong>Contract:</strong> ${esc(fmt(job.contractValue))}</div>
+        <div><strong>PM:</strong> ${esc(job.pm||"—")}</div>
+        <div><strong>Finalized:</strong> ${esc((k.finalizedAt||"").slice(0,10)||"Draft")}</div>
+      </div>
+      ${sectionsHtml}
+      <h3>Drop Box Documentation Checklist</h3>${checkHtml}
+      <div class="ft">FDI — Farmer Development Inc. · Prepared &amp; Accountable</div>
+      </body></html>`;
+    const w = window.open("", "_blank");
+    if (!w) { alert("Pop-up blocked. Allow pop-ups to export the kickoff PDF."); return; }
+    w.document.write(html);
+    w.document.close();
+    setTimeout(() => { w.focus(); w.print(); }, 350);
+  };
+
   const updateCapexJobPersist = (id, patch) => {
     setCapexJobs(prev => prev.map(j => {
       if (j.id !== id) return j;
@@ -5049,6 +5176,7 @@ export default function App() {
           proposal_number: updated.proposalNumber||null,
           brad_reviewed: updated.bradReviewed||false,
           assigned_to: updated.assignedTo||null,
+          kickoff_sheet: updated.kickoff||null,
         };
         supa.from("capex_jobs").update(dbRow).eq("id", id);
       } catch(e) {}
@@ -17153,8 +17281,13 @@ window.addEventListener('message',function(e){
         };
         const moveToBuyout = () => {
           setCapexWonHandoff(null);
-          setCapexBuyoutJob(capexJobs.find(j=>j.id===job.id)||job);
-          setCapexBuyoutForm({startDate:job.startDate||"",endDate:job.endDate||"",pm:job.pm||"",contractValue:String(job.contractValue||"")});
+          const jb = capexJobs.find(j=>j.id===job.id)||job;
+          setCapexBuyoutJob(jb);
+          setCapexBuyoutForm({
+            startDate:jb.startDate||"", endDate:jb.endDate||"", pm:jb.pm||"",
+            contractValue:String(jb.contractValue||""),
+            kickoff: buildKickoffDraft(jb),
+          });
           setShowCapexBuyoutGate(true);
         };
         return (
@@ -17229,27 +17362,46 @@ window.addEventListener('message',function(e){
         const co  = companies.find(c=>c.id===job.companyId);
         const W   = capexBuyoutForm;
         const setW = (k,v) => setCapexBuyoutForm(f=>({...f,[k]:v}));
-        const valid = W.startDate && W.endDate && W.pm && W.contractValue;
+        const K = W.kickoff || {};
+        const setK = (k,v) => setCapexBuyoutForm(f=>({...f, kickoff:{...(f.kickoff||{}), [k]:v}}));
+        const toggleCheck = (item) => setCapexBuyoutForm(f=>({...f, kickoff:{...(f.kickoff||{}), checklist:{...((f.kickoff||{}).checklist||{}), [item]: !((f.kickoff||{}).checklist||{})[item]}}}));
+        const missingKickoff = KICKOFF_REQUIRED.filter(key => {
+          const v = K[key];
+          return v === undefined || v === null || String(v).trim() === "";
+        });
+        const valid = W.startDate && W.endDate && W.pm && W.contractValue && missingKickoff.length === 0;
         const confirm = () => {
           if (!valid) return;
+          const finalizedKickoff = { ...K, finalizedAt: new Date().toISOString(), finalizedStage: "buyout" };
           updateCapexJobPersist(job.id, {
             stage:"buyout", startDate:W.startDate, endDate:W.endDate,
             pm:W.pm, contractValue:parseFloat(W.contractValue)||job.contractValue,
             buyoutDate:new Date().toISOString().slice(0,10),
+            kickoff: finalizedKickoff,
           });
           setShowCapexBuyoutGate(false);
           setCapexBuyoutJob(null);
         };
         const fi = {width:"100%",padding:"9px 12px",border:"1.5px solid #CBD1E8",borderRadius:7,fontSize:13,fontFamily:"inherit",outline:"none",boxSizing:"border-box"};
+        const renderKField = (f) => {
+          const val = K[f.key] ?? "";
+          const showReq = f.req && (val===""||val==null);
+          const lbl = <div style={{fontSize:11,fontWeight:700,color:"#1A2240",marginBottom:4}}>{f.label}{f.req&&" *"}{f.auto&&<span style={{marginLeft:6,fontSize:9,fontWeight:600,color:"#059669",background:"#ECFDF5",border:"1px solid #A7F3D0",borderRadius:4,padding:"1px 5px",textTransform:"uppercase",letterSpacing:"0.04em"}}>auto</span>}</div>;
+          const bd = showReq ? "1.5px solid #FCA5A5" : fi.border;
+          if (f.type==="area") return <div key={f.key}>{lbl}<textarea value={val} onChange={e=>setK(f.key,e.target.value)} rows={2} style={{...fi,border:bd,resize:"vertical"}}/></div>;
+          if (f.type==="yesno") return <div key={f.key}>{lbl}<div style={{display:"flex",gap:8}}>{["Yes","No"].map(o=>(<button key={o} onClick={()=>setK(f.key,o)} style={{flex:1,padding:"8px",borderRadius:7,border:"1.5px solid "+(val===o?"#3B6FE8":"#CBD1E8"),background:val===o?"#EEF3FE":"#fff",color:val===o?"#3B6FE8":"#4A5278",fontFamily:"inherit",fontSize:13,fontWeight:600,cursor:"pointer"}}>{o}</button>))}</div></div>;
+          if (f.type==="money") return <div key={f.key}>{lbl}<input type="number" value={val} onChange={e=>setK(f.key,e.target.value)} placeholder="$0" style={{...fi,border:bd}}/></div>;
+          return <div key={f.key}>{lbl}<input value={val} onChange={e=>setK(f.key,e.target.value)} style={{...fi,border:bd}}/></div>;
+        };
         return (
           <div style={{position:"fixed",inset:0,background:"rgba(10,16,36,0.75)",zIndex:2200,display:"flex",alignItems:"center",justifyContent:"center",backdropFilter:"blur(4px)",padding:16}}>
-            <div style={{background:"#fff",borderRadius:16,width:"min(460px,100%)",boxShadow:"0 12px 60px rgba(0,0,0,0.25)",overflow:"hidden"}}>
-              <div style={{background:"linear-gradient(135deg,#78350F,#D97706)",padding:"20px 24px",color:"#fff"}}>
-                <div style={{fontSize:11,color:"rgba(255,255,255,0.6)",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:4}}>🛒 Moving to Buyout</div>
+            <div style={{background:"#fff",borderRadius:16,width:"min(620px,100%)",maxHeight:"92vh",display:"flex",flexDirection:"column",boxShadow:"0 12px 60px rgba(0,0,0,0.25)",overflow:"hidden"}}>
+              <div style={{background:"linear-gradient(135deg,#78350F,#D97706)",padding:"20px 24px",color:"#fff",flexShrink:0}}>
+                <div style={{fontSize:11,color:"rgba(255,255,255,0.6)",textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:4}}>🛒 Moving to Buyout — Project Kickoff</div>
                 <div style={{fontSize:17,fontWeight:800}}>{job.name}</div>
                 {co&&<div style={{fontSize:12,color:"rgba(255,255,255,0.7)",marginTop:2}}>{co.name}</div>}
               </div>
-              <div style={{padding:"20px 24px",display:"flex",flexDirection:"column",gap:14}}>
+              <div style={{padding:"20px 24px",display:"flex",flexDirection:"column",gap:14,overflowY:"auto"}}>
                 <div style={{background:"#FFF8E7",border:"1px solid #FDE68A",borderRadius:8,padding:"12px 14px"}}>
                   <div style={{fontSize:11,fontWeight:700,color:"#92400E",marginBottom:4}}>📋 Brad's Buyout Responsibilities</div>
                   <div style={{display:"flex",flexDirection:"column",gap:3}}>
@@ -17286,13 +17438,47 @@ window.addEventListener('message',function(e){
                   <input type="number" value={W.contractValue} onChange={e=>setW("contractValue",e.target.value)} placeholder="$0" style={fi}/>
                   {job.contractValue>0&&<div style={{fontSize:10,color:"#9BA3BF",marginTop:3}}>Originally estimated: {fmt(job.contractValue)}</div>}
                 </div>
+
+                {/* ── KICKOFF SHEET ── */}
+                <div style={{borderTop:"2px solid #FDE68A",margin:"4px 0",paddingTop:14}}>
+                  <div style={{fontSize:13,fontWeight:800,color:"#92400E",textTransform:"uppercase",letterSpacing:"0.04em"}}>📝 Project Kickoff Sheet</div>
+                  <div style={{fontSize:11,color:"#4A5278",marginTop:3}}>Finalize the kickoff before this job enters Buyout. Auto-filled fields are pulled from the job, site, and customer — review and complete the rest.</div>
+                </div>
+                {KICKOFF_SECTIONS.map(section=>(
+                  <div key={section.title} style={{display:"flex",flexDirection:"column",gap:10,background:"#FAFBFD",border:"1px solid #E8EBF4",borderRadius:10,padding:"14px 16px"}}>
+                    <div style={{fontSize:11,fontWeight:800,color:"#3B6FE8",textTransform:"uppercase",letterSpacing:"0.05em"}}>{section.title}</div>
+                    {section.fields.map(renderKField)}
+                  </div>
+                ))}
+                {/* Dropbox checklist */}
+                <div style={{display:"flex",flexDirection:"column",gap:8,background:"#FAFBFD",border:"1px solid #E8EBF4",borderRadius:10,padding:"14px 16px"}}>
+                  <div style={{fontSize:11,fontWeight:800,color:"#3B6FE8",textTransform:"uppercase",letterSpacing:"0.05em"}}>Drop Box Documentation Checklist</div>
+                  {KICKOFF_CHECKLIST.map(item=>{
+                    const on = !!((K.checklist||{})[item]);
+                    return (
+                      <div key={item} onClick={()=>toggleCheck(item)} style={{display:"flex",gap:9,alignItems:"center",cursor:"pointer",fontSize:12,color:"#1A2240"}}>
+                        <div style={{width:18,height:18,borderRadius:5,border:"1.5px solid "+(on?"#059669":"#CBD1E8"),background:on?"#059669":"#fff",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,flexShrink:0}}>{on?"✓":""}</div>
+                        <span>{item}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Pinned footer */}
+              <div style={{padding:"14px 24px",borderTop:"1px solid #E8EBF4",background:"#fff",flexShrink:0}}>
+                {!valid && missingKickoff.length>0 && (
+                  <div style={{fontSize:11,color:"#B91C1C",background:"#FEF2F2",border:"1px solid #FECACA",borderRadius:6,padding:"7px 10px",marginBottom:10}}>
+                    ⚠ {missingKickoff.length} required kickoff field{missingKickoff.length>1?"s":""} remaining
+                  </div>
+                )}
                 <div style={{display:"flex",gap:8}}>
-                  <button onClick={()=>{setShowCapexBuyoutGate(false);setCapexBuyoutJob(null);}} style={{flex:1,padding:"9px",background:"#F0F2F8",border:"1px solid #CBD1E8",borderRadius:7,cursor:"pointer",fontFamily:"inherit",fontSize:13,color:"#4A5278"}}>Cancel</button>
-                  <button onClick={confirm} disabled={!valid} style={{flex:2,padding:"9px",background:valid?"#FCD34D":"#F0F2F8",border:"none",borderRadius:7,cursor:valid?"pointer":"default",fontFamily:"inherit",fontSize:13,color:valid?"#1A2240":"#9BA3BF",fontWeight:700,opacity:valid?1:0.6}}>
-                    {valid?"✓ Confirm & Move to Buyout":"Fill all required fields"}
+                  <button onClick={()=>{setShowCapexBuyoutGate(false);setCapexBuyoutJob(null);}} style={{flex:1,padding:"10px",background:"#F0F2F8",border:"1px solid #CBD1E8",borderRadius:7,cursor:"pointer",fontFamily:"inherit",fontSize:13,color:"#4A5278"}}>Cancel</button>
+                  <button onClick={confirm} disabled={!valid} style={{flex:2,padding:"10px",background:valid?"#FCD34D":"#F0F2F8",border:"none",borderRadius:7,cursor:valid?"pointer":"default",fontFamily:"inherit",fontSize:13,color:valid?"#1A2240":"#9BA3BF",fontWeight:700,opacity:valid?1:0.6}}>
+                    {valid?"✓ Finalize Kickoff & Move to Buyout":"Complete required fields to continue"}
                   </button>
                 </div>
-                <div style={{fontSize:9,color:"#9BA3BF",textAlign:"center",paddingTop:4}}>
+                <div style={{fontSize:9,color:"#9BA3BF",textAlign:"center",paddingTop:8}}>
                   <strong style={{color:"#1A2240"}}>Prepared</strong> — Stay ahead of the game · <strong style={{color:"#1A2240"}}>Accountable</strong> — Own every responsibility
                 </div>
               </div>
@@ -17625,6 +17811,58 @@ window.addEventListener('message',function(e){
                   </div>
                 )}
                 {selectedCapexJob.notes && <div style={{ fontSize: 12, color: "#6B7694", lineHeight: 1.6, background: "#F0F2F8", padding: "10px 12px", borderRadius: 6, border: "1px solid #CBD1E8" }}>{selectedCapexJob.notes}</div>}
+
+                {/* ── Kickoff Sheet (lives inside the job) ── */}
+                {(() => {
+                  const k = selectedCapexJob.kickoff;
+                  const hasKickoff = k && k.finalizedAt;
+                  const pastEstimating = !["estimating","owner_approval","won","lost"].includes(selectedCapexJob.stage);
+                  const openEditor = () => {
+                    const jb = selectedCapexJob;
+                    setCapexBuyoutJob(jb);
+                    setCapexBuyoutForm({
+                      startDate: jb.startDate||"", endDate: jb.endDate||"", pm: jb.pm||"",
+                      contractValue: String(jb.contractValue||""),
+                      kickoff: buildKickoffDraft(jb),
+                    });
+                    setShowCapexBuyoutGate(true);
+                    setSelectedCapexJob(null);
+                  };
+                  if (hasKickoff) {
+                    const checked = Object.values(k.checklist||{}).filter(Boolean).length;
+                    return (
+                      <div style={{ border: "1px solid #FDE68A", background: "#FFFBEB", borderRadius: 10, padding: "14px 16px" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                          <div style={{ fontSize: 11, fontWeight: 800, color: "#92400E", textTransform: "uppercase", letterSpacing: "0.05em" }}>📝 Kickoff Sheet</div>
+                          <div style={{ fontSize: 9, color: "#B45309" }}>Finalized {String(k.finalizedAt).slice(0,10)}</div>
+                        </div>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                          {KICKOFF_SECTIONS.flatMap(s=>s.fields).filter(f=>k[f.key]!==undefined&&k[f.key]!==""&&k[f.key]!=null).slice(0,8).map(f=>(
+                            <div key={f.key} style={{ display: "flex", justifyContent: "space-between", gap: 10, fontSize: 11 }}>
+                              <span style={{ color: "#92400E", flexShrink: 0 }}>{f.label.split("(")[0].trim()}</span>
+                              <span style={{ color: "#1A2240", textAlign: "right", fontWeight: 500 }}>{String(k[f.key]).length>40?String(k[f.key]).slice(0,40)+"…":String(k[f.key])}</span>
+                            </div>
+                          ))}
+                          <div style={{ fontSize: 10, color: "#B45309", marginTop: 2 }}>Drop Box checklist: {checked}/{KICKOFF_CHECKLIST.length} complete</div>
+                        </div>
+                        <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+                          <button className="btn-ghost" style={{ flex: 1, fontSize: 12 }} onClick={openEditor}>✎ Edit Kickoff</button>
+                          <button className="btn-ghost" style={{ flex: 1, fontSize: 12 }} onClick={() => exportKickoffPDF(selectedCapexJob)}>⬇ Export PDF</button>
+                        </div>
+                      </div>
+                    );
+                  }
+                  if (pastEstimating) {
+                    return (
+                      <div style={{ border: "1px dashed #FDE68A", background: "#FFFBEB", borderRadius: 10, padding: "12px 16px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10 }}>
+                        <div style={{ fontSize: 11, color: "#92400E" }}>📝 No kickoff sheet on file for this job.</div>
+                        <button className="btn-ghost" style={{ fontSize: 12, flexShrink: 0 }} onClick={openEditor}>+ Start Kickoff</button>
+                      </div>
+                    );
+                  }
+                  return null;
+                })()}
+
                 <div style={{ display: "flex", gap: 8 }}>
                   <button className="btn-ghost" style={{ flex: 1 }} onClick={() => { openEditCapex(selectedCapexJob); setSelectedCapexJob(null); }}>✎ Edit</button>
                   <button className="btn-ghost" style={{ color: "#F87171", borderColor: "#F8717120" }} onClick={() => deleteCapex(selectedCapexJob.id)}>✕</button>
@@ -19339,8 +19577,18 @@ window.addEventListener('message',function(e){
               </div>
               <div><label className="lbl">Stage</label>
                 <select className="fi" value={capexForm.stage} onChange={e => setCapexForm(f => ({ ...f, stage: e.target.value }))}>
-                  {CAPEX_FM_STAGES.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
+                  {CAPEX_FM_STAGES.map(s => {
+                    // Active stages (buyout onward) are only enterable via the Kickoff gate.
+                    // Allow selecting them only if the job is already in an active stage.
+                    const activeOrder = ["buyout","do_work","bill"];
+                    const alreadyActive = activeOrder.includes(editCapexId ? capexForm.stage : "");
+                    const locked = activeOrder.includes(s.id) && !alreadyActive;
+                    return <option key={s.id} value={s.id} disabled={locked}>{s.label}{locked ? " — via Kickoff gate" : ""}</option>;
+                  })}
                 </select>
+                {["estimating","owner_approval","won","lost"].includes(capexForm.stage) && (
+                  <div style={{fontSize:10,color:"#9BA3BF",marginTop:3}}>Buyout & active stages require finalizing the Kickoff Sheet — use “Mark Won” → buyout on the job card.</div>
+                )}
               </div>
               {/* Stage-specific action date */}
               {(() => { const st = CAPEX_FM_STAGES.find(s => s.id === capexForm.stage); return st ? (
