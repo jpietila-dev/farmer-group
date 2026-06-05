@@ -10934,8 +10934,98 @@ window.addEventListener('message',function(e){
                       </div>
                       {/* Notes */}
                       {job.notes && <div style={{background:"#F9FAFC",borderRadius:8,border:"1px solid #E8EBF4",padding:"12px 14px",fontSize:12,color:"#4A5278",lineHeight:1.6}}>{job.notes}</div>}
+
+                      {/* Kickoff summary (overview) */}
+                      {(() => {
+                        const k = job.kickoff;
+                        const openEditor = () => {
+                          setCapexBuyoutJob(job);
+                          setCapexBuyoutForm({ startDate:job.startDate||"", endDate:job.endDate||"", pm:job.pm||"", contractValue:String(job.contractValue||""), kickoff:buildKickoffDraft(job) });
+                          setShowCapexBuyoutGate(true);
+                        };
+                        if (k && k.finalizedAt) {
+                          const checked = Object.values(k.checklist||{}).filter(Boolean).length;
+                          return (
+                            <div style={{border:"1px solid #FDE68A",background:"#FFFBEB",borderRadius:10,padding:"14px 16px"}}>
+                              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+                                <div style={{fontSize:11,fontWeight:800,color:"#92400E",textTransform:"uppercase",letterSpacing:"0.05em"}}>📝 Kickoff Sheet</div>
+                                <div style={{fontSize:9,color:"#B45309"}}>Finalized {String(k.finalizedAt).slice(0,10)} · checklist {checked}/{KICKOFF_CHECKLIST.length}</div>
+                              </div>
+                              <div style={{display:"flex",gap:8}}>
+                                <button onClick={()=>setCapexDetailTab("buyout")} style={{flex:1,padding:"8px",background:"#fff",border:"1px solid #FDE68A",borderRadius:7,cursor:"pointer",fontFamily:"inherit",fontSize:12,color:"#92400E",fontWeight:600}}>View full sheet →</button>
+                                <button onClick={()=>exportKickoffPDF(job)} style={{flex:1,padding:"8px",background:"#fff",border:"1px solid #FDE68A",borderRadius:7,cursor:"pointer",fontFamily:"inherit",fontSize:12,color:"#92400E",fontWeight:600}}>⬇ Export PDF</button>
+                              </div>
+                            </div>
+                          );
+                        }
+                        return (
+                          <div style={{border:"1px dashed #FDE68A",background:"#FFFBEB",borderRadius:10,padding:"12px 16px",display:"flex",justifyContent:"space-between",alignItems:"center",gap:10}}>
+                            <div style={{fontSize:11,color:"#92400E"}}>📝 No kickoff sheet finalized yet.</div>
+                            <button onClick={openEditor} style={{flexShrink:0,padding:"7px 12px",background:"#FCD34D",border:"none",borderRadius:7,cursor:"pointer",fontFamily:"inherit",fontSize:12,color:"#1A2240",fontWeight:700}}>+ Start Kickoff</button>
+                          </div>
+                        );
+                      })()}
                     </div>
                   )}
+
+                  {/* ── BUYOUT TAB (Kickoff Sheet) ── */}
+                  {activeTab === "buyout" && (() => {
+                    const k = job.kickoff || {};
+                    const hasKickoff = k && k.finalizedAt;
+                    const openEditor = () => {
+                      setCapexBuyoutJob(job);
+                      setCapexBuyoutForm({ startDate:job.startDate||"", endDate:job.endDate||"", pm:job.pm||"", contractValue:String(job.contractValue||""), kickoff:buildKickoffDraft(job) });
+                      setShowCapexBuyoutGate(true);
+                    };
+                    return (
+                      <div style={{display:"flex",flexDirection:"column",gap:16}}>
+                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                          <div>
+                            <div style={{fontSize:15,fontWeight:800,color:"#1A2240"}}>📝 Project Kickoff Sheet</div>
+                            {hasKickoff
+                              ? <div style={{fontSize:11,color:"#B45309",marginTop:2}}>Finalized {String(k.finalizedAt).slice(0,10)}</div>
+                              : <div style={{fontSize:11,color:"#9BA3BF",marginTop:2}}>Not finalized yet</div>}
+                          </div>
+                          <div style={{display:"flex",gap:8}}>
+                            <button onClick={openEditor} style={{padding:"8px 14px",background:"#fff",border:"1px solid #CBD1E8",borderRadius:7,cursor:"pointer",fontFamily:"inherit",fontSize:12,color:"#4A5278",fontWeight:600}}>✎ {hasKickoff?"Edit":"Fill out"}</button>
+                            {hasKickoff && <button onClick={()=>exportKickoffPDF(job)} style={{padding:"8px 14px",background:"#FCD34D",border:"none",borderRadius:7,cursor:"pointer",fontFamily:"inherit",fontSize:12,color:"#1A2240",fontWeight:700}}>⬇ Export PDF</button>}
+                          </div>
+                        </div>
+                        {!hasKickoff && (
+                          <div style={{border:"1px dashed #FDE68A",background:"#FFFBEB",borderRadius:10,padding:"16px",fontSize:12,color:"#92400E"}}>No kickoff sheet has been finalized for this job. Click <strong>Fill out</strong> to complete it.</div>
+                        )}
+                        {hasKickoff && KICKOFF_SECTIONS.map(sec => (
+                          <div key={sec.title} style={{border:"1px solid #E8EBF4",borderRadius:10,overflow:"hidden"}}>
+                            <div style={{background:"#FAFBFD",padding:"10px 14px",fontSize:11,fontWeight:800,color:"#3B6FE8",textTransform:"uppercase",letterSpacing:"0.05em",borderBottom:"1px solid #E8EBF4"}}>{sec.title}</div>
+                            <div style={{padding:"4px 14px"}}>
+                              {sec.fields.map(f => (
+                                <div key={f.key} style={{display:"flex",gap:12,padding:"7px 0",borderBottom:"1px solid #F4F6FB",fontSize:12}}>
+                                  <span style={{width:"42%",color:"#4A5278",fontWeight:600,flexShrink:0}}>{f.label}</span>
+                                  <span style={{color:(k[f.key]==null||k[f.key]==="")?"#C0C6D6":"#1A2240",whiteSpace:"pre-wrap"}}>{(k[f.key]==null||k[f.key]==="")?"—":String(k[f.key])}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                        {hasKickoff && (
+                          <div style={{border:"1px solid #E8EBF4",borderRadius:10,overflow:"hidden"}}>
+                            <div style={{background:"#FAFBFD",padding:"10px 14px",fontSize:11,fontWeight:800,color:"#3B6FE8",textTransform:"uppercase",letterSpacing:"0.05em",borderBottom:"1px solid #E8EBF4"}}>Drop Box Documentation Checklist</div>
+                            <div style={{padding:"10px 14px",display:"flex",flexDirection:"column",gap:6}}>
+                              {KICKOFF_CHECKLIST.map(item => {
+                                const on = !!((k.checklist||{})[item]);
+                                return (
+                                  <div key={item} style={{display:"flex",gap:9,alignItems:"center",fontSize:12,color:"#1A2240"}}>
+                                    <span style={{width:16,height:16,borderRadius:4,border:"1.5px solid "+(on?"#059669":"#CBD1E8"),background:on?"#059669":"#fff",color:"#fff",display:"inline-flex",alignItems:"center",justifyContent:"center",fontSize:11,flexShrink:0}}>{on?"✓":""}</span>
+                                    <span>{item}</span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
 
                   {/* ── ESTIMATING TAB ── */}
                   {activeTab === "estimating" && (() => {
