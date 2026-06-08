@@ -4809,7 +4809,7 @@ export default function App() {
     const load = async () => {
       setDbLoading(l => ({ ...l, companies: true, sites: true, lawnSites: true, subcontractors: true }));
       try {
-        const [coRes, siteRes, subRes, fmRes, teamRes, crmRes, ctRes, mpPipeRes, mpRes, mpwRes, mpVendorRes, mpEstimateRes] = await Promise.all([
+        const [coRes, siteRes, subRes, fmRes, teamRes, crmRes, ctRes, mpPipeRes, mpRes, mpwRes, mpVendorRes, mpEstimateRes, capexRes] = await Promise.all([
           supa.from("companies").select("*"),
           fetch(`${SUPA_URL}/rest/v1/sites?select=*&limit=1000`, {
             headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}` }
@@ -4830,6 +4830,9 @@ export default function App() {
             headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}` }
           }).then(r => r.json()).then(data => ({ data, error: null })).catch(() => ({ data: null, error: null })),
           fetch(`${SUPA_URL}/rest/v1/mp_estimates?select=*&limit=500`, {
+            headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}` }
+          }).then(r => r.json()).then(data => ({ data, error: null })).catch(() => ({ data: null, error: null })),
+          fetch(`${SUPA_URL}/rest/v1/capex_jobs?select=*&limit=2000`, {
             headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}` }
           }).then(r => r.json()).then(data => ({ data, error: null })).catch(() => ({ data: null, error: null })),
         ]);
@@ -4933,6 +4936,10 @@ export default function App() {
           if (Object.keys(newWbs).length)   setWbsData(newWbs);
           if (Object.keys(newBids).length)  setBidPackages(newBids);
           if (Object.keys(newPhase).length) setEstimatePhase(newPhase);
+        }
+        // CapEx jobs — load from DB (kickoff sheets, stages, buyout data all persist here)
+        if (Array.isArray(capexRes.data) && capexRes.data.length) {
+          setCapexJobs(capexRes.data.map(dbToCapexJob));
         }
         // contacts table — deduplicate by name+company before setting
         if (Array.isArray(ctRes.data) && ctRes.data.length) {
@@ -5079,6 +5086,38 @@ export default function App() {
 
   // Build a Kickoff Sheet draft, auto-filling from the job + its linked site + company.
   // Preserves any already-saved kickoff values (so re-opening doesn't clobber edits).
+  // Maps a capex_jobs DB row → in-app CapEx job (inverse of updateCapexJobPersist's dbRow).
+  const dbToCapexJob = (r) => ({
+    id: r.id,
+    name: r.name || "",
+    companyId: r.company_id || "",
+    siteId: r.site_id || "",
+    contractValue: Number(r.contract_value || 0),
+    grossProfit: Number(r.gross_profit || 0),
+    stage: r.stage || "estimating",
+    startDate: r.start_date || "",
+    endDate: r.end_date || "",
+    pm: r.pm || "",
+    pct: Number(r.pct || 0),
+    bidDueDate: r.bid_due_date || "",
+    followUpDate: r.follow_up_date || "",
+    buyoutDate: r.buyout_date || "",
+    invoiceDate: r.invoice_date || "",
+    notes: r.notes || "",
+    storeCode: r.store_code || "",
+    approverContactId: r.approver_contact_id || "",
+    noahApproved: !!r.noah_approved,
+    bradApproved: !!r.brad_approved,
+    wonDate: r.won_date || "",
+    lostDate: r.lost_date || "",
+    subCost: r.sub_cost != null ? Number(r.sub_cost) : null,
+    ownerCost: r.owner_cost != null ? Number(r.owner_cost) : null,
+    proposalNumber: r.proposal_number || "",
+    bradReviewed: !!r.brad_reviewed,
+    assignedTo: r.assigned_to || "",
+    kickoff: r.kickoff_sheet || null,
+  });
+
   const buildKickoffDraft = (job) => {
     const co   = companies.find(c => c.id === job.companyId);
     const site = sites.find(s => s.id === job.siteId);
@@ -5211,7 +5250,7 @@ export default function App() {
     const entry = { ...capexForm, contractValue: Number(capexForm.contractValue), pct: Number(capexForm.pct || 0) };
     if (editCapexId) {
       const existing = capexJobs.find(j => j.id === editCapexId) || {};
-      const updated = { ...entry, id: editCapexId };
+      const updated = { ...existing, ...entry, id: editCapexId };
       // Fire triggers if stage changed
       if (existing.stage !== updated.stage) {
         const triggerPatch = fireCapexTrigger(existing, updated.stage);
