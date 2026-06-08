@@ -4787,6 +4787,8 @@ export default function App() {
     setSelectedCustomer(null);
     setSelectedJob(null);
     setSelectedCapexJob(null);
+    setSelectedCapexFull(null);
+    setSelectedOppFull(null);
     setSelectedCrmContact(null);
   };
   const handleBUChange = (id) => { setActiveBU(id); setActiveNav("dashboard"); setCrmTagFilter(null); setCrmMode(false); setAccountingMode(false); closeAllPanels(); };
@@ -10927,16 +10929,16 @@ window.addEventListener('message',function(e){
 
                   {/* Back + header */}
                   <div style={{display:"flex",alignItems:"center",gap:12}}>
-                    <button onClick={()=>setSelectedCapexFull(null)} style={{background:"#F0F2F8",border:"1px solid #CBD1E8",borderRadius:6,padding:"6px 14px",fontSize:12,color:"#4A5278",cursor:"pointer",fontFamily:"inherit"}}>← All Projects</button>
+                    <button className="t-btn t-btn-ghost t-btn-sm" onClick={()=>setSelectedCapexFull(null)}>← All Projects</button>
                     <div style={{flex:1}}>
-                      <div style={{fontSize:20,fontWeight:800,color:"#1A2240",letterSpacing:"-0.01em"}}>{job.name}</div>
-                      <div style={{fontSize:11,color:"#4A5278",marginTop:2}}>
+                      <div className="t-h2">{job.name}</div>
+                      <div className="t-section-meta" style={{marginTop:2}}>
                         {co?.name}{job.pm?" · PM: "+job.pm:""}
                         {site?" · Store #"+site.storeNumber:""}
                       </div>
                     </div>
                     <span style={{padding:"5px 14px",borderRadius:20,background:st.color+"20",color:st.color,fontSize:11,fontWeight:700,border:"1px solid "+st.color+"40"}}>{st.label}</span>
-                    <button onClick={()=>openEditCapex(job)} style={{padding:"6px 14px",background:"#F0F2F8",border:"1px solid #CBD1E8",borderRadius:6,fontSize:12,color:"#4A5278",cursor:"pointer",fontFamily:"inherit"}}>✎ Edit</button>
+                    <button className="t-btn t-btn-ghost t-btn-sm" onClick={()=>openEditCapex(job)}>✎ Edit</button>
                   </div>
 
                   {/* Stage progress bar */}
@@ -10974,14 +10976,14 @@ window.addEventListener('message',function(e){
                           {label:"Start Date",     value:job.startDate||"—",color:"#4ADE80"},
                           {label:"End Date",       value:job.endDate||"—",  color:"#F97316"},
                         ].map(k=>(
-                          <div key={k.label} style={{background:"#fff",borderRadius:10,border:"1px solid #D4D9EE",padding:"12px 14px",borderTop:"3px solid "+k.color}}>
-                            <div style={{fontSize:9,color:"#9BA3BF",textTransform:"uppercase",letterSpacing:"0.07em",marginBottom:4}}>{k.label}</div>
-                            <div style={{fontSize:14,fontWeight:700,color:"#1A2240"}}>{k.value}</div>
+                          <div key={k.label} className="t-card" style={{padding:"12px 14px",borderTop:"3px solid "+k.color}}>
+                            <div className="t-eyebrow" style={{marginBottom:4}}>{k.label}</div>
+                            <div style={{fontSize:14,fontWeight:700,color:"var(--t-ink)"}}>{k.value}</div>
                           </div>
                         ))}
                       </div>
                       {/* Dates row */}
-                      <div style={{background:"#fff",borderRadius:10,border:"1px solid #D4D9EE",padding:"14px 18px",display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:14}}>
+                      <div className="t-card" style={{padding:"14px 18px",display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:14}}>
                         {[
                           {label:"Bid Due Date",   key:"bidDueDate"},
                           {label:"Follow-Up Date", key:"followUpDate"},
