@@ -17215,10 +17215,25 @@ window.addEventListener('message',function(e){
 
         const saveManual = () => {
           if (!W.company.trim()) return;
-          const newV = {...W, id:"v"+Date.now()};
-          setBidPackages(prev=>({...prev,[activeBidOpp]:{...pkg,vendors:[...pkg.vendors,newV]}}));
+          // Assign to the specific cost-code line the picker was opened from (if any),
+          // mirroring addFromSub — without this the sub has no costCodes and is
+          // filtered out of every per-line quoting view ("disappears").
+          const assignedItem = addSubForItem?.oppId === activeBidOpp ? addSubForItem.itemId : null;
+          const newV = {
+            ...W,
+            id: "v"+Date.now(),
+            costCodes: assignedItem ? [assignedItem] : [],
+            bidding: false, infoSent: false, bidReceived: false, bidAmount: W.bidAmount||"", notes: W.notes||"",
+          };
+          setBidPackages(prev=>{
+            const curPkg = prev[activeBidOpp] || {vendors:[], lineStatus:{}};
+            const updated = {...prev,[activeBidOpp]:{...curPkg,vendors:[...curPkg.vendors,newV]}};
+            setTimeout(()=>saveEstimateData(activeBidOpp, wbsData[activeBidOpp]||[], updated[activeBidOpp]||{vendors:[]}, estimatePhase[activeBidOpp]||"overview"), 300);
+            return updated;
+          });
           setVendorForm({company:"",contact:"",phone:"",email:"",trades:[],bidding:false,infoSent:false,bidReceived:false,bidAmount:"",notes:""});
           setShowAddVendor(false);
+          setAddSubForItem(null);
         };
 
         return (
