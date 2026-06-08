@@ -543,8 +543,8 @@ const KICKOFF_SECTIONS = [
     { key: "contractRevenue",label: "Total Contract Revenue",      auto: true, type: "money", req: true },
     { key: "projectedCogs",  label: "Projected COGs",              auto: true, type: "money" },
     { key: "projectedGp",    label: "Projected $ and GP % (Margin)", auto: true },
-    { key: "divisions",      label: "Divisions of work to be bought out", type: "area", req: true },
-    { key: "tradeBuyout",    label: "Potential Trade Buyout and what trade", type: "area" },
+    { key: "divisions",      label: "Divisions of work to be bought out", type: "area", req: true, auto: true },
+    { key: "tradeBuyout",    label: "Potential Trade Buyout and what trade", type: "area", auto: true },
     { key: "alternates",     label: "Does the job have alternates and which were accepted?", type: "area" },
   ]},
   { title: "Risks & Notes", fields: [
@@ -5085,6 +5085,26 @@ export default function App() {
     const saved = job.kickoff || {};
     const cogs = job.subCost || job.ownerCost || (job.contractValue && job.grossProfit ? job.contractValue - job.grossProfit : "");
     const gpPct = job.contractValue ? Math.round(((job.contractValue - (Number(cogs)||0)) / job.contractValue) * 100) : "";
+
+    // ── Pull awarded subs from the estimating workspace (same winner logic as the Quoting rollup) ──
+    const wbs = wbsData[job.id] || [];
+    const pkg = bidPackages[job.id] || { vendors: [], lineStatus: {} };
+    const ls  = pkg.lineStatus || {};
+    const awarded = wbs.map(item => {
+      const winner = (pkg.vendors||[]).find(v => (v.costCodes||[]).includes(item.id) && ls[v.id+"_"+item.id]?.isWinner);
+      if (!winner) return null;
+      const amt = parseFloat(winner.bidAmount) || 0;
+      return { trade: item.trade || item.description, code: item.code, sub: winner.company, amount: amt };
+    }).filter(Boolean);
+    // Divisions to be bought out = trades that have a winning sub
+    const divisionsAuto = awarded.length
+      ? awarded.map(a => `${a.trade}${a.sub ? " — " + a.sub : ""}${a.amount ? " ($" + a.amount.toLocaleString() + ")" : ""}`).join("\n")
+      : "";
+    // Trade buyout summary = quick list of awarded trades
+    const tradeBuyoutAuto = awarded.length
+      ? [...new Set(awarded.map(a => a.trade))].join(", ")
+      : "";
+
     const auto = {
       storageCompany:  co?.name || "",
       jobName:         job.name || "",
@@ -5098,6 +5118,8 @@ export default function App() {
       contractRevenue: job.contractValue ? String(job.contractValue) : "",
       projectedCogs:   cogs !== "" ? String(cogs) : "",
       projectedGp:     gpPct !== "" ? gpPct + "%" : "",
+      divisions:       divisionsAuto,
+      tradeBuyout:     tradeBuyoutAuto,
     };
     // Saved values win over auto-fill; checklist defaults to all-false
     const checklist = saved.checklist || Object.fromEntries(KICKOFF_CHECKLIST.map(c => [c, false]));
@@ -10994,6 +11016,38 @@ window.addEventListener('message',function(e){
                         {!hasKickoff && (
                           <div style={{border:"1px dashed #FDE68A",background:"#FFFBEB",borderRadius:10,padding:"16px",fontSize:12,color:"#92400E"}}>No kickoff sheet has been finalized for this job. Click <strong>Fill out</strong> to complete it.</div>
                         )}
+
+                        {/* ── Awarded subs (from estimating) — the buyout breakdown for the PM ── */}
+                        {(() => {
+                          const wbs = wbsData[job.id] || [];
+                          const pkg = bidPackages[job.id] || { vendors: [], lineStatus: {} };
+                          const ls  = pkg.lineStatus || {};
+                          const awarded = wbs.map(item => {
+                            const w = (pkg.vendors||[]).find(v => (v.costCodes||[]).includes(item.id) && ls[v.id+"_"+item.id]?.isWinner);
+                            return w ? { trade:item.trade||item.description, code:item.code, sub:w.company, contact:w.contact, phone:w.phone, amount:parseFloat(w.bidAmount)||0 } : null;
+                          }).filter(Boolean);
+                          if (!awarded.length) return null;
+                          const total = awarded.reduce((s,a)=>s+a.amount,0);
+                          return (
+                            <div style={{border:"1px solid #BBF7D0",borderRadius:10,overflow:"hidden"}}>
+                              <div style={{background:"#F0FDF4",padding:"10px 14px",fontSize:11,fontWeight:800,color:"#16A34A",textTransform:"uppercase",letterSpacing:"0.05em",borderBottom:"1px solid #BBF7D0",display:"flex",justifyContent:"space-between"}}>
+                                <span>🏆 Awarded Subs — Buyout Breakdown</span>
+                                <span style={{color:"#15803D"}}>{awarded.length} trade{awarded.length>1?"s":""} · {fmt(total)}</span>
+                              </div>
+                              <div style={{display:"grid",gridTemplateColumns:"1fr 1.2fr 90px 110px",gap:8,padding:"6px 14px",background:"#FAFBFD",borderBottom:"1px solid #E8EBF4"}}>
+                                {["Trade","Awarded Sub","Phone","Amount"].map((h,i)=>(<div key={i} style={{fontSize:8,fontWeight:800,color:"#9BA3BF",textTransform:"uppercase",letterSpacing:"0.06em",textAlign:i===3?"right":"left"}}>{h}</div>))}
+                              </div>
+                              {awarded.map((a,i)=>(
+                                <div key={i} style={{display:"grid",gridTemplateColumns:"1fr 1.2fr 90px 110px",gap:8,padding:"8px 14px",borderBottom:"1px solid #F4F6FB",alignItems:"center"}}>
+                                  <div style={{fontSize:11,fontWeight:700,color:"#1A2240"}}>{a.trade}{a.code&&<span style={{fontSize:9,color:"#9BA3BF",fontFamily:"monospace",marginLeft:5}}>{a.code}</span>}</div>
+                                  <div style={{fontSize:11,color:"#1A2240"}}>{a.sub}{a.contact&&<span style={{fontSize:9,color:"#9BA3BF"}}> · {a.contact}</span>}</div>
+                                  <div style={{fontSize:10,color:"#4A5278"}}>{a.phone||"—"}</div>
+                                  <div style={{fontSize:11,fontWeight:700,color:"#16A34A",textAlign:"right",fontFamily:"monospace"}}>{a.amount?fmt(a.amount):"—"}</div>
+                                </div>
+                              ))}
+                            </div>
+                          );
+                        })()}
                         {hasKickoff && KICKOFF_SECTIONS.map(sec => (
                           <div key={sec.title} style={{border:"1px solid #E8EBF4",borderRadius:10,overflow:"hidden"}}>
                             <div style={{background:"#FAFBFD",padding:"10px 14px",fontSize:11,fontWeight:800,color:"#3B6FE8",textTransform:"uppercase",letterSpacing:"0.05em",borderBottom:"1px solid #E8EBF4"}}>{sec.title}</div>
