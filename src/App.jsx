@@ -11377,6 +11377,69 @@ window.addEventListener('message',function(e){
                               <span style={{fontSize:12,fontWeight:700,color:"#1A2240",flex:1}}>{wbs.length} codes · {pkg.vendors.length} subs · {totalBids} bids received</span>
                               <span style={{fontSize:10,color:"#9BA3BF"}}>Use + Sub on each line to assign subs per cost code</span>
                             </div>
+                            {/* ── Trade-by-trade rollup ── at-a-glance: who's covered, who we're still chasing */}
+                            {wbs.length>0 && (() => {
+                              const ls = pkg.lineStatus||{};
+                              const rows = wbs.map(item=>{
+                                const iv = pkg.vendors.filter(v=>(v.costCodes||[]).includes(item.id));
+                                const get=(vid,k)=>ls[vid+"_"+item.id]?.[k]??false;
+                                const invited = iv.length;
+                                const bidsIn  = iv.filter(v=>get(v.id,"bidReceived")||get(v.id,"hasBidFile"));
+                                const pending = iv.filter(v=>!(get(v.id,"bidReceived")||get(v.id,"hasBidFile")));
+                                const winner  = iv.find(v=>get(v.id,"isWinner"));
+                                const amts    = bidsIn.map(v=>parseFloat(v.bidAmount)||0).filter(n=>n>0);
+                                const low     = amts.length?Math.min(...amts):0;
+                                let state = "none";          // no subs at all
+                                if (invited>0 && bidsIn.length===0) state="chasing";   // invited, nothing back
+                                else if (bidsIn.length>0 && !winner) state="review";   // bids in, no winner picked
+                                else if (winner) state="awarded";                      // winner chosen
+                                return {item, invited, bidsIn:bidsIn.length, pending, winner, low, state};
+                              });
+                              const ST = {
+                                none:    {c:"#F87171", bg:"#FFF1F2", label:"No subs"},
+                                chasing: {c:"#F97316", bg:"#FFF8E7", label:"Awaiting bids"},
+                                review:  {c:"#3B6FE8", bg:"#EEF3FF", label:"Ready to review"},
+                                awarded: {c:"#16A34A", bg:"#F0FDF4", label:"Awarded"},
+                              };
+                              const needPricing = rows.filter(r=>r.state==="none"||r.state==="chasing");
+                              return (
+                                <div style={{padding:"12px 16px",borderBottom:"3px solid #E8EBF4",background:"#FAFBFD"}}>
+                                  {needPricing.length>0 && (
+                                    <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10,fontSize:11,color:"#92400E",background:"#FFFBEB",border:"1px solid #FDE68A",borderRadius:7,padding:"7px 11px"}}>
+                                      <span style={{fontWeight:800}}>⚠ {needPricing.length} trade{needPricing.length>1?"s":""} still need pricing:</span>
+                                      <span>{needPricing.map(r=>r.item.trade||r.item.description).join(", ")}</span>
+                                    </div>
+                                  )}
+                                  <div style={{border:"1px solid #E0E4F0",borderRadius:8,overflow:"hidden",background:"#fff"}}>
+                                    <div style={{display:"grid",gridTemplateColumns:"1fr 70px 70px 1.4fr 110px 120px",gap:8,padding:"6px 12px",background:"#F4F6FB",borderBottom:"1px solid #E8EBF4"}}>
+                                      {["Trade / Scope","Invited","Bids In","Still chasing","Low Bid","Status"].map((h,i)=>(
+                                        <div key={i} style={{fontSize:8,fontWeight:800,color:"#9BA3BF",textTransform:"uppercase",letterSpacing:"0.06em",textAlign:i===1||i===2?"center":i===4?"right":"left"}}>{h}</div>
+                                      ))}
+                                    </div>
+                                    {rows.map(r=>{
+                                      const st = ST[r.state];
+                                      return (
+                                        <div key={r.item.id} style={{display:"grid",gridTemplateColumns:"1fr 70px 70px 1.4fr 110px 120px",gap:8,padding:"7px 12px",borderBottom:"1px solid #F4F6FB",alignItems:"center"}}>
+                                          <div style={{minWidth:0}}>
+                                            <div style={{fontSize:11,fontWeight:700,color:"#1A2240",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{r.item.trade||"—"}</div>
+                                            <div style={{fontSize:9,color:"#9BA3BF",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{r.item.code?r.item.code+" · ":""}{r.item.description}</div>
+                                          </div>
+                                          <div style={{textAlign:"center",fontSize:12,fontWeight:700,color:r.invited?"#1A2240":"#CBD1E8"}}>{r.invited||"—"}</div>
+                                          <div style={{textAlign:"center",fontSize:12,fontWeight:700,color:r.bidsIn?"#16A34A":"#CBD1E8"}}>{r.bidsIn||"—"}</div>
+                                          <div style={{fontSize:9,color:r.pending.length?"#92400E":"#CBD1E8",lineHeight:1.3,overflow:"hidden"}}>
+                                            {r.pending.length? r.pending.map(v=>v.company).join(", ") : (r.invited?"✓ all returned":"—")}
+                                          </div>
+                                          <div style={{textAlign:"right",fontSize:11,fontWeight:700,color:r.low?"#1A2240":"#CBD1E8",fontFamily:"monospace"}}>
+                                            {r.winner&&r.winner.bidAmount?fmt(parseFloat(r.winner.bidAmount)):(r.low?fmt(r.low):"—")}
+                                          </div>
+                                          <div><span style={{fontSize:9,fontWeight:700,color:st.c,background:st.bg,border:"1px solid "+st.c+"40",borderRadius:5,padding:"2px 8px",whiteSpace:"nowrap"}}>{r.state==="awarded"&&r.winner?"🏆 "+r.winner.company.slice(0,12):st.label}</span></div>
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              );
+                            })()}
                             {/* Per-trade quoting tracker */}
                             {wbs.length===0&&<div style={{padding:"40px",textAlign:"center",color:"#9BA3BF",fontSize:13}}>Add cost codes in WBS first</div>}
                             {wbs.map(item=>{
