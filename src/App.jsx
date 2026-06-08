@@ -5247,7 +5247,49 @@ export default function App() {
 
   const saveCapex = () => {
     if (!capexForm.name.trim()) return;
-    const entry = { ...capexForm, contractValue: Number(capexForm.contractValue), pct: Number(capexForm.pct || 0) };
+
+    // ── Company is required (it auto-pulls onto the kickoff sheet) ──
+    let companyId = capexForm.companyId;
+    if (capexForm._newCompany) {
+      if (!(capexForm._newCompanyName||"").trim()) { alert("Enter the new company name."); return; }
+      const newCo = {
+        id: "co" + Date.now(),
+        name: capexForm._newCompanyName.trim(),
+        address: capexForm._newCompanyAddress||"",
+        website: "", logo: "",
+        notes: capexForm._newCompanyPhone ? ("Phone: " + capexForm._newCompanyPhone) : "",
+      };
+      setCompanies(prev => [...prev, newCo]);
+      try { supa.from("companies").insert(companyToDB(newCo)); } catch(e) {}
+      companyId = newCo.id;
+    }
+    if (!companyId) { alert("Company is required."); return; }
+
+    // ── Optional new manual site ──
+    let siteId = capexForm.siteId;
+    if (capexForm._newSite) {
+      if (!(capexForm._newSiteAddress||"").trim()) { alert("Enter the new site address."); return; }
+      const newSite = {
+        id: "s" + Date.now(),
+        companyId, contactIds: [],
+        storeNumber: capexForm._newSiteStore||"",
+        address: capexForm._newSiteAddress.trim(),
+        phone: capexForm._newSitePhone||"",
+        accessCode: "", gateCode: capexForm._newSiteGate||"",
+        managerName: capexForm._newSiteMgr||"", managerPhone: "", managerEmail: "",
+        businessUnits: ["capital"], notes: "",
+      };
+      setSites(prev => [...prev, newSite]);
+      try { supa.from("sites").insert(siteToDB(newSite)); } catch(e) {}
+      siteId = newSite.id;
+    }
+
+    // Strip transient _new* fields off the job before saving
+    const { _newCompany, _newCompanyName, _newCompanyAddress, _newCompanyPhone,
+            _newSite, _newSiteStore, _newSiteAddress, _newSitePhone, _newSiteGate, _newSiteMgr,
+            ...clean } = capexForm;
+    const entry = { ...clean, companyId, siteId, contractValue: Number(capexForm.contractValue), pct: Number(capexForm.pct || 0) };
+
     if (editCapexId) {
       const existing = capexJobs.find(j => j.id === editCapexId) || {};
       const updated = { ...existing, ...entry, id: editCapexId };
@@ -5257,14 +5299,14 @@ export default function App() {
         Object.assign(updated, triggerPatch);
       }
       setCapexJobs(capexJobs.map(j => j.id === editCapexId ? updated : j));
-      try { supa.from("capex_jobs").update({ stage: updated.stage, name: updated.name, contract_value: updated.contractValue, pm: updated.pm, pct: updated.pct, follow_up_date: updated.followUpDate||null, buyout_date: updated.buyoutDate||null, invoice_date: updated.invoiceDate||null, notes: updated.notes||"" }).eq("id", editCapexId); } catch(e) {}
+      try { supa.from("capex_jobs").update({ stage: updated.stage, name: updated.name, company_id: updated.companyId||null, site_id: updated.siteId||null, contract_value: updated.contractValue, pm: updated.pm, pct: updated.pct, follow_up_date: updated.followUpDate||null, buyout_date: updated.buyoutDate||null, invoice_date: updated.invoiceDate||null, notes: updated.notes||"" }).eq("id", editCapexId); } catch(e) {}
     } else {
       const newId = "cx" + Date.now();
       const newJob = { ...entry, id: newId };
       setCapexJobs([...capexJobs, newJob]);
       try { supa.from("capex_jobs").insert({ id: newId, name: newJob.name, company_id: newJob.companyId||null, site_id: newJob.siteId||null, contract_value: newJob.contractValue||0, stage: newJob.stage||"estimating", pm: newJob.pm||"", pct: 0, notes: newJob.notes||"" }); } catch(e) {}
     }
-    autoTagCrmContacts(capexForm.companyId, "CapEx");
+    autoTagCrmContacts(companyId, "CapEx");
     setShowCapexForm(false);
   };
   const deleteCapex = (id) => { setCapexJobs(capexJobs.filter(j => j.id !== id)); setSelectedCapexJob(null); try { supa.from("capex_jobs").delete().eq("id", id); } catch(e) {} };
@@ -11259,26 +11301,6 @@ window.addEventListener('message',function(e){
                                   placeholder="Scope notes, site observations, special conditions, owner requirements…"
                                   style={{width:"100%",padding:"10px 12px",border:"1.5px solid #D4D9EE",borderRadius:8,fontSize:12,fontFamily:"inherit",outline:"none",resize:"vertical",boxSizing:"border-box",lineHeight:1.6}}
                                 />
-                              </div>
-
-                              {/* Brad Review + Task Assignment */}
-                              <div style={{background:job.bradReviewed?"#F0FDF4":"#FFF8E7",border:"1px solid "+(job.bradReviewed?"#BBF7D0":"#FDE68A"),borderRadius:10,padding:"12px 14px"}}>
-                                <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:job.bradReviewed?0:10}}>
-                                  <div onClick={()=>updateCapex({bradReviewed:!job.bradReviewed})}
-                                    style={{width:22,height:22,borderRadius:6,background:job.bradReviewed?"#4ADE80":"#fff",border:"2px solid "+(job.bradReviewed?"#4ADE80":"#FCD34D"),display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0}}>
-                                    {job.bradReviewed&&<span style={{fontSize:13,color:"#fff",fontWeight:700}}>✓</span>}
-                                  </div>
-                                  <div style={{flex:1}}>
-                                    <div style={{fontSize:12,fontWeight:700,color:"#1A2240"}}>Brad Review</div>
-                                    <div style={{fontSize:10,color:"#9BA3BF"}}>All CI estimates must be reviewed by Brad or a qualified team member before sending to owner</div>
-                                  </div>
-                                  {!job.bradReviewed&&<span style={{fontSize:9,background:"#FCD34D20",color:"#92400E",border:"1px solid #FCD34D60",borderRadius:4,padding:"2px 8px",fontWeight:700,flexShrink:0}}>REQUIRED</span>}
-                                </div>
-                                {!job.bradReviewed&&(
-                                  <div style={{marginTop:8,fontSize:10,color:"#92400E",background:"#FEF9C3",borderRadius:5,padding:"6px 10px",lineHeight:1.5}}>
-                                    📋 <strong>Prepared:</strong> Stay ahead — get Brad's sign-off before owner presentation
-                                  </div>
-                                )}
                               </div>
 
                               {/* Task Assignment (Noah can assign to multiple people) */}
@@ -17561,16 +17583,20 @@ window.addEventListener('message',function(e){
                 <div style={{fontSize:14,fontWeight:700,marginTop:4}}>{fmt(job.contractValue)}</div>
               </div>
               <div style={{padding:"20px 24px",display:"flex",flexDirection:"column",gap:14}}>
-                {/* Review requirement warning */}
-                {!job.bradReviewed && (
-                  <div style={{background:"#FFF8E7",border:"1px solid #FDE68A",borderRadius:8,padding:"10px 12px",display:"flex",gap:10,alignItems:"flex-start"}}>
-                    <span style={{fontSize:16,flexShrink:0}}>⚠️</span>
-                    <div>
-                      <div style={{fontSize:11,fontWeight:700,color:"#92400E"}}>Estimate not yet reviewed by Brad</div>
-                      <div style={{fontSize:10,color:"#92400E",marginTop:2}}>All CI estimates must be reviewed by Brad or a qualified team member before award. Mark the Brad Review checkbox in the Estimating tab first.</div>
+                {/* Brad Review — lives here, at the Owner Approval → Won gate */}
+                <div style={{background:job.bradReviewed?"#F0FDF4":"#FFF8E7",border:"1px solid "+(job.bradReviewed?"#BBF7D0":"#FDE68A"),borderRadius:8,padding:"12px 14px"}}>
+                  <div style={{display:"flex",alignItems:"center",gap:10}}>
+                    <div onClick={()=>updateCapexJobPersist(job.id,{bradReviewed:!job.bradReviewed})}
+                      style={{width:22,height:22,borderRadius:6,background:job.bradReviewed?"#4ADE80":"#fff",border:"2px solid "+(job.bradReviewed?"#4ADE80":"#FCD34D"),display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",flexShrink:0}}>
+                      {job.bradReviewed&&<span style={{fontSize:13,color:"#fff",fontWeight:700}}>✓</span>}
                     </div>
+                    <div style={{flex:1}}>
+                      <div style={{fontSize:12,fontWeight:700,color:"#1A2240"}}>Brad Review</div>
+                      <div style={{fontSize:10,color:"#9BA3BF"}}>All CI estimates must be reviewed by Brad or a qualified team member before award</div>
+                    </div>
+                    {!job.bradReviewed&&<span style={{fontSize:9,background:"#FCD34D20",color:"#92400E",border:"1px solid #FCD34D60",borderRadius:4,padding:"2px 8px",fontWeight:700,flexShrink:0}}>REQUIRED</span>}
                   </div>
-                )}
+                </div>
                 <div style={{fontSize:12,color:"#4A5278"}}>Both Noah and Brad must approve before this project moves to Buyout.</div>
                 {/* Approval cards */}
                 <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
@@ -19800,22 +19826,54 @@ window.addEventListener('message',function(e){
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
               <div><label className="lbl">Job Name *</label><input className="fi" value={capexForm.name} onChange={e => setCapexForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. HVAC Upgrade" /></div>
               <div className="g2">
-                <div><label className="lbl">Company</label>
-                  <select className="fi" value={capexForm.companyId} onChange={e => setCapexForm(f => ({ ...f, companyId: e.target.value, siteId: "" }))}>
-                    <option value="">Select company…</option>
-                    {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                  </select>
+                <div><label className="lbl">Company *</label>
+                  {!capexForm._newCompany ? (
+                    <select className="fi" value={capexForm.companyId} onChange={e => { if (e.target.value === "__new__") { setCapexForm(f => ({ ...f, _newCompany: true, companyId: "", siteId: "" })); } else { setCapexForm(f => ({ ...f, companyId: e.target.value, siteId: "" })); } }}>
+                      <option value="">Select company…</option>
+                      {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                      <option value="__new__">➕ New company…</option>
+                    </select>
+                  ) : (
+                    <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                      <input className="fi" autoFocus placeholder="New company name *" value={capexForm._newCompanyName||""} onChange={e => setCapexForm(f => ({ ...f, _newCompanyName: e.target.value }))} />
+                      <input className="fi" placeholder="Address" value={capexForm._newCompanyAddress||""} onChange={e => setCapexForm(f => ({ ...f, _newCompanyAddress: e.target.value }))} />
+                      <input className="fi" placeholder="Phone" value={capexForm._newCompanyPhone||""} onChange={e => setCapexForm(f => ({ ...f, _newCompanyPhone: e.target.value }))} />
+                      <button type="button" onClick={() => setCapexForm(f => ({ ...f, _newCompany: false, _newCompanyName:"", _newCompanyAddress:"", _newCompanyPhone:"" }))} style={{fontSize:11,color:"#9BA3BF",background:"none",border:"none",cursor:"pointer",textAlign:"left",padding:0}}>← pick existing company</button>
+                    </div>
+                  )}
                 </div>
                 <div><label className="lbl">Site</label>
-                  <select className="fi" value={capexForm.siteId} onChange={e => setCapexForm(f => ({ ...f, siteId: e.target.value }))}>
-                    <option value="">Select site…</option>
-                    {sites.filter(s => !capexForm.companyId || s.companyId === capexForm.companyId).map(s => <option key={s.id} value={s.id}>Store #{s.storeNumber} — {s.address}</option>)}
-                  </select>
+                  {!capexForm._newSite ? (
+                    <select className="fi" value={capexForm.siteId} onChange={e => { if (e.target.value === "__new__") { setCapexForm(f => ({ ...f, _newSite: true, siteId: "" })); } else { setCapexForm(f => ({ ...f, siteId: e.target.value })); } }}>
+                      <option value="">Select site…</option>
+                      {sites.filter(s => !capexForm.companyId || s.companyId === capexForm.companyId).map(s => <option key={s.id} value={s.id}>Store #{s.storeNumber} — {s.address}</option>)}
+                      <option value="__new__">➕ New site…</option>
+                    </select>
+                  ) : (
+                    <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                      <input className="fi" autoFocus placeholder="Store # (optional)" value={capexForm._newSiteStore||""} onChange={e => setCapexForm(f => ({ ...f, _newSiteStore: e.target.value }))} />
+                      <input className="fi" placeholder="Site address *" value={capexForm._newSiteAddress||""} onChange={e => setCapexForm(f => ({ ...f, _newSiteAddress: e.target.value }))} />
+                      <input className="fi" placeholder="Site phone" value={capexForm._newSitePhone||""} onChange={e => setCapexForm(f => ({ ...f, _newSitePhone: e.target.value }))} />
+                      <input className="fi" placeholder="Gate code" value={capexForm._newSiteGate||""} onChange={e => setCapexForm(f => ({ ...f, _newSiteGate: e.target.value }))} />
+                      <input className="fi" placeholder="Site / property manager name" value={capexForm._newSiteMgr||""} onChange={e => setCapexForm(f => ({ ...f, _newSiteMgr: e.target.value }))} />
+                      <button type="button" onClick={() => setCapexForm(f => ({ ...f, _newSite: false, _newSiteStore:"", _newSiteAddress:"", _newSitePhone:"", _newSiteGate:"", _newSiteMgr:"" }))} style={{fontSize:11,color:"#9BA3BF",background:"none",border:"none",cursor:"pointer",textAlign:"left",padding:0}}>← pick existing site</button>
+                    </div>
+                  )}
                 </div>
               </div>
               <div className="g2">
                 <div><label className="lbl">Contract Value</label><input className="fi" type="number" value={capexForm.contractValue} onChange={e => setCapexForm(f => ({ ...f, contractValue: e.target.value }))} /></div>
-                <div><label className="lbl">Project Manager</label><input className="fi" value={capexForm.pm} onChange={e => setCapexForm(f => ({ ...f, pm: e.target.value }))} /></div>
+                <div><label className="lbl">Project Manager</label>
+                  <select className="fi" value={capexForm.pm} onChange={e => setCapexForm(f => ({ ...f, pm: e.target.value }))}>
+                    <option value="">Select PM…</option>
+                    {(() => {
+                      const names = new Set();
+                      fmTeam.forEach(m => m.name && names.add(m.name));
+                      crmContacts.forEach(c => { const n = `${c.firstName||""} ${c.lastName||""}`.trim(); if (n) names.add(n); });
+                      return [...names].sort().map(n => <option key={n} value={n}>{n}</option>);
+                    })()}
+                  </select>
+                </div>
               </div>
               {/* Approver */}
               <div>
