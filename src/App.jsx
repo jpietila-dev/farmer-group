@@ -5632,7 +5632,7 @@ Return ONLY valid JSON, no markdown, no extra text:
   // know to update the existing row instead of creating a new one.
   const inboxLeads = [
     ...fmJobs.filter(j => j.stage === "intake" && j.status !== "dismissed").map(j => ({
-      id: j.id, _jobRow: true, source: "email",
+      id: j.id, _jobRow: true, _job: j, source: "email",
       name: j.name, storeCode: j.storeCode, scopeOfWork: j.scopeOfWork,
       bidDueDate: j.bidDueDate, companyId: j.companyId,
       companyName: (companies.find(c => c.id === j.companyId)?.name) || "",
@@ -9767,7 +9767,7 @@ Example:
                           </div>
                           <div style={{ display: "flex", gap: 6, flexShrink: 0, alignItems: "center" }}>
                             {/* Open to verify / add info before assigning */}
-                            {lead._jobRow && <button className="btn-ghost" style={{ fontSize: 11, color: "#3B6FE8", borderColor: "#3B6FE830", padding: "4px 10px" }} onClick={() => setFmFullScreenJob(lead._jobRow)}>Open</button>}
+                            {lead._job && <button className="btn-ghost" style={{ fontSize: 11, color: "#3B6FE8", borderColor: "#3B6FE830", padding: "4px 10px" }} onClick={() => setFmFullScreenJob(lead._job)}>Open</button>}
                             {/* Assign dropdown */}
                             <select
                               style={{ background: "#FFFFFF", border: "1px solid #3B6FE860", color: "#3B6FE8", fontSize: 11, borderRadius: 5, padding: "5px 10px", cursor: "pointer", fontFamily: "inherit" }}
