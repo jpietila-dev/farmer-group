@@ -205,7 +205,13 @@ const fmJobToDB = j => ({
   market_area: j.marketArea||null, category: j.category||"FM",
 });
 
+// PILOT: FM-only. Other business units (Major Projects, Capital Improvements,
+// Lawn, Snow) are hidden from the switcher for now — their code is untouched
+// below, so restoring them later is just re-adding the lines here.
 const BUSINESS_UNITS = [
+  { id: "facility", label: "Facility Maintenance", short: "FM" },
+];
+const BUSINESS_UNITS_ALL = [
   { id: "all", label: "All", short: "ALL" },
   { id: "major", label: "Major Projects", short: "MP" },
   { id: "capital", label: "Capital Improvements", short: "CI" },
@@ -4340,7 +4346,7 @@ export default function App() {
   const urlVendorPortal = useMemo(() => new URLSearchParams(window.location.search).get("vendor"), []);
   const urlPreviewSubId = useMemo(() => new URLSearchParams(window.location.search).get("subId"), []);
 
-  const [activeBU,  setActiveBU]  = useState("all");
+  const [activeBU,  setActiveBU]  = useState("facility"); // PILOT: default to FM
   const [activeNav, setActiveNav] = useState("dashboard");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
