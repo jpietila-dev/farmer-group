@@ -173,6 +173,8 @@ const dbToFmJob = r => ({
   accountManager: r.account_manager||"",
   marketArea: r.market_area||"",
   category: r.category||"FM",
+  trade: r.trade||"",
+  deadAt: r.dead_at||"", deadReason: r.dead_reason||"",
 });
 const fmJobToDB = j => ({
   id: j.id, name: j.name||"", company_id: j.companyId||null, site_id: j.siteId||null,
@@ -203,7 +205,24 @@ const fmJobToDB = j => ({
   priority: j.priority||null, hot: !!j.hot, odds: j.odds||0,
   prp_sent: j.prpSent||null, account_manager: j.accountManager||null,
   market_area: j.marketArea||null, category: j.category||"FM",
+  trade: j.trade||null,
+  dead_at: j.deadAt||null, dead_reason: j.deadReason||null,
 });
+
+// Active Jobs / pipeline search: match the term against every field a user might
+// type — not just the job name. WO number lives in ownersProjectNo, so searching
+// a work-order number now returns the job.
+function fmJobMatchesSearch(j, term) {
+  if (!term) return true;
+  const _q = String(term).toLowerCase();
+  return [
+    j.name, j.storeCode, j.projectNo, j.ownersProjectNo,
+    j.coordinator, j.pm, j.accountManager,
+    j.scopeOfWork, j.vendorQuoteScope, j.vendorNextStep,
+    j.vendorInvoiceNumber, j.poNumber,
+    j.marketArea, j.category, j.notes,
+  ].some(v => (v == null ? "" : String(v)).toLowerCase().includes(_q));
+}
 
 // PILOT: FM-only. Other business units (Major Projects, Capital Improvements,
 // Lawn, Snow) are hidden from the switcher for now — their code is untouched
@@ -300,9 +319,9 @@ const NAV_ITEMS = {
   ],
   facility: [
     { id: "dashboard",      label: "Dashboard",      icon: "⊞" },
-    { id: "pipeline",       label: "Pipeline",       icon: "◈" },
-    { id: "jobs",           label: "Active Jobs",    icon: "🔨" },
+    { id: "jobs",           label: "Jobs",           icon: "🔨" },
     { id: "completed",      label: "Completed",      icon: "✅" },
+    { id: "dead",           label: "Dead / Lost",    icon: "⊘" },
     { id: "sites",          label: "Sites",          icon: "📍" },
     { id: "customers",      label: "Customers",      icon: "🤝" },
     { id: "subcontractors", label: "Subcontractors", icon: "🔧" },
@@ -631,6 +650,29 @@ const FM_STAGES = [
 
 const FM_PIPELINE_STAGES = FM_STAGES.filter(s => s.phase === "pipeline");
 const FM_ACTIVE_STAGES   = FM_STAGES.filter(s => s.phase === "active");
+
+// The four FM project managers (used for dashboard PM breakdown tiles)
+const FM_PMS = ["Zak Kranich", "Connor Thomas", "Jacob Dafoe", "Bobby Kearney"];
+
+// FM trades (matches the PBR Trade picklist) — used for job Trade + subcontractor trades
+const FM_TRADES = ["Apartment Repairs", "Units Doors", "Bay Doors", "Sliding Doors", "Swing Doors", "Access Control", "Cameras", "Unit Cleanouts", "Plumbing", "Backflow Devices", "Electrical", "HVAC", "Fencing", "Leaks/Water Intrusion", "Fire Suppression/Extinguishers", "Misc."];
+
+// Human-readable "what needs to happen next" for a job, shown in job detail
+function fmNextStepText(job) {
+  if (!job) return "";
+  if (job.sentToAR) return "Sent to AR — job complete";
+  if (job.status === "on_hold") return "On hold";
+  switch (job.stage) {
+    case "estimating":        return "Estimate / scope the job";
+    case "waiting_quote":     return "Awaiting vendor quotes";
+    case "generate_proposal": return "Generate proposal for owner";
+    case "owner_approval":    return "Awaiting owner approval";
+    case "buyout":            return job.subcontractorId ? "Buyout — issue PO to vendor" : "Vendor assignment needed";
+    case "do_work":           return job.startDate ? "Work scheduled — in progress" : "Schedule the vendor";
+    case "bill":              return "Ready to bill / send to AR";
+    default:                  return "";
+  }
+}
 
 // FM stage → theme pill class (vendor-portal aesthetic, used for restyled sections)
 const fmStagePill = stage => {
@@ -4420,6 +4462,7 @@ export default function App() {
     "vendorInvNum",     // vendor invoice number
     "approvedDate",     // approval date
     "scope",            // scope of work
+    "trade",            // FM trade
     "pm",               // PM
     "customer",         // customer contact
     "category",         // FM / CapEx / Lawn / Snow
@@ -5435,6 +5478,22 @@ export default function App() {
     setFmCompanySearch(""); setFmSiteSearch("");
   };
   const deleteFm = (id) => { setFmJobs(fmJobs.filter(j => j.id !== id)); setSelectedFmJob(null); setFmFullScreenJob(null); try { supa.from("fm_jobs").delete().eq("id", id); } catch(e) {} };
+  // Kill an opportunity → moves it to the Dead / Lost tab (soft, reversible)
+  const killFm = (job) => {
+    const reason = window.prompt("Why is this opportunity dead/lost? (optional)") || "";
+    const deadAt = new Date().toISOString();
+    const updated = { ...job, status: "dead", deadAt, deadReason: reason, odds: 0 };
+    setFmJobs(fmJobs.map(j => j.id === job.id ? updated : j));
+    setSelectedFmJob(null); setFmFullScreenJob(null);
+    // odds:0 is the signal the PBR mirror pushes to Smartsheet, which moves the row to Dead/Lost
+    try { supa.from("fm_jobs").update({ status: "dead", dead_at: deadAt, dead_reason: reason || null, odds: 0 }).eq("id", job.id); } catch(e) {}
+  };
+  // Restore a dead/lost opportunity back to active
+  const restoreFm = (job) => {
+    const updated = { ...job, status: "", deadAt: "", deadReason: "" };
+    setFmJobs(fmJobs.map(j => j.id === job.id ? updated : j));
+    try { supa.from("fm_jobs").update({ status: null, dead_at: null, dead_reason: null }).eq("id", job.id); } catch(e) {}
+  };
   // Send an FM job to Accounts Receivable: marks the job sent_to_ar so it appears in
   // the Ready-to-Invoice queue. AR creates the actual invoice from there.
   const sendFmJobToAR = async (jobId) => {
@@ -7260,6 +7319,15 @@ Return ONLY valid JSON, no markdown, no extra text:
                   };
                 });
 
+                // ── Jobs completed per month (sent to AR) ──
+                const completedData = {};
+                fmJobs.forEach(j => {
+                  if (!j.sentToAR) return;
+                  const k = (j.sentToARAt || j.invoiceDate || "").slice(0,7);
+                  if (k) completedData[k] = (completedData[k] || 0) + 1;
+                });
+                const jobsComplete12 = Array.from({length:12}, (_,i) => completedData[curYear + "-" + String(i+1).padStart(2,"0")] || 0);
+
                 // ── Quarterly data ──
                 const quarters = [1,2,3,4].map(q => {
                   const mIdxs = [0,1,2].map(i => (q-1)*3+i);
@@ -7373,7 +7441,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                 };
 
                 // ── PM selector ──
-                const pms = [...new Set(fmJobs.map(j => j.pm||"").filter(Boolean))];
+                const pms = FM_PMS;
 
                 return (
                   <div className="t-page fade-in" style={{ background: "transparent", display: "flex", flexDirection: "column", gap: 24 }}>
@@ -7408,39 +7476,34 @@ Return ONLY valid JSON, no markdown, no extra text:
                       </div>
                     </div>
 
-                    {/* -- TOP ROW: KPIs left + GP by Quarter right -- */}
-                    {fmDashReportsVisible.kpis && (
-                    <div style={{ display: "grid", gridTemplateColumns: "minmax(280px, 320px) 1fr", gap: 18 }}>
-
-                      {/* KPI stack — theme-toned cards */}
-                      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                        {[
-                          { label: "Revenue",            value: "$" + Math.round(ytdRev).toLocaleString(),         sub: "Actual YTD",          accent: "var(--t-dowork)" },
-                          { label: "Profit",             value: "$" + Math.round(ytdGP).toLocaleString(),          sub: "Actual YTD",          accent: "var(--t-approval)" },
-                          { label: "Pipeline Potential", value: "$" + Math.round(pipelineVal).toLocaleString(),    sub: "Current potential",   accent: "var(--t-approved)" },
-                          { label: "Average Margin",     value: ytdMargin + "%",                                   sub: "Actual YTD",          accent: "var(--t-warn)" },
-                        ].map(s => (
-                          <div key={s.label} className="t-card" style={{ padding: "12px 14px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                            <div>
-                              <div className="t-eyebrow" style={{ color: s.accent }}>{s.label}</div>
-                              <div style={{ fontSize: 10, color: "var(--t-ink3)", marginTop: 2 }}>{s.sub}</div>
-                            </div>
-                            <div style={{ fontSize: 22, fontWeight: 700, color: "var(--t-ink)", fontFamily: "var(--t-mono)" }}>{s.value}</div>
-                          </div>
-                        ))}
-                      </div>
-
-                      {/* GP per Quarter horizontal bars */}
-                      <div className="t-card" style={{ padding: 20 }}>
-                        <div className="t-eyebrow" style={{ marginBottom: 16 }}>2026 Gross Profit per Quarter</div>
-                        <QBarChart data={quarters} />
-                      </div>
+                    {/* -- KPI TILES ACROSS THE TOP -- */}
+                    {fmDashReportsVisible.kpis && (<>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14 }}>
+                      {[
+                        { label: "Revenue",            value: "$" + Math.round(ytdRev).toLocaleString(),         sub: "Actual YTD",          accent: "var(--t-dowork)" },
+                        { label: "Profit",             value: "$" + Math.round(ytdGP).toLocaleString(),          sub: "Actual YTD",          accent: "var(--t-approval)" },
+                        { label: "Pipeline Potential", value: "$" + Math.round(pipelineVal).toLocaleString(),    sub: "Current potential",   accent: "var(--t-approved)" },
+                        { label: "Average Margin",     value: ytdMargin + "%",                                   sub: "Actual YTD",          accent: "var(--t-warn)" },
+                      ].map(s => (
+                        <div key={s.label} className="t-card" style={{ padding: "16px 18px", position: "relative", overflow: "hidden" }}>
+                          <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, background: s.accent }} />
+                          <div className="t-eyebrow" style={{ color: s.accent, marginBottom: 6 }}>{s.label}</div>
+                          <div style={{ fontSize: 28, fontWeight: 700, color: "var(--t-ink)", fontFamily: "var(--t-mono)", lineHeight: 1.1 }}>{s.value}</div>
+                          <div style={{ fontSize: 10, color: "var(--t-ink3)", marginTop: 4 }}>{s.sub}</div>
+                        </div>
+                      ))}
                     </div>
-                    )}
 
-                    {/* -- CHARTS ROW: 3 equal-size charts side-by-side -- */}
+                    {/* GP per Quarter — full width */}
+                    <div className="t-card" style={{ padding: 20 }}>
+                      <div className="t-eyebrow" style={{ marginBottom: 16 }}>2026 Gross Profit per Quarter</div>
+                      <QBarChart data={quarters} />
+                    </div>
+                    </>)}
+
+                    {/* -- CHARTS: stacked full-width -- */}
                     {fmDashReportsVisible.charts && (
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 18 }}>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
                       <div className="t-card" style={{ padding: 22, display: "flex", flexDirection: "column" }}>
                         <div className="t-eyebrow" style={{ marginBottom: 10 }}>Opportunities YOY</div>
                         <div style={{ flex: 1 }}>
@@ -7450,7 +7513,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                               { label: "Last Year", color: "#94A3B8", data: months12.map(m => m.lastRev > 0 ? Math.round(m.lastRev/500) : 0) },
                               { label: "This Year", color: "var(--t-ink)", isCurrent: true, data: months12.map(m => m.thisCount) },
                             ]}
-                            height={140}
+                            height={200}
                             yFmt={v => v}
                           />
                         </div>
@@ -7469,7 +7532,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                               { label: "2025", color: "#94A3B8", data: months12.map(m => m.lastRev) },
                               { label: "2026", color: "var(--t-dowork)", isCurrent: true, data: months12.map(m => m.thisRev) },
                             ]}
-                            height={140}
+                            height={200}
                           />
                         </div>
                         <div style={{ display: "flex", gap: 14, marginTop: 10, fontSize: 11, color: "var(--t-ink2)", flexWrap: "wrap" }}>
@@ -7487,12 +7550,27 @@ Return ONLY valid JSON, no markdown, no extra text:
                               { label: "2025", color: "#94A3B8", data: months12.map(m => m.lastGP) },
                               { label: "2026", color: "var(--t-approval)", isCurrent: true, data: months12.map(m => m.thisGP) },
                             ]}
-                            height={140}
+                            height={200}
                           />
                         </div>
                         <div style={{ display: "flex", gap: 14, marginTop: 10, fontSize: 11, color: "var(--t-ink2)", flexWrap: "wrap" }}>
                           <span><span style={{ display: "inline-block", width: 16, height: 2, background: "#94A3B8", marginRight: 6, verticalAlign: "middle" }}></span>2025</span>
                           <span><span style={{ display: "inline-block", width: 16, height: 2, background: "var(--t-approval)", marginRight: 6, verticalAlign: "middle" }}></span>2026</span>
+                        </div>
+                      </div>
+
+                      {/* Jobs Complete per Month */}
+                      <div className="t-card" style={{ padding: 22, display: "flex", flexDirection: "column" }}>
+                        <div className="t-eyebrow" style={{ marginBottom: 10 }}>Jobs Complete per Month · {curYear}</div>
+                        <div style={{ flex: 1 }}>
+                          <LineChart
+                            labels={MONTHS}
+                            series={[
+                              { label: "Jobs Complete", color: "var(--t-approved)", isCurrent: true, data: jobsComplete12 },
+                            ]}
+                            height={200}
+                            yFmt={v => v}
+                          />
                         </div>
                       </div>
                     </div>
@@ -7518,11 +7596,11 @@ Return ONLY valid JSON, no markdown, no extra text:
                         </div>
                       </div>
                       <div className="t-card" style={{ padding: 22 }}>
-                        <div className="t-eyebrow" style={{ marginBottom: 14 }}>PM Breakdown</div>
+                        <div className="t-eyebrow" style={{ marginBottom: 14 }}>Coordinator Breakdown</div>
                         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
                           <thead>
                             <tr style={{ borderBottom: "1px solid var(--t-line)" }}>
-                              {["PM","Jobs","Rev","GP","GP%"].map(h => <th key={h} style={{ textAlign:"left", padding:"6px 8px", fontSize:10, color:"var(--t-ink3)", textTransform:"uppercase", letterSpacing:"0.07em", fontWeight: 600 }}>{h}</th>)}
+                              {["Coordinator","Jobs","Rev","GP","GP%"].map(h => <th key={h} style={{ textAlign:"left", padding:"6px 8px", fontSize:10, color:"var(--t-ink3)", textTransform:"uppercase", letterSpacing:"0.07em", fontWeight: 600 }}>{h}</th>)}
                             </tr>
                           </thead>
                           <tbody>
@@ -9924,7 +10002,7 @@ Example:
                 const fmPipelineJobs = fmJobs.filter(j =>
                   !j.sentToAR &&
                   FM_PIPELINE_STAGES.some(s => s.id === j.stage) &&
-                  (j.name.toLowerCase().includes(q) || (j.storeCode||"").toLowerCase().includes(q) || (j.projectNo||"").toLowerCase().includes(q))
+                  fmJobMatchesSearch(j, q)
                 ).sort((a, b) => {
                   const ai = FM_PIPELINE_STAGES.findIndex(s => s.id === a.stage);
                   const bi = FM_PIPELINE_STAGES.findIndex(s => s.id === b.stage);
@@ -10076,6 +10154,7 @@ Example:
                     );
                   }},
                   category: { label: "Category", width: 90, render: j => <span style={{ fontSize: 11, color: "var(--t-ink2)" }}>{j.category || "FM"}</span> },
+              trade: { label: "Trade", width: 120, render: j => j.trade ? <span style={{ fontSize: 11, color: "var(--t-ink2)" }}>{j.trade}</span> : <span style={{ color: "var(--t-ink3)" }}>—</span> },
                   company: { label: "Company", width: 160, className: "t-td-wrap", render: j => {
                     const co = companies.find(c => c.id === j.companyId);
                     return co ? <span>🏢 {co.name}</span> : <span style={{ color: "var(--t-ink3)" }}>—</span>;
@@ -12145,14 +12224,15 @@ window.addEventListener('message',function(e){
           {activeNav === "jobs" && activeBU === "facility" && !accountingMode && (() => {
             const coords = ["all", ...Array.from(new Set(fmTeam.map(m => m.name)))];
             const filtered = fmJobs.filter(j => {
-              const isActive    = FM_ACTIVE_STAGES.some(s => s.id === j.stage);
+              const isActive    = FM_STAGES.some(s => s.id === j.stage); // all stages (pipeline + active) — combined view
               const notSentToAR = !j.sentToAR;
+              const notDead     = !["dead","lost","dismissed"].includes((j.status||"").toLowerCase());
               const matchCoord  = fmCoordFilter === "all" || j.coordinator === fmCoordFilter;
-              const matchSearch = !fmSearch || j.name.toLowerCase().includes(fmSearch.toLowerCase()) || (j.storeCode||"").toLowerCase().includes(fmSearch.toLowerCase()) || (j.projectNo||"").toLowerCase().includes(fmSearch.toLowerCase());
-              return isActive && notSentToAR && matchCoord && matchSearch;
+              const matchSearch = fmJobMatchesSearch(j, fmSearch);
+              return isActive && notSentToAR && notDead && matchCoord && matchSearch;
             }).sort((a, b) => {
-              const ai = FM_ACTIVE_STAGES.findIndex(s => s.id === a.stage);
-              const bi = FM_ACTIVE_STAGES.findIndex(s => s.id === b.stage);
+              const ai = FM_STAGES.findIndex(s => s.id === a.stage);
+              const bi = FM_STAGES.findIndex(s => s.id === b.stage);
               if (ai !== bi) return ai - bi;
               const ad = a.startDate || "";
               const bd = b.startDate || "";
@@ -12308,6 +12388,7 @@ window.addEventListener('message',function(e){
                 );
               }},
               category: { label: "Category", width: 90, render: j => <span style={{ fontSize: 11, color: "var(--t-ink2)" }}>{j.category || "FM"}</span> },
+              trade: { label: "Trade", width: 120, render: j => j.trade ? <span style={{ fontSize: 11, color: "var(--t-ink2)" }}>{j.trade}</span> : <span style={{ color: "var(--t-ink3)" }}>—</span> },
               company: { label: "Company", width: 160, className: "t-td-wrap", render: j => {
                 const co = companies.find(c => c.id === j.companyId);
                 return co ? <span>🏢 {co.name}</span> : <span style={{ color: "var(--t-ink3)" }}>—</span>;
@@ -12329,7 +12410,7 @@ window.addEventListener('message',function(e){
                 {/* Header */}
                 <div className="t-section-hdr">
                   <div>
-                    <div className="t-h1">Active Jobs</div>
+                    <div className="t-h1">Jobs</div>
                     <div className="t-section-meta">
                       <span className="t-mono">{filtered.length}</span> jobs &nbsp;·&nbsp;
                       <span className="t-mono">{fmt(totalGross)}</span> gross &nbsp;·&nbsp;
@@ -12364,9 +12445,9 @@ window.addEventListener('message',function(e){
                   </div>
                 </div>
 
-                {/* Stage stats - active phase only */}
-                <div style={{ display: "grid", gridTemplateColumns: `repeat(${FM_ACTIVE_STAGES.length}, 1fr)`, gap: 10, marginBottom: 18 }}>
-                  {FM_ACTIVE_STAGES.map(st => {
+                {/* Stage stats - all stages (pipeline + active) */}
+                <div style={{ display: "grid", gridTemplateColumns: `repeat(${FM_STAGES.length}, 1fr)`, gap: 10, marginBottom: 18 }}>
+                  {FM_STAGES.map(st => {
                     const cnt = filtered.filter(j => j.stage === st.id).length;
                     const val = filtered.filter(j => j.stage === st.id).reduce((s,j) => s+(j.contractValue||0),0);
                     return (
@@ -12472,7 +12553,7 @@ window.addEventListener('message',function(e){
           {activeNav === "completed" && activeBU === "facility" && !accountingMode && (() => {
             const completedJobs = fmJobs
               .filter(j => j.sentToAR)
-              .filter(j => !fmSearch || j.name.toLowerCase().includes(fmSearch.toLowerCase()) || (j.storeCode||"").toLowerCase().includes(fmSearch.toLowerCase()) || (j.projectNo||"").toLowerCase().includes(fmSearch.toLowerCase()))
+              .filter(j => fmJobMatchesSearch(j, fmSearch))
               .sort((a, b) => {
                 const ad = a.sentToARAt || "";
                 const bd = b.sentToARAt || "";
@@ -12535,6 +12616,76 @@ window.addEventListener('message',function(e){
                               <td style={{ textAlign: "right", fontFamily: "var(--t-mono)" }}>{fmt(j.vendorInvoiceAmount)}</td>
                               <td style={{ textAlign: "right", fontFamily: "var(--t-mono)", fontWeight: 600, color: profit >= 0 ? "var(--t-dowork)" : "var(--t-warn)" }}>{fmt(profit)}</td>
                               <td style={{ fontFamily: "var(--t-mono)", fontSize: 11, color: "var(--t-ink2)" }}>{j.sentToARAt ? new Date(j.sentToARAt).toLocaleDateString() : "—"}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+
+          {/* -- DEAD / LOST -- */}
+          {activeNav === "dead" && activeBU === "facility" && !accountingMode && (() => {
+            const deadJobs = fmJobs
+              .filter(j => ["dead","lost","dismissed"].includes((j.status||"").toLowerCase()))
+              .filter(j => fmJobMatchesSearch(j, fmSearch))
+              .sort((a,b) => (b.deadAt||"").localeCompare(a.deadAt||""));
+            const deadValue = deadJobs.reduce((s,j)=>s+Number(j.contractValue||0),0);
+            return (
+              <div className="fade-in" style={{ display:"flex", flexDirection:"column", gap:16 }}>
+                <div className="t-section-hdr">
+                  <div>
+                    <div className="t-h1">Dead / Lost</div>
+                    <div className="t-section-meta">
+                      <span className="t-mono">{deadJobs.length}</span> opportunities &nbsp;·&nbsp;
+                      <span className="t-mono">{fmt(deadValue)}</span> lost value
+                    </div>
+                  </div>
+                  <div style={{ display:"flex", gap:10 }}>
+                    <span className="t-srch"><input className="t-input" style={{ width:220 }} placeholder="Search…" value={fmSearch} onChange={e=>setFmSearch(e.target.value)} /></span>
+                    <button className="t-btn t-btn-ghost" onClick={refreshFmJobs} disabled={fmJobsRefreshing} title="Refresh from Supabase">
+                      <span style={{ display:"inline-block", transition:"transform 0.3s", transform: fmJobsRefreshing ? "rotate(360deg)" : "none" }}>🔄</span>
+                      {fmJobsRefreshing ? "Refreshing…" : "Refresh"}
+                    </button>
+                  </div>
+                </div>
+                {deadJobs.length === 0 ? (
+                  <div className="t-empty">No dead or lost opportunities. Use "⊘ Mark Dead/Lost" on a job to move it here.</div>
+                ) : (
+                  <div className="t-card" style={{ padding:0, overflow:"hidden" }}>
+                    <table className="t-table">
+                      <thead>
+                        <tr>
+                          <th>Store</th>
+                          <th>Project #</th>
+                          <th>Scope</th>
+                          <th>Company</th>
+                          <th>Coordinator</th>
+                          <th style={{ textAlign:"right" }}>Gross Value</th>
+                          <th>Reason</th>
+                          <th>Killed</th>
+                          <th></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {deadJobs.map(j => {
+                          const co = companies.find(c => c.id === j.companyId);
+                          return (
+                            <tr key={j.id} style={{ cursor:"pointer" }}>
+                              <td onClick={() => setFmFullScreenJob(j)}><span className="t-mono">{j.storeCode || "—"}</span></td>
+                              <td onClick={() => setFmFullScreenJob(j)}><span className="t-mono">{j.projectNo || "—"}</span></td>
+                              <td onClick={() => setFmFullScreenJob(j)}>{j.name}</td>
+                              <td onClick={() => setFmFullScreenJob(j)}>{co?.name || "—"}</td>
+                              <td onClick={() => setFmFullScreenJob(j)}>{j.coordinator || "—"}</td>
+                              <td onClick={() => setFmFullScreenJob(j)} style={{ textAlign:"right", fontFamily:"var(--t-mono)" }}>{fmt(j.contractValue)}</td>
+                              <td onClick={() => setFmFullScreenJob(j)} style={{ fontSize:11, color:"var(--t-ink2)" }}>{j.deadReason || "—"}</td>
+                              <td onClick={() => setFmFullScreenJob(j)} style={{ fontFamily:"var(--t-mono)", fontSize:11, color:"var(--t-ink2)" }}>{j.deadAt ? new Date(j.deadAt).toLocaleDateString() : "—"}</td>
+                              <td onClick={e => e.stopPropagation()}>
+                                <button className="t-btn t-btn-ghost t-btn-sm" onClick={() => restoreFm(j)} title="Restore to active">↩ Restore</button>
+                              </td>
                             </tr>
                           );
                         })}
@@ -18308,6 +18459,7 @@ window.addEventListener('message',function(e){
                       <button className="t-btn t-btn-ghost" onClick={closePanel}>← Back to list</button>
                       <div style={{ display: "flex", gap: 8 }}>
                         <button className="t-btn t-btn-ghost t-btn-sm" onClick={() => { openEditFm(job); closePanel(); }}>✎ Full Edit</button>
+                        <button className="t-btn t-btn-ghost t-btn-sm" onClick={() => killFm(job)} title="Move to Dead / Lost">⊘ Mark Dead/Lost</button>
                         <button className="t-btn t-btn-ghost t-btn-sm t-btn-danger" onClick={() => deleteFm(job.id)}>✕ Delete</button>
                       </div>
                     </div>
@@ -18318,6 +18470,7 @@ window.addEventListener('message',function(e){
                         {job.storeCode && <span className="t-mono-tag">#{job.storeCode}</span>}
                         {job.projectNo && <span className="t-mono-tag">Project {job.projectNo}</span>}
                       </div>
+                      <div style={{ display: "inline-block", fontSize: 14, fontWeight: 700, color: "var(--t-approval)", background: "var(--t-approval-bg)", border: "1px solid color-mix(in srgb, var(--t-approval) 30%, transparent)", borderRadius: 6, padding: "4px 10px", marginBottom: 8 }}>→ Next step: {fmNextStepText(job)}</div>
                       <div className="t-h1" style={{ fontSize: 26, lineHeight: 1.15 }}>{job.name}</div>
                     </div>
                   </div>
@@ -18328,10 +18481,14 @@ window.addEventListener('message',function(e){
                         <span className="t-eyebrow">FM Job</span>
                         <span className={"t-pill " + fmStagePill(job.stage)}>{st.label}</span>
                       </div>
+                      <div style={{ display: "inline-block", fontSize: 13, fontWeight: 700, color: "var(--t-approval)", background: "var(--t-approval-bg)", border: "1px solid color-mix(in srgb, var(--t-approval) 30%, transparent)", borderRadius: 6, padding: "3px 9px", marginBottom: 6 }}>→ Next step: {fmNextStepText(job)}</div>
                       <div className="t-h2" style={{ lineHeight: 1.3 }}>{job.name}</div>
                       {job.storeCode && <div className="t-section-meta" style={{ marginTop: 4 }}><span className="t-mono">#{job.storeCode}</span> {job.projectNo ? "· " + job.projectNo : ""}</div>}
                     </div>
-                    <button className="t-btn t-btn-ghost t-btn-sm" onClick={closePanel} style={{ flexShrink: 0 }}>✕</button>
+                    <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                      <button className="t-btn t-btn-ghost t-btn-sm" onClick={() => killFm(job)} title="Move to Dead / Lost">⊘</button>
+                      <button className="t-btn t-btn-ghost t-btn-sm" onClick={closePanel}>✕</button>
+                    </div>
                   </div>
                 )}
 
@@ -18510,6 +18667,8 @@ window.addEventListener('message',function(e){
                         <InlineRow label="Store Code" value={job.storeCode} onSave={v => update({ storeCode: v })} mono />
                         <InlineRow label="Category" value={job.category || "FM"} onSave={v => update({ category: v })}
                           options={[{ v: "FM", l: "FM" }, { v: "CapEx", l: "CapEx" }, { v: "Lawn", l: "Lawn" }, { v: "Snow", l: "Snow" }]} />
+                        <InlineRow label="Trade" value={job.trade} onSave={v => update({ trade: v })}
+                          options={FM_TRADES.map(t => ({ v: t, l: t }))} placeholder="(set trade)" />
                         <InlineRow label="Priority" value={job.priority} onSave={v => update({ priority: v })}
                           options={[{ v: "Red", l: "🔴 Red" }, { v: "Yellow", l: "🟡 Yellow" }, { v: "Green", l: "🟢 Green" }]} />
 
@@ -18537,7 +18696,8 @@ window.addEventListener('message',function(e){
 
                         {/* Vendor / Customer */}
                         <ReadRow label="Vendor" value={sub ? sub.name : ""} placeholder="(none assigned — use the Estimating or Vendor card to assign)" />
-                        <ReadRow label="Customer" value={ct ? [ct.firstName, ct.lastName].filter(Boolean).join(" ") : ""} placeholder="(none assigned)" />
+                        <InlineRow label="Customer" value={job.approverContactId} onSave={v => update({ approverContactId: v })}
+                          options={companyContacts.map(c => ({ v: c.id, l: [c.firstName, c.lastName].filter(Boolean).join(" ") || c.email || "Contact" }))} placeholder="(none assigned)" />
                         <ReadRow label="Vendor Next Step" value={VENDOR_NEXT_STEPS.find(v => v.id === job.vendorNextStep)?.label || job.vendorNextStep} />
 
                         {/* Schedule / dates */}
@@ -18551,13 +18711,14 @@ window.addEventListener('message',function(e){
 
                         {/* Team */}
                         <InlineRow label="Coordinator" value={job.coordinator} onSave={v => update({ coordinator: v })} />
-                        <InlineRow label="PM" value={job.pm} onSave={v => update({ pm: v })} />
                         <InlineRow label="Account Manager" value={job.accountManager} onSave={v => update({ accountManager: v })} />
 
                         {/* Location */}
                         <InlineRow label="Market Area" value={job.marketArea} onSave={v => update({ marketArea: v })} />
-                        <ReadRow label="Company" value={co ? co.name : ""} />
-                        <ReadRow label="Site" value={site ? (site.storeNumber ? "#" + site.storeNumber + " · " : "") + (site.address || "Site") : ""} muted />
+                        <InlineRow label="Company" value={job.companyId} onSave={v => update({ companyId: v, approverContactId: "", siteId: "" })}
+                          options={companies.map(c => ({ v: c.id, l: c.name }))} placeholder="(none)" />
+                        <InlineRow label="Site" value={job.siteId} onSave={v => update({ siteId: v })}
+                          options={(job.companyId ? companySites : sites).map(s => ({ v: s.id, l: (s.storeNumber ? "#" + s.storeNumber + " · " : "") + (s.address || "Site") }))} placeholder="(none)" />
                       </div>
 
                       {/* Scope of Work — full-width textarea */}
@@ -18569,7 +18730,8 @@ window.addEventListener('message',function(e){
                   );
                 })()}
 
-                {/* ── LINKED RECORDS ── Company / Customer / Site cards */}
+                {/* Linked Records removed — Company / Customer / Site are editable in All Job Details above */}
+                {false && (
                 <div className="t-card" style={{ padding: "14px 16px", background: "var(--t-surface)" }}>
                   <div className="t-eyebrow" style={{ marginBottom: 12 }}>🔗 Linked Records</div>
                   <div style={{ display: "grid", gridTemplateColumns: isFullScreen ? "repeat(3, 1fr)" : "1fr", gap: 10 }}>
@@ -18673,8 +18835,10 @@ window.addEventListener('message',function(e){
 
                   </div>
                 </div>
+                )}
 
-                {/* Stage selector - full pipeline across all 6 stages */}
+                {/* Stage selector removed — stage is driven by the workflow, not changed from job detail */}
+                {false && (
                 <div>
                   <div style={{ fontSize: 10, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 8 }}>Stage</div>
                   <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
@@ -18727,6 +18891,7 @@ window.addEventListener('message',function(e){
                     </div>
                   </div>
                 </div>
+                )}
 
                 {/* Owner Approval info panel */}
                 {job.stage === "owner_approval" && (
@@ -18787,8 +18952,8 @@ window.addEventListener('message',function(e){
                   </div>
                 )}
 
-                {/* Key action date */}
-                {st.actionKey && (
+                {/* Key action date removed — dates live in All Job Details */}
+                {false && st.actionKey && (
                   <div>
                     <div style={{ fontSize: 10, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5 }}>{st.actionLabel}</div>
                     <input className="fi" type="date" value={job[st.actionKey] || ""}
@@ -18798,7 +18963,8 @@ window.addEventListener('message',function(e){
                   </div>
                 )}
 
-                {/* Coordinator */}
+                {/* Coordinator removed — now in All Job Details */}
+                {false && (
                 <div>
                   <div style={{ fontSize: 10, color: "#4A5278", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 5 }}>Coordinator</div>
                   <select className="fi" value={job.coordinator || ""} onChange={e => update({ coordinator: e.target.value })}>
@@ -18806,6 +18972,7 @@ window.addEventListener('message',function(e){
                     {fmTeam.map(m => <option key={m.id} value={m.name}>{m.name}</option>)}
                   </select>
                 </div>
+                )}
 
                 {/* -- ESTIMATING stage panel (also stays during waiting_quote so coordinator can see bids/path UI) -- */}
                 {(job.stage === "estimating" || job.stage === "waiting_quote") && (() => {
