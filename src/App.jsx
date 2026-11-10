@@ -5481,12 +5481,19 @@ Return ONLY valid JSON, no markdown, no extra text:
   };
 
   const assignInboxLead = (lead, coordinator) => {
+    // Auto-captured leads from the inbound task are already fm_jobs rows (stage="intake").
+    // Advance them in place so assigning never creates a duplicate; persist to Supabase.
+    if (lead._jobRow) {
+      setFmJobs(prev => prev.map(j => j.id === lead.id ? { ...j, stage: "estimating", coordinator, pm: coordinator } : j));
+      try { supa.from("fm_jobs").update({ stage: "estimating", coordinator, pm: coordinator }).eq("id", lead.id); } catch(e) {}
+      return;
+    }
     const co = companies.find(c => c.id === lead.companyId) || companies.find(c => c.name.toLowerCase() === (lead.companyName||"").toLowerCase());
     const companyId = co?.id || "";
     const nte = Number(lead.authorizedAmount || 0);
     const gp  = fmGrossProfit(nte);
     const vendorNTE = fmVendorNTE(nte);
-    setFmJobs(prev => [...prev, {
+    const newJob = {
       id: "fm" + Date.now(), name: lead.name, companyId, siteId: lead.storeId || "",
       approverContactId: lead.contactId || "",
       contractValue: nte, grossProfit: gp, nte: String(nte), vendorNTE: String(vendorNTE),
@@ -5496,11 +5503,37 @@ Return ONLY valid JSON, no markdown, no extra text:
       vendorInvoiceAmount: 0, vendorInvoiceNumber: "", subcontractorId: "", vendorNextStep: "",
       vendorQuotePrice: "", vendorQuoteScope: "", scopeOfWork: lead.scopeOfWork || lead.name,
       coordinator, subSentAt: null, pmPingedAt: null
-    }]);
+    };
+    setFmJobs(prev => [...prev, newJob]);
+    try { supa.from("fm_jobs").insert(fmJobToDB(newJob)); } catch(e) {}
     setFmInbox(prev => prev.filter(l => l.id !== lead.id));
   };
 
-  const deleteInboxLead = (id) => setFmInbox(prev => prev.filter(l => l.id !== id));
+  const deleteInboxLead = (id) => {
+    // A job-backed (auto-captured) lead is dismissed, not hard-deleted — keeps the audit row.
+    if (fmJobs.some(j => j.id === id)) {
+      setFmJobs(prev => prev.map(j => j.id === id ? { ...j, status: "dismissed" } : j));
+      try { supa.from("fm_jobs").update({ status: "dismissed" }).eq("id", id); } catch(e) {}
+      return;
+    }
+    setFmInbox(prev => prev.filter(l => l.id !== id));
+  };
+
+  // Unified inbox = automatic leads from the inbound task (fm_jobs with stage="intake")
+  // + any manually-added in-memory leads. The intake rows carry _jobRow so assign/delete
+  // know to update the existing row instead of creating a new one.
+  const inboxLeads = [
+    ...fmJobs.filter(j => j.stage === "intake" && j.status !== "dismissed").map(j => ({
+      id: j.id, _jobRow: true, source: "email",
+      name: j.name, storeCode: j.storeCode, scopeOfWork: j.scopeOfWork,
+      bidDueDate: j.bidDueDate, companyId: j.companyId,
+      companyName: (companies.find(c => c.id === j.companyId)?.name) || "",
+      address: (sites.find(s => s.id === j.siteId)?.address) || "",
+      storeId: j.siteId, ownersProjectNo: j.ownersProjectNo,
+      authorizedAmount: j.contractValue, contactId: j.approverContactId, notes: j.notes,
+    })),
+    ...fmInbox,
+  ];
 
   const newItem = () => ({ id: "i" + Date.now() + Math.random(), desc: "", unit: "EA", qty: 1, unitPrice: 0, labor: 0, material: 0, sub: 0, misc: 0 });
   const newSection = (name="") => ({ id: "s" + Date.now() + Math.random(), name, items: [newItem()] });
@@ -9578,21 +9611,21 @@ Example:
                 <div style={{ background: "#F8F9FD", border: "1px solid #FCD34D30", borderRadius: 12, padding: "18px 20px" }}>
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                      <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#FCD34D", boxShadow: fmInbox.length > 0 ? "0 0 8px #FCD34D" : "none" }} />
+                      <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#FCD34D", boxShadow: inboxLeads.length > 0 ? "0 0 8px #FCD34D" : "none" }} />
                       <span style={{ fontSize: 13, fontWeight: 700, color: "#FCD34D", textTransform: "uppercase", letterSpacing: "0.07em" }}>Lead Inbox</span>
-                      <span style={{ fontSize: 11, color: "#4A5278" }}>{fmInbox.length} unassigned</span>
+                      <span style={{ fontSize: 11, color: "#4A5278" }}>{inboxLeads.length} unassigned</span>
                     </div>
                     <button className="btn-ghost" style={{ fontSize: 11, borderColor: "#FCD34D40", color: "#FCD34D" }} onClick={() => { setInboxForm({ name: "", companyName: "", storeCode: "", address: "", scopeOfWork: "", ownersProjectNo: "", bidDueDate: "", notes: "", source: "manual" }); setInboxParseText(""); setShowInboxForm(true); }}>+ New Lead</button>
                   </div>
 
-                  {fmInbox.length === 0 && (
+                  {inboxLeads.length === 0 && (
                     <div style={{ textAlign: "center", padding: "24px", color: "#3D4570", fontSize: 12, border: "1px dashed #CBD1E8", borderRadius: 8 }}>
                       No unassigned leads — add one manually or paste an email to parse
                     </div>
                   )}
 
                   <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                    {fmInbox.map(lead => (
+                    {inboxLeads.map(lead => (
                       <div key={lead.id} style={{ background: "#ECEEF8", border: "1px solid #FCD34D20", borderRadius: 8, padding: "14px 16px" }}>
                         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10 }}>
                           <div style={{ flex: 1, minWidth: 0 }}>
