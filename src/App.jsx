@@ -319,6 +319,7 @@ const NAV_ITEMS = {
   ],
   facility: [
     { id: "dashboard",      label: "Dashboard",      icon: "⊞" },
+    { id: "inbox",          label: "Lead Inbox",     icon: "📥" },
     { id: "jobs",           label: "Jobs",           icon: "🔨" },
     { id: "completed",      label: "Completed",      icon: "✅" },
     { id: "dead",           label: "Dead / Lost",    icon: "⊘" },
@@ -9728,12 +9729,9 @@ Example:
           })()}
 
 
-          {/* -- PIPELINE -- */}
-          {activeNav === "pipeline" && activeBU !== "major" && activeBU !== "capital" && !accountingMode && (
-            <div className="fade-in" style={{ display: "flex", flexDirection: "column", gap: 22 }}>
-
+          {/* -- LEAD INBOX (its own tab) -- */}
               {/* -- FM INBOX (unassigned leads) - FM only -- */}
-              {activeBU === "facility" && (
+              {activeNav === "inbox" && activeBU === "facility" && (
                 <div style={{ background: "#F8F9FD", border: "1px solid #FCD34D30", borderRadius: 12, padding: "18px 20px" }}>
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -9768,6 +9766,8 @@ Example:
                             {lead.scopeOfWork && <div style={{ fontSize: 11, color: "#4A5278", marginTop: 4, fontStyle: "italic" }}>{lead.scopeOfWork}</div>}
                           </div>
                           <div style={{ display: "flex", gap: 6, flexShrink: 0, alignItems: "center" }}>
+                            {/* Open to verify / add info before assigning */}
+                            {lead._jobRow && <button className="btn-ghost" style={{ fontSize: 11, color: "#3B6FE8", borderColor: "#3B6FE830", padding: "4px 10px" }} onClick={() => setFmFullScreenJob(lead._jobRow)}>Open</button>}
                             {/* Assign dropdown */}
                             <select
                               style={{ background: "#FFFFFF", border: "1px solid #3B6FE860", color: "#3B6FE8", fontSize: 11, borderRadius: 5, padding: "5px 10px", cursor: "pointer", fontFamily: "inherit" }}
@@ -9957,6 +9957,11 @@ Example:
                   )}
                 </div>
               )}
+
+          {/* -- PIPELINE -- */}
+          {activeNav === "pipeline" && activeBU !== "major" && activeBU !== "capital" && !accountingMode && (
+            <div className="fade-in" style={{ display: "flex", flexDirection: "column", gap: 22 }}>
+
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                 <div>
                   <div style={{ fontSize: 22, fontWeight: 700, color: "#1A2240", letterSpacing: "-0.01em", textTransform: "uppercase" }}>Pipeline</div>
