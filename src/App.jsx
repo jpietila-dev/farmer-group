@@ -220,6 +220,54 @@ const BUSINESS_UNITS_ALL = [
   { id: "snow", label: "Snow", short: "SN" },
 ];
 
+// Off-portal vendor invoicing — for vendors NOT on the portal, lets internal staff
+// record the invoice (#, amount, file) on the job and advance it to Bill, so the
+// existing Bill-stage invoice + Send-to-AR cards light up. Caps at vendor quote/NTE.
+function OffPortalInvoice({ job, sub, update, fmt, fmGrossProfit }) {
+  const [invNum, setInvNum] = useState("");
+  const [invAmt, setInvAmt] = useState("");
+  const [file, setFile]     = useState(null);
+  const [busy, setBusy]     = useState(false);
+  const [err, setErr]       = useState("");
+  const cvNum  = Number(job.contractValue || 0);
+  const gpNum  = Number(job.grossProfit || 0) || (cvNum > 0 ? fmGrossProfit(cvNum) : 0);
+  const nte    = Math.max(0, cvNum - gpNum);
+  const quoted = Number(job.vendorQuotePrice || 0);
+  const cap    = quoted > 0 ? quoted : nte;
+  const onFile = (e) => {
+    const f = e.target.files && e.target.files[0];
+    if (!f) return;
+    const r = new FileReader();
+    r.onload = () => setFile({ name: f.name, type: f.type, data: r.result });
+    r.readAsDataURL(f);
+  };
+  const save = () => {
+    const amt = parseFloat(invAmt);
+    if (!amt || amt <= 0) { setErr("Enter an invoice amount"); return; }
+    if (cap > 0 && amt > cap) { setErr("Amount exceeds the maximum of " + fmt(cap)); return; }
+    setBusy(true);
+    update({
+      vendorInvoiceAmount: amt,
+      vendorInvoiceNumber: invNum || "",
+      invoiceAttachment: file || job.invoiceAttachment || null,
+      stage: (job.stage === "do_work" || job.stage === "buyout") ? "bill" : job.stage,
+    });
+  };
+  return (
+    <div style={{ background: "#FFFBEB", border: "1px solid #FCD34D40", borderRadius: 8, padding: "14px 16px" }}>
+      <div style={{ fontSize: 10, color: "#92400E", textTransform: "uppercase", letterSpacing: "0.07em", fontWeight: 700, marginBottom: 4 }}>📋 Enter Vendor Invoice (off-portal)</div>
+      <div style={{ fontSize: 11.5, color: "#4A5278", marginBottom: 12 }}>{sub ? sub.name : "This vendor"} isn't on the portal — record their invoice here. Max {cap > 0 ? fmt(cap) : "—"} (vendor NTE{quoted > 0 ? " / quote" : ""}). Saving moves the job to Bill.</div>
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end" }}>
+        <div><div style={{ fontSize: 10, color: "#4A5278", marginBottom: 3 }}>Invoice #</div><input className="fi" style={{ maxWidth: 170 }} value={invNum} onChange={e => setInvNum(e.target.value)} placeholder="e.g. INV-2041" /></div>
+        <div><div style={{ fontSize: 10, color: "#4A5278", marginBottom: 3 }}>Amount</div><input className="fi" type="number" style={{ maxWidth: 150 }} value={invAmt} onChange={e => { setInvAmt(e.target.value); setErr(""); }} placeholder={cap > 0 ? "max " + cap : "$"} /></div>
+        <label className="btn-ghost" style={{ cursor: "pointer", padding: "8px 14px" }}>{file ? "📎 " + file.name.slice(0, 18) : "📎 Attach invoice"}<input type="file" accept="application/pdf,image/*" style={{ display: "none" }} onChange={onFile} /></label>
+        <button style={{ padding: "9px 16px", border: "none", borderRadius: 8, background: "#18181A", color: "#fff", fontSize: 13, fontWeight: 600, fontFamily: "inherit", cursor: busy ? "default" : "pointer", opacity: busy ? 0.6 : 1 }} disabled={busy} onClick={save}>{busy ? "Saving…" : "Record invoice → Bill"}</button>
+      </div>
+      {err && <div style={{ marginTop: 8, fontSize: 11.5, color: "#B91C1C" }}>{err}</div>}
+    </div>
+  );
+}
+
 const NAV_ITEMS = {
   all: [
     { id: "dashboard",      label: "Dashboard",      icon: "⊞" },
@@ -19656,6 +19704,11 @@ window.addEventListener('message',function(e){
                 })()}
 
                 {/* Financials moved into the top Stage Status Card (which has accurate computed values) */}
+
+                {/* Off-portal vendor invoice entry — vendor not on the portal, job at do_work/buyout/bill, no invoice yet */}
+                {(!sub || !sub.portalEnabled) && ["do_work","buyout","bill"].includes(job.stage) && !(Number(job.vendorInvoiceAmount) > 0) && (
+                  <OffPortalInvoice job={job} sub={sub} update={update} fmt={fmt} fmGrossProfit={fmGrossProfit} />
+                )}
 
                 {/* Vendor Invoice Submission — only shown once stage is at Bill (or later) */}
                 {job.stage === "bill" && (job.vendorInvoiceAmount > 0 || (job.completionPhotos||[]).length > 0 || job.invoiceAttachment) && (
