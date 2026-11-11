@@ -715,6 +715,20 @@ const fmStageDotColor = stage => {
   }
 };
 
+// Maps a stage to the SAME color token the stage pill uses, so rows/tiles match the pills
+const fmStageVar = stage => {
+  switch (stage) {
+    case "estimating":        return "pending";
+    case "waiting_quote":     return "approved";
+    case "generate_proposal": return "approval";
+    case "owner_approval":    return "approval";
+    case "buyout":            return "buyout";
+    case "do_work":           return "dowork";
+    case "bill":              return "warn";
+    default:                  return "hold";
+  }
+};
+
 // Keep CAPEX_FM_STAGES as alias for CapEx (uses same 5-stage system)
 const CAPEX_FM_STAGES = CAPEX_STAGES;
 
@@ -4616,7 +4630,7 @@ export default function App() {
   const [vendorPickerSearch, setVendorPickerSearch] = useState("");
   const [fmSearch,      setFmSearch]      = useState("");
   const [fmCoordFilter, setFmCoordFilter] = useState("Zak Kranich"); // defaults to the logged-in coordinator (pilot: Zak); toggle "All Jobs" to see everyone
-  const [fmStageFilter, setFmStageFilter] = useState(null);          // click a stage tile in Jobs to show only that stage
+  const [fmStageFilter, setFmStageFilter] = useState([]);           // click stage tiles in Jobs to filter by one or more stages
   const [selectedPM,    setSelectedPM]    = useState(null);
   const [openSections,   setOpenSections]   = useState(new Set(["do_work","bill"]));
   // Major Projects state
@@ -4700,6 +4714,7 @@ export default function App() {
   const [editSiteId,   setEditSiteId]   = useState(null);
   const [siteForm,     setSiteForm]     = useState({ companyId: "", contactIds: [], storeNumber: "", address: "", phone: "", accessCode: "", notes: "", lat: "", lng: "", businessUnits: [] });
   const [selectedSite, setSelectedSite] = useState(null);
+  const [globalSearch, setGlobalSearch] = useState("");
   const [siteSearch,   setSiteSearch]   = useState("");
   const [siteView,     setSiteView]     = useState("list"); // "list" | "map"
   const [mapCompanyFilter, setMapCompanyFilter] = useState(null); // null = all
@@ -6263,7 +6278,70 @@ Return ONLY valid JSON, no markdown, no extra text:
             <button className={"t-bu-tab k-crm" + (crmMode ? " active" : "")} onClick={() => { setCrmMode(true); setAccountingMode(false); closeAllPanels(); }}>CRM</button>
             <button className={"t-bu-tab k-acct" + (accountingMode ? " active" : "")} onClick={() => { setAccountingMode(true); setCrmMode(false); closeAllPanels(); }}>$ ACCT</button>
           </div>
-          <div className="t-topbar-meta">{BUSINESS_UNITS.find(b => b.id === activeBU)?.label}</div>
+          <div style={{ position: "relative", flex: 1, maxWidth: 440, margin: "0 16px" }}>
+            <input
+              value={globalSearch}
+              onChange={e => setGlobalSearch(e.target.value)}
+              placeholder="🔍  Search store #, road, town, project…"
+              style={{ width: "100%", height: 34, borderRadius: 8, border: "1px solid var(--t-line)", background: "var(--t-paper)", padding: "0 12px", fontSize: 12, fontFamily: "inherit", color: "var(--t-ink1)", outline: "none", boxSizing: "border-box" }}
+            />
+            {globalSearch.trim().length >= 2 && (() => {
+              const q = globalSearch.trim().toLowerCase();
+              const siteHits = sites.filter(s =>
+                (s.storeNumber||"").toLowerCase().includes(q) ||
+                (s.address||"").toLowerCase().includes(q)
+              ).slice(0, 6);
+              const jobHits = fmJobs.filter(j =>
+                (j.storeCode||"").toLowerCase().includes(q) ||
+                (j.name||"").toLowerCase().includes(q) ||
+                (j.projectNo||"").toLowerCase().includes(q) ||
+                (j.ownersProjectNo||"").toLowerCase().includes(q)
+              ).slice(0, 8);
+              const openSite = (site) => { setGlobalSearch(""); setSelectedSiteDetail(site); setSiteDetailTab("projects"); setEditingSite(false); setSiteEditForm({...site}); };
+              const openJob  = (job)  => { setGlobalSearch(""); closeAllPanels(); setActiveBU("facility"); setFmFullScreenJob(job); };
+              const ddBox = { position: "absolute", top: 40, left: 0, right: 0, background: "var(--t-surface)", border: "1px solid var(--t-line)", borderRadius: 8, boxShadow: "0 10px 30px rgba(10,16,36,0.18)", zIndex: 200 };
+              if (siteHits.length === 0 && jobHits.length === 0) {
+                return <div style={{ ...ddBox, padding: "14px 16px", fontSize: 12, color: "var(--t-ink3)" }}>No matches for "{globalSearch.trim()}"</div>;
+              }
+              return (
+                <div style={{ ...ddBox, maxHeight: 440, overflowY: "auto" }}>
+                  {siteHits.length > 0 && (
+                    <div>
+                      <div style={{ padding: "8px 14px 4px", fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--t-ink3)" }}>Sites</div>
+                      {siteHits.map(s => {
+                        const co = companies.find(c => c.id === s.companyId);
+                        const nProj = fmJobs.filter(j => j.siteId === s.id).length;
+                        return (
+                          <div key={"gs-site-"+s.id} onClick={() => openSite(s)} style={{ padding: "8px 14px", cursor: "pointer", display: "flex", alignItems: "center", gap: 10, borderTop: "1px solid var(--t-line)" }}>
+                            <span style={{ fontSize: 15 }}>📍</span>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div style={{ fontSize: 12, fontWeight: 600, color: "var(--t-ink1)" }}>Store #{s.storeNumber || "—"}{co ? " · " + co.name : ""}</div>
+                              <div style={{ fontSize: 11, color: "var(--t-ink3)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{s.address || "—"}</div>
+                            </div>
+                            {nProj > 0 && <span style={{ fontSize: 10, fontWeight: 700, background: "#3B6FE815", color: "#3B6FE8", borderRadius: 10, padding: "2px 8px", flexShrink: 0 }}>{nProj} project{nProj !== 1 ? "s" : ""}</span>}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                  {jobHits.length > 0 && (
+                    <div>
+                      <div style={{ padding: "8px 14px 4px", fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--t-ink3)", borderTop: siteHits.length ? "1px solid var(--t-line)" : "none" }}>Projects</div>
+                      {jobHits.map(j => (
+                        <div key={"gs-job-"+j.id} onClick={() => openJob(j)} style={{ padding: "8px 14px", cursor: "pointer", display: "flex", alignItems: "center", gap: 10, borderTop: "1px solid var(--t-line)" }}>
+                          <span style={{ fontSize: 15 }}>🔨</span>
+                          <div style={{ flex: 1, minWidth: 0 }}>
+                            <div style={{ fontSize: 12, fontWeight: 600, color: "var(--t-ink1)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{j.name || "Untitled"}</div>
+                            <div style={{ fontSize: 11, color: "var(--t-ink3)" }}>{[j.storeCode && ("Store " + j.storeCode), j.coordinator, j.stage].filter(Boolean).join(" · ")}</div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+          </div>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             {supaReady && <div className="t-status-chip t-status-live"><span className="t-status-dot"></span>DB Live</div>}
             {dbError && <div className="t-status-chip t-status-offline">⚠ Offline</div>}
@@ -7359,9 +7437,18 @@ Return ONLY valid JSON, no markdown, no extra text:
 
                 // ── SVG Line Chart helper ──
                 const LineChart = ({ series, labels, title, height=130, yFmt }) => {
+                  const wrapRef = React.useRef(null);
+                  const [cw, setCw] = useState(900);
+                  useEffect(() => {
+                    const el = wrapRef.current; if (!el || typeof ResizeObserver === "undefined") return;
+                    const update = () => { const w = el.clientWidth; if (w > 0) setCw(w); };
+                    update();
+                    const ro = new ResizeObserver(update); ro.observe(el);
+                    return () => ro.disconnect();
+                  }, []);
                   const allVals = series.flatMap(s => s.data);
                   const maxV = Math.max(...allVals, 1);
-                  const W = 500, H = height, padL = 60, padB = 24, padT = 10, padR = 20;
+                  const W = Math.max(cw, 320), H = height, padL = 60, padB = 24, padT = 10, padR = 20;
                   const innerW = W - padL - padR;
                   const innerH = H - padB - padT;
                   const xStep = innerW / Math.max(labels.length - 1, 1);
@@ -7371,7 +7458,8 @@ Return ONLY valid JSON, no markdown, no extra text:
                   // Y axis ticks
                   const ticks = [0, 0.25, 0.5, 0.75, 1].map(t => Math.round(t * maxV));
                   return (
-                    <svg viewBox={`0 0 ${W} ${H}`} style={{width:"100%", height:H+20, overflow:"visible"}}>
+                    <div ref={wrapRef} style={{ width: "100%" }}>
+                    <svg viewBox={`0 0 ${W} ${H}`} style={{width:"100%", height:H+20, overflow:"visible", display:"block"}}>
                       {/* Grid lines */}
                       {ticks.map((t,i) => (
                         <g key={i}>
@@ -7397,6 +7485,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                         );
                       })}
                     </svg>
+                    </div>
                   );
                 };
 
@@ -8373,7 +8462,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                         const siteLawnBids = lawnBids.filter(b => b.siteId === s.id);
                         const buTags = (s.businessUnits || []);
                         return (
-                          <div key={s.id} style={{ background: "#fff", border: "1px solid #D4D9EE", borderRadius: 10, padding: "14px 16px" }}>
+                          <div key={s.id} onClick={() => { setSelectedSiteDetail(s); setSiteDetailTab("info"); setEditingSite(false); setSiteEditForm({...s}); }} style={{ background: "#fff", border: "1px solid #D4D9EE", borderRadius: 10, padding: "14px 16px", cursor: "pointer" }}>
                             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
                               <div>
                                 <div style={{ fontSize: 14, fontWeight: 700, color: "#1A2240" }}>
@@ -8774,8 +8863,8 @@ Return ONLY valid JSON, no markdown, no extra text:
               </div>
               )}
 
-              {/* Company grid */}
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(260px, 1fr))", gap: 14 }}>
+              {/* Company list */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                 {filteredCompanies.map(company => {
                   const cc     = getCompanyContacts(company.id);
                   const cSites = sites.filter(s => s.companyId === company.id);
@@ -8784,30 +8873,25 @@ Return ONLY valid JSON, no markdown, no extra text:
                   const lawnAnn = lawnBidsForCo.reduce((s, b) => s + lawnBidAnnualOur(b), 0);
                   const tags   = getCompanyTags(company.id);
                   return (
-                    <div key={company.id} className="company-card" onClick={() => { setSelectedCustomer(company); setCrmTab("overview"); }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 10 }}>
-                        <div style={{ width: 40, height: 40, borderRadius: 8, background: "#E8EEFA", border: "1px solid #3B6FE840", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 700, color: "#3B6FE8", flexShrink: 0 }}>
-                          {company.logo ? <img src={company.logo} style={{ width: 36, height: 36, borderRadius: 6, objectFit: "cover" }} alt="" /> : company.name.charAt(0).toUpperCase()}
-                        </div>
-                        <div style={{ minWidth: 0, flex: 1 }}>
-                          <div style={{ fontSize: 14, color: "#1A2240", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{company.name}</div>
-                          {company.website && <div style={{ fontSize: 11, color: "#4A5278" }}>{company.website}</div>}
-                        </div>
+                    <div key={company.id} className="company-card" onClick={() => { setSelectedCustomer(company); setCrmTab("overview"); }} style={{ display: "flex", alignItems: "center", gap: 16, padding: "12px 16px" }}>
+                      <div style={{ width: 40, height: 40, borderRadius: 8, background: "#E8EEFA", border: "1px solid #3B6FE840", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 700, color: "#3B6FE8", flexShrink: 0 }}>
+                        {company.logo ? <img src={company.logo} style={{ width: 36, height: 36, borderRadius: 6, objectFit: "cover" }} alt="" /> : company.name.charAt(0).toUpperCase()}
                       </div>
-                      {/* Service tags */}
-                      {tags.length > 0 && (
-                        <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginBottom: 8 }}>
-                          {tags.map(t => <TagBadge key={t} tag={t} />)}
+                      <div style={{ minWidth: 0, flex: 1 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                          <div style={{ fontSize: 14, color: "#1A2240", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{company.name}</div>
+                          <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>{tags.map(t => <TagBadge key={t} tag={t} />)}</div>
                         </div>
-                      )}
-                      {company.address && <div style={{ fontSize: 11, color: "#4A5278", marginBottom: 10 }}>📍 {company.address}</div>}
-                      <div style={{ display: "flex", justifyContent: "space-between", paddingTop: 10, borderTop: "1px solid #E8EBF4" }}>
-                        <div><div style={{ fontSize: 13, fontWeight: 600, color: "#252E52" }}>{cSites.length}</div><div style={{ fontSize: 10, color: "#4A5278" }}>Sites</div></div>
-                        <div><div style={{ fontSize: 13, fontWeight: 600, color: "#252E52" }}>{cc.length}</div><div style={{ fontSize: 10, color: "#4A5278" }}>Contacts</div></div>
+                        {company.address && <div style={{ fontSize: 11, color: "#4A5278", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>📍 {company.address}</div>}
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 24, flexShrink: 0 }}>
+                        <div style={{ textAlign: "center" }}><div style={{ fontSize: 14, fontWeight: 600, color: "#252E52" }}>{cSites.length}</div><div style={{ fontSize: 10, color: "#4A5278" }}>Sites</div></div>
+                        <div style={{ textAlign: "center" }}><div style={{ fontSize: 14, fontWeight: 600, color: "#252E52" }}>{cc.length}</div><div style={{ fontSize: 10, color: "#4A5278" }}>Contacts</div></div>
                         {lawnAnn > 0
-                          ? <div style={{ textAlign: "right" }}><div style={{ fontSize: 13, fontWeight: 600, color: "#4ADE80" }}>${Math.round(lawnAnn/1000)}k</div><div style={{ fontSize: 10, color: "#4A5278" }}>Lawn/yr</div></div>
-                          : <div style={{ textAlign: "right" }}><div style={{ fontSize: 13, fontWeight: 600, color: "#3B6FE8" }}>{fmt(tv)}</div><div style={{ fontSize: 10, color: "#4A5278" }}>Contract Val.</div></div>
+                          ? <div style={{ textAlign: "right", minWidth: 92 }}><div style={{ fontSize: 14, fontWeight: 600, color: "#4ADE80" }}>${Math.round(lawnAnn/1000)}k</div><div style={{ fontSize: 10, color: "#4A5278" }}>Lawn/yr</div></div>
+                          : <div style={{ textAlign: "right", minWidth: 92 }}><div style={{ fontSize: 14, fontWeight: 600, color: "#3B6FE8" }}>{fmt(tv)}</div><div style={{ fontSize: 10, color: "#4A5278" }}>Contract Val.</div></div>
                         }
+                        <span style={{ color: "#9BA3BF", fontSize: 18 }}>›</span>
                       </div>
                     </div>
                   );
@@ -12234,7 +12318,7 @@ window.addEventListener('message',function(e){
               const notSentToAR = !j.sentToAR;
               const notDead     = !["dead","lost","dismissed"].includes((j.status||"").toLowerCase());
               const matchCoord  = fmCoordFilter === "all" || j.coordinator === fmCoordFilter;
-              const matchStage  = !fmStageFilter || j.stage === fmStageFilter;
+              const matchStage  = fmStageFilter.length === 0 || fmStageFilter.includes(j.stage);
               const matchSearch = fmJobMatchesSearch(j, fmSearch);
               return isActive && notSentToAR && notDead && matchCoord && matchStage && matchSearch;
             }).sort((a, b) => {
@@ -12459,10 +12543,10 @@ window.addEventListener('message',function(e){
                   {FM_STAGES.map(st => {
                     const cnt = stageBase.filter(j => j.stage === st.id).length;
                     const val = stageBase.filter(j => j.stage === st.id).reduce((s,j) => s+(j.contractValue||0),0);
-                    const on = fmStageFilter === st.id;
+                    const on = fmStageFilter.includes(st.id);
                     return (
-                      <div key={st.id} className="t-stat" onClick={() => setFmStageFilter(on ? null : st.id)}
-                        title={on ? "Showing only " + st.label + " — click to show all stages" : "Click to show only " + st.label}
+                      <div key={st.id} className="t-stat" onClick={() => setFmStageFilter(on ? fmStageFilter.filter(x => x !== st.id) : [...fmStageFilter, st.id])}
+                        title={on ? "Click to remove " + st.label + " from the filter" : "Click to add " + st.label + " (you can select several)"}
                         style={{ cursor: "pointer", outline: on ? "2px solid #3B6FE8" : "none", outlineOffset: -1, background: on ? "#3B6FE810" : undefined }}>
                         <div className="t-stat-n">{cnt}</div>
                         <div className="t-stat-l">{st.label}</div>
@@ -12471,10 +12555,10 @@ window.addEventListener('message',function(e){
                     );
                   })}
                 </div>
-                {fmStageFilter && (
+                {fmStageFilter.length > 0 && (
                   <div style={{ marginTop: -8, marginBottom: 14 }}>
-                    <button className="t-chip on" onClick={() => setFmStageFilter(null)}>
-                      Stage: {FM_STAGES.find(s => s.id === fmStageFilter)?.label} ✕
+                    <button className="t-chip on" onClick={() => setFmStageFilter([])}>
+                      Stages: {fmStageFilter.map(id => FM_STAGES.find(s => s.id === id)?.label).filter(Boolean).join(", ")} ✕
                     </button>
                   </div>
                 )}
@@ -12519,7 +12603,7 @@ window.addEventListener('message',function(e){
                         {filtered.map(job => {
                           const stMeta = FM_STAGES.find(s => s.id === job.stage) || FM_STAGES[0];
                           return (
-                            <tr key={job.id} onClick={() => setFmFullScreenJob(job)} style={{ background: stMeta.color + "18", boxShadow: "inset 4px 0 0 " + stMeta.color }}>
+                            <tr key={job.id} onClick={() => setFmFullScreenJob(job)} style={{ background: `var(--t-${fmStageVar(job.stage)}-bg)`, boxShadow: `inset 4px 0 0 var(--t-${fmStageVar(job.stage)})` }}>
                               {/* Stage dot */}
                               <td>
                                 <span className="t-stage-dot" style={{ background: fmStageDotColor(job.stage) }} title={stMeta.label} />
