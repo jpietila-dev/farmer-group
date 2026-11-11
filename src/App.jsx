@@ -19358,6 +19358,36 @@ window.addEventListener('message',function(e){
               if (isFullScreen) setFmFullScreenJob(updated); else setSelectedFmJob(updated);
               try { supa.from("fm_jobs").update(fmJobToDB(updated)).eq("id", job.id); } catch(e) {}
             };
+            // Cancel an award: clear the vendor, reopen any offers so it can be re-offered/re-claimed, drop back to Buyout
+            const cancelAward = () => {
+              const vn = (subcontractors.find(s => s.id === job.subcontractorId) || {}).name || "the vendor";
+              if (!window.confirm("Cancel the award to " + vn + "? The job returns to Buyout (needs a vendor) and any offers reopen.")) return;
+              try {
+                fetch(`${SUPA_URL}/rest/v1/fm_job_offers?job_id=eq.${encodeURIComponent(job.id)}&status=in.(awarded,accepted,closed)`, {
+                  method: "PATCH",
+                  headers: { apikey: SUPA_KEY, Authorization: "Bearer " + SUPA_KEY, "Content-Type": "application/json", Prefer: "return=minimal" },
+                  body: JSON.stringify({ status: "offered", quote_amount: null, schedule_date: null })
+                });
+              } catch (e) {}
+              update({ subcontractorId: "", vendorQuotePrice: "", startDate: "", stage: "buyout" });
+            };
+            // Move to stage — if a vendor is assigned and we jump back before buyout, the award can't come along
+            const moveToStage = (target) => {
+              const preAward = ["estimating", "waiting_quote", "generate_proposal", "owner_approval"];
+              if (job.subcontractorId && preAward.includes(target)) {
+                if (!window.confirm("This job is awarded to a vendor. Moving it back to \"" + (FM_STAGES.find(s => s.id === target) || {}).label + "\" will cancel the award and reopen any offers. Continue?")) return;
+                try {
+                  fetch(`${SUPA_URL}/rest/v1/fm_job_offers?job_id=eq.${encodeURIComponent(job.id)}&status=in.(awarded,accepted,closed)`, {
+                    method: "PATCH",
+                    headers: { apikey: SUPA_KEY, Authorization: "Bearer " + SUPA_KEY, "Content-Type": "application/json", Prefer: "return=minimal" },
+                    body: JSON.stringify({ status: "offered", quote_amount: null, schedule_date: null })
+                  });
+                } catch (e) {}
+                update({ subcontractorId: "", vendorQuotePrice: "", startDate: "", stage: target });
+              } else {
+                update({ stage: target });
+              }
+            };
             // Add a new contact tied to this job's company, persist to DB, link to job
             const addContactToJob = () => {
               if (!job.companyId) { alert("Please select a Company first before adding a Customer."); return; }
@@ -19514,6 +19544,26 @@ window.addEventListener('message',function(e){
                         </div>
                         <span className={"t-pill " + fmStagePill(job.stage)} style={{ fontSize: 12, padding: "5px 12px" }}>{st.label}</span>
                       </div>
+                      {/* Visual pipeline — where this job is and what's next */}
+                      {(() => {
+                        const stageIdx = FM_STAGES.findIndex(s => s.id === job.stage);
+                        return (
+                          <div style={{ display: "flex", gap: 4, marginBottom: 12 }}>
+                            {FM_STAGES.map((s, i) => {
+                              const done = i < stageIdx, cur = i === stageIdx;
+                              const barColor = done ? "var(--t-dowork)" : cur ? `var(${toneVar})` : "var(--t-line2)";
+                              return (
+                                <div key={s.id} style={{ flex: 1, minWidth: 0, textAlign: "center", cursor: "pointer" }} title={"Move to " + s.label} onClick={() => moveToStage(s.id)}>
+                                  <div style={{ height: 5, borderRadius: 3, background: barColor, marginBottom: 5 }} />
+                                  <div style={{ fontSize: 9.5, lineHeight: 1.15, fontWeight: cur ? 700 : 500, color: cur ? `var(${toneVar})` : done ? "var(--t-ink2)" : "var(--t-ink3)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                                    {done ? "✓ " : ""}{s.label}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        );
+                      })()}
                       {/* Facts grid */}
                       {facts.length > 0 && (
                         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(110px, 1fr))", gap: 12, paddingTop: 10, borderTop: "1px solid var(--t-line2)" }}>
@@ -19528,7 +19578,7 @@ window.addEventListener('message',function(e){
                       {/* Move to stage — jobs don't always follow the pipeline in order */}
                       <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--t-line2)", display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                         <span style={{ fontSize: 11, color: "var(--t-ink3)" }}>Move to stage:</span>
-                        <select className="fi" style={{ width: 210 }} value={job.stage} onChange={e => update({ stage: e.target.value })}>
+                        <select className="fi" style={{ width: 210 }} value={job.stage} onChange={e => moveToStage(e.target.value)}>
                           {FM_STAGES.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
                         </select>
                       </div>
@@ -19548,6 +19598,34 @@ window.addEventListener('message',function(e){
                               onOffered={() => update({ stage: "waiting_quote" })}
                               onAwarded={(subId, price, date) => update({ subcontractorId: subId, vendorQuotePrice: price, ...(date ? { startDate: date, stage: "do_work" } : { stage: "buyout" }) })} />
                           </div>
+                        </div>
+                      )}
+                      {/* Do Work — vendor awarded & scheduled; keep materials + a cancel path visible */}
+                      {job.stage === "do_work" && job.subcontractorId && (
+                        <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--t-line2)" }}>
+                          <div style={{ fontSize: 12, color: "var(--t-ink2)", marginBottom: 10 }}>
+                            ✅ Awarded to <b style={{ color: "var(--t-ink)" }}>{(subcontractors.find(s => s.id === job.subcontractorId) || {}).name || "vendor"}</b>
+                            {job.vendorQuotePrice ? <span style={{ color: "var(--t-ink3)" }}> — ${Number(job.vendorQuotePrice).toLocaleString()}</span> : null}
+                            {job.startDate ? <span style={{ color: "var(--t-ink3)" }}> · starts {job.startDate}</span> : null}
+                          </div>
+                          <div style={{ marginBottom: 10 }}>
+                            <div style={{ fontSize: 11, color: "var(--t-ink3)", marginBottom: 4 }}>Materials</div>
+                            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                              <select className="fi" style={{ width: 150 }} value={job.materialsStatus || ""} onChange={e => update({ materialsStatus: e.target.value })}>
+                                <option value="">Not needed</option>
+                                <option value="ordered">Ordered</option>
+                                <option value="received">Received</option>
+                              </select>
+                              {job.materialsStatus === "ordered" && (
+                                <>
+                                  <input key={job.id + "-po2"} className="fi" style={{ width: 130 }} placeholder="PO #" defaultValue={job.materialsPo || ""} onBlur={e => update({ materialsPo: e.target.value })} />
+                                  <input type="date" className="fi" style={{ width: 150 }} title="Materials ETA" value={job.materialsEta || ""} onChange={e => update({ materialsEta: e.target.value })} />
+                                </>
+                              )}
+                            </div>
+                            {job.materialsStatus === "ordered" && <div style={{ fontSize: 11, color: "var(--t-warn)", marginTop: 4 }}>⚠ Materials ordered{job.materialsEta ? " — ETA " + job.materialsEta : ""}, not yet received.</div>}
+                          </div>
+                          <button className="t-btn t-btn-sm" style={{ color: "var(--t-danger, #B91C1C)", borderColor: "var(--t-danger, #B91C1C)" }} onClick={cancelAward}>✕ Cancel award &amp; reopen for vendors</button>
                         </div>
                       )}
                       {/* Owner approval — one-click advance once the owner signs off */}
@@ -19577,7 +19655,8 @@ window.addEventListener('message',function(e){
                             <div>
                               <div style={{ fontSize: 12, color: "var(--t-ink2)", marginBottom: 10 }}>
                                 👤 Vendor: <b style={{ color: "var(--t-ink)" }}>{(subcontractors.find(s => s.id === job.subcontractorId) || {}).name || "Assigned"}</b>
-                                <span style={{ marginLeft: 10, cursor: "pointer", color: "var(--t-approval)", fontSize: 11 }} onClick={() => update({ subcontractorId: "" })}>change</span>
+                                {job.vendorQuotePrice ? <span style={{ color: "var(--t-ink3)" }}> — ${Number(job.vendorQuotePrice).toLocaleString()}</span> : null}
+                                <span style={{ marginLeft: 10, cursor: "pointer", color: "var(--t-danger, #B91C1C)", fontSize: 11, fontWeight: 600 }} onClick={cancelAward}>✕ cancel award</span>
                               </div>
                               {/* Materials checklist (coordinator or vendor can set it; syncs both ways) */}
                               <div style={{ marginBottom: 10 }}>
