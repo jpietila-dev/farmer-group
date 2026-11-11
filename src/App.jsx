@@ -4615,7 +4615,8 @@ export default function App() {
   const [showVendorPickerForJob, setShowVendorPickerForJob] = useState(null); // job whose row vendor picker is open
   const [vendorPickerSearch, setVendorPickerSearch] = useState("");
   const [fmSearch,      setFmSearch]      = useState("");
-  const [fmCoordFilter, setFmCoordFilter] = useState("all");
+  const [fmCoordFilter, setFmCoordFilter] = useState("Zak Kranich"); // defaults to the logged-in coordinator (pilot: Zak); toggle "All Jobs" to see everyone
+  const [fmStageFilter, setFmStageFilter] = useState(null);          // click a stage tile in Jobs to show only that stage
   const [selectedPM,    setSelectedPM]    = useState(null);
   const [openSections,   setOpenSections]   = useState(new Set(["do_work","bill"]));
   // Major Projects state
@@ -10585,8 +10586,8 @@ Example:
 <style>html,body,#map{margin:0;padding:0;height:100%;width:100%}.leaflet-popup-content-wrapper{border-radius:10px;box-shadow:0 4px 20px rgba(0,0,0,0.15)}</style>
 </head><body><div id="map"></div><script>
 var map=L.map('map',{zoomControl:true,attributionControl:false});
-L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{maxZoom:19,attribution:'© OSM © CARTO'}).addTo(map);
-L.control.attribution({prefix:'© OSM'}).addTo(map);
+L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap'}).addTo(map);
+L.control.attribution({prefix:false}).addTo(map);
 window.addEventListener('message',function(e){
   if(!e.data||e.data.type!=='loadPts')return;
   var pts=e.data.pts,bounds=[];
@@ -12233,8 +12234,9 @@ window.addEventListener('message',function(e){
               const notSentToAR = !j.sentToAR;
               const notDead     = !["dead","lost","dismissed"].includes((j.status||"").toLowerCase());
               const matchCoord  = fmCoordFilter === "all" || j.coordinator === fmCoordFilter;
+              const matchStage  = !fmStageFilter || j.stage === fmStageFilter;
               const matchSearch = fmJobMatchesSearch(j, fmSearch);
-              return isActive && notSentToAR && notDead && matchCoord && matchSearch;
+              return isActive && notSentToAR && notDead && matchCoord && matchStage && matchSearch;
             }).sort((a, b) => {
               const ai = FM_STAGES.findIndex(s => s.id === a.stage);
               const bi = FM_STAGES.findIndex(s => s.id === b.stage);
@@ -12248,6 +12250,8 @@ window.addEventListener('message',function(e){
             });
             const totalGross  = filtered.reduce((s,j) => s + (j.contractValue||0), 0);
             const totalProfit = filtered.reduce((s,j) => s + (j.grossProfit||0), 0);
+            // Stage-tile counts ignore the active stage filter (so you can still switch stages)
+            const stageBase = fmJobs.filter(j => FM_STAGES.some(s => s.id === j.stage) && !j.sentToAR && !["dead","lost","dismissed"].includes((j.status||"").toLowerCase()) && (fmCoordFilter === "all" || j.coordinator === fmCoordFilter) && fmJobMatchesSearch(j, fmSearch));
 
             // ── Column definitions (id, label, width, render) ──
             // Builds an ALL-FIELDS column set matching the AR/PBR pipeline spreadsheet.
@@ -12453,10 +12457,13 @@ window.addEventListener('message',function(e){
                 {/* Stage stats - all stages (pipeline + active) */}
                 <div style={{ display: "grid", gridTemplateColumns: `repeat(${FM_STAGES.length}, 1fr)`, gap: 10, marginBottom: 18 }}>
                   {FM_STAGES.map(st => {
-                    const cnt = filtered.filter(j => j.stage === st.id).length;
-                    const val = filtered.filter(j => j.stage === st.id).reduce((s,j) => s+(j.contractValue||0),0);
+                    const cnt = stageBase.filter(j => j.stage === st.id).length;
+                    const val = stageBase.filter(j => j.stage === st.id).reduce((s,j) => s+(j.contractValue||0),0);
+                    const on = fmStageFilter === st.id;
                     return (
-                      <div key={st.id} className="t-stat">
+                      <div key={st.id} className="t-stat" onClick={() => setFmStageFilter(on ? null : st.id)}
+                        title={on ? "Showing only " + st.label + " — click to show all stages" : "Click to show only " + st.label}
+                        style={{ cursor: "pointer", outline: on ? "2px solid #3B6FE8" : "none", outlineOffset: -1, background: on ? "#3B6FE810" : undefined }}>
                         <div className="t-stat-n">{cnt}</div>
                         <div className="t-stat-l">{st.label}</div>
                         <div className="t-stat-sub">{fmt(val)}</div>
@@ -12464,6 +12471,13 @@ window.addEventListener('message',function(e){
                     );
                   })}
                 </div>
+                {fmStageFilter && (
+                  <div style={{ marginTop: -8, marginBottom: 14 }}>
+                    <button className="t-chip on" onClick={() => setFmStageFilter(null)}>
+                      Stage: {FM_STAGES.find(s => s.id === fmStageFilter)?.label} ✕
+                    </button>
+                  </div>
+                )}
 
                 {/* Coordinator filter chips */}
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 18 }}>
@@ -12505,7 +12519,7 @@ window.addEventListener('message',function(e){
                         {filtered.map(job => {
                           const stMeta = FM_STAGES.find(s => s.id === job.stage) || FM_STAGES[0];
                           return (
-                            <tr key={job.id} onClick={() => setFmFullScreenJob(job)}>
+                            <tr key={job.id} onClick={() => setFmFullScreenJob(job)} style={{ background: stMeta.color + "18", boxShadow: "inset 4px 0 0 " + stMeta.color }}>
                               {/* Stage dot */}
                               <td>
                                 <span className="t-stage-dot" style={{ background: fmStageDotColor(job.stage) }} title={stMeta.label} />
@@ -13280,8 +13294,8 @@ window.addEventListener('message',function(e){
 <style>html,body,#map{margin:0;padding:0;height:100%;width:100%}.leaflet-popup-content-wrapper{border-radius:10px;box-shadow:0 4px 20px rgba(0,0,0,0.15)}</style>
 </head><body><div id="map"></div><script>
 var map = L.map('map',{zoomControl:true,attributionControl:false});
-L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',{maxZoom:19,attribution:'© OSM © CARTO'}).addTo(map);
-L.control.attribution({prefix:'© OSM'}).addTo(map);
+L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap'}).addTo(map);
+L.control.attribution({prefix:false}).addTo(map);
 var TM={'HVAC':['❄️','#60A5FA'],'Plumbing':['🔧','#3B82F6'],'Electrical':['⚡','#F59E0B'],'Roofing':['🏠','#8B5CF6'],'Painting':['🎨','#EC4899'],'Concrete':['🪨','#6B7280'],'Landscaping':['🌿','#10B981'],'Snow':['🌨','#A8C4F8'],'General':['🔨','#7BA7F5'],'Fire':['🔥','#EF4444'],'Pest':['🪲','#84CC16'],'Cleaning':['🧹','#14B8A6'],'Security':['🔒','#6366F1'],'Elevator':['🛗','#D97706'],'Carpentry':['🪵','#92400E']};
 function getI(t){var m=Object.entries(TM).find(function(e){return t&&t.toLowerCase().includes(e[0].toLowerCase());});return m?m[1]:['🔧','#7BA7F5'];}
 window.addEventListener('message',function(e){
@@ -13447,13 +13461,21 @@ window.addEventListener('message',function(e){
                                       onClick={()=>window.open(`/?vendor=preview&subId=${s.id}`,"_blank")}>🔑</button>
                                   )}
                                   <button className="btn-ghost" style={{fontSize:10,padding:"3px 8px"}} onClick={()=>{setEditSubId(s.id);setSubForm({...s});setShowSubForm(true);}}>✎</button>
-                                  <button className="btn-ghost" style={{fontSize:10,padding:"3px 8px",color:"#F97316",borderColor:"#F9731620"}} onClick={()=>{
-                                    const updated={...s,archived:true};
-                                    setSubcontractors(subcontractors.map(x=>x.id===s.id?updated:x));
-                                    try{supa.from("subcontractors").update({archived:true}).eq("id",s.id);}catch(e){}
-                                    setSelectedSubProfile(null);
-                                  }} title="Archive this subcontractor">📦</button>
-                                  <button className="btn-ghost" style={{fontSize:10,padding:"3px 8px",color:"#F87171",borderColor:"#F8717120"}} onClick={()=>{if(window.confirm("Delete "+s.name+"?")){setSubcontractors(subcontractors.filter(x=>x.id!==s.id));supa.from("subcontractors").delete().eq("id",s.id);}}}>✕</button>
+                                  {!s.archived ? (
+                                    <button className="btn-ghost" style={{fontSize:10,padding:"3px 8px",color:"#F97316",borderColor:"#F9731620"}} onClick={()=>{
+                                      const updated={...s,archived:true};
+                                      setSubcontractors(subcontractors.map(x=>x.id===s.id?updated:x));
+                                      try{supa.from("subcontractors").update({archived:true}).eq("id",s.id);}catch(e){}
+                                      setSelectedSubProfile(null);
+                                    }} title="Archive this subcontractor">📦</button>
+                                  ) : (<>
+                                    <button className="btn-ghost" style={{fontSize:10,padding:"3px 8px",color:"#3B6FE8",borderColor:"#3B6FE820"}} onClick={()=>{
+                                      const updated={...s,archived:false};
+                                      setSubcontractors(subcontractors.map(x=>x.id===s.id?updated:x));
+                                      try{supa.from("subcontractors").update({archived:false}).eq("id",s.id);}catch(e){}
+                                    }} title="Restore this subcontractor">↩</button>
+                                    <button className="btn-ghost" style={{fontSize:10,padding:"3px 8px",color:"#F87171",borderColor:"#F8717120"}} onClick={()=>{if(window.confirm("Permanently delete "+s.name+"? This cannot be undone.")){setSubcontractors(subcontractors.filter(x=>x.id!==s.id));supa.from("subcontractors").delete().eq("id",s.id);}}} title="Delete permanently">✕</button>
+                                  </>)}
                                 </div>
                               </div>
                             );
@@ -15684,7 +15706,7 @@ window.addEventListener('message',function(e){
 
       {/* -- SITE SIDE PANEL -- */}
       {selectedSite && !selectedCompany && (
-        <div className="side-panel slide-in">
+        <div className="side-panel slide-in" style={{ zIndex: 60 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
             <div style={{ fontSize: 13, fontWeight: 600, color: "#1A2240", textTransform: "uppercase", letterSpacing: "0.06em" }}>Site Detail</div>
             <button className="btn-ghost" onClick={() => setSelectedSite(null)}>✕</button>
@@ -15789,6 +15811,28 @@ window.addEventListener('message',function(e){
                         )}
                         {bid.notes && <div style={{ fontSize: 11, color: "#4A5278", fontStyle: "italic" }}>{bid.notes}</div>}
                         <button className="btn-ghost" style={{ fontSize: 10, padding: "5px 0", color: "#60A5FA", borderColor: "#60A5FA30" }} onClick={() => { setSelectedSite(null); setEditLawnBidId(selectedSite.id); }}>Open in Bids →</button>
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* Projects at this store */}
+                {(() => {
+                  const siteJobs = fmJobs.filter(j => j.siteId === selectedSite.id);
+                  if (siteJobs.length === 0) return <div style={{ fontSize: 11, color: "#4A5278", fontStyle: "italic" }}>No FM projects at this store yet.</div>;
+                  return (
+                    <div>
+                      <div style={{ fontSize: 10, letterSpacing: "0.1em", textTransform: "uppercase", color: "#4A5278", marginBottom: 10, fontWeight: 600 }}>Projects at this store ({siteJobs.length})</div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                        {siteJobs.slice().sort((a,b) => FM_STAGES.findIndex(s=>s.id===a.stage) - FM_STAGES.findIndex(s=>s.id===b.stage)).map(j => (
+                          <div key={j.id} onClick={() => { setSelectedSite(null); setFmFullScreenJob(j); }} style={{ cursor: "pointer", background: "#F0F2F8", border: "1px solid #CBD1E8", borderRadius: 6, padding: "8px 10px", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+                            <div style={{ minWidth: 0 }}>
+                              <div style={{ fontSize: 12, color: "#1A2240", fontWeight: 500, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{j.name}</div>
+                              <div style={{ fontSize: 10, color: "#4A5278" }}>{j.sentToAR ? "Job Complete" : (j.status === "dead" ? "Dead / Lost" : (FM_STAGES.find(s=>s.id===j.stage)?.label || j.stage))}</div>
+                            </div>
+                            <span style={{ fontSize: 11, fontFamily: "var(--t-mono)", color: "#252E52", flexShrink: 0 }}>{fmt(j.contractValue)}</span>
+                          </div>
+                        ))}
                       </div>
                     </div>
                   );
@@ -18497,6 +18541,20 @@ window.addEventListener('message',function(e){
                   </div>
                 )}
 
+                {/* New lead — assign to a coordinator right from the detail */}
+                {job.stage === "intake" && (
+                  <div style={{ background: "var(--t-approval-bg)", border: "1px solid color-mix(in srgb, var(--t-approval) 30%, transparent)", borderRadius: 10, padding: "14px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: "var(--t-approval)" }}>New lead — ready to assign</div>
+                      <div style={{ fontSize: 11, color: "var(--t-ink2)", marginTop: 2 }}>Verify the details below, then assign to a coordinator to move it into the pipeline.</div>
+                    </div>
+                    <select className="fi" style={{ width: 210 }} defaultValue="" onChange={e => { if (e.target.value) { assignInboxLead({ _jobRow: true, id: job.id }, e.target.value); closePanel(); } }}>
+                      <option value="" disabled>Assign to coordinator…</option>
+                      {FM_PMS.map(n => <option key={n} value={n}>{n}</option>)}
+                    </select>
+                  </div>
+                )}
+
                 {/* ─── STAGE STATUS CARD — stage-aware summary ─── */}
                 {(() => {
                   const cvNum = Number(job.contractValue || 0);
@@ -18724,6 +18782,7 @@ window.addEventListener('message',function(e){
                           options={companies.map(c => ({ v: c.id, l: c.name }))} placeholder="(none)" />
                         <InlineRow label="Site" value={job.siteId} onSave={v => update({ siteId: v })}
                           options={(job.companyId ? companySites : sites).map(s => ({ v: s.id, l: (s.storeNumber ? "#" + s.storeNumber + " · " : "") + (s.address || "Site") }))} placeholder="(none)" />
+                        {site && <div style={{ textAlign: "right", margin: "-2px 0 6px" }}><button className="t-btn t-btn-ghost t-btn-sm" onClick={() => setSelectedSite(site)}>⤢ Open site details</button></div>}
                       </div>
 
                       {/* Scope of Work — full-width textarea */}
