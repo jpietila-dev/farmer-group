@@ -3623,6 +3623,37 @@ function VendorPortalAuthenticated({ sub, myJobs, fmJobs, setFmJobs, companies, 
   const [formState, setFormState] = useState({}); // {jobId: { bidAmt, bidNotes, schedDate, note, invAmt, invNum, msgOk, msgEr, busy }}
   const setForm = (jobId, patch) => setFormState(prev => ({ ...prev, [jobId]: { ...(prev[jobId]||{}), ...patch } }));
 
+  // ── Offers made to this vendor (offer/claim model) ──
+  const OFF_H = { apikey: SUPA_KEY, Authorization: "Bearer " + SUPA_KEY, "Content-Type": "application/json" };
+  const [offers, setOffers] = useState([]);
+  const loadOffers = useCallback(() => {
+    if (!sub?.id) return;
+    fetch(`${SUPA_URL}/rest/v1/fm_job_offers?sub_id=eq.${encodeURIComponent(sub.id)}&status=in.(offered,quoted)&order=created_at.desc`, { headers: OFF_H })
+      .then(r => r.json()).then(d => { if (Array.isArray(d)) setOffers(d); }).catch(()=>{});
+  }, [sub?.id]);
+  useEffect(() => { loadOffers(); const t = setInterval(loadOffers, 12000); return () => clearInterval(t); }, [loadOffers]);
+  const offeredJobs = offers
+    .map(o => ({ offer: o, job: fmJobs.find(j => j.id === o.job_id) }))
+    .filter(x => x.job && !x.job.subcontractorId);   // only jobs still unclaimed
+
+  const acceptOffer = async (offer, job) => {
+    const key = "offer_" + offer.id; const fs = formState[key] || {};
+    if (!fs.date) { setForm(key, { msgEr: "Pick a schedule date to accept" }); setTimeout(() => setForm(key, { msgEr: "" }), 3000); return; }
+    setForm(key, { busy: true });
+    await fetch(`${SUPA_URL}/rest/v1/fm_job_offers?id=eq.${offer.id}`, { method:"PATCH", headers:{...OFF_H, Prefer:"return=minimal"}, body: JSON.stringify({ status:"accepted", quote_amount: offer.offer_price, schedule_date: fs.date, responded_at:new Date().toISOString() }) }).catch(()=>{});
+    await fetch(`${SUPA_URL}/rest/v1/fm_job_offers?job_id=eq.${encodeURIComponent(job.id)}&sub_id=neq.${encodeURIComponent(sub.id)}`, { method:"PATCH", headers:{...OFF_H, Prefer:"return=minimal"}, body: JSON.stringify({ status:"closed" }) }).catch(()=>{});
+    await fetch(`${SUPA_URL}/rest/v1/fm_jobs?id=eq.${encodeURIComponent(job.id)}`, { method:"PATCH", headers:{...OFF_H, Prefer:"return=minimal"}, body: JSON.stringify({ subcontractor_id: sub.id, vendor_quote_price: String(offer.offer_price), start_date: fs.date, stage: "do_work" }) }).catch(()=>{});
+    setFmJobs(fmJobs.map(j => j.id === job.id ? { ...j, subcontractorId: sub.id, vendorQuotePrice: String(offer.offer_price), startDate: fs.date, stage: "do_work" } : j));
+    setForm(key, { busy: false }); loadOffers();
+  };
+  const quoteOffer = async (offer, job) => {
+    const key = "offer_" + offer.id; const fs = formState[key] || {};
+    if (!fs.quote || !fs.date) { setForm(key, { msgEr: "Enter a price and a date" }); setTimeout(() => setForm(key, { msgEr: "" }), 3000); return; }
+    setForm(key, { busy: true });
+    await fetch(`${SUPA_URL}/rest/v1/fm_job_offers?id=eq.${offer.id}`, { method:"PATCH", headers:{...OFF_H, Prefer:"return=minimal"}, body: JSON.stringify({ status:"quoted", quote_amount: Number(fs.quote), schedule_date: fs.date, quote_notes: fs.notes||"", responded_at:new Date().toISOString() }) }).catch(()=>{});
+    setForm(key, { busy: false, msgOk: "Quote sent" }); setTimeout(() => setForm(key, { msgOk: "" }), 3000); loadOffers();
+  };
+
   // visible jobs = filter out owner_approval (vendor doesn't act on those yet)
   const visibleJobs = useMemo(() => myJobs.filter(j => j.stage !== "owner_approval"), [myJobs]);
 
@@ -4388,6 +4419,51 @@ function VendorPortalAuthenticated({ sub, myJobs, fmJobs, setFmJobs, companies, 
             </div>
           </div>
           <input className="vp-srch" placeholder="🔍  Search by name, store, address…" value={search} onChange={e => setSearch(e.target.value)} />
+
+          {offeredJobs.length > 0 && (
+            <div style={{ marginBottom: 18 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: "#E65100", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 8 }}>🔔 Available — offered to you ({offeredJobs.length})</div>
+              {offeredJobs.map(({ offer, job }) => {
+                const fs = formState["offer_" + offer.id] || {};
+                const site = sites.find(s => s.id === job.siteId);
+                const offAmt = Number(offer.offer_price || 0).toLocaleString();
+                return (
+                  <div key={offer.id} style={{ border: "1px solid #E65100", borderRadius: 12, padding: 14, marginBottom: 10, background: "#FFF8F2" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "flex-start" }}>
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ fontSize: 14, fontWeight: 600 }}>{job.name}</div>
+                        <div style={{ fontSize: 12, color: "#6b7280", marginTop: 2 }}>{job.storeCode}{site?.address ? " · " + site.address : ""}</div>
+                        {job.scopeOfWork && <div style={{ fontSize: 12, color: "#4b5563", marginTop: 6, lineHeight: 1.5 }}>{job.scopeOfWork}</div>}
+                      </div>
+                      <div style={{ textAlign: "right", flexShrink: 0 }}>
+                        <div style={{ fontSize: 10, color: "#6b7280", textTransform: "uppercase" }}>Offer</div>
+                        <div style={{ fontSize: 18, fontWeight: 700, color: "#2E7D32" }}>${offAmt}</div>
+                      </div>
+                    </div>
+                    {offer.status === "quoted" ? (
+                      <div style={{ marginTop: 10, fontSize: 12, color: "#1565C0", fontWeight: 600 }}>✓ You quoted ${Number(offer.quote_amount || 0).toLocaleString()}{offer.schedule_date ? " for " + offer.schedule_date : ""} — waiting on FDI</div>
+                    ) : (
+                      <div style={{ marginTop: 12, display: "flex", flexDirection: "column", gap: 8 }}>
+                        <label style={{ fontSize: 11, color: "#6b7280" }}>Schedule date
+                          <input type="date" value={fs.date || ""} onChange={e => setForm("offer_" + offer.id, { date: e.target.value })} style={{ display: "block", marginTop: 3, padding: "8px 10px", border: "1px solid #d1d5db", borderRadius: 8, fontSize: 13 }} />
+                        </label>
+                        <button disabled={fs.busy} onClick={() => acceptOffer(offer, job)} style={{ padding: "11px", borderRadius: 8, border: "none", background: "#18181A", color: "#fff", fontWeight: 600, cursor: "pointer" }}>Accept at ${offAmt} &amp; schedule</button>
+                        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", borderTop: "1px solid #f0e6dc", paddingTop: 10 }}>
+                          <span style={{ fontSize: 11, color: "#6b7280" }}>or quote a different price:</span>
+                          <input type="number" placeholder="Your price" value={fs.quote || ""} onChange={e => setForm("offer_" + offer.id, { quote: e.target.value })} style={{ width: 110, padding: "8px 10px", border: "1px solid #d1d5db", borderRadius: 8, fontSize: 13 }} />
+                          <button disabled={fs.busy} onClick={() => quoteOffer(offer, job)} style={{ padding: "9px 14px", borderRadius: 8, border: "1px solid #d1d5db", background: "#fff", fontWeight: 600, cursor: "pointer" }}>Submit quote</button>
+                        </div>
+                        {fs.msgEr && <div style={{ fontSize: 12, color: "#C62828" }}>{fs.msgEr}</div>}
+                        {fs.msgOk && <div style={{ fontSize: 12, color: "#2E7D32" }}>{fs.msgOk}</div>}
+                        <div style={{ fontSize: 11, color: "#9ca3af" }}>A schedule date is required either way.</div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
           {filtered.length === 0
             ? <div className="vp-empty">No jobs in this category.</div>
             : filtered.map(j => <div key={j.id} data-vp-jobid={j.id}>{renderCard(j)}</div>)
@@ -4447,7 +4523,7 @@ function VendorPortalAuthenticated({ sub, myJobs, fmJobs, setFmJobs, companies, 
 
 
 // ── FmVendorOffer ─ coordinator offers a job to one+ vendors at a price; accept/quote/award (Uber model) ──
-function FmVendorOffer({ job, subcontractors, onAwarded }) {
+function FmVendorOffer({ job, subcontractors, onAwarded, onOffered }) {
   const [offers, setOffers] = useState([]);
   const [picking, setPicking] = useState(false);
   const [sel, setSel]   = useState([]);
@@ -4476,14 +4552,17 @@ function FmVendorOffer({ job, subcontractors, onAwarded }) {
     const rows = sel.filter(id => !offeredIds.has(id)).map(id => ({ job_id: job.id, sub_id: id, offer_price: Number(price), status: "offered" }));
     if (!rows.length) { setMsg("Those vendors already have this offer"); setTimeout(()=>setMsg(""),2500); return; }
     await fetch(`${SUPA_URL}/rest/v1/fm_job_offers`, { method:"POST", headers:{...H, Prefer:"return=minimal"}, body: JSON.stringify(rows) }).catch(()=>{});
-    setSel([]); setPrice(""); setPicking(false); setMsg("Offered to " + rows.length + " vendor(s)"); setTimeout(()=>setMsg(""),2500); load();
+    setSel([]); setPrice(""); setPicking(false); setMsg("Offered to " + rows.length + " vendor(s)"); setTimeout(()=>setMsg(""),2500);
+    if (onOffered) onOffered();
+    load();
   };
   const award = async (offer) => {
     const awardPrice = offer.quote_amount != null ? offer.quote_amount : offer.offer_price;
-    if (!window.confirm(`Award this job to ${subName(offer.sub_id)} at ${usd(awardPrice)}?\n\nThis locks the job to them and closes it for the other vendors.`)) return;
+    const awardDate = offer.schedule_date || null;
+    if (!window.confirm(`Award this job to ${subName(offer.sub_id)} at ${usd(awardPrice)}${awardDate ? " for " + awardDate : ""}?\n\n${awardDate ? "It moves straight to Do Work." : "It locks to them; you'll set a schedule date next."} Closes it for the other vendors.`)) return;
     await fetch(`${SUPA_URL}/rest/v1/fm_job_offers?id=eq.${offer.id}`, { method:"PATCH", headers:{...H, Prefer:"return=minimal"}, body: JSON.stringify({ status:"awarded", responded_at:new Date().toISOString() }) }).catch(()=>{});
     await fetch(`${SUPA_URL}/rest/v1/fm_job_offers?job_id=eq.${encodeURIComponent(job.id)}&id=neq.${offer.id}`, { method:"PATCH", headers:{...H, Prefer:"return=minimal"}, body: JSON.stringify({ status:"closed" }) }).catch(()=>{});
-    onAwarded(offer.sub_id, awardPrice);
+    onAwarded(offer.sub_id, awardPrice, awardDate);
     load();
   };
   const cancelOffer = async (offer) => {
@@ -4504,7 +4583,7 @@ function FmVendorOffer({ job, subcontractors, onAwarded }) {
                 <div style={{ flex:1, minWidth:0 }}>
                   <div style={{ fontSize:12, fontWeight:600, color:"var(--t-ink)" }}>{subName(o.sub_id)}</div>
                   <div style={{ fontSize:11, color:"var(--t-ink3)" }}>
-                    Offer {usd(o.offer_price)}{o.status==="quoted" && o.quote_amount!=null ? " · Quoted " + usd(o.quote_amount) : ""}
+                    Offer {usd(o.offer_price)}{o.quote_amount!=null ? " · Quoted " + usd(o.quote_amount) : ""}{o.schedule_date ? " · " + o.schedule_date : ""}
                     {o.quote_notes ? " · " + o.quote_notes : ""}
                   </div>
                 </div>
@@ -19407,7 +19486,8 @@ window.addEventListener('message',function(e){
                           <div style={{ marginTop: 12 }}>
                             <div style={{ fontSize: 11, color: "var(--t-ink3)", marginBottom: 2 }}>Getting a price from vendors? Offer it out for quotes:</div>
                             <FmVendorOffer job={job} subcontractors={subcontractors}
-                              onAwarded={(subId, price) => update({ subcontractorId: subId, vendorQuotePrice: price })} />
+                              onOffered={() => update({ stage: "waiting_quote" })}
+                              onAwarded={(subId, price, date) => update({ subcontractorId: subId, vendorQuotePrice: price, ...(date ? { startDate: date, stage: "do_work" } : { stage: "buyout" }) })} />
                           </div>
                         </div>
                       )}
@@ -19431,7 +19511,8 @@ window.addEventListener('message',function(e){
                               </select>
                               <div style={{ fontSize: 11, color: "var(--t-ink3)", margin: "8px 0 2px" }}>— or —</div>
                               <FmVendorOffer job={job} subcontractors={subcontractors}
-                                onAwarded={(subId, price) => update({ subcontractorId: subId, vendorQuotePrice: price })} />
+                                onOffered={() => update({ stage: "waiting_quote" })}
+                                onAwarded={(subId, price, date) => update({ subcontractorId: subId, vendorQuotePrice: price, ...(date ? { startDate: date, stage: "do_work" } : { stage: "buyout" }) })} />
                             </div>
                           ) : (
                             <div>
