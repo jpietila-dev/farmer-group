@@ -4444,6 +4444,262 @@ function VendorPortalAuthenticated({ sub, myJobs, fmJobs, setFmJobs, companies, 
 // ── End VendorPortal ───────────────────────────────────────────────────────────
 
 
+// ── CrmDashboard ─ Store / Customer / District Mgr / All Jobs analytics (reads app data) ──
+function CrmDashboard({ fmJobs, companies, sites, subcontractors }) {
+  const [mode, setMode]       = useState("store"); // store | cust | dm | all
+  const [q, setQ]             = useState("");       // search box value
+  const [current, setCurrent] = useState("");       // committed selection
+  const [trade, setTrade]     = useState("");
+  const [cq, setCq]           = useState("");       // completed-jobs search
+  const [allSrc, setAllSrc]   = useState("");
+  const [allTrade, setAllTrade] = useState("");
+
+  const num  = (v) => { if (typeof v === "number") return v; const n = parseFloat(String(v ?? "").replace(/[^0-9.\-]/g, "")); return isNaN(n) ? 0 : n; };
+  const usd  = (n) => (n || 0).toLocaleString("en-US", { style:"currency", currency:"USD", maximumFractionDigits:0 });
+  const pct  = (n) => isFinite(n) ? (n * 100).toFixed(1) + "%" : "—";
+  const norm = (s) => String(s ?? "").trim().toLowerCase();
+  const fmtDate = (v) => { if (!v) return ""; const d = new Date(String(v).slice(0,10) + "T00:00:00"); return isNaN(d) ? String(v) : d.toLocaleDateString("en-US", { month:"short", day:"numeric", year:"numeric" }); };
+
+  const coName  = (id) => (companies.find(c => c.id === id) || {}).name || "";
+  const subName = (id) => (subcontractors.find(s => s.id === id) || {}).name || "";
+  const siteByJob = (j) => sites.find(s => s.id === j.siteId) || sites.find(s => norm(s.storeNumber) === norm(j.storeCode)) || null;
+  const scodeOf = (j) => String(j.storeCode || (siteByJob(j) || {}).storeNumber || "");
+  const custOf  = (j) => coName(j.companyId) || coName((siteByJob(j) || {}).companyId);
+  const dmOf    = (j) => (siteByJob(j) || {}).managerName || "";
+  const isDead  = (j) => ["dead","lost"].includes(norm(j.status));
+  const isDone  = (j) => !isDead(j) && (j.sentToAR === true || ["completed","complete"].includes(norm(j.status)));
+  const isActive= (j) => !isDead(j) && !isDone(j) && j.stage !== "intake";
+
+  const STAGE_LABEL = { estimating:"Estimating", waiting_quote:"Waiting on Quotes", generate_proposal:"Generate Proposal", owner_approval:"Owner Approval", buyout:"Buyout", do_work:"Do Work", bill:"Bill" };
+  const isWaiting = (j) => isActive(j) && j.stage === "owner_approval";
+
+  const pool = React.useMemo(() => fmJobs.filter(j => j.stage !== "intake"), [fmJobs]);
+  const calcM = (list) => {
+    const done = list.filter(isDone), dead = list.filter(isDead), active = list.filter(isActive);
+    const rev = done.reduce((s,j)=>s+num(j.contractValue),0), gp = done.reduce((s,j)=>s+num(j.grossProfit),0);
+    const won = active.length + done.length, total = won + dead.length;
+    return { rev, gp, margin: rev?gp/rev:NaN, turn: total?won/total:NaN, jobs: total, done: done.length, won, dead: dead.length };
+  };
+
+  const stores = React.useMemo(() => {
+    const m = new Map();
+    sites.forEach(s => { const c = String(s.storeNumber || "").trim(); if (c && !m.has(norm(c))) m.set(norm(c), c); });
+    pool.forEach(j => { const c = scodeOf(j).trim(); if (c && !m.has(norm(c))) m.set(norm(c), c); });
+    return m;
+  }, [sites, pool]);
+  const customers = React.useMemo(() => [...new Set(companies.map(c => c.name).filter(Boolean))].sort((a,b)=>a.localeCompare(b)), [companies]);
+  const dms = React.useMemo(() => [...new Set(sites.map(s => s.managerName).filter(Boolean))].sort((a,b)=>a.localeCompare(b)), [sites]);
+
+  const matchStores = (input) => {
+    const n = norm(input); if (!n) return [];
+    if (stores.has(n)) return [{ k:n, code:stores.get(n) }];
+    if (n.length < 2) return [];
+    return [...stores].filter(([k]) => k.includes(n)).slice(0,25).map(([k,code]) => ({ k, code }));
+  };
+  const matchList = (list, input) => { const n = norm(input); if (!n) return []; const ex = list.filter(c => norm(c) === n); if (ex.length) return ex; return list.filter(c => norm(c).includes(n)).slice(0,25); };
+
+  const Kpi = ({ l, v, s }) => (
+    <div className="t-card" style={{ padding:"14px 16px" }}>
+      <div style={{ fontSize:12, color:"var(--t-ink3)", textTransform:"uppercase", letterSpacing:"0.04em" }}>{l}</div>
+      <div style={{ fontSize:26, fontWeight:700, marginTop:4, color:"var(--t-ink)" }}>{v}</div>
+      {s && <div style={{ fontSize:12, color:"var(--t-ink3)", marginTop:2 }}>{s}</div>}
+    </div>
+  );
+  const th = { fontSize:11, color:"var(--t-ink3)", fontWeight:600, textTransform:"uppercase", letterSpacing:"0.03em", textAlign:"left", padding:"9px 12px", borderBottom:"1px solid var(--t-line)", whiteSpace:"nowrap" };
+  const td = { padding:"9px 12px", borderBottom:"1px solid var(--t-line)", whiteSpace:"nowrap", fontSize:13 };
+  const Section = ({ title, count, children, tools }) => (
+    <div className="t-card" style={{ padding:0, marginBottom:16, overflow:"hidden" }}>
+      <div style={{ display:"flex", alignItems:"center", gap:8, padding:"12px 16px", borderBottom:"1px solid var(--t-line)", flexWrap:"wrap" }}>
+        <div style={{ fontSize:14, fontWeight:600 }}>{title}</div>
+        {count != null && <span style={{ background:"var(--t-paper)", color:"var(--t-ink3)", borderRadius:20, padding:"1px 9px", fontSize:12, fontWeight:600 }}>{count}</span>}
+        {tools && <div style={{ marginLeft:"auto", display:"flex", gap:8, flexWrap:"wrap" }}>{tools}</div>}
+      </div>
+      {children}
+    </div>
+  );
+
+  const pbrTable = (title, rows, withStore) => (
+    <Section title={title} count={rows.length}>
+      {rows.length ? (
+        <div style={{ overflowX:"auto" }}><table style={{ width:"100%", borderCollapse:"collapse" }}>
+          <thead><tr>{withStore && <th style={th}>Store</th>}<th style={th}>Job</th><th style={th}>Cat.</th><th style={th}>Trade</th><th style={th}>Stage</th><th style={th}>Vendor</th><th style={{...th, textAlign:"right"}}>Gross Value</th></tr></thead>
+          <tbody>{rows.map((r,i) => (
+            <tr key={i}>{withStore && <td style={td}>{scodeOf(r)}</td>}
+              <td style={{...td, whiteSpace:"normal", minWidth:200}}>{r.name}</td>
+              <td style={td}>{r.category}</td><td style={td}>{r.trade}</td>
+              <td style={td}>{STAGE_LABEL[r.stage] || r.stage}</td>
+              <td style={td}>{subName(r.subcontractorId)}</td>
+              <td style={{...td, textAlign:"right"}}>{usd(num(r.contractValue))}</td>
+            </tr>
+          ))}</tbody>
+        </table></div>
+      ) : <div style={{ padding:20, textAlign:"center", color:"var(--t-ink3)", fontSize:13 }}>Nothing here.</div>}
+    </Section>
+  );
+
+  const completedTable = (list) => {
+    const trades = [...new Set(list.map(r => r.trade).filter(Boolean))].sort();
+    const n = norm(cq);
+    const rows = list.filter(r => (!trade || r.trade === trade) && (!n || norm([scodeOf(r), r.name, r.ownersProjectNo, subName(r.subcontractorId), r.scopeOfWork, r.vendorInvoiceNumber, r.trade, r.notes].join(" ")).includes(n)));
+    return (
+      <Section title="Completed Jobs" count={rows.length} tools={<>
+        <select className="fi" value={trade} onChange={e=>setTrade(e.target.value)} style={{ fontSize:13 }}><option value="">All trades</option>{trades.map(t => <option key={t}>{t}</option>)}</select>
+        <input className="fi" value={cq} onChange={e=>setCq(e.target.value)} placeholder="Search past WOs…" style={{ fontSize:13 }} />
+      </>}>
+        {rows.length ? (
+          <div style={{ overflowX:"auto" }}><table style={{ width:"100%", borderCollapse:"collapse" }}>
+            <thead><tr><th style={th}>Store</th><th style={th}>Job</th><th style={th}>Trade</th><th style={th}>Vendor</th><th style={th}>Invoiced</th><th style={{...th, textAlign:"right"}}>Gross Value</th><th style={{...th, textAlign:"right"}}>Profit</th></tr></thead>
+            <tbody>{rows.map((r,i) => (
+              <tr key={i}>
+                <td style={td}>{scodeOf(r)}</td>
+                <td style={{...td, whiteSpace:"normal", minWidth:200}}>{r.name}</td>
+                <td style={td}>{r.trade}</td><td style={td}>{subName(r.subcontractorId)}</td>
+                <td style={td}>{fmtDate(r.invoiceDate || r.invoicedAt)}</td>
+                <td style={{...td, textAlign:"right"}}>{usd(num(r.contractValue))}</td>
+                <td style={{...td, textAlign:"right", color:"#15803d"}}>{usd(num(r.grossProfit))}</td>
+              </tr>
+            ))}</tbody>
+          </table></div>
+        ) : <div style={{ padding:20, textAlign:"center", color:"var(--t-ink3)", fontSize:13 }}>No completed jobs match.</div>}
+      </Section>
+    );
+  };
+
+  // ------- body by mode -------
+  let body = null, meta = "";
+  if (mode === "all") {
+    const rows = pool.filter(r => {
+      const src = isDone(r) ? "Completed" : isDead(r) ? "Dead/Lost" : isWaiting(r) ? "Waiting for Approval" : "On PBR";
+      const n = norm(q);
+      return (!allSrc || src === allSrc) && (!allTrade || r.trade === allTrade) &&
+        (!n || norm([scodeOf(r), r.name, r.ownersProjectNo, subName(r.subcontractorId), r.trade, r.scopeOfWork, r.notes].join(" ")).includes(n));
+    });
+    const trades = [...new Set(pool.map(r => r.trade).filter(Boolean))].sort();
+    const srcs = ["On PBR","Waiting for Approval","Completed","Dead/Lost"];
+    const shown = rows.slice(0, 300);
+    body = (
+      <Section title="All Jobs" count={rows.length + " of " + pool.length} tools={<>
+        <select className="fi" value={allSrc} onChange={e=>setAllSrc(e.target.value)} style={{ fontSize:13 }}><option value="">All statuses</option>{srcs.map(s => <option key={s}>{s}</option>)}</select>
+        <select className="fi" value={allTrade} onChange={e=>setAllTrade(e.target.value)} style={{ fontSize:13 }}><option value="">All trades</option>{trades.map(t => <option key={t}>{t}</option>)}</select>
+      </>}>
+        <div style={{ overflowX:"auto" }}><table style={{ width:"100%", borderCollapse:"collapse" }}>
+          <thead><tr><th style={th}>Store</th><th style={th}>Job</th><th style={th}>Status</th><th style={th}>Trade</th><th style={th}>Vendor</th><th style={{...th, textAlign:"right"}}>Gross Value</th></tr></thead>
+          <tbody>{shown.map((r,i) => {
+            const src = isDone(r) ? "Completed" : isDead(r) ? "Dead/Lost" : isWaiting(r) ? "Waiting for Approval" : "On PBR";
+            return (<tr key={i}><td style={td}>{scodeOf(r)}</td><td style={{...td, whiteSpace:"normal", minWidth:200}}>{r.name}</td><td style={td}>{src}</td><td style={td}>{r.trade}</td><td style={td}>{subName(r.subcontractorId)}</td><td style={{...td, textAlign:"right"}}>{usd(num(r.contractValue))}</td></tr>);
+          })}</tbody>
+        </table></div>
+        {rows.length > shown.length && <div style={{ padding:14, textAlign:"center", color:"var(--t-ink3)", fontSize:12 }}>Showing first 300 of {rows.length} — narrow the search.</div>}
+      </Section>
+    );
+  } else if (mode === "cust" || mode === "dm") {
+    const list = mode === "dm" ? dms : customers;
+    const ms = matchList(list, current);
+    if (!current) body = <div style={{ padding:40, textAlign:"center", color:"var(--t-ink3)" }}>{mode === "dm" ? "Search a district manager to see all their stores and jobs." : "Search a customer (e.g. Public Storage) to see all its stores and jobs."}</div>;
+    else if (!ms.length) body = <div style={{ padding:40, textAlign:"center", color:"var(--t-ink3)" }}>No {mode === "dm" ? "district manager" : "customer"} found for "{current}".</div>;
+    else if (ms.length > 1) body = <div style={{ padding:40, textAlign:"center", color:"var(--t-ink3)" }}>{ms.length} match "{current}" — pick one:<br/><br/>{ms.map(m => <button key={m} className="t-btn t-btn-ghost t-btn-sm" style={{ margin:3 }} onClick={()=>{ setQ(m); setCurrent(m); }}>{m}</button>)}</div>;
+    else {
+      const name = ms[0];
+      const inGroup = (j) => mode === "dm" ? dmOf(j) === name : custOf(j) === name;
+      const grp = pool.filter(inGroup);
+      const m = calcM(grp);
+      const storeCodes = [...new Set(grp.map(scodeOf).filter(Boolean))];
+      const rollup = storeCodes.map(code => { const sj = grp.filter(j => scodeOf(j) === code); const sm = calcM(sj); return { code, addr:(sites.find(s=>norm(s.storeNumber)===norm(code))||{}).address||"", sm, onPbr: sj.filter(isActive).length, wait: sj.filter(isWaiting).length }; }).filter(r=>r.sm.jobs>0).sort((a,b)=>b.sm.rev-a.sm.rev);
+      meta = storeCodes.length + " stores";
+      body = <>
+        <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))", gap:12, marginBottom:16 }}>
+          <Kpi l="Revenue" v={usd(m.rev)} s={m.done + " completed jobs"} /><Kpi l="Gross Profit" v={usd(m.gp)} /><Kpi l="Margin" v={pct(m.margin)} /><Kpi l="Turnover %" v={pct(m.turn)} s={m.won + " won / " + m.jobs + " total (" + m.dead + " dead)"} />
+        </div>
+        <Section title="Stores" count={rollup.length + " with jobs"}>
+          <div style={{ overflowX:"auto" }}><table style={{ width:"100%", borderCollapse:"collapse" }}>
+            <thead><tr><th style={th}>Store</th><th style={th}>Address</th><th style={{...th, textAlign:"right"}}>Revenue</th><th style={{...th, textAlign:"right"}}>GP</th><th style={{...th, textAlign:"right"}}>Margin</th><th style={{...th, textAlign:"right"}}>Turnover</th><th style={{...th, textAlign:"right"}}>On PBR</th><th style={{...th, textAlign:"right"}}>Waiting</th></tr></thead>
+            <tbody>{rollup.map((r,i) => (
+              <tr key={i} style={{ cursor:"pointer" }} onClick={()=>{ setMode("store"); setQ(r.code); setCurrent(r.code); }}>
+                <td style={{...td, color:"var(--t-approval)", fontWeight:600}}>{r.code}</td><td style={{...td, whiteSpace:"normal"}}>{r.addr}</td>
+                <td style={{...td, textAlign:"right"}}>{usd(r.sm.rev)}</td><td style={{...td, textAlign:"right"}}>{usd(r.sm.gp)}</td>
+                <td style={{...td, textAlign:"right"}}>{pct(r.sm.margin)}</td><td style={{...td, textAlign:"right"}}>{pct(r.sm.turn)}</td>
+                <td style={{...td, textAlign:"right"}}>{r.onPbr}</td><td style={{...td, textAlign:"right"}}>{r.wait}</td>
+              </tr>
+            ))}</tbody>
+          </table></div>
+        </Section>
+        {pbrTable("Current Jobs on PBR", grp.filter(isActive).filter(j=>!isWaiting(j)), true)}
+        {pbrTable("Waiting for Approval", grp.filter(isWaiting), true)}
+        {completedTable(grp.filter(isDone))}
+      </>;
+    }
+  } else {
+    // store mode
+    const ms = matchStores(current);
+    if (!current) body = <div style={{ padding:40, textAlign:"center", color:"var(--t-ink3)" }}>Search a store code above to load its dashboard.</div>;
+    else if (ms.length > 1) body = <div style={{ padding:40, textAlign:"center", color:"var(--t-ink3)" }}>{ms.length} stores match "{current}" — pick one:<br/><br/>{ms.map(m => <button key={m.code} className="t-btn t-btn-ghost t-btn-sm" style={{ margin:3 }} onClick={()=>{ setQ(m.code); setCurrent(m.code); }}>{m.code}</button>)}</div>;
+    else {
+      const key = ms.length ? ms[0].k : norm(current);
+      const sj = pool.filter(j => norm(scodeOf(j)) === key);
+      const site = sites.find(s => norm(s.storeNumber) === key);
+      if (!sj.length && !site) body = <div style={{ padding:40, textAlign:"center", color:"var(--t-ink3)" }}>No store found for "{current}".</div>;
+      else {
+        const m = calcM(sj);
+        const custName = (site && coName(site.companyId)) || (sj[0] && custOf(sj[0])) || "";
+        meta = [custName, (site||{}).address].filter(Boolean).join(" · ");
+        const f = (l, v) => v ? <div><div style={{ fontSize:11, color:"var(--t-ink3)", textTransform:"uppercase", letterSpacing:"0.04em", marginBottom:2 }}>{l}</div><div>{v}</div></div> : null;
+        // customer compare
+        let compare = null;
+        if (custName) {
+          const cg = pool.filter(j => custOf(j) === custName);
+          const cm = calcM(cg);
+          const rr = (l,a,b)=>(<tr><td style={td}>{l}</td><td style={{...td, textAlign:"right"}}>{a}</td><td style={{...td, textAlign:"right"}}>{b}</td></tr>);
+          compare = (
+            <Section title={"Store vs " + custName} count={[...new Set(cg.map(scodeOf).filter(Boolean))].length + " stores"}>
+              <div style={{ overflowX:"auto" }}><table style={{ width:"100%", borderCollapse:"collapse" }}>
+                <thead><tr><th style={th}></th><th style={{...th, textAlign:"right"}}>This store</th><th style={{...th, textAlign:"right"}}>{custName} overall</th></tr></thead>
+                <tbody>
+                  {rr("Revenue", usd(m.rev), usd(cm.rev))}{rr("Gross Profit", usd(m.gp), usd(cm.gp))}{rr("Margin", pct(m.margin), pct(cm.margin))}{rr("Turnover %", pct(m.turn), pct(cm.turn))}{rr("Completed jobs", m.done, cm.done)}{rr("Total jobs", m.jobs, cm.jobs)}{rr("Share of customer revenue", cm.rev ? pct(m.rev/cm.rev) : "—", "")}
+                </tbody>
+              </table></div>
+            </Section>
+          );
+        }
+        body = <>
+          {site && (
+            <div className="t-card" style={{ padding:"14px 16px", marginBottom:16 }}>
+              <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))", gap:"12px 20px" }}>
+                {f("Customer", custName)}{f("Address", site.address)}{f("Store Phone", site.phone)}{f("Gate Code", site.gateCode)}{f("Manager", [site.managerName, site.managerPhone].filter(Boolean).join(" · "))}{f("Manager Email", site.managerEmail)}
+              </div>
+            </div>
+          )}
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(200px,1fr))", gap:12, marginBottom:16 }}>
+            <Kpi l="Revenue" v={usd(m.rev)} s={m.done + " completed jobs"} /><Kpi l="Gross Profit" v={usd(m.gp)} /><Kpi l="Margin" v={pct(m.margin)} /><Kpi l="Turnover %" v={pct(m.turn)} s={m.won + " won / " + m.jobs + " total (" + m.dead + " dead)"} />
+          </div>
+          {compare}
+          {pbrTable("Current Jobs on PBR", sj.filter(isActive).filter(j=>!isWaiting(j)), false)}
+          {pbrTable("Waiting for Approval", sj.filter(isWaiting), false)}
+          {completedTable(sj.filter(isDone))}
+        </>;
+      }
+    }
+  }
+
+  const modeBtn = (id, label) => (
+    <button onClick={()=>{ setMode(id); setQ(""); setCurrent(""); setTrade(""); setCq(""); }}
+      className="t-btn t-btn-sm" style={{ background: mode===id ? "var(--t-approval)" : "var(--t-surface)", color: mode===id ? "#fff" : "var(--t-ink)", border:"1px solid var(--t-line)" }}>{label}</button>
+  );
+  const placeholder = mode==="store" ? "Search store number…" : mode==="cust" ? "Search customer…" : mode==="dm" ? "Search district manager…" : "Search all jobs: store, WO #, job, vendor, scope…";
+  const onSearch = (v) => { setQ(v); if (mode !== "all") setCurrent(v.trim()); };
+
+  return (
+    <div className="fade-in">
+      <div style={{ display:"flex", gap:12, alignItems:"center", flexWrap:"wrap", marginBottom:18 }}>
+        <div style={{ fontSize:18, fontWeight:600 }}>Store Dashboard</div>
+        <input className="fi" value={q} onChange={e=>onSearch(e.target.value)} placeholder={placeholder} style={{ flex:1, minWidth:220, maxWidth:420, fontSize:15 }} />
+        <div style={{ display:"flex", gap:4 }}>{modeBtn("store","Store")}{modeBtn("cust","Customer")}{modeBtn("dm","District Mgr")}{modeBtn("all","All Jobs")}</div>
+        {meta && <div style={{ fontSize:13, color:"var(--t-ink3)" }}>{meta}</div>}
+      </div>
+      {body}
+    </div>
+  );
+}
+
 // ── FmEstimate ─ simplified proposal builder (exact FDI margin math), saved on the job ──
 function FmEstimate({ job, items, meta, onSave, onApprove }) {
   const blankLine = () => ({ item:"", desc:"", qty:1, cost:"", margin:"", rate:"" });
@@ -6507,6 +6763,8 @@ Return ONLY valid JSON, no markdown, no extra text:
           {navItems.map(item => (
             <button key={item.id} className={"t-nav-item" + (activeNav === item.id ? " active" : "")} onClick={() => {
               setActiveNav(item.id);
+              setCrmMode(false);
+              setAccountingMode(false);
               closeAllPanels();
             }}>
               <span className="t-nav-icon">{item.icon}</span>
@@ -6531,7 +6789,7 @@ Return ONLY valid JSON, no markdown, no extra text:
               <button key={bu.id} className={"t-bu-tab" + (activeBU === bu.id && !crmMode && !accountingMode ? " active" : "")} onClick={() => { setCrmMode(false); setAccountingMode(false); handleBUChange(bu.id); closeAllPanels(); }}>{bu.short}</button>
             ))}
             <div style={{ width: 1, height: 20, background: "var(--t-line)", margin: "0 6px" }} />
-            <button className={"t-bu-tab k-crm" + (crmMode ? " active" : "")} onClick={() => { setCrmMode(true); setAccountingMode(false); closeAllPanels(); }}>CRM</button>
+            <button className={"t-bu-tab k-crm" + (crmMode ? " active" : "")} onClick={() => { setCrmMode(true); setAccountingMode(false); setActiveNav("dashboard"); closeAllPanels(); }}>CRM</button>
             <button className={"t-bu-tab k-acct" + (accountingMode ? " active" : "")} onClick={() => { setAccountingMode(true); setCrmMode(false); closeAllPanels(); }}>$ ACCT</button>
           </div>
           <div style={{ position: "relative", flex: 1, maxWidth: 440, margin: "0 16px" }}>
@@ -7115,7 +7373,8 @@ Return ONLY valid JSON, no markdown, no extra text:
           {/* ══════════════════════════════════════════
                CRM MODULE - renders when crmMode === true
           ══════════════════════════════════════════ */}
-          {crmMode && (() => {
+          {crmMode && <CrmDashboard fmJobs={fmJobs} companies={companies} sites={sites} subcontractors={subcontractors} />}
+          {crmMode && false && (() => {
             const CRM_STATUSES = [
               { id: "active",    label: "Active Customer", color: "#4ADE80" },
               { id: "prospect",  label: "Prospect",        color: "#818CF8" },
@@ -19018,8 +19277,8 @@ window.addEventListener('message',function(e){
                           />
                         </div>
                       )}
-                      {/* Buyout — assign a vendor, then a schedule date moves it into Do Work */}
-                      {job.stage === "buyout" && (
+                      {/* Vendor assignment needed shows in-stage for buyout & do_work; buyout also gets a schedule date to advance */}
+                      {(job.stage === "buyout" || (job.stage === "do_work" && !job.subcontractorId)) && (
                         <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--t-line2)" }}>
                           {!job.subcontractorId ? (
                             <div>
@@ -20102,7 +20361,7 @@ window.addEventListener('message',function(e){
                 {/* -- WAITING FOR QUOTE panel: now folded into the Estimating panel above (which renders on both estimating + waiting_quote stages) -- */}
 
                 {/* -- VENDOR PICKER for buyout / do_work / bill — adds OR changes the assigned vendor -- */}
-                {(job.stage === "do_work" || job.stage === "bill") && (() => {
+                {(((job.stage === "do_work") && job.subcontractorId) || job.stage === "bill") && (() => {
                   const pickerOpen = vendorPickerJobOpen === job.id;
                   const currentSub = subcontractors.find(s => s.id === job.subcontractorId);
                   const q = (vendorPickerJobSearch || "").toLowerCase();
