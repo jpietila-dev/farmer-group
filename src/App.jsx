@@ -3574,6 +3574,20 @@ const VENDOR_PORTAL_CSS = `
 .vp-est-hdr-sub { font-size:12px; color:#8a8a92; margin-top:3px; }
 .vp-est-cnt { margin-left:auto; font-size:28px; font-weight:600; letter-spacing:-1px; color:#E65100; flex-shrink:0; }
 .vp-admin-banner { background:#1565C0; color:#fff; text-align:center; padding:6px; font-size:11px; font-weight:600; letter-spacing:.05em; text-transform:uppercase; }
+.vp-sg { margin-bottom:10px; }
+.vp-sg-hdr { display:flex; align-items:center; gap:12px; padding:12px 18px; background:#FFF; border:1px solid rgba(24,24,26,0.1); border-radius:10px; cursor:pointer; transition:background .12s; }
+.vp-sg-hdr:hover { background:#F7F6F2; }
+.vp-sg-hdr.open { border-radius:10px 10px 0 0; border-bottom-color:transparent; }
+.vp-sg-info { flex:1; min-width:0; }
+.vp-sg-name { font-size:14px; font-weight:600; font-family:'DM Mono',monospace; }
+.vp-sg-addr { font-size:12px; color:#8a8a92; margin-top:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.vp-sg-cnt { font-family:'DM Mono',monospace; font-size:11px; background:#F7F6F2; border:1px solid rgba(24,24,26,0.1); padding:2px 8px; border-radius:10px; color:#8a8a92; flex-shrink:0; }
+.vp-sg-chev { color:#8a8a92; transition:transform .2s; flex-shrink:0; }
+.vp-sg-hdr.open .vp-sg-chev { transform:rotate(180deg); }
+.vp-sg-body { display:none; border:1px solid rgba(24,24,26,0.1); border-top:none; border-radius:0 0 10px 10px; overflow:hidden; }
+.vp-sg-body.open { display:block; }
+.vp-sg-body .vp-jcard { border-radius:0; border-left:none; border-right:none; border-top:none; border-bottom:1px solid rgba(24,24,26,0.06); margin-bottom:0; }
+.vp-sg-body .vp-jcard:last-child { border-bottom:none; }
 `;
 
 // ── stage helpers (map FM stage IDs to vendor portal labels/styles)
@@ -3619,6 +3633,7 @@ function VendorPortalAuthenticated({ sub, myJobs, fmJobs, setFmJobs, companies, 
   const [cardTab, setCardTab] = useState({}); // {jobId: "info"|"photos"|"update"}
   const [region, setRegion] = useState("grandrapids");
   const [calDate, setCalDate] = useState(new Date());
+  const [openStores, setOpenStores] = useState({}); // {storeCode: bool}
   // per-job form state for Update Job actions
   const [formState, setFormState] = useState({}); // {jobId: { bidAmt, bidNotes, schedDate, note, invAmt, invNum, msgOk, msgEr, busy }}
   const setForm = (jobId, patch) => setFormState(prev => ({ ...prev, [jobId]: { ...(prev[jobId]||{}), ...patch } }));
@@ -4393,6 +4408,7 @@ function VendorPortalAuthenticated({ sub, myJobs, fmJobs, setFmJobs, companies, 
       {/* Tabs */}
       <div className="vp-tabs">
         <button className={"vp-tab" + (view === "jobs" ? " active" : "")} onClick={() => setView("jobs")}>📋 All Jobs</button>
+        <button className={"vp-tab" + (view === "stores" ? " active" : "")} onClick={() => setView("stores")}>🏪 Stores</button>
         <button className={"vp-tab" + (view === "geo" ? " active" : "")} onClick={() => setView("geo")}>📍 Geographic</button>
         <button className={"vp-tab" + (view === "sched" ? " active" : "")} onClick={() => setView("sched")}>📅 Schedule</button>
         <button className={"vp-tab" + (view === "est" ? " active" : "")} onClick={() => setView("est")}>📝 Need Estimates</button>
@@ -4468,6 +4484,49 @@ function VendorPortalAuthenticated({ sub, myJobs, fmJobs, setFmJobs, companies, 
             ? <div className="vp-empty">No jobs in this category.</div>
             : filtered.map(j => <div key={j.id} data-vp-jobid={j.id}>{renderCard(j)}</div>)
           }
+        </div>
+      )}
+
+      {/* Stores — jobs grouped by store */}
+      {view === "stores" && (
+        <div className="vp-shell">
+          <input className="vp-srch" placeholder="🔍  Search by name, store, address…" value={search} onChange={e => setSearch(e.target.value)} />
+          {(() => {
+            let list = visibleJobs;
+            if (search.trim()) {
+              const q = search.toLowerCase();
+              list = list.filter(j => {
+                const st = sites.find(s => s.id === j.siteId || (s.storeNumber && j.storeCode && s.storeNumber === j.storeCode));
+                return (j.name||"").toLowerCase().includes(q) || (j.storeCode||"").toLowerCase().includes(q)
+                  || (j.projectNo||"").toLowerCase().includes(q) || (st?.address||"").toLowerCase().includes(q);
+              });
+            }
+            const groups = {};
+            list.forEach(j => { const k = j.storeCode || "Other"; (groups[k] = groups[k] || []).push(j); });
+            const keys = Object.keys(groups).sort();
+            if (!keys.length) return <div className="vp-empty">No jobs yet.</div>;
+            return keys.map(store => {
+              const jobs = groups[store];
+              const site = sites.find(s => s.id === jobs[0].siteId || (s.storeNumber && s.storeNumber === store));
+              const co = companies.find(c => c.id === site?.companyId);
+              const open = !!openStores[store];
+              return (
+                <div className="vp-sg" key={store}>
+                  <div className={"vp-sg-hdr" + (open ? " open" : "")} onClick={() => setOpenStores(p => ({ ...p, [store]: !p[store] }))}>
+                    <div className="vp-sg-info">
+                      <div className="vp-sg-name">{store}{co?.name ? <span style={{ fontFamily: "'DM Sans',sans-serif", fontSize: 12, fontWeight: 400, color: "#8a8a92" }}>{" · " + co.name}</span> : null}</div>
+                      {site?.address ? <div className="vp-sg-addr">{site.address}</div> : null}
+                    </div>
+                    <span className="vp-sg-cnt">{jobs.length} WO{jobs.length !== 1 ? "s" : ""}</span>
+                    <svg className="vp-sg-chev" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg>
+                  </div>
+                  <div className={"vp-sg-body" + (open ? " open" : "")}>
+                    {jobs.map(j => <div key={j.id} data-vp-jobid={j.id}>{renderCard(j)}</div>)}
+                  </div>
+                </div>
+              );
+            });
+          })()}
         </div>
       )}
 
