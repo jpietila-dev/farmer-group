@@ -14980,18 +14980,37 @@ window.addEventListener('message',function(e){
                     {mapSitesWithCoords.length === 0 ? (
                       <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "#4A5278", fontSize: 13 }}>No sites with coordinates in this filter</div>
                     ) : (() => {
-                      const lats = mapSitesWithCoords.map(s => s.lat);
-                      const lngs = mapSitesWithCoords.map(s => s.lng);
-                      const centerLat = (Math.min(...lats) + Math.max(...lats)) / 2;
-                      const centerLng = (Math.min(...lngs) + Math.max(...lngs)) / 2;
-                      const colColors = { untouched: "gray", bidding: "yellow", owner_approval: "blue", buyout: "green" };
-                      const markers = mapSitesWithCoords.map(s => {
-                        const col = getCol(s);
-                        const color = colColors[col] || "red";
-                        return `markers=color:${color}%7C${s.lat},${s.lng}`;
-                      }).join("&");
-                      const mapUrl = `https://maps.googleapis.com/maps/api/staticmap?center=${centerLat},${centerLng}&zoom=5&size=800x280&maptype=roadmap&${markers}&key=AIzaSyD-9tSrke72PouQMnMX-a7eZSW0jkFMBWY`;
-                      return <img src={mapUrl} alt="Bid sites map" style={{ width: "100%", height: 280, objectFit: "cover", display: "block" }} />;
+                      const colColors = { untouched: "#9CA3AF", bidding: "#FCD34D", owner_approval: "#3B6FE8", buyout: "#4ADE80" };
+                      const pts = mapSitesWithCoords.map(s => ({ lat: s.lat, lng: s.lng, store: s.storeNumber||"", addr: s.address||"", color: colColors[getCol(s)] || "#F87171" }));
+                      return (
+                        <iframe
+                          key={"bidmap|"+pts.length}
+                          sandbox="allow-scripts"
+                          style={{ width: "100%", height: 280, border: "none", display: "block" }}
+                          title="Bid sites map"
+                          onLoad={e => { e.target.contentWindow.postMessage({ type:"loadPts", pts }, "*"); }}
+                          srcDoc={`<!DOCTYPE html><html><head><meta charset="utf-8">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"><\/script>
+<style>html,body,#map{margin:0;padding:0;height:100%;width:100%}</style>
+</head><body><div id="map"></div><script>
+var map=L.map('map',{zoomControl:true,attributionControl:false});
+L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',{maxZoom:20,subdomains:'abcd'}).addTo(map);
+window.addEventListener('message',function(e){
+  if(!e.data||e.data.type!=='loadPts')return;
+  var pts=e.data.pts,bounds=[];
+  pts.forEach(function(p){
+    var icon=L.divIcon({className:'',html:'<div style="width:11px;height:11px;border-radius:50%;background:'+p.color+';border:2px solid white;box-shadow:0 1px 5px rgba(0,0,0,0.5)"></div>',iconSize:[11,11],iconAnchor:[5,5],popupAnchor:[0,-6]});
+    L.marker([p.lat,p.lng],{icon:icon}).addTo(map).bindPopup('<div style="font-family:sans-serif;line-height:1.4"><b>#'+p.store+'</b><br><span style="color:#555;font-size:11px">'+p.addr+'</span></div>');
+    bounds.push([p.lat,p.lng]);
+  });
+  if(bounds.length>1)map.fitBounds(bounds,{padding:[25,25]});
+  else if(bounds.length===1)map.setView(bounds[0],12);
+  else map.setView([39.5,-98.5],4);
+});
+<\/script></body></html>`}
+                        />
+                      );
                     })()}
                     <div style={{ position: "absolute", bottom: 8, left: 12, display: "flex", gap: 6 }}>
                       {COLS.map(col => (
@@ -21050,7 +21069,7 @@ window.addEventListener('message',function(e){
         const sub  = chosenSubId ? subcontractors.find(s => s.id === chosenSubId) : null;
         const mapLat = site.lat || 39.9526;
         const mapLng = site.lng || -75.1652;
-        const mapUrl = `https://maps.googleapis.com/maps/api/staticmap?center=${mapLat},${mapLng}&zoom=1&size=640x320&maptype=satellite&markers=color:red%7C${mapLat},${mapLng}&key=AIzaSyD-9tSrke72PouQMnMX-a7eZSW0jkFMBWY`;
+        const mapUrl = `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/export?bbox=${mapLng-0.006},${mapLat-0.003},${mapLng+0.006},${mapLat+0.003}&bboxSR=4326&imageSR=3857&size=640,320&format=png&f=image`;
         const today = new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
 
         const printBidDoc = () => {
