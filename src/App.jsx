@@ -174,6 +174,7 @@ const dbToFmJob = r => ({
   marketArea: r.market_area||"",
   category: r.category||"FM",
   trade: r.trade||"", estimateData: r.estimate_data||null,
+  materialsStatus: r.materials_status||"", materialsPo: r.materials_po||"", materialsEta: r.materials_eta||"",
   deadAt: r.dead_at||"", deadReason: r.dead_reason||"",
 });
 const fmJobToDB = j => ({
@@ -206,6 +207,7 @@ const fmJobToDB = j => ({
   prp_sent: j.prpSent||null, account_manager: j.accountManager||null,
   market_area: j.marketArea||null, category: j.category||"FM",
   trade: j.trade||null, estimate_data: j.estimateData||null,
+  materials_status: j.materialsStatus||null, materials_po: j.materialsPo||null, materials_eta: j.materialsEta||null,
   dead_at: j.deadAt||null, dead_reason: j.deadReason||null,
 });
 
@@ -4444,6 +4446,104 @@ function VendorPortalAuthenticated({ sub, myJobs, fmJobs, setFmJobs, companies, 
 // ── End VendorPortal ───────────────────────────────────────────────────────────
 
 
+// ── FmVendorOffer ─ coordinator offers a job to one+ vendors at a price; accept/quote/award (Uber model) ──
+function FmVendorOffer({ job, subcontractors, onAwarded }) {
+  const [offers, setOffers] = useState([]);
+  const [picking, setPicking] = useState(false);
+  const [sel, setSel]   = useState([]);
+  const [price, setPrice] = useState("");
+  const [vq, setVq]     = useState("");
+  const [msg, setMsg]   = useState("");
+  const H = { apikey: SUPA_KEY, Authorization: "Bearer " + SUPA_KEY, "Content-Type": "application/json" };
+
+  const load = React.useCallback(() => {
+    if (!job.id) return;
+    fetch(`${SUPA_URL}/rest/v1/fm_job_offers?job_id=eq.${encodeURIComponent(job.id)}&order=created_at.asc`, { headers: H })
+      .then(r => r.json()).then(d => { if (Array.isArray(d)) setOffers(d); }).catch(()=>{});
+  }, [job.id]);
+  useEffect(() => { load(); const t = setInterval(load, 10000); return () => clearInterval(t); }, [load]);
+
+  const subName = (id) => (subcontractors.find(s => s.id === id) || {}).name || id;
+  const activeSubs = subcontractors.filter(s => !s.archived);
+  const offeredIds = new Set(offers.map(o => o.sub_id));
+  const filtered = vq ? activeSubs.filter(s => (s.name||"").toLowerCase().includes(vq.toLowerCase()) || (s.trade||"").toLowerCase().includes(vq.toLowerCase())) : activeSubs;
+  const usd = (n) => "$" + (Number(n)||0).toLocaleString("en-US");
+  const STAT = { offered:{t:"Waiting", c:"var(--t-ink3)"}, quoted:{t:"Quoted", c:"var(--t-approval)"}, accepted:{t:"Accepted", c:"var(--t-dowork)"}, awarded:{t:"Awarded", c:"var(--t-dowork)"}, declined:{t:"Declined", c:"var(--t-warn)"}, closed:{t:"Closed", c:"var(--t-ink3)"} };
+
+  const toggleSel = (id) => setSel(s => s.includes(id) ? s.filter(x=>x!==id) : [...s, id]);
+  const sendOffers = async () => {
+    if (!sel.length || !price) { setMsg("Pick vendors and set a price"); setTimeout(()=>setMsg(""),2500); return; }
+    const rows = sel.filter(id => !offeredIds.has(id)).map(id => ({ job_id: job.id, sub_id: id, offer_price: Number(price), status: "offered" }));
+    if (!rows.length) { setMsg("Those vendors already have this offer"); setTimeout(()=>setMsg(""),2500); return; }
+    await fetch(`${SUPA_URL}/rest/v1/fm_job_offers`, { method:"POST", headers:{...H, Prefer:"return=minimal"}, body: JSON.stringify(rows) }).catch(()=>{});
+    setSel([]); setPrice(""); setPicking(false); setMsg("Offered to " + rows.length + " vendor(s)"); setTimeout(()=>setMsg(""),2500); load();
+  };
+  const award = async (offer) => {
+    const awardPrice = offer.quote_amount != null ? offer.quote_amount : offer.offer_price;
+    if (!window.confirm(`Award this job to ${subName(offer.sub_id)} at ${usd(awardPrice)}?\n\nThis locks the job to them and closes it for the other vendors.`)) return;
+    await fetch(`${SUPA_URL}/rest/v1/fm_job_offers?id=eq.${offer.id}`, { method:"PATCH", headers:{...H, Prefer:"return=minimal"}, body: JSON.stringify({ status:"awarded", responded_at:new Date().toISOString() }) }).catch(()=>{});
+    await fetch(`${SUPA_URL}/rest/v1/fm_job_offers?job_id=eq.${encodeURIComponent(job.id)}&id=neq.${offer.id}`, { method:"PATCH", headers:{...H, Prefer:"return=minimal"}, body: JSON.stringify({ status:"closed" }) }).catch(()=>{});
+    onAwarded(offer.sub_id, awardPrice);
+    load();
+  };
+  const cancelOffer = async (offer) => {
+    await fetch(`${SUPA_URL}/rest/v1/fm_job_offers?id=eq.${offer.id}`, { method:"DELETE", headers:H }).catch(()=>{});
+    load();
+  };
+
+  const liveOffers = offers.filter(o => o.status !== "closed");
+  return (
+    <div style={{ marginTop: 10 }}>
+      {liveOffers.length > 0 && (
+        <div style={{ display:"flex", flexDirection:"column", gap:6, marginBottom:10 }}>
+          <div style={{ fontSize:11, color:"var(--t-ink3)", textTransform:"uppercase", letterSpacing:"0.06em", fontWeight:600 }}>Offered to {liveOffers.length} vendor{liveOffers.length!==1?"s":""}</div>
+          {liveOffers.map(o => {
+            const st = STAT[o.status] || STAT.offered;
+            return (
+              <div key={o.id} style={{ display:"flex", alignItems:"center", gap:8, padding:"7px 10px", border:"1px solid var(--t-line)", borderRadius:8, background:"var(--t-paper)" }}>
+                <div style={{ flex:1, minWidth:0 }}>
+                  <div style={{ fontSize:12, fontWeight:600, color:"var(--t-ink)" }}>{subName(o.sub_id)}</div>
+                  <div style={{ fontSize:11, color:"var(--t-ink3)" }}>
+                    Offer {usd(o.offer_price)}{o.status==="quoted" && o.quote_amount!=null ? " · Quoted " + usd(o.quote_amount) : ""}
+                    {o.quote_notes ? " · " + o.quote_notes : ""}
+                  </div>
+                </div>
+                <span style={{ fontSize:10, fontWeight:700, color:st.c }}>{st.t}</span>
+                {(o.status === "quoted" || o.status === "offered") && <button className="t-btn t-btn-primary t-btn-sm" onClick={()=>award(o)}>Award</button>}
+                {o.status !== "awarded" && <button onClick={()=>cancelOffer(o)} title="Remove offer" style={{ border:"none", background:"none", color:"var(--t-ink3)", cursor:"pointer", fontSize:14 }}>✕</button>}
+              </div>
+            );
+          })}
+        </div>
+      )}
+      {picking ? (
+        <div style={{ border:"1px solid var(--t-line)", borderRadius:8, padding:10, background:"var(--t-surface)" }}>
+          <div style={{ display:"flex", gap:8, alignItems:"center", marginBottom:8, flexWrap:"wrap" }}>
+            <input type="number" value={price} onChange={e=>setPrice(e.target.value)} placeholder="Offer $ (vendor price)" style={{ width:170, border:"1px solid var(--t-line)", borderRadius:6, padding:"6px 8px", fontSize:12, fontFamily:"inherit", background:"var(--t-paper)", color:"var(--t-ink1)" }} />
+            <input value={vq} onChange={e=>setVq(e.target.value)} placeholder="Search vendors…" style={{ flex:1, minWidth:140, border:"1px solid var(--t-line)", borderRadius:6, padding:"6px 8px", fontSize:12, fontFamily:"inherit", background:"var(--t-paper)", color:"var(--t-ink1)" }} />
+          </div>
+          <div style={{ maxHeight:200, overflowY:"auto", display:"flex", flexDirection:"column", gap:2, marginBottom:8 }}>
+            {filtered.length === 0 ? <div style={{ fontSize:12, color:"var(--t-ink3)", padding:8 }}>No active vendors — add some in Subcontractors.</div> :
+              filtered.slice(0,60).map(s => (
+                <label key={s.id} style={{ display:"flex", alignItems:"center", gap:8, padding:"6px 8px", cursor: offeredIds.has(s.id) ? "default" : "pointer", opacity: offeredIds.has(s.id) ? 0.5 : 1, borderRadius:6 }}>
+                  <input type="checkbox" disabled={offeredIds.has(s.id)} checked={sel.includes(s.id)} onChange={()=>toggleSel(s.id)} />
+                  <span style={{ fontSize:12, color:"var(--t-ink)" }}>{s.name}{s.trade ? " — " + s.trade : ""}{offeredIds.has(s.id) ? " (offered)" : ""}</span>
+                </label>
+              ))}
+          </div>
+          <div style={{ display:"flex", gap:8, justifyContent:"flex-end" }}>
+            <button className="t-btn t-btn-ghost t-btn-sm" onClick={()=>{ setPicking(false); setSel([]); }}>Cancel</button>
+            <button className="t-btn t-btn-primary t-btn-sm" onClick={sendOffers}>Send offer to {sel.length || ""} vendor{sel.length!==1?"s":""}</button>
+          </div>
+        </div>
+      ) : (
+        <button className="t-btn t-btn-ghost t-btn-sm" onClick={()=>setPicking(true)}>📨 Offer to vendor(s) for competing quotes</button>
+      )}
+      {msg && <div style={{ fontSize:11, color:"var(--t-ink2)", marginTop:6 }}>{msg}</div>}
+    </div>
+  );
+}
+
 // ── CrmDashboard ─ Store / Customer / District Mgr / All Jobs analytics (reads app data) ──
 function CrmDashboard({ fmJobs, companies, sites, subcontractors }) {
   const [mode, setMode]       = useState("store"); // store | cust | dm | all
@@ -5415,6 +5515,26 @@ export default function App() {
     setSelectedCrmContact(null);
   };
   const handleBUChange = (id) => { setActiveBU(id); setActiveNav("dashboard"); setCrmTagFilter(null); setCrmMode(false); setAccountingMode(false); closeAllPanels(); };
+
+  // Live-refresh the open FM job so vendor-portal changes (schedule, materials, status) appear without a reload
+  useEffect(() => {
+    const openId = (fmFullScreenJob || selectedFmJob)?.id;
+    if (!openId) return;
+    const VF = ["startDate","stage","subcontractorId","materialsStatus","materialsPo","materialsEta","vendorPortalStatus","vendorQuotePrice","vendorNextStep","sentToAR","status"];
+    const tick = () => {
+      fetch(`${SUPA_URL}/rest/v1/fm_jobs?id=eq.${encodeURIComponent(openId)}&select=*`, { headers: { apikey: SUPA_KEY, Authorization: "Bearer " + SUPA_KEY } })
+        .then(r => r.json()).then(rows => {
+          if (!Array.isArray(rows) || !rows[0]) return;
+          const fresh = dbToFmJob(rows[0]);
+          const patch = {}; VF.forEach(k => { patch[k] = fresh[k]; });
+          setFmJobs(prev => prev.map(j => j.id === openId ? { ...j, ...patch } : j));
+          setFmFullScreenJob(f => (f && f.id === openId) ? { ...f, ...patch } : f);
+          setSelectedFmJob(s => (s && s.id === openId) ? { ...s, ...patch } : s);
+        }).catch(()=>{});
+    };
+    const t = setInterval(tick, 15000);
+    return () => clearInterval(t);
+  }, [fmFullScreenJob?.id, selectedFmJob?.id]);
 
   // Punch list
 
@@ -19214,8 +19334,10 @@ window.addEventListener('message',function(e){
                       tone = "approval";
                       break;
                     case "buyout":
-                      title = "Approved";
-                      subtitle = "Vendor needs to accept and schedule";
+                      title = "Buyout";
+                      subtitle = job.subcontractorId
+                        ? "Vendor assigned — set the schedule date to start"
+                        : "Needs a vendor — assign one or offer it out for quotes";
                       tone = "buyout";
                       break;
                     case "do_work":
@@ -19265,6 +19387,13 @@ window.addEventListener('message',function(e){
                           ))}
                         </div>
                       )}
+                      {/* Move to stage — jobs don't always follow the pipeline in order */}
+                      <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--t-line2)", display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                        <span style={{ fontSize: 11, color: "var(--t-ink3)" }}>Move to stage:</span>
+                        <select className="fi" style={{ width: 210 }} value={job.stage} onChange={e => update({ stage: e.target.value })}>
+                          {FM_STAGES.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
+                        </select>
+                      </div>
                       {/* Proposal / Estimate tool — only while estimating or waiting on quotes; collapsed by default */}
                       {["estimating","waiting_quote"].includes(job.stage) && (
                         <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--t-line2)" }}>
@@ -19275,6 +19404,18 @@ window.addEventListener('message',function(e){
                             onSave={(data) => update({ estimateData: data })}
                             onApprove={(data, total, gp) => update({ estimateData: data, contractValue: total, grossProfit: gp, stage: "owner_approval" })}
                           />
+                          <div style={{ marginTop: 12 }}>
+                            <div style={{ fontSize: 11, color: "var(--t-ink3)", marginBottom: 2 }}>Getting a price from vendors? Offer it out for quotes:</div>
+                            <FmVendorOffer job={job} subcontractors={subcontractors}
+                              onAwarded={(subId, price) => update({ subcontractorId: subId, vendorQuotePrice: price })} />
+                          </div>
+                        </div>
+                      )}
+                      {/* Owner approval — one-click advance once the owner signs off */}
+                      {job.stage === "owner_approval" && (
+                        <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--t-line2)" }}>
+                          <div style={{ fontSize: 12, color: "var(--t-ink2)", marginBottom: 6 }}>Proposal sent — waiting for owner sign-off.</div>
+                          <button className="t-btn t-btn-primary t-btn-sm" onClick={() => update({ stage: "buyout" })}>✓ Owner approved → move to Buyout</button>
                         </div>
                       )}
                       {/* Vendor assignment needed shows in-stage for buyout & do_work; buyout also gets a schedule date to advance */}
@@ -19285,15 +19426,36 @@ window.addEventListener('message',function(e){
                               <div style={{ fontSize: 12, fontWeight: 700, color: "var(--t-buyout)", marginBottom: 6 }}>👤 Vendor assignment needed</div>
                               <select className="fi" defaultValue="" style={{ width: "100%", maxWidth: 340 }}
                                 onChange={e => { if (e.target.value) update({ subcontractorId: e.target.value }); }}>
-                                <option value="" disabled>Assign a vendor…</option>
+                                <option value="" disabled>Assign a vendor directly…</option>
                                 {subcontractors.filter(s => !s.archived).map(s => <option key={s.id} value={s.id}>{s.name}{s.trade ? " — " + s.trade : ""}</option>)}
                               </select>
+                              <div style={{ fontSize: 11, color: "var(--t-ink3)", margin: "8px 0 2px" }}>— or —</div>
+                              <FmVendorOffer job={job} subcontractors={subcontractors}
+                                onAwarded={(subId, price) => update({ subcontractorId: subId, vendorQuotePrice: price })} />
                             </div>
                           ) : (
                             <div>
-                              <div style={{ fontSize: 12, color: "var(--t-ink2)", marginBottom: 8 }}>
+                              <div style={{ fontSize: 12, color: "var(--t-ink2)", marginBottom: 10 }}>
                                 👤 Vendor: <b style={{ color: "var(--t-ink)" }}>{(subcontractors.find(s => s.id === job.subcontractorId) || {}).name || "Assigned"}</b>
                                 <span style={{ marginLeft: 10, cursor: "pointer", color: "var(--t-approval)", fontSize: 11 }} onClick={() => update({ subcontractorId: "" })}>change</span>
+                              </div>
+                              {/* Materials checklist (coordinator or vendor can set it; syncs both ways) */}
+                              <div style={{ marginBottom: 10 }}>
+                                <div style={{ fontSize: 11, color: "var(--t-ink3)", marginBottom: 4 }}>Materials</div>
+                                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                                  <select className="fi" style={{ width: 150 }} value={job.materialsStatus || ""} onChange={e => update({ materialsStatus: e.target.value })}>
+                                    <option value="">Not needed</option>
+                                    <option value="ordered">Ordered</option>
+                                    <option value="received">Received</option>
+                                  </select>
+                                  {job.materialsStatus === "ordered" && (
+                                    <>
+                                      <input key={job.id + "-po"} className="fi" style={{ width: 130 }} placeholder="PO #" defaultValue={job.materialsPo || ""} onBlur={e => update({ materialsPo: e.target.value })} />
+                                      <input type="date" className="fi" style={{ width: 150 }} title="Materials ETA" value={job.materialsEta || ""} onChange={e => update({ materialsEta: e.target.value })} />
+                                    </>
+                                  )}
+                                </div>
+                                {job.materialsStatus === "ordered" && <div style={{ fontSize: 11, color: "var(--t-warn)", marginTop: 4 }}>⚠ Materials ordered{job.materialsEta ? " — ETA " + job.materialsEta : ""}, not yet received.</div>}
                               </div>
                               <div style={{ fontSize: 11, color: "var(--t-ink3)", marginBottom: 5 }}>Set the schedule date to move this job into Do Work:</div>
                               <input type="date" className="fi" style={{ maxWidth: 200 }} value={job.startDate || ""}
