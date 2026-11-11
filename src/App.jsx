@@ -4452,7 +4452,7 @@ function FmEstimate({ job, items, meta, onSave, onApprove }) {
   const [margin, setMargin] = useState(seed.margin != null ? seed.margin : 30);
   const [buried, setBuried] = useState(seed.buried != null ? seed.buried : 10);
   const [gcOverride, setGcOverride] = useState(seed.gcOverride != null ? seed.gcOverride : "");
-  const [open, setOpen]     = useState(["estimating","waiting_quote","generate_proposal"].includes(job.stage));
+  const [open, setOpen]     = useState(false);
   const [msg, setMsg]       = useState("");
 
   useEffect(() => {
@@ -18920,17 +18920,6 @@ window.addEventListener('message',function(e){
                   </div>
                 )}
 
-                {/* Proposal / Estimate — lives on the project; approval pushes gross value + GP to the PBR */}
-                {job.stage !== "intake" && !["dead","lost"].includes((job.status||"").toLowerCase()) && (
-                  <FmEstimate
-                    job={job}
-                    items={FDI_ITEMS}
-                    meta={{ customer: co?.name || "", address: site?.address || "", store: job.storeCode || "", wo: job.ownersProjectNo || "", jobName: job.name || "" }}
-                    onSave={(data) => update({ estimateData: data })}
-                    onApprove={(data, total, gp) => update({ estimateData: data, contractValue: total, grossProfit: gp, stage: "owner_approval" })}
-                  />
-                )}
-
                 {/* ─── STAGE STATUS CARD — stage-aware summary ─── */}
                 {(() => {
                   const cvNum = Number(job.contractValue || 0);
@@ -19015,6 +19004,18 @@ window.addEventListener('message',function(e){
                               <div style={{ fontSize: 14, fontWeight: 600, color: f.color || "var(--t-ink)", fontFamily: f.mono ? "var(--t-mono)" : "inherit" }}>{f.val}</div>
                             </div>
                           ))}
+                        </div>
+                      )}
+                      {/* Proposal / Estimate tool — only while estimating or waiting on quotes; collapsed by default */}
+                      {["estimating","waiting_quote"].includes(job.stage) && (
+                        <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--t-line2)" }}>
+                          <FmEstimate
+                            job={job}
+                            items={FDI_ITEMS}
+                            meta={{ customer: co?.name || "", address: site?.address || "", store: job.storeCode || "", wo: job.ownersProjectNo || "", jobName: job.name || "" }}
+                            onSave={(data) => update({ estimateData: data })}
+                            onApprove={(data, total, gp) => update({ estimateData: data, contractValue: total, grossProfit: gp, stage: "owner_approval" })}
+                          />
                         </div>
                       )}
                     </div>
@@ -19414,8 +19415,8 @@ window.addEventListener('message',function(e){
                 </div>
                 )}
 
-                {/* -- ESTIMATING stage panel (also stays during waiting_quote so coordinator can see bids/path UI) -- */}
-                {(job.stage === "estimating" || job.stage === "waiting_quote") && (() => {
+                {/* -- ESTIMATING stage panel retired — replaced by the Proposal / Estimate tool in the Stage box -- */}
+                {false && (job.stage === "estimating" || job.stage === "waiting_quote") && (() => {
                   const cvNum    = Number(job.contractValue || 0);
                   const gp       = Number(job.grossProfit || 0) || (cvNum > 0 ? fmGrossProfit(cvNum) : 0);
                   const nte      = cvNum; // gross value (kept as legacy variable name in this panel)
