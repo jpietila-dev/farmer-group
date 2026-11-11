@@ -4917,6 +4917,9 @@ export default function App() {
   const getCompanyPipeline  = (cid) => pipeline.filter(o => o.companyId === cid);
   const getCompanyTotalValue = (cid) => jobs.filter(j => j.companyId === cid).reduce((s, j) => s + j.contractValue, 0);
   const getCompanySites     = (cid) => sites.filter(s => s.companyId === cid);
+  // Jobs at a site: linked by site_id, with a store-number fallback so projects still
+  // surface even when a job isn't perfectly tied to the site row.
+  const fmJobsForSite = (site) => site ? fmJobs.filter(j => j.siteId === site.id || (!!j.storeCode && !!site.storeNumber && j.storeCode === site.storeNumber)) : [];
 
   // ── Supabase: load data on mount ──────────────────────────
   useEffect(() => {
@@ -6310,7 +6313,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                       <div style={{ padding: "8px 14px 4px", fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--t-ink3)" }}>Sites</div>
                       {siteHits.map(s => {
                         const co = companies.find(c => c.id === s.companyId);
-                        const nProj = fmJobs.filter(j => j.siteId === s.id).length;
+                        const nProj = fmJobsForSite(s).length;
                         return (
                           <div key={"gs-site-"+s.id} onClick={() => openSite(s)} style={{ padding: "8px 14px", cursor: "pointer", display: "flex", alignItems: "center", gap: 10, borderTop: "1px solid var(--t-line)" }}>
                             <span style={{ fontSize: 15 }}>📍</span>
@@ -15902,7 +15905,7 @@ window.addEventListener('message',function(e){
 
                 {/* Projects at this store */}
                 {(() => {
-                  const siteJobs = fmJobs.filter(j => j.siteId === selectedSite.id);
+                  const siteJobs = fmJobsForSite(selectedSite);
                   if (siteJobs.length === 0) return <div style={{ fontSize: 11, color: "#4A5278", fontStyle: "italic" }}>No FM projects at this store yet.</div>;
                   return (
                     <div>
@@ -16284,10 +16287,10 @@ window.addEventListener('message',function(e){
         const co = companies.find(c => c.id === s.companyId);
         const siteContacts = contacts.filter(c => (s.contactIds||[]).includes(c.id));
         const siteAllJobs = [
-          ...fmJobs.filter(j => j.siteId === s.id),
+          ...fmJobsForSite(s),
           ...capexJobs.filter(j => j.siteId === s.id),
         ];
-        const fmSiteJobs    = fmJobs.filter(j => j.siteId === s.id);
+        const fmSiteJobs    = fmJobsForSite(s);
         const capexSiteJobs = capexJobs.filter(j => j.siteId === s.id);
 
         const TRADE_GROUPS = [
