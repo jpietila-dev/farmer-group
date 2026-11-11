@@ -19018,6 +19018,31 @@ window.addEventListener('message',function(e){
                           />
                         </div>
                       )}
+                      {/* Buyout — assign a vendor, then a schedule date moves it into Do Work */}
+                      {job.stage === "buyout" && (
+                        <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--t-line2)" }}>
+                          {!job.subcontractorId ? (
+                            <div>
+                              <div style={{ fontSize: 12, fontWeight: 700, color: "var(--t-buyout)", marginBottom: 6 }}>👤 Vendor assignment needed</div>
+                              <select className="fi" defaultValue="" style={{ width: "100%", maxWidth: 340 }}
+                                onChange={e => { if (e.target.value) update({ subcontractorId: e.target.value }); }}>
+                                <option value="" disabled>Assign a vendor…</option>
+                                {subcontractors.filter(s => !s.archived).map(s => <option key={s.id} value={s.id}>{s.name}{s.trade ? " — " + s.trade : ""}</option>)}
+                              </select>
+                            </div>
+                          ) : (
+                            <div>
+                              <div style={{ fontSize: 12, color: "var(--t-ink2)", marginBottom: 8 }}>
+                                👤 Vendor: <b style={{ color: "var(--t-ink)" }}>{(subcontractors.find(s => s.id === job.subcontractorId) || {}).name || "Assigned"}</b>
+                                <span style={{ marginLeft: 10, cursor: "pointer", color: "var(--t-approval)", fontSize: 11 }} onClick={() => update({ subcontractorId: "" })}>change</span>
+                              </div>
+                              <div style={{ fontSize: 11, color: "var(--t-ink3)", marginBottom: 5 }}>Set the schedule date to move this job into Do Work:</div>
+                              <input type="date" className="fi" style={{ maxWidth: 200 }} value={job.startDate || ""}
+                                onChange={e => { const d = e.target.value; if (d) update({ startDate: d, stage: "do_work" }); }} />
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   );
                 })()}
@@ -20077,7 +20102,7 @@ window.addEventListener('message',function(e){
                 {/* -- WAITING FOR QUOTE panel: now folded into the Estimating panel above (which renders on both estimating + waiting_quote stages) -- */}
 
                 {/* -- VENDOR PICKER for buyout / do_work / bill — adds OR changes the assigned vendor -- */}
-                {(job.stage === "buyout" || job.stage === "do_work" || job.stage === "bill") && (() => {
+                {(job.stage === "do_work" || job.stage === "bill") && (() => {
                   const pickerOpen = vendorPickerJobOpen === job.id;
                   const currentSub = subcontractors.find(s => s.id === job.subcontractorId);
                   const q = (vendorPickerJobSearch || "").toLowerCase();
