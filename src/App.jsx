@@ -5372,6 +5372,7 @@ export default function App() {
   const [fmForm,        setFmForm]        = useState({ name: "", companyId: "", siteId: "", approverContactId: "", contractValue: "", grossProfit: "", nte: "", stage: "estimating", startDate: "", endDate: "", pm: "", pct: 0, bidDueDate: "", quoteDueDate: "", proposalDate: "", followUpDate: "", buyoutDate: "", invoiceDate: "", notes: "", storeCode: "", projectNo: "", ownersProjectNo: "", vendorInvoiceAmount: "", vendorInvoiceNumber: "", subcontractorId: "", vendorNextStep: "", vendorQuotePrice: "", vendorQuoteScope: "", scopeOfWork: "", coordinator: "" });
   const [selectedFmJob, setSelectedFmJob] = useState(null);
   const [fmFullScreenJob, setFmFullScreenJob] = useState(null); // full-screen detail view (from list + kanban)
+  const [offerRefresh, setOfferRefresh] = useState(0); // bump to force the vendor-offer panel to reload (e.g. after Cancel award)
   const [showVendorPickerForJob, setShowVendorPickerForJob] = useState(null); // job whose row vendor picker is open
   const [vendorPickerSearch, setVendorPickerSearch] = useState("");
   const [fmSearch,      setFmSearch]      = useState("");
@@ -19367,31 +19368,31 @@ window.addEventListener('message',function(e){
               if (isFullScreen) setFmFullScreenJob(updated); else setSelectedFmJob(updated);
               try { supa.from("fm_jobs").update(fmJobToDB(updated)).eq("id", job.id); } catch(e) {}
             };
-            // Cancel an award: clear the vendor, reopen any offers so it can be re-offered/re-claimed, drop back to Buyout
-            const cancelAward = () => {
+            // Cancel an award: wipe EVERY offer on this job (clean slate), clear the vendor, drop back to Buyout so it can be offered to anyone
+            const cancelAward = async () => {
               const vn = (subcontractors.find(s => s.id === job.subcontractorId) || {}).name || "the vendor";
-              if (!window.confirm("Cancel the award to " + vn + "? The job returns to Buyout (needs a vendor) and any offers reopen.")) return;
+              if (!window.confirm("Cancel the award to " + vn + "? This clears ALL offers on this job and returns it to Buyout, so you can offer it to anyone fresh.")) return;
               try {
-                fetch(`${SUPA_URL}/rest/v1/fm_job_offers?job_id=eq.${encodeURIComponent(job.id)}&status=in.(awarded,accepted,closed)`, {
-                  method: "PATCH",
-                  headers: { apikey: SUPA_KEY, Authorization: "Bearer " + SUPA_KEY, "Content-Type": "application/json", Prefer: "return=minimal" },
-                  body: JSON.stringify({ status: "offered", quote_amount: null, schedule_date: null })
+                await fetch(`${SUPA_URL}/rest/v1/fm_job_offers?job_id=eq.${encodeURIComponent(job.id)}`, {
+                  method: "DELETE",
+                  headers: { apikey: SUPA_KEY, Authorization: "Bearer " + SUPA_KEY, Prefer: "return=minimal" },
                 });
               } catch (e) {}
+              setOfferRefresh(x => x + 1);
               update({ subcontractorId: "", vendorQuotePrice: "", startDate: "", stage: "buyout" });
             };
-            // Move to stage — if a vendor is assigned and we jump back before buyout, the award can't come along
-            const moveToStage = (target) => {
+            // Move to stage — if a vendor is assigned and we jump back before buyout, clear the award and all offers too
+            const moveToStage = async (target) => {
               const preAward = ["estimating", "waiting_quote", "generate_proposal", "owner_approval"];
               if (job.subcontractorId && preAward.includes(target)) {
-                if (!window.confirm("This job is awarded to a vendor. Moving it back to \"" + (FM_STAGES.find(s => s.id === target) || {}).label + "\" will cancel the award and reopen any offers. Continue?")) return;
+                if (!window.confirm("This job is awarded to a vendor. Moving it back to \"" + (FM_STAGES.find(s => s.id === target) || {}).label + "\" clears ALL offers and cancels the award. Continue?")) return;
                 try {
-                  fetch(`${SUPA_URL}/rest/v1/fm_job_offers?job_id=eq.${encodeURIComponent(job.id)}&status=in.(awarded,accepted,closed)`, {
-                    method: "PATCH",
-                    headers: { apikey: SUPA_KEY, Authorization: "Bearer " + SUPA_KEY, "Content-Type": "application/json", Prefer: "return=minimal" },
-                    body: JSON.stringify({ status: "offered", quote_amount: null, schedule_date: null })
+                  await fetch(`${SUPA_URL}/rest/v1/fm_job_offers?job_id=eq.${encodeURIComponent(job.id)}`, {
+                    method: "DELETE",
+                    headers: { apikey: SUPA_KEY, Authorization: "Bearer " + SUPA_KEY, Prefer: "return=minimal" },
                   });
                 } catch (e) {}
+                setOfferRefresh(x => x + 1);
                 update({ subcontractorId: "", vendorQuotePrice: "", startDate: "", stage: target });
               } else {
                 update({ stage: target });
@@ -19603,7 +19604,7 @@ window.addEventListener('message',function(e){
                           />
                           <div style={{ marginTop: 12 }}>
                             <div style={{ fontSize: 11, color: "var(--t-ink3)", marginBottom: 2 }}>Getting a price from vendors? Offer it out for quotes:</div>
-                            <FmVendorOffer job={job} subcontractors={subcontractors}
+                            <FmVendorOffer key={"off-" + job.id + "-" + offerRefresh} job={job} subcontractors={subcontractors}
                               onOffered={() => update({ stage: "waiting_quote" })}
                               onAwarded={(subId, price, date) => update({ subcontractorId: subId, vendorQuotePrice: price, ...(date ? { startDate: date, stage: "do_work" } : { stage: "buyout" }) })} />
                           </div>
@@ -19656,7 +19657,7 @@ window.addEventListener('message',function(e){
                                 {subcontractors.filter(s => !s.archived).map(s => <option key={s.id} value={s.id}>{s.name}{s.trade ? " — " + s.trade : ""}</option>)}
                               </select>
                               <div style={{ fontSize: 11, color: "var(--t-ink3)", margin: "8px 0 2px" }}>— or —</div>
-                              <FmVendorOffer job={job} subcontractors={subcontractors}
+                              <FmVendorOffer key={"off2-" + job.id + "-" + offerRefresh} job={job} subcontractors={subcontractors}
                                 onOffered={() => update({ stage: "waiting_quote" })}
                                 onAwarded={(subId, price, date) => update({ subcontractorId: subId, vendorQuotePrice: price, ...(date ? { startDate: date, stage: "do_work" } : { stage: "buyout" }) })} />
                             </div>
