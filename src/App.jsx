@@ -6423,11 +6423,18 @@ Return ONLY valid JSON, no markdown, no extra text:
       bidDueDate: j.bidDueDate, companyId: j.companyId,
       companyName: (companies.find(c => c.id === j.companyId)?.name) || "",
       address: (sites.find(s => s.id === j.siteId)?.address) || "",
-      storeId: j.siteId, ownersProjectNo: j.ownersProjectNo,
+      storeId: j.siteId, ownersProjectNo: j.ownersProjectNo, marketArea: j.marketArea,
       authorizedAmount: j.contractValue, contactId: j.approverContactId, notes: j.notes,
     })),
     ...fmInbox,
   ];
+  // Short customer tag for store display, e.g. "Public Storage" -> "PS", "Extra Space Storage" -> "ESS"
+  const custAbbr = (name) => {
+    const n = (name || "").trim();
+    if (!n) return "";
+    const w = n.split(/\s+/);
+    return w.length >= 2 ? w.map(x => x[0]).join("").toUpperCase().slice(0, 4) : n.slice(0, 4).toUpperCase();
+  };
 
   const newItem = () => ({ id: "i" + Date.now() + Math.random(), desc: "", unit: "EA", qty: 1, unitPrice: 0, labor: 0, material: 0, sub: 0, misc: 0 });
   const newSection = (name="") => ({ id: "s" + Date.now() + Math.random(), name, items: [newItem()] });
@@ -10611,16 +10618,24 @@ Example:
                       <div key={lead.id} style={{ background: "#ECEEF8", border: "1px solid #FCD34D20", borderRadius: 8, padding: "14px 16px" }}>
                         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10 }}>
                           <div style={{ flex: 1, minWidth: 0 }}>
+                            {/* Job name + status badges */}
                             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 5, flexWrap: "wrap" }}>
                               <span style={{ fontSize: 13, fontWeight: 600, color: "#1A2240" }}>{lead.name}</span>
                               {lead.source === "email" && <span style={{ fontSize: 10, background: "#3B6FE820", color: "#3B6FE8", padding: "1px 7px", borderRadius: 4 }}>✉ email</span>}
-                              {lead.storeCode && <span style={{ fontSize: 10, background: "#E8EBFA", color: "#4A5278", padding: "1px 7px", borderRadius: 4 }}>#{lead.storeCode}</span>}
                               {lead.bidDueDate && <span style={{ fontSize: 10, background: "#FCD34D15", color: "#FCD34D", padding: "1px 7px", borderRadius: 4 }}>📋 Bid: {lead.bidDueDate}</span>}
                             </div>
+                            {/* Store (PS 1234) · WO # · Market area */}
+                            <div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginBottom: 4 }}>
+                              {lead.storeCode && <span style={{ fontSize: 11, fontWeight: 600, color: "#1A2240" }}>🏬 {(custAbbr(lead.companyName) ? custAbbr(lead.companyName) + " " : "")}{lead.storeCode}</span>}
+                              {lead.ownersProjectNo && <span style={{ fontSize: 11, color: "#4A5278" }}>WO# {lead.ownersProjectNo}</span>}
+                              {lead.marketArea && <span style={{ fontSize: 11, color: "#4A5278" }}>🗺 {lead.marketArea}</span>}
+                            </div>
+                            {/* Company + address */}
                             <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
                               {lead.companyName && <span style={{ fontSize: 11, color: "#3B6FE8" }}>🏢 {lead.companyName}</span>}
                               {lead.address     && <span style={{ fontSize: 11, color: "#4A5278" }}>📍 {lead.address}</span>}
                             </div>
+                            {/* Scope at the bottom */}
                             {lead.scopeOfWork && <div style={{ fontSize: 11, color: "#4A5278", marginTop: 4, fontStyle: "italic" }}>{lead.scopeOfWork}</div>}
                           </div>
                           <div style={{ display: "flex", gap: 6, flexShrink: 0, alignItems: "center" }}>
