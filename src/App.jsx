@@ -5906,7 +5906,7 @@ export default function App() {
     const load = async () => {
       setDbLoading(l => ({ ...l, companies: true, sites: true, lawnSites: true, subcontractors: true }));
       try {
-        const [coRes, siteRes, subRes, fmRes, teamRes, crmRes, ctRes, mpPipeRes, mpRes, mpwRes, mpVendorRes, mpEstimateRes, capexRes, histRes] = await Promise.all([
+        const [coRes, siteRes, subRes, fmRes, teamRes, crmRes, ctRes, mpPipeRes, mpRes, mpwRes, mpVendorRes, mpEstimateRes, capexRes] = await Promise.all([
           supa.from("companies").select("*"),
           fetch(`${SUPA_URL}/rest/v1/sites?select=*&limit=1000`, {
             headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}` }
@@ -5932,11 +5932,7 @@ export default function App() {
           fetch(`${SUPA_URL}/rest/v1/capex_jobs?select=*&limit=2000`, {
             headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}` }
           }).then(r => r.json()).then(data => ({ data, error: null })).catch(() => ({ data: null, error: null })),
-          fetch(`${SUPA_URL}/rest/v1/fm_history?select=*&limit=6000`, {
-            headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}` }
-          }).then(r => r.json()).then(data => ({ data, error: null })).catch(() => ({ data: null, error: null })),
         ]);
-        if (Array.isArray(histRes?.data) && histRes.data.length) setFmHistory(histRes.data.map(dbToHistory));
         if (coRes.data?.length)   setCompanies(coRes.data.map(dbToCompany));
         if (siteRes.data?.length) setSites(siteRes.data.map(dbToSite));
         if (subRes.data?.length)  setSubcontractors(subRes.data.map(dbToSub));
@@ -6061,6 +6057,32 @@ export default function App() {
       clearTimeout(timeout);
     };
     load();
+  }, []);
+
+  // Load imported project history (fm_history) for the Completed / Dead-Lost archive rollups.
+  // Paginated because PostgREST caps a single response (~1000 rows) and the archive spans thousands.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const minYear = new Date().getFullYear() - 4; // last 5 years window
+      const cols = "id,outcome,project_no,name,store_code,customer,owners_proj_no,gross_value,gross_profit,trade,market_area,close_date,year,status,dead_reason,source";
+      let all = [], offset = 0; const page = 1000;
+      for (let i = 0; i < 30; i++) { // safety cap: 30 pages
+        let batch;
+        try {
+          const r = await fetch(`${SUPA_URL}/rest/v1/fm_history?select=${cols}&year=gte.${minYear}&order=year.desc,close_date.desc&offset=${offset}&limit=${page}`, {
+            headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}` }
+          });
+          batch = await r.json();
+        } catch (e) { break; }
+        if (!Array.isArray(batch) || !batch.length) break;
+        all = all.concat(batch);
+        if (batch.length < page) break;
+        offset += page;
+      }
+      if (!cancelled && all.length) setFmHistory(all.map(dbToHistory));
+    })();
+    return () => { cancelled = true; };
   }, []);
 
   // Auto-categorize subs as FM: any sub assigned to an FM job (subcontractorId)
