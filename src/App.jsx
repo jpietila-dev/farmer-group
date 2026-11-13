@@ -175,7 +175,7 @@ const dbToFmJob = r => ({
   category: r.category||"FM",
   trade: r.trade||"", estimateData: r.estimate_data||null,
   materialsStatus: r.materials_status||"", materialsPo: r.materials_po||"", materialsEta: r.materials_eta||"",
-  unitOccupancy: r.unit_occupancy||"", createdAt: r.created_at||"",
+  unitOccupancy: r.unit_occupancy||"", createdAt: r.created_at||"", stageChangedAt: r.stage_changed_at||"",
   deadAt: r.dead_at||"", deadReason: r.dead_reason||"",
 });
 const fmJobToDB = j => ({
@@ -209,7 +209,7 @@ const fmJobToDB = j => ({
   market_area: j.marketArea||null, category: j.category||"FM",
   trade: j.trade||null, estimate_data: j.estimateData||null,
   materials_status: j.materialsStatus||null, materials_po: j.materialsPo||null, materials_eta: j.materialsEta||null,
-  unit_occupancy: j.unitOccupancy||null,
+  unit_occupancy: j.unitOccupancy||null, stage_changed_at: j.stageChangedAt||null,
   dead_at: j.deadAt||null, dead_reason: j.deadReason||null,
 });
 
@@ -692,6 +692,54 @@ const fmStagePill = stage => {
     case "bill":               return "t-pill-warn";
     default:                   return "t-pill-hold";
   }
+};
+// Auto-computed "next step" for a job, from its stage + how long it's sat there.
+// Returns { label, tone } where tone is "urgent" | "warn" | "ok", or null for done/dead jobs.
+function fmNextStep(job) {
+  if (!job) return null;
+  const st = (job.status || "").toLowerCase();
+  if (st === "dead" || st === "lost" || job.sentToAR === true || job.stage === "bill" && st === "done") return null;
+  const anchor = job.stageChangedAt || job.createdAt || "";
+  let days = 0;
+  if (anchor) { const d = new Date(anchor); if (!isNaN(d)) days = Math.floor((Date.now() - d.getTime()) / 86400000); }
+  const sentOut = !!job.estimateData || !!job.subcontractorId || (Array.isArray(job.bidInvites) && job.bidInvites.some(b => b && b.vendor));
+  switch (job.stage) {
+    case "estimating":
+      if (!sentOut && days >= 7) return { label: "Need estimate — " + days + "d", tone: "urgent" };
+      if (!sentOut) return { label: "Build / send estimate", tone: "warn" };
+      return { label: "Awaiting pricing", tone: "ok" };
+    case "waiting_quote":
+      if (days >= 5) return { label: "Need sub quote — " + days + "d", tone: "urgent" };
+      return { label: "Waiting on quote", tone: "ok" };
+    case "generate_proposal":
+      return { label: days >= 3 ? "Send proposal — " + days + "d" : "Build proposal", tone: days >= 3 ? "urgent" : "warn" };
+    case "owner_approval":
+      return { label: days >= 5 ? "Follow up w/ owner — " + days + "d" : "Awaiting owner approval", tone: days >= 5 ? "warn" : "ok" };
+    case "buyout":
+      if (!job.subcontractorId) return { label: days >= 5 ? "Assign vendor — " + days + "d" : "Assign vendor", tone: days >= 5 ? "urgent" : "warn" };
+      if (!job.startDate) return { label: "Set schedule date", tone: "warn" };
+      return { label: "Ready to schedule", tone: "ok" };
+    case "do_work": {
+      if (!job.startDate) return { label: "Needs schedule", tone: "warn" };
+      const sd = new Date(job.startDate);
+      if (!isNaN(sd) && sd.getTime() < Date.now() - 86400000) return { label: "Confirm work done", tone: "warn" };
+      return { label: "Scheduled", tone: "ok" };
+    }
+    case "bill":
+      return { label: days >= 7 ? "Follow up on billing — " + days + "d" : "Send / confirm invoice", tone: days >= 7 ? "warn" : "ok" };
+    default:
+      return null;
+  }
+}
+// Small colored pill style for a next-step tone
+const fmNextStepStyle = (tone) => {
+  const map = {
+    urgent: { bg: "#FEE2E2", fg: "#B91C1C", bd: "#FCA5A5" },
+    warn:   { bg: "#FEF3C7", fg: "#92400E", bd: "#FCD34D" },
+    ok:     { bg: "#ECFDF5", fg: "#047857", bd: "#A7F3D0" },
+  };
+  const c = map[tone] || map.ok;
+  return { display: "inline-flex", alignItems: "center", gap: 5, background: c.bg, color: c.fg, border: "1px solid " + c.bd, borderRadius: 6, padding: "3px 9px", fontSize: 11, fontWeight: 600, whiteSpace: "nowrap" };
 };
 // FM stage → stat-tile color key (for the active stat tile background)
 const fmStageStatKey = stage => {
@@ -11039,9 +11087,16 @@ Example:
                   setVendorPickerSearch("");
                 };
                 const COLS = {
-                  primary: { label: "Primary", width: 240, className: "t-td-wrap", style: { fontWeight: 500 }, render: j => (
-                    <span><span style={{ color: "var(--t-ink3)", fontFamily: "var(--t-mono)", fontSize: 11 }}>{j.projectNo || "—"}</span>{" "}{j.name || "(no name)"}</span>
-                  )},
+                  primary: { label: "Primary", width: 240, className: "t-td-wrap", style: { fontWeight: 500 }, render: j => {
+                    const flagged = j.hot || j.priority === "Red" || j.priority === "Yellow";
+                    const ns = flagged ? fmNextStep(j) : null;
+                    return (
+                      <span>
+                        <span><span style={{ color: "var(--t-ink3)", fontFamily: "var(--t-mono)", fontSize: 11 }}>{j.projectNo || "—"}</span>{" "}{j.name || "(no name)"}</span>
+                        {ns && <span style={{ display: "block", marginTop: 3 }}><span style={fmNextStepStyle(ns.tone)}>{ns.tone === "urgent" ? "⚠ " : ""}{ns.label}</span></span>}
+                      </span>
+                    );
+                  }},
                   priority: { label: "Priority", width: 90, stopPropagation: true, render: j => {
                     const colors = { Red: { bg: "#FEE2E2", fg: "#B91C1C" }, Yellow: { bg: "#FEF3C7", fg: "#92400E" }, Green: { bg: "#D1FAE5", fg: "#065F46" } };
                     return (
@@ -19472,6 +19527,7 @@ window.addEventListener('message',function(e){
               const patch = { ...fields };
               // Auto-stamp milestone dates on stage transitions (only when not already set)
               if (patch.stage && patch.stage !== job.stage) {
+                patch.stageChangedAt = new Date().toISOString(); // reset "days in stage" clock
                 const today = new Date().toISOString().slice(0, 10);
                 const plusDays = (n) => { const d = new Date(); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); };
                 const s = patch.stage;
@@ -19688,6 +19744,17 @@ window.addEventListener('message',function(e){
                         </div>
                         <span className={"t-pill " + fmStagePill(job.stage)} style={{ fontSize: 12, padding: "5px 12px" }}>{st.label}</span>
                       </div>
+                      {/* Next step — auto-computed from stage + days sitting there */}
+                      {(() => {
+                        const ns = fmNextStep(job);
+                        if (!ns) return null;
+                        return (
+                          <div style={{ marginBottom: 12 }}>
+                            <span style={{ fontSize: 10, color: "var(--t-ink3)", textTransform: "uppercase", letterSpacing: "0.05em", marginRight: 8 }}>Next step</span>
+                            <span style={fmNextStepStyle(ns.tone)}>{ns.tone === "urgent" ? "⚠ " : ""}{ns.label}</span>
+                          </div>
+                        );
+                      })()}
                       {/* Visual pipeline — where this job is and what's next */}
                       {(() => {
                         const stageIdx = FM_STAGES.findIndex(s => s.id === job.stage);
