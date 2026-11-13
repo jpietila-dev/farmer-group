@@ -4837,51 +4837,67 @@ function FmBidOut({ job, onSave }) {
   );
 }
 
-// ── FmHistoryRollup ─ last-5-years archive of imported past projects, grouped by year (collapsible) ──
-function FmHistoryRollup({ rows, kind }) {
+// ── FmHistoryRollup ─ last-5-years archive, summary headers + lazy per-year row loading ──
+function FmHistoryRollup({ summary, outcome, kind }) {
   const [openYears, setOpenYears] = useState({});
+  const [rowsByYear, setRowsByYear] = useState({}); // year -> rows[] | "loading"
   const usd = n => "$" + Math.round(Number(n || 0)).toLocaleString();
-  const byYear = {};
-  (rows || []).forEach(r => {
-    let y = r.year || (r.closeDate ? Number(String(r.closeDate).slice(0, 4)) : 0);
-    if (!y || isNaN(y)) return;
-    (byYear[y] = byYear[y] || []).push(r);
-  });
   const thisYear = new Date().getFullYear();
-  const years = Object.keys(byYear).map(Number).filter(y => y >= thisYear - 4).sort((a, b) => b - a).slice(0, 5);
+  const mine = (summary || []).filter(s => s.outcome === outcome && s.year && Number(s.year) >= thisYear - 4);
+  const years = mine.map(s => Number(s.year)).sort((a, b) => b - a).slice(0, 5);
   if (!years.length) return null;
+  const sumFor = y => mine.find(s => Number(s.year) === y) || { jobs: 0, gross_value: 0 };
+  const toggle = async (y) => {
+    const open = !openYears[y];
+    setOpenYears(p => ({ ...p, [y]: open }));
+    if (open && rowsByYear[y] == null) {
+      setRowsByYear(p => ({ ...p, [y]: "loading" }));
+      const cols = "id,outcome,project_no,name,store_code,customer,gross_value,trade,close_date,year,status,dead_reason";
+      try {
+        const r = await fetch(`${SUPA_URL}/rest/v1/fm_history?select=${cols}&outcome=eq.${outcome}&year=eq.${y}&order=close_date.desc&limit=2000`, {
+          headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}` }
+        });
+        const d = await r.json();
+        setRowsByYear(p => ({ ...p, [y]: Array.isArray(d) ? d.map(dbToHistory) : [] }));
+      } catch (e) { setRowsByYear(p => ({ ...p, [y]: [] })); }
+    }
+  };
   return (
     <div style={{ marginTop: 20, borderTop: "1px solid var(--t-line)", paddingTop: 16 }}>
       <div style={{ fontSize: 15, fontWeight: 700, color: "var(--t-ink)", marginBottom: 2 }}>Archive — last 5 years</div>
       <div className="t-section-meta" style={{ marginBottom: 12 }}>Imported history of {kind === "completed" ? "completed" : "dead / lost"} projects, grouped by year.</div>
       {years.map(y => {
-        const list = (byYear[y] || []).slice().sort((a, b) => String(b.closeDate || "").localeCompare(String(a.closeDate || "")));
-        const rev = list.reduce((s, r) => s + Number(r.grossValue || 0), 0);
+        const s = sumFor(y);
         const open = !!openYears[y];
+        const list = rowsByYear[y];
         return (
           <div key={y} style={{ marginBottom: 8 }}>
-            <div onClick={() => setOpenYears(p => ({ ...p, [y]: !p[y] }))} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px", background: "var(--t-surface)", border: "1px solid var(--t-line)", borderRadius: open ? "8px 8px 0 0" : "8px", cursor: "pointer" }}>
-              <div style={{ fontWeight: 700, fontSize: 14 }}>{y} <span style={{ fontWeight: 400, color: "var(--t-ink3)", fontSize: 12 }}>· {list.length} job{list.length !== 1 ? "s" : ""} · {usd(rev)}</span></div>
+            <div onClick={() => toggle(y)} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px", background: "var(--t-surface)", border: "1px solid var(--t-line)", borderRadius: open ? "8px 8px 0 0" : "8px", cursor: "pointer" }}>
+              <div style={{ fontWeight: 700, fontSize: 14 }}>{y} <span style={{ fontWeight: 400, color: "var(--t-ink3)", fontSize: 12 }}>· {s.jobs} job{s.jobs !== 1 ? "s" : ""} · {usd(s.gross_value)}</span></div>
               <span style={{ color: "var(--t-ink3)" }}>{open ? "▾" : "▸"}</span>
             </div>
             {open && (
               <div className="t-card" style={{ padding: 0, overflow: "hidden", borderRadius: "0 0 8px 8px", borderTop: "none" }}>
-                <table className="t-table">
-                  <thead><tr><th>Store</th><th>Project #</th><th>Scope</th><th>Customer</th><th>Trade</th><th style={{ textAlign: "right" }}>Gross Value</th><th>{kind === "completed" ? "Invoiced" : "Reason"}</th></tr></thead>
-                  <tbody>
-                    {list.map(r => (
-                      <tr key={r.id}>
-                        <td><span className="t-mono">{r.storeCode || "—"}</span></td>
-                        <td><span className="t-mono">{r.projectNo || "—"}</span></td>
-                        <td>{r.name}</td>
-                        <td>{r.customer || "—"}</td>
-                        <td>{r.trade || "—"}</td>
-                        <td style={{ textAlign: "right", fontFamily: "var(--t-mono)" }}>{usd(r.grossValue)}</td>
-                        <td style={{ fontSize: 11, color: "var(--t-ink2)" }}>{kind === "completed" ? (r.closeDate || "—") : (r.deadReason || r.status || "—")}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                {list === "loading" || list == null ? (
+                  <div style={{ padding: 16, fontSize: 12, color: "var(--t-ink3)" }}>Loading {y}…</div>
+                ) : (
+                  <table className="t-table">
+                    <thead><tr><th>Store</th><th>Project #</th><th>Scope</th><th>Customer</th><th>Trade</th><th style={{ textAlign: "right" }}>Gross Value</th><th>{kind === "completed" ? "Invoiced" : "Reason"}</th></tr></thead>
+                    <tbody>
+                      {list.map(r => (
+                        <tr key={r.id}>
+                          <td><span className="t-mono">{r.storeCode || "—"}</span></td>
+                          <td><span className="t-mono">{r.projectNo || "—"}</span></td>
+                          <td>{r.name}</td>
+                          <td>{r.customer || "—"}</td>
+                          <td>{r.trade || "—"}</td>
+                          <td style={{ textAlign: "right", fontFamily: "var(--t-mono)" }}>{usd(r.grossValue)}</td>
+                          <td style={{ fontSize: 11, color: "var(--t-ink2)" }}>{kind === "completed" ? (r.closeDate || "—") : (r.deadReason || r.status || "—")}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
               </div>
             )}
           </div>
@@ -5582,7 +5598,7 @@ export default function App() {
   const [selectedFmJob, setSelectedFmJob] = useState(null);
   const [fmFullScreenJob, setFmFullScreenJob] = useState(null); // full-screen detail view (from list + kanban)
   const [offerRefresh, setOfferRefresh] = useState(0); // bump to force the vendor-offer panel to reload (e.g. after Cancel award)
-  const [fmHistory, setFmHistory] = useState([]); // imported past projects (completed + dead/lost) for the archive rollups
+  const [fmHistorySummary, setFmHistorySummary] = useState([]); // {outcome, year, jobs, gross_value} for the archive rollup headers (rows lazy-loaded per year)
   const [showVendorPickerForJob, setShowVendorPickerForJob] = useState(null); // job whose row vendor picker is open
   const [vendorPickerSearch, setVendorPickerSearch] = useState("");
   const [fmSearch,      setFmSearch]      = useState("");
@@ -6059,28 +6075,19 @@ export default function App() {
     load();
   }, []);
 
-  // Load imported project history (fm_history) for the Completed / Dead-Lost archive rollups.
-  // Paginated because PostgREST caps a single response (~1000 rows) and the archive spans thousands.
+  // Load a tiny per-year summary (counts + totals) for the Completed / Dead-Lost archive rollups.
+  // Row detail is fetched lazily per year when a year is expanded (see FmHistoryRollup), so the
+  // app never pulls thousands of archive rows at startup.
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const minYear = new Date().getFullYear() - 4; // last 5 years window
-      const cols = "id,outcome,project_no,name,store_code,customer,owners_proj_no,gross_value,gross_profit,trade,market_area,close_date,year,status,dead_reason,source";
-      let all = [], offset = 0; const page = 1000;
-      for (let i = 0; i < 30; i++) { // safety cap: 30 pages
-        let batch;
-        try {
-          const r = await fetch(`${SUPA_URL}/rest/v1/fm_history?select=${cols}&year=gte.${minYear}&order=year.desc,close_date.desc&offset=${offset}&limit=${page}`, {
-            headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}` }
-          });
-          batch = await r.json();
-        } catch (e) { break; }
-        if (!Array.isArray(batch) || !batch.length) break;
-        all = all.concat(batch);
-        if (batch.length < page) break;
-        offset += page;
-      }
-      if (!cancelled && all.length) setFmHistory(all.map(dbToHistory));
+      try {
+        const r = await fetch(`${SUPA_URL}/rest/v1/fm_history_summary?select=outcome,year,jobs,gross_value`, {
+          headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}` }
+        });
+        const d = await r.json();
+        if (!cancelled && Array.isArray(d)) setFmHistorySummary(d);
+      } catch (e) { /* non-fatal */ }
     })();
     return () => { cancelled = true; };
   }, []);
@@ -13752,7 +13759,7 @@ window.addEventListener('message',function(e){
                     </table>
                   </div>
                 )}
-                <FmHistoryRollup rows={fmHistory.filter(h => h.outcome === "completed")} kind="completed" />
+                <FmHistoryRollup summary={fmHistorySummary} outcome="completed" kind="completed" />
               </div>
             );
           })()}
@@ -13823,7 +13830,7 @@ window.addEventListener('message',function(e){
                     </table>
                   </div>
                 )}
-                <FmHistoryRollup rows={fmHistory.filter(h => h.outcome === "dead_lost")} kind="dead" />
+                <FmHistoryRollup summary={fmHistorySummary} outcome="dead_lost" kind="dead" />
               </div>
             );
           })()}
