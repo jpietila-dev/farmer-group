@@ -4845,23 +4845,30 @@ function FmHistoryRollup({ summary, outcome, kind }) {
   const thisYear = new Date().getFullYear();
   const mine = (summary || []).filter(s => s.outcome === outcome && s.year && Number(s.year) >= thisYear - 4);
   const years = mine.map(s => Number(s.year)).sort((a, b) => b - a).slice(0, 5);
-  if (!years.length) return null;
-  const sumFor = y => mine.find(s => Number(s.year) === y) || { jobs: 0, gross_value: 0 };
-  const toggle = async (y) => {
+  const sumFor = y => mine.find(s => Number(s.year) === y) || { jobs: 0, gross_value: 0, gross_profit: 0 };
+  const loadYear = async (y) => {
+    if (rowsByYear[y] != null) return;
+    setRowsByYear(p => ({ ...p, [y]: "loading" }));
+    const cols = "id,outcome,project_no,name,store_code,customer,gross_value,gross_profit,trade,close_date,year,status,dead_reason";
+    try {
+      const r = await fetch(`${SUPA_URL}/rest/v1/fm_history?select=${cols}&outcome=eq.${outcome}&category=eq.FM&year=eq.${y}&order=close_date.desc&limit=2000`, {
+        headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}` }
+      });
+      const d = await r.json();
+      setRowsByYear(p => ({ ...p, [y]: Array.isArray(d) ? d.map(dbToHistory) : [] }));
+    } catch (e) { setRowsByYear(p => ({ ...p, [y]: [] })); }
+  };
+  const toggle = (y) => {
     const open = !openYears[y];
     setOpenYears(p => ({ ...p, [y]: open }));
-    if (open && rowsByYear[y] == null) {
-      setRowsByYear(p => ({ ...p, [y]: "loading" }));
-      const cols = "id,outcome,project_no,name,store_code,customer,gross_value,gross_profit,trade,close_date,year,status,dead_reason";
-      try {
-        const r = await fetch(`${SUPA_URL}/rest/v1/fm_history?select=${cols}&outcome=eq.${outcome}&category=eq.FM&year=eq.${y}&order=close_date.desc&limit=2000`, {
-          headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}` }
-        });
-        const d = await r.json();
-        setRowsByYear(p => ({ ...p, [y]: Array.isArray(d) ? d.map(dbToHistory) : [] }));
-      } catch (e) { setRowsByYear(p => ({ ...p, [y]: [] })); }
-    }
+    if (open) loadYear(y);
   };
+  // Auto-expand the current (most recent) year so it shows in full like the live list up top
+  useEffect(() => {
+    if (years.length) { const y = years[0]; setOpenYears(p => (y in p ? p : { ...p, [y]: true })); loadYear(y); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [years[0]]);
+  if (!years.length) return null;
   return (
     <div style={{ marginTop: 20, borderTop: "1px solid var(--t-line)", paddingTop: 16 }}>
       <div style={{ fontSize: 15, fontWeight: 700, color: "var(--t-ink)", marginBottom: 2 }}>Archive — last 5 years</div>
@@ -4984,6 +4991,7 @@ function CrmDashboard({ fmJobs, companies, sites, subcontractors }) {
   const [cq, setCq]           = useState("");       // completed-jobs search
   const [allSrc, setAllSrc]   = useState("");
   const [allTrade, setAllTrade] = useState("");
+  const [histRows, setHistRows] = useState([]); // imported completed FM history for the selected store
 
   const num  = (v) => { if (typeof v === "number") return v; const n = parseFloat(String(v ?? "").replace(/[^0-9.\-]/g, "")); return isNaN(n) ? 0 : n; };
   const usd  = (n) => (n || 0).toLocaleString("en-US", { style:"currency", currency:"USD", maximumFractionDigits:0 });
@@ -5028,6 +5036,31 @@ function CrmDashboard({ fmJobs, companies, sites, subcontractors }) {
     return [...stores].filter(([k]) => k.includes(n)).slice(0,25).map(([k,code]) => ({ k, code }));
   };
   const matchList = (list, input) => { const n = norm(input); if (!n) return []; const ex = list.filter(c => norm(c) === n); if (ex.length) return ex; return list.filter(c => norm(c).includes(n)).slice(0,25); };
+
+  // When a single store is selected, pull its imported completed FM history and shape it like completed jobs
+  const resolvedStoreKey = (mode === "store" && current) ? (() => { const r = matchStores(current); return r.length === 1 ? r[0].k : ""; })() : "";
+  useEffect(() => {
+    if (!resolvedStoreKey) { setHistRows([]); return; }
+    const d = resolvedStoreKey.replace(/[^0-9]/g, "");
+    if (!d) { setHistRows([]); return; }
+    let cancelled = false;
+    (async () => {
+      try {
+        const cols = "id,project_no,name,store_code,customer,gross_value,gross_profit,trade,close_date,year,outcome";
+        const r = await fetch(`${SUPA_URL}/rest/v1/fm_history?select=${cols}&store_num=eq.${d}&category=eq.FM&outcome=eq.completed&order=close_date.desc&limit=3000`, {
+          headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}` }
+        });
+        const data = await r.json();
+        if (!cancelled) setHistRows(Array.isArray(data) ? data.map(h => ({
+          id: h.id, storeCode: h.store_code || "", name: h.name || "", trade: h.trade || "",
+          contractValue: h.gross_value, grossProfit: h.gross_profit, subcontractorId: "",
+          status: "completed", stage: "bill", invoiceDate: h.close_date || "",
+          ownersProjectNo: h.project_no || "", _hist: true,
+        })) : []);
+      } catch (e) { if (!cancelled) setHistRows([]); }
+    })();
+    return () => { cancelled = true; };
+  }, [resolvedStoreKey]);
 
   const Kpi = ({ l, v, s }) => (
     <div className="t-card" style={{ padding:"14px 16px" }}>
@@ -5168,9 +5201,10 @@ function CrmDashboard({ fmJobs, companies, sites, subcontractors }) {
       const key = ms.length ? ms[0].k : norm(current);
       const sj = pool.filter(j => norm(scodeOf(j)) === key);
       const site = sites.find(s => norm(s.storeNumber) === key);
-      if (!sj.length && !site) body = <div style={{ padding:40, textAlign:"center", color:"var(--t-ink3)" }}>No store found for "{current}".</div>;
+      if (!sj.length && !site && !histRows.length) body = <div style={{ padding:40, textAlign:"center", color:"var(--t-ink3)" }}>No store found for "{current}".</div>;
       else {
-        const m = calcM(sj);
+        const sjAll = [...sj, ...histRows]; // live pipeline + imported completed history
+        const m = calcM(sjAll);
         const custName = (site && coName(site.companyId)) || (sj[0] && custOf(sj[0])) || "";
         meta = [custName, (site||{}).address].filter(Boolean).join(" · ");
         const f = (l, v) => v ? <div><div style={{ fontSize:11, color:"var(--t-ink3)", textTransform:"uppercase", letterSpacing:"0.04em", marginBottom:2 }}>{l}</div><div>{v}</div></div> : null;
@@ -5183,7 +5217,7 @@ function CrmDashboard({ fmJobs, companies, sites, subcontractors }) {
           compare = (
             <Section title={"Store vs " + custName} count={[...new Set(cg.map(scodeOf).filter(Boolean))].length + " stores"}>
               <div style={{ overflowX:"auto" }}><table style={{ width:"100%", borderCollapse:"collapse" }}>
-                <thead><tr><th style={th}></th><th style={{...th, textAlign:"right"}}>This store</th><th style={{...th, textAlign:"right"}}>{custName} overall</th></tr></thead>
+                <thead><tr><th style={th}></th><th style={{...th, textAlign:"right"}}>This store (incl. history)</th><th style={{...th, textAlign:"right"}}>{custName} (live pipeline)</th></tr></thead>
                 <tbody>
                   {rr("Revenue", usd(m.rev), usd(cm.rev))}{rr("Gross Profit", usd(m.gp), usd(cm.gp))}{rr("Margin", pct(m.margin), pct(cm.margin))}{rr("Turnover %", pct(m.turn), pct(cm.turn))}{rr("Completed jobs", m.done, cm.done)}{rr("Total jobs", m.jobs, cm.jobs)}{rr("Share of customer revenue", cm.rev ? pct(m.rev/cm.rev) : "—", "")}
                 </tbody>
@@ -5205,7 +5239,7 @@ function CrmDashboard({ fmJobs, companies, sites, subcontractors }) {
           {compare}
           {pbrTable("Current Jobs on PBR", sj.filter(isActive).filter(j=>!isWaiting(j)), false)}
           {pbrTable("Waiting for Approval", sj.filter(isWaiting), false)}
-          {completedTable(sj.filter(isDone))}
+          {completedTable(sjAll.filter(isDone))}
         </>;
       }
     }
@@ -6150,7 +6184,7 @@ export default function App() {
     let cancelled = false;
     (async () => {
       try {
-        const r = await fetch(`${SUPA_URL}/rest/v1/fm_history_summary?select=outcome,year,jobs,gross_value`, {
+        const r = await fetch(`${SUPA_URL}/rest/v1/fm_history_summary?select=outcome,year,jobs,gross_value,gross_profit`, {
           headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}` }
         });
         const d = await r.json();
