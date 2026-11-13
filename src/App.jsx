@@ -175,6 +175,7 @@ const dbToFmJob = r => ({
   category: r.category||"FM",
   trade: r.trade||"", estimateData: r.estimate_data||null,
   materialsStatus: r.materials_status||"", materialsPo: r.materials_po||"", materialsEta: r.materials_eta||"",
+  unitOccupancy: r.unit_occupancy||"", createdAt: r.created_at||"",
   deadAt: r.dead_at||"", deadReason: r.dead_reason||"",
 });
 const fmJobToDB = j => ({
@@ -208,6 +209,7 @@ const fmJobToDB = j => ({
   market_area: j.marketArea||null, category: j.category||"FM",
   trade: j.trade||null, estimate_data: j.estimateData||null,
   materials_status: j.materialsStatus||null, materials_po: j.materialsPo||null, materials_eta: j.materialsEta||null,
+  unit_occupancy: j.unitOccupancy||null,
   dead_at: j.deadAt||null, dead_reason: j.deadReason||null,
 });
 
@@ -4678,6 +4680,82 @@ function FmVendorOffer({ job, subcontractors, onAwarded, onOffered }) {
         <button className="t-btn t-btn-ghost t-btn-sm" onClick={()=>setPicking(true)}>📨 Offer to vendor(s) for competing quotes</button>
       )}
       {msg && <div style={{ fontSize:11, color:"var(--t-ink2)", marginTop:6 }}>{msg}</div>}
+    </div>
+  );
+}
+
+// ── FmAssignVendor ─ collapsible single-vendor assignment (portal or not) ──
+function FmAssignVendor({ job, subcontractors, onAssign, onClear }) {
+  const [open, setOpen] = useState(false);
+  const sub = subcontractors.find(s => s.id === job.subcontractorId);
+  const active = subcontractors.filter(s => !s.archived);
+  return (
+    <div className="t-card" style={{ padding:0, background:"var(--t-surface)", overflow:"hidden" }}>
+      <div onClick={()=>setOpen(o=>!o)} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"12px 16px", cursor:"pointer", borderBottom: open?"1px solid var(--t-line)":"none" }}>
+        <div className="t-eyebrow">👤 Assign Vendor</div>
+        <div style={{ display:"flex", alignItems:"center", gap:12 }}>
+          {sub && <span style={{ fontSize:12, color:"var(--t-ink2)" }}>{sub.name}</span>}
+          <span style={{ color:"var(--t-ink3)" }}>{open?"▾":"▸"}</span>
+        </div>
+      </div>
+      {open && (
+        <div style={{ padding:16 }}>
+          {sub ? (
+            <div style={{ fontSize:12, color:"var(--t-ink2)" }}>
+              Assigned to <b style={{ color:"var(--t-ink)" }}>{sub.name}</b>
+              <span style={{ marginLeft:10, cursor:"pointer", color:"var(--t-danger,#B91C1C)", fontWeight:600 }} onClick={onClear}>✕ clear</span>
+            </div>
+          ) : (
+            <>
+              <div style={{ fontSize:11, color:"var(--t-ink3)", marginBottom:6 }}>Assign one vendor directly. They'll see it in their portal if they have one.</div>
+              <select className="fi" defaultValue="" style={{ width:"100%", maxWidth:360 }} onChange={e=>{ if(e.target.value) onAssign(e.target.value); }}>
+                <option value="" disabled>Select a vendor…</option>
+                {active.map(s => <option key={s.id} value={s.id}>{s.name}{s.trade?" — "+s.trade:""}</option>)}
+              </select>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── FmBidOut ─ collapsible manual bid-tracking list (vendor name + date sent) ──
+function FmBidOut({ job, onSave }) {
+  const [open, setOpen] = useState(false);
+  const [rows, setRows] = useState(() => { const s = Array.isArray(job.bidInvites) ? job.bidInvites : []; return s.length ? s : [{ vendor:"", dateSent:"" }]; });
+  useEffect(() => { const s = Array.isArray(job.bidInvites) ? job.bidInvites : []; setRows(s.length ? s : [{ vendor:"", dateSent:"" }]); }, [job.id]); // eslint-disable-line
+  const save = (next) => { setRows(next); onSave(next.filter(r => r.vendor || r.dateSent)); };
+  const setRow = (i, k, v) => save(rows.map((r,idx)=> idx===i ? {...r,[k]:v} : r));
+  const addRow = () => setRows(r => [...r, { vendor:"", dateSent:"" }]);
+  const delRow = (i) => save(rows.filter((_,idx)=>idx!==i));
+  const count = (Array.isArray(job.bidInvites) ? job.bidInvites : []).filter(r => r.vendor).length;
+  const inS = { boxSizing:"border-box", border:"1px solid var(--t-line)", borderRadius:5, padding:"6px 8px", fontSize:12, fontFamily:"inherit", background:"var(--t-paper)", color:"var(--t-ink1)", width:"100%" };
+  return (
+    <div className="t-card" style={{ padding:0, background:"var(--t-surface)", overflow:"hidden" }}>
+      <div onClick={()=>setOpen(o=>!o)} style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"12px 16px", cursor:"pointer", borderBottom: open?"1px solid var(--t-line)":"none" }}>
+        <div className="t-eyebrow">📨 Bid Out</div>
+        <div style={{ display:"flex", alignItems:"center", gap:12 }}>
+          {count>0 && <span style={{ fontSize:12, color:"var(--t-ink2)" }}>{count} vendor{count!==1?"s":""}</span>}
+          <span style={{ color:"var(--t-ink3)" }}>{open?"▾":"▸"}</span>
+        </div>
+      </div>
+      {open && (
+        <div style={{ padding:16, display:"flex", flexDirection:"column", gap:8 }}>
+          <div style={{ fontSize:11, color:"var(--t-ink3)" }}>Track who you sent this bid to and when. Add a line per vendor.</div>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 160px 28px", gap:8, fontSize:10, color:"var(--t-ink3)", textTransform:"uppercase", letterSpacing:"0.05em" }}>
+            <div>Vendor name</div><div>Date sent</div><div></div>
+          </div>
+          {rows.map((r,i) => (
+            <div key={i} style={{ display:"grid", gridTemplateColumns:"1fr 160px 28px", gap:8, alignItems:"center" }}>
+              <input style={inS} placeholder="Vendor name" value={r.vendor||""} onChange={e=>setRow(i,"vendor",e.target.value)} />
+              <input type="date" style={inS} value={r.dateSent||""} onChange={e=>setRow(i,"dateSent",e.target.value)} />
+              <button onClick={()=>delRow(i)} title="Remove" style={{ border:"none", background:"none", color:"var(--t-ink3)", cursor:"pointer", fontSize:15 }}>✕</button>
+            </div>
+          ))}
+          <div><button className="t-btn t-btn-ghost t-btn-sm" onClick={addRow}>+ Add vendor line</button></div>
+        </div>
+      )}
     </div>
   );
 }
@@ -19363,7 +19441,27 @@ window.addEventListener('message',function(e){
             const overdue = actionDate && new Date(actionDate) < new Date();
             const curStageIdx = FM_STAGES.findIndex(s => s.id === job.stage);
             const update = (fields) => {
-              const updated = { ...job, ...fields };
+              const patch = { ...fields };
+              // Auto-stamp milestone dates on stage transitions (only when not already set)
+              if (patch.stage && patch.stage !== job.stage) {
+                const today = new Date().toISOString().slice(0, 10);
+                const plusDays = (n) => { const d = new Date(); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10); };
+                const s = patch.stage;
+                if (s === "generate_proposal" && !job.proposalDate) patch.proposalDate = today;
+                if (s === "owner_approval") {
+                  if (!job.prpSent) patch.prpSent = today;              // PRP / proposal sent
+                  if (!job.proposalDate) patch.proposalDate = today;
+                  if (!job.followUpDate) patch.followUpDate = plusDays(3); // follow up 3 days after proposal sent
+                }
+                if (s === "buyout" && !job.buyoutDate) patch.buyoutDate = today;
+                if (s === "bill" && !job.endDate) patch.endDate = today;
+              }
+              // Bid due date = 7 days from creation (set once while still pre-buyout)
+              if (!job.bidDueDate && !patch.bidDueDate && job.createdAt) {
+                const created = new Date(String(job.createdAt).slice(0, 10));
+                if (!isNaN(created)) { created.setDate(created.getDate() + 7); patch.bidDueDate = created.toISOString().slice(0, 10); }
+              }
+              const updated = { ...job, ...patch };
               setFmJobs(fmJobs.map(j => j.id === job.id ? updated : j));
               if (isFullScreen) setFmFullScreenJob(updated); else setSelectedFmJob(updated);
               try { supa.from("fm_jobs").update(fmJobToDB(updated)).eq("id", job.id); } catch(e) {}
@@ -19592,9 +19690,9 @@ window.addEventListener('message',function(e){
                           {FM_STAGES.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
                         </select>
                       </div>
-                      {/* Proposal / Estimate tool — only while estimating or waiting on quotes; collapsed by default */}
+                      {/* Estimating tools — three collapsible boxes: Build Estimate, Assign Vendor, Bid Out */}
                       {["estimating","waiting_quote"].includes(job.stage) && (
-                        <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--t-line2)" }}>
+                        <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--t-line2)", display: "flex", flexDirection: "column", gap: 10 }}>
                           <FmEstimate
                             job={job}
                             items={FDI_ITEMS}
@@ -19602,12 +19700,10 @@ window.addEventListener('message',function(e){
                             onSave={(data) => update({ estimateData: data })}
                             onApprove={(data, total, gp) => update({ estimateData: data, contractValue: total, grossProfit: gp, stage: "owner_approval" })}
                           />
-                          <div style={{ marginTop: 12 }}>
-                            <div style={{ fontSize: 11, color: "var(--t-ink3)", marginBottom: 2 }}>Getting a price from vendors? Offer it out for quotes:</div>
-                            <FmVendorOffer key={"off-" + job.id + "-" + offerRefresh} job={job} subcontractors={subcontractors}
-                              onOffered={() => update({ stage: "waiting_quote" })}
-                              onAwarded={(subId, price, date) => update({ subcontractorId: subId, vendorQuotePrice: price, ...(date ? { startDate: date, stage: "do_work" } : { stage: "buyout" }) })} />
-                          </div>
+                          <FmAssignVendor job={job} subcontractors={subcontractors}
+                            onAssign={(subId) => update({ subcontractorId: subId })}
+                            onClear={() => update({ subcontractorId: "" })} />
+                          <FmBidOut job={job} onSave={(rows) => update({ bidInvites: rows })} />
                         </div>
                       )}
                       {/* Do Work — vendor awarded & scheduled; keep materials + a cancel path visible */}
@@ -19656,10 +19752,6 @@ window.addEventListener('message',function(e){
                                 <option value="" disabled>Assign a vendor directly…</option>
                                 {subcontractors.filter(s => !s.archived).map(s => <option key={s.id} value={s.id}>{s.name}{s.trade ? " — " + s.trade : ""}</option>)}
                               </select>
-                              <div style={{ fontSize: 11, color: "var(--t-ink3)", margin: "8px 0 2px" }}>— or —</div>
-                              <FmVendorOffer key={"off2-" + job.id + "-" + offerRefresh} job={job} subcontractors={subcontractors}
-                                onOffered={() => update({ stage: "waiting_quote" })}
-                                onAwarded={(subId, price, date) => update({ subcontractorId: subId, vendorQuotePrice: price, ...(date ? { startDate: date, stage: "do_work" } : { stage: "buyout" }) })} />
                             </div>
                           ) : (
                             <div>
@@ -19750,6 +19842,32 @@ window.addEventListener('message',function(e){
                       </div>
                     );
                   };
+                  // Unit Occupancy: Vacant / Key on File / a typed lock code
+                  const OccupancyRow = function OccupancyRow({ value, onSave }) {
+                    const presets = ["Vacant", "Key on File"];
+                    const modeOf = (v) => v === "Vacant" ? "Vacant" : v === "Key on File" ? "Key on File" : (v ? "Lock Code" : "");
+                    const [mode, setMode] = React.useState(modeOf(value));
+                    const [code, setCode] = React.useState(presets.includes(value) ? "" : (value || ""));
+                    React.useEffect(() => { setMode(modeOf(value)); setCode(presets.includes(value) ? "" : (value || "")); }, [value]);
+                    const selS = { padding: "5px 8px", border: "1px solid var(--t-line)", borderRadius: 4, fontFamily: "inherit", fontSize: 12, background: "var(--t-surface)", color: "var(--t-ink1)" };
+                    return (
+                      <div style={{ display: "grid", gridTemplateColumns: "minmax(140px, 0.6fr) 1fr", gap: 12, alignItems: "center", padding: "8px 0", borderBottom: "1px solid var(--t-line2)" }}>
+                        <div style={{ fontSize: 11, color: "var(--t-ink2)", fontWeight: 500 }}>Unit Occupancy</div>
+                        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                          <select value={mode} style={selS} onChange={e => { const m = e.target.value; setMode(m); if (m === "Vacant" || m === "Key on File") onSave(m); else if (m === "") onSave(""); else onSave(code); }}>
+                            <option value="">—</option>
+                            <option value="Vacant">Vacant</option>
+                            <option value="Key on File">Key on File</option>
+                            <option value="Lock Code">Lock Code</option>
+                          </select>
+                          {mode === "Lock Code" && (
+                            <input value={code} placeholder="Enter lock code" style={{ ...selS, background: "var(--t-paper)", width: 160 }}
+                              onChange={e => setCode(e.target.value)} onBlur={() => onSave(code)} />
+                          )}
+                        </div>
+                      </div>
+                    );
+                  };
                   const ScopeEditor = function ScopeEditor() {
                     const [editing, setEditing] = React.useState(false);
                     const [local, setLocal] = React.useState(job.scopeOfWork || "");
@@ -19762,6 +19880,29 @@ window.addEventListener('message',function(e){
                     ) : (
                       <div onClick={() => setEditing(true)} style={{ cursor: "pointer", padding: "8px 10px", borderRadius: 6, background: "var(--t-paper)", border: "1px solid var(--t-line)", fontSize: 13, color: job.scopeOfWork ? "var(--t-ink)" : "var(--t-ink3)", fontStyle: job.scopeOfWork ? "normal" : "italic", whiteSpace: "pre-wrap", minHeight: 40 }}>
                         {job.scopeOfWork || "(click to add scope of work)"}
+                      </div>
+                    );
+                  };
+                  // Auto-tracked milestone dates, tucked away and expandable
+                  const AdditionalInfo = function AdditionalInfo() {
+                    const [open, setOpen] = React.useState(false);
+                    return (
+                      <div style={{ marginTop: 14, paddingTop: 14, borderTop: "1px solid var(--t-line)" }}>
+                        <div onClick={() => setOpen(o => !o)} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer" }}>
+                          <div style={{ fontSize: 11, color: "var(--t-ink2)", fontWeight: 500 }}>Additional Project Information</div>
+                          <span style={{ color: "var(--t-ink3)", fontSize: 12 }}>{open ? "▾" : "▸"}</span>
+                        </div>
+                        {open && (
+                          <div style={{ marginTop: 8 }}>
+                            <div style={{ fontSize: 10, color: "var(--t-ink3)", marginBottom: 4, fontStyle: "italic" }}>Auto-tracked as the job moves through its stages — edit if needed.</div>
+                            <InlineRow label="PRP Sent" value={job.prpSent} onSave={v => update({ prpSent: v })} type="date" mono />
+                            <InlineRow label="Proposal Date" value={job.proposalDate} onSave={v => update({ proposalDate: v })} type="date" mono />
+                            <InlineRow label="Buyout Date (Approved)" value={job.buyoutDate} onSave={v => update({ buyoutDate: v })} type="date" mono />
+                            <InlineRow label="End Date" value={job.endDate} onSave={v => update({ endDate: v })} type="date" mono />
+                            <InlineRow label="Follow Up Date" value={job.followUpDate} onSave={v => update({ followUpDate: v })} type="date" mono />
+                            <InlineRow label="Bid Due Date" value={job.bidDueDate} onSave={v => update({ bidDueDate: v })} type="date" mono />
+                          </div>
+                        )}
                       </div>
                     );
                   };
@@ -19794,7 +19935,6 @@ window.addEventListener('message',function(e){
                           options={[0.2, 0.4, 0.5, 0.6, 0.8, 1.0].map(o => ({ v: String(o), l: Math.round(o*100) + "%" }))} />
                         <InlineRow label="Hot?" value={job.hot ? "Yes" : "No"} onSave={v => update({ hot: v === "Yes" })}
                           options={[{ v: "Yes", l: "🔥 Yes" }, { v: "No", l: "No" }]} />
-                        <ReadRow label="PRP Sent" value={job.prpSent} />
 
                         {/* Financials */}
                         <InlineRow label="Gross Value" value={job.contractValue || 0} onSave={v => {
@@ -19815,14 +19955,9 @@ window.addEventListener('message',function(e){
                           options={companyContacts.map(c => ({ v: c.id, l: [c.firstName, c.lastName].filter(Boolean).join(" ") || c.email || "Contact" }))} placeholder="(none assigned)" />
                         <ReadRow label="Vendor Next Step" value={VENDOR_NEXT_STEPS.find(v => v.id === job.vendorNextStep)?.label || job.vendorNextStep} />
 
-                        {/* Schedule / dates */}
+                        {/* Schedule + access (auto-tracked dates moved to Additional Project Information below) */}
                         <InlineRow label="Start Date" value={job.startDate} onSave={v => update({ startDate: v })} type="date" mono />
-                        <InlineRow label="End Date" value={job.endDate} onSave={v => update({ endDate: v })} type="date" mono />
-                        <InlineRow label="Bid Due Date" value={job.bidDueDate} onSave={v => update({ bidDueDate: v })} type="date" mono />
-                        <InlineRow label="Quote Due Date" value={job.quoteDueDate} onSave={v => update({ quoteDueDate: v })} type="date" mono />
-                        <InlineRow label="Proposal Date" value={job.proposalDate} onSave={v => update({ proposalDate: v })} type="date" mono />
-                        <InlineRow label="Follow Up Date" value={job.followUpDate} onSave={v => update({ followUpDate: v })} type="date" mono />
-                        <InlineRow label="Buyout Date (Approved)" value={job.buyoutDate} onSave={v => update({ buyoutDate: v })} type="date" mono />
+                        <OccupancyRow value={job.unitOccupancy} onSave={v => update({ unitOccupancy: v })} />
 
                         {/* Team */}
                         <InlineRow label="Coordinator" value={job.coordinator} onSave={v => update({ coordinator: v })} />
@@ -19842,6 +19977,9 @@ window.addEventListener('message',function(e){
                         <div style={{ fontSize: 11, color: "var(--t-ink2)", fontWeight: 500, marginBottom: 6 }}>Scope of Work</div>
                         <ScopeEditor />
                       </div>
+
+                      {/* Additional Project Information — auto-tracked dates, collapsed */}
+                      <AdditionalInfo />
                     </div>
                   );
                 })()}
