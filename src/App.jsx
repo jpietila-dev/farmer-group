@@ -4852,9 +4852,9 @@ function FmHistoryRollup({ summary, outcome, kind }) {
     setOpenYears(p => ({ ...p, [y]: open }));
     if (open && rowsByYear[y] == null) {
       setRowsByYear(p => ({ ...p, [y]: "loading" }));
-      const cols = "id,outcome,project_no,name,store_code,customer,gross_value,trade,close_date,year,status,dead_reason";
+      const cols = "id,outcome,project_no,name,store_code,customer,gross_value,gross_profit,trade,close_date,year,status,dead_reason";
       try {
-        const r = await fetch(`${SUPA_URL}/rest/v1/fm_history?select=${cols}&outcome=eq.${outcome}&year=eq.${y}&order=close_date.desc&limit=2000`, {
+        const r = await fetch(`${SUPA_URL}/rest/v1/fm_history?select=${cols}&outcome=eq.${outcome}&category=eq.FM&year=eq.${y}&order=close_date.desc&limit=2000`, {
           headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}` }
         });
         const d = await r.json();
@@ -4873,7 +4873,7 @@ function FmHistoryRollup({ summary, outcome, kind }) {
         return (
           <div key={y} style={{ marginBottom: 8 }}>
             <div onClick={() => toggle(y)} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px", background: "var(--t-surface)", border: "1px solid var(--t-line)", borderRadius: open ? "8px 8px 0 0" : "8px", cursor: "pointer" }}>
-              <div style={{ fontWeight: 700, fontSize: 14 }}>{y} <span style={{ fontWeight: 400, color: "var(--t-ink3)", fontSize: 12 }}>· {s.jobs} job{s.jobs !== 1 ? "s" : ""} · {usd(s.gross_value)}</span></div>
+              <div style={{ fontWeight: 700, fontSize: 14 }}>{y} <span style={{ fontWeight: 400, color: "var(--t-ink3)", fontSize: 12 }}>· {s.jobs} job{s.jobs !== 1 ? "s" : ""} · {usd(s.gross_value)} value · <span style={{ color: "var(--t-dowork)" }}>{usd(s.gross_profit)} GP</span></span></div>
               <span style={{ color: "var(--t-ink3)" }}>{open ? "▾" : "▸"}</span>
             </div>
             {open && (
@@ -4882,7 +4882,7 @@ function FmHistoryRollup({ summary, outcome, kind }) {
                   <div style={{ padding: 16, fontSize: 12, color: "var(--t-ink3)" }}>Loading {y}…</div>
                 ) : (
                   <table className="t-table">
-                    <thead><tr><th>Store</th><th>Project #</th><th>Scope</th><th>Customer</th><th>Trade</th><th style={{ textAlign: "right" }}>Gross Value</th><th>{kind === "completed" ? "Invoiced" : "Reason"}</th></tr></thead>
+                    <thead><tr><th>Store</th><th>Project #</th><th>Scope</th><th>Customer</th><th>Trade</th><th style={{ textAlign: "right" }}>Gross Value</th><th style={{ textAlign: "right" }}>Gross Profit</th><th>{kind === "completed" ? "Invoiced" : "Reason"}</th></tr></thead>
                     <tbody>
                       {list.map(r => (
                         <tr key={r.id}>
@@ -4892,6 +4892,7 @@ function FmHistoryRollup({ summary, outcome, kind }) {
                           <td>{r.customer || "—"}</td>
                           <td>{r.trade || "—"}</td>
                           <td style={{ textAlign: "right", fontFamily: "var(--t-mono)" }}>{usd(r.grossValue)}</td>
+                          <td style={{ textAlign: "right", fontFamily: "var(--t-mono)", fontWeight: 600, color: "var(--t-dowork)" }}>{usd(r.grossProfit)}</td>
                           <td style={{ fontSize: 11, color: "var(--t-ink2)" }}>{kind === "completed" ? (r.closeDate || "—") : (r.deadReason || r.status || "—")}</td>
                         </tr>
                       ))}
@@ -4903,6 +4904,73 @@ function FmHistoryRollup({ summary, outcome, kind }) {
           </div>
         );
       })}
+    </div>
+  );
+}
+
+// ── SiteHistory ─ historical completed FM jobs + cost data for one store (reads fm_history) ──
+function SiteHistory({ storeNumber }) {
+  const [rows, setRows] = useState(null); // null = loading
+  useEffect(() => {
+    let cancelled = false;
+    const d = String(storeNumber || "").replace(/[^0-9]/g, "");
+    if (!d) { setRows([]); return; }
+    (async () => {
+      try {
+        const cols = "id,project_no,name,store_code,customer,gross_value,gross_profit,trade,close_date,year,outcome";
+        const r = await fetch(`${SUPA_URL}/rest/v1/fm_history?select=${cols}&store_num=eq.${d}&category=eq.FM&outcome=eq.completed&order=close_date.desc&limit=2000`, {
+          headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}` }
+        });
+        const data = await r.json();
+        if (!cancelled) setRows(Array.isArray(data) ? data.map(dbToHistory) : []);
+      } catch (e) { if (!cancelled) setRows([]); }
+    })();
+    return () => { cancelled = true; };
+  }, [storeNumber]);
+  const usd = n => "$" + Math.round(Number(n || 0)).toLocaleString();
+  if (rows === null) return <div style={{ fontSize: 12, color: "#8a8a92" }}>Loading history…</div>;
+  if (!rows.length) return <div style={{ fontSize: 12, color: "#8a8a92" }}>No historical completed FM jobs found for this store number.</div>;
+  const tv = rows.reduce((s, r) => s + Number(r.grossValue || 0), 0);
+  const tp = rows.reduce((s, r) => s + Number(r.grossProfit || 0), 0);
+  const Stat = ({ label, val }) => (
+    <div style={{ flex: 1, background: "#F7F8FC", border: "1px solid #E1E6F2", borderRadius: 8, padding: "10px 12px" }}>
+      <div style={{ fontSize: 10, color: "#8a8a92", textTransform: "uppercase", letterSpacing: "0.05em" }}>{label}</div>
+      <div style={{ fontSize: 17, fontWeight: 700, color: "#1A2240", marginTop: 2 }}>{val}</div>
+    </div>
+  );
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+      <div style={{ display: "flex", gap: 10 }}>
+        <Stat label="Completed jobs" val={rows.length} />
+        <Stat label="Total revenue" val={usd(tv)} />
+        <Stat label="Total gross profit" val={usd(tp)} />
+      </div>
+      <div style={{ border: "1px solid #E1E6F2", borderRadius: 8, overflow: "hidden" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+          <thead>
+            <tr style={{ background: "#F7F8FC", textAlign: "left" }}>
+              <th style={{ padding: "8px 10px", color: "#4A5278" }}>Date</th>
+              <th style={{ padding: "8px 10px", color: "#4A5278" }}>Project #</th>
+              <th style={{ padding: "8px 10px", color: "#4A5278" }}>Scope</th>
+              <th style={{ padding: "8px 10px", color: "#4A5278" }}>Trade</th>
+              <th style={{ padding: "8px 10px", color: "#4A5278", textAlign: "right" }}>Gross Value</th>
+              <th style={{ padding: "8px 10px", color: "#4A5278", textAlign: "right" }}>Gross Profit</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(r => (
+              <tr key={r.id} style={{ borderTop: "1px solid #EDF0F7" }}>
+                <td style={{ padding: "7px 10px", fontFamily: "monospace", color: "#4A5278" }}>{r.closeDate || r.year || "—"}</td>
+                <td style={{ padding: "7px 10px", fontFamily: "monospace", color: "#4A5278" }}>{r.projectNo || "—"}</td>
+                <td style={{ padding: "7px 10px", color: "#1A2240" }}>{r.name}</td>
+                <td style={{ padding: "7px 10px", color: "#4A5278" }}>{r.trade || "—"}</td>
+                <td style={{ padding: "7px 10px", fontFamily: "monospace", textAlign: "right" }}>{usd(r.grossValue)}</td>
+                <td style={{ padding: "7px 10px", fontFamily: "monospace", textAlign: "right", fontWeight: 600, color: "#1C7C54" }}>{usd(r.grossProfit)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
@@ -17355,6 +17423,7 @@ window.addEventListener('message',function(e){
           { id:"backflow", icon:"💧", label:"Backflow" },
           { id:"hvac",     icon:"❄️",  label:"HVAC" },
           { id:"projects", icon:"🔨", label:"Projects" },
+          { id:"history",  icon:"📜", label:"History" },
         ];
 
         const saveSiteField = (field, value) => {
@@ -17574,6 +17643,13 @@ window.addEventListener('message',function(e){
                 )}
 
                 {/* ══ PAST PROJECTS TAB ══ */}
+                {siteDetailTab==="history" && (
+                  <div style={{display:"flex",flexDirection:"column",gap:12}}>
+                    <div style={{fontSize:11,color:"#8a8a92"}}>Imported historical completed FM work orders for store #{s.storeNumber || "—"} — your cost/profit history at this site.</div>
+                    <SiteHistory storeNumber={s.storeNumber} />
+                  </div>
+                )}
+
                 {siteDetailTab==="projects" && (
                   <div style={{display:"flex",flexDirection:"column",gap:14}}>
                     {siteAllJobs.length===0 && (
