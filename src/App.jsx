@@ -5704,7 +5704,7 @@ export default function App() {
   const [showVendorPickerForJob, setShowVendorPickerForJob] = useState(null); // job whose row vendor picker is open
   const [vendorPickerSearch, setVendorPickerSearch] = useState("");
   const [fmSearch,      setFmSearch]      = useState("");
-  const [fmCoordFilter, setFmCoordFilter] = useState("Zak Kranich"); // defaults to the logged-in coordinator (pilot: Zak); toggle "All Jobs" to see everyone
+  const [fmCoordFilter, setFmCoordFilter] = useState("all"); // show every coordinator's PBR jobs by default; chips narrow to one
   const [fmStageFilter, setFmStageFilter] = useState([]);           // click stage tiles in Jobs to filter by one or more stages
   const [selectedPM,    setSelectedPM]    = useState(null);
   const [openSections,   setOpenSections]   = useState(new Set(["do_work","bill"]));
@@ -8816,7 +8816,7 @@ Return ONLY valid JSON, no markdown, no extra text:
                           </thead>
                           <tbody>
                             {pms.map(pm => {
-                              const j = fmJobs.filter(x => x.pm === pm);
+                              const j = fmJobs.filter(x => (x.coordinator || x.pm) === pm);
                               const r = j.reduce((s,x)=>s+(x.contractValue||0),0);
                               const g = j.reduce((s,x)=>s+(x.grossProfit||0),0);
                               return (
@@ -8834,6 +8834,50 @@ Return ONLY valid JSON, no markdown, no extra text:
                       </div>
                     </div>
                     )}
+
+                    {/* -- HISTORICAL PERFORMANCE (past completed FM, from the archive) -- */}
+                    {(() => {
+                      const comp = (fmHistorySummary || []).filter(h => h.outcome === "completed");
+                      if (!comp.length) return null;
+                      const byYear = comp
+                        .map(h => ({ year: Number(h.year), jobs: Number(h.jobs)||0, rev: Number(h.gross_value)||0, gp: Number(h.gross_profit)||0 }))
+                        .filter(h => h.year)
+                        .sort((a,b) => b.year - a.year)
+                        .slice(0, 6);
+                      const tot = byYear.reduce((s,h) => ({ jobs:s.jobs+h.jobs, rev:s.rev+h.rev, gp:s.gp+h.gp }), {jobs:0,rev:0,gp:0});
+                      const fmtK = v => v >= 1000000 ? "$"+(v/1000000).toFixed(2)+"M" : "$"+Math.round(v/1000)+"k";
+                      return (
+                        <div className="t-card" style={{ padding: 22 }}>
+                          <div className="t-eyebrow" style={{ marginBottom: 4 }}>Historical Performance · Completed FM</div>
+                          <div style={{ fontSize: 11, color: "var(--t-ink3)", marginBottom: 14 }}>Realized revenue & gross profit from all completed FM projects on record, by year.</div>
+                          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                            <thead>
+                              <tr style={{ borderBottom: "1px solid var(--t-line)" }}>
+                                {["Year","Jobs","Revenue","Gross Profit","GP%"].map(h => <th key={h} style={{ textAlign: h==="Year"?"left":"right", padding:"6px 8px", fontSize:10, color:"var(--t-ink3)", textTransform:"uppercase", letterSpacing:"0.07em", fontWeight:600 }}>{h}</th>)}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {byYear.map(h => (
+                                <tr key={h.year} style={{ borderBottom: "1px solid var(--t-line2)" }}>
+                                  <td style={{ padding:"8px", fontWeight:600, color:"var(--t-ink)" }}>{h.year}</td>
+                                  <td style={{ padding:"8px", textAlign:"right", color:"var(--t-ink2)", fontFamily:"var(--t-mono)" }}>{h.jobs.toLocaleString()}</td>
+                                  <td style={{ padding:"8px", textAlign:"right", color:"var(--t-ink)", fontFamily:"var(--t-mono)" }}>{fmtK(h.rev)}</td>
+                                  <td style={{ padding:"8px", textAlign:"right", color:"var(--t-dowork)", fontWeight:600, fontFamily:"var(--t-mono)" }}>{fmtK(h.gp)}</td>
+                                  <td style={{ padding:"8px", textAlign:"right", color:"var(--t-approval)", fontFamily:"var(--t-mono)" }}>{h.rev>0?Math.round((h.gp/h.rev)*100):0}%</td>
+                                </tr>
+                              ))}
+                              <tr style={{ borderTop: "2px solid var(--t-line)" }}>
+                                <td style={{ padding:"8px", fontWeight:700, color:"var(--t-ink)" }}>Total</td>
+                                <td style={{ padding:"8px", textAlign:"right", fontWeight:700, color:"var(--t-ink)", fontFamily:"var(--t-mono)" }}>{tot.jobs.toLocaleString()}</td>
+                                <td style={{ padding:"8px", textAlign:"right", fontWeight:700, color:"var(--t-ink)", fontFamily:"var(--t-mono)" }}>{fmtK(tot.rev)}</td>
+                                <td style={{ padding:"8px", textAlign:"right", fontWeight:700, color:"var(--t-dowork)", fontFamily:"var(--t-mono)" }}>{fmtK(tot.gp)}</td>
+                                <td style={{ padding:"8px", textAlign:"right", fontWeight:700, color:"var(--t-approval)", fontFamily:"var(--t-mono)" }}>{tot.rev>0?Math.round((tot.gp/tot.rev)*100):0}%</td>
+                              </tr>
+                            </tbody>
+                          </table>
+                        </div>
+                      );
+                    })()}
 
 
                   </div>
@@ -13447,7 +13491,7 @@ window.addEventListener('message',function(e){
 
           {/* -- FM JOBS -- */}
           {activeNav === "jobs" && activeBU === "facility" && !accountingMode && (() => {
-            const coords = ["all", ...Array.from(new Set(fmTeam.map(m => m.name)))];
+            const coords = ["all", ...Array.from(new Set([...fmTeam.map(m => m.name), ...fmJobs.map(j => j.coordinator)].filter(Boolean)))];
             const filtered = fmJobs.filter(j => {
               const isActive    = FM_STAGES.some(s => s.id === j.stage); // all stages (pipeline + active) — combined view
               const notSentToAR = !j.sentToAR;
