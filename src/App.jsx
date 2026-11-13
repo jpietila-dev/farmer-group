@@ -67,6 +67,7 @@ const siteToDB = s => ({ id: s.id, company_id: s.companyId||null, contact_ids: s
 const dbToLsSite = r => dbToSite(r); // same structure now
 const lsSiteToDB = s => siteToDB(s);
 
+const dbToHistory = r => ({ id: r.id, outcome: r.outcome||"", projectNo: r.project_no||"", name: r.name||"", storeCode: r.store_code||"", customer: r.customer||"", ownersProjNo: r.owners_proj_no||"", grossValue: r.gross_value||0, grossProfit: r.gross_profit||0, trade: r.trade||"", marketArea: r.market_area||"", pm: r.pm||"", status: r.status||"", deadReason: r.dead_reason||"", closeDate: r.close_date||"", year: r.year||null, source: r.source||"" });
 const dbToSub = r => ({ id: r.id, name: r.name||"", trade: r.trade||"", phone: r.phone||"", email: r.email||"", msaStatus: r.msa_status||"missing", coiExpiry: r.coi_expiry||"", w9: r.w9||false, notes: r.notes||"", services: r.services||[], address: r.address||"", city: r.city||"", state: r.state||"", lat: r.lat||null, lng: r.lng||null, coverage: r.coverage||"", contact_name: r.contact_name||"", w9FileUrl: r.w9_file_url||"", coiFileUrl: r.coi_file_url||"", archived: r.archived||false, username: r.username||"", passwordHash: r.password_hash||"", portalEnabled: r.portal_enabled||false });
 const subToDB = s => ({ id: s.id, name: s.name||"", trade: s.trade||"", phone: s.phone||"", email: s.email||"", msa_status: s.msaStatus||s.msa_status||"missing", coi_expiry: s.coiExpiry||s.coi_expiry||null, w9: s.w9||false, notes: s.notes||"", services: s.services||[], address: s.address||null, city: s.city||null, state: s.state||null, lat: s.lat||null, lng: s.lng||null, coverage: s.coverage||null, contact_name: s.contact_name||null, w9_file_url: s.w9FileData||s.w9FileUrl||null, coi_file_url: s.coiFileData||s.coiFileUrl||null, archived: s.archived||false, username: s.username||null, password_hash: s.passwordHash||null, portal_enabled: s.portalEnabled||false });
 
@@ -4836,6 +4837,60 @@ function FmBidOut({ job, onSave }) {
   );
 }
 
+// ── FmHistoryRollup ─ last-5-years archive of imported past projects, grouped by year (collapsible) ──
+function FmHistoryRollup({ rows, kind }) {
+  const [openYears, setOpenYears] = useState({});
+  const usd = n => "$" + Math.round(Number(n || 0)).toLocaleString();
+  const byYear = {};
+  (rows || []).forEach(r => {
+    let y = r.year || (r.closeDate ? Number(String(r.closeDate).slice(0, 4)) : 0);
+    if (!y || isNaN(y)) return;
+    (byYear[y] = byYear[y] || []).push(r);
+  });
+  const thisYear = new Date().getFullYear();
+  const years = Object.keys(byYear).map(Number).filter(y => y >= thisYear - 4).sort((a, b) => b - a).slice(0, 5);
+  if (!years.length) return null;
+  return (
+    <div style={{ marginTop: 20, borderTop: "1px solid var(--t-line)", paddingTop: 16 }}>
+      <div style={{ fontSize: 15, fontWeight: 700, color: "var(--t-ink)", marginBottom: 2 }}>Archive — last 5 years</div>
+      <div className="t-section-meta" style={{ marginBottom: 12 }}>Imported history of {kind === "completed" ? "completed" : "dead / lost"} projects, grouped by year.</div>
+      {years.map(y => {
+        const list = (byYear[y] || []).slice().sort((a, b) => String(b.closeDate || "").localeCompare(String(a.closeDate || "")));
+        const rev = list.reduce((s, r) => s + Number(r.grossValue || 0), 0);
+        const open = !!openYears[y];
+        return (
+          <div key={y} style={{ marginBottom: 8 }}>
+            <div onClick={() => setOpenYears(p => ({ ...p, [y]: !p[y] }))} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "10px 14px", background: "var(--t-surface)", border: "1px solid var(--t-line)", borderRadius: open ? "8px 8px 0 0" : "8px", cursor: "pointer" }}>
+              <div style={{ fontWeight: 700, fontSize: 14 }}>{y} <span style={{ fontWeight: 400, color: "var(--t-ink3)", fontSize: 12 }}>· {list.length} job{list.length !== 1 ? "s" : ""} · {usd(rev)}</span></div>
+              <span style={{ color: "var(--t-ink3)" }}>{open ? "▾" : "▸"}</span>
+            </div>
+            {open && (
+              <div className="t-card" style={{ padding: 0, overflow: "hidden", borderRadius: "0 0 8px 8px", borderTop: "none" }}>
+                <table className="t-table">
+                  <thead><tr><th>Store</th><th>Project #</th><th>Scope</th><th>Customer</th><th>Trade</th><th style={{ textAlign: "right" }}>Gross Value</th><th>{kind === "completed" ? "Invoiced" : "Reason"}</th></tr></thead>
+                  <tbody>
+                    {list.map(r => (
+                      <tr key={r.id}>
+                        <td><span className="t-mono">{r.storeCode || "—"}</span></td>
+                        <td><span className="t-mono">{r.projectNo || "—"}</span></td>
+                        <td>{r.name}</td>
+                        <td>{r.customer || "—"}</td>
+                        <td>{r.trade || "—"}</td>
+                        <td style={{ textAlign: "right", fontFamily: "var(--t-mono)" }}>{usd(r.grossValue)}</td>
+                        <td style={{ fontSize: 11, color: "var(--t-ink2)" }}>{kind === "completed" ? (r.closeDate || "—") : (r.deadReason || r.status || "—")}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 // ── CrmDashboard ─ Store / Customer / District Mgr / All Jobs analytics (reads app data) ──
 function CrmDashboard({ fmJobs, companies, sites, subcontractors }) {
   const [mode, setMode]       = useState("store"); // store | cust | dm | all
@@ -5527,6 +5582,7 @@ export default function App() {
   const [selectedFmJob, setSelectedFmJob] = useState(null);
   const [fmFullScreenJob, setFmFullScreenJob] = useState(null); // full-screen detail view (from list + kanban)
   const [offerRefresh, setOfferRefresh] = useState(0); // bump to force the vendor-offer panel to reload (e.g. after Cancel award)
+  const [fmHistory, setFmHistory] = useState([]); // imported past projects (completed + dead/lost) for the archive rollups
   const [showVendorPickerForJob, setShowVendorPickerForJob] = useState(null); // job whose row vendor picker is open
   const [vendorPickerSearch, setVendorPickerSearch] = useState("");
   const [fmSearch,      setFmSearch]      = useState("");
@@ -5850,7 +5906,7 @@ export default function App() {
     const load = async () => {
       setDbLoading(l => ({ ...l, companies: true, sites: true, lawnSites: true, subcontractors: true }));
       try {
-        const [coRes, siteRes, subRes, fmRes, teamRes, crmRes, ctRes, mpPipeRes, mpRes, mpwRes, mpVendorRes, mpEstimateRes, capexRes] = await Promise.all([
+        const [coRes, siteRes, subRes, fmRes, teamRes, crmRes, ctRes, mpPipeRes, mpRes, mpwRes, mpVendorRes, mpEstimateRes, capexRes, histRes] = await Promise.all([
           supa.from("companies").select("*"),
           fetch(`${SUPA_URL}/rest/v1/sites?select=*&limit=1000`, {
             headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}` }
@@ -5876,7 +5932,11 @@ export default function App() {
           fetch(`${SUPA_URL}/rest/v1/capex_jobs?select=*&limit=2000`, {
             headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}` }
           }).then(r => r.json()).then(data => ({ data, error: null })).catch(() => ({ data: null, error: null })),
+          fetch(`${SUPA_URL}/rest/v1/fm_history?select=*&limit=6000`, {
+            headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}` }
+          }).then(r => r.json()).then(data => ({ data, error: null })).catch(() => ({ data: null, error: null })),
         ]);
+        if (Array.isArray(histRes?.data) && histRes.data.length) setFmHistory(histRes.data.map(dbToHistory));
         if (coRes.data?.length)   setCompanies(coRes.data.map(dbToCompany));
         if (siteRes.data?.length) setSites(siteRes.data.map(dbToSite));
         if (subRes.data?.length)  setSubcontractors(subRes.data.map(dbToSub));
@@ -13670,6 +13730,7 @@ window.addEventListener('message',function(e){
                     </table>
                   </div>
                 )}
+                <FmHistoryRollup rows={fmHistory.filter(h => h.outcome === "completed")} kind="completed" />
               </div>
             );
           })()}
@@ -13740,6 +13801,7 @@ window.addEventListener('message',function(e){
                     </table>
                   </div>
                 )}
+                <FmHistoryRollup rows={fmHistory.filter(h => h.outcome === "dead_lost")} kind="dead" />
               </div>
             );
           })()}
