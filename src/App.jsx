@@ -4684,8 +4684,39 @@ function FmVendorOffer({ job, subcontractors, onAwarded, onOffered }) {
   );
 }
 
+// ── VendorAssignControl ─ pick an existing portal vendor OR add a brand-new vendor ──
+function VendorAssignControl({ subcontractors, onAssignExisting, onCreateNew }) {
+  const [mode, setMode] = useState("existing"); // "existing" | "new"
+  const [name, setName] = useState("");
+  const [trade, setTrade] = useState("");
+  const active = subcontractors.filter(s => !s.archived);
+  const inS = { boxSizing:"border-box", border:"1px solid var(--t-line)", borderRadius:5, padding:"7px 9px", fontSize:12, fontFamily:"inherit", background:"var(--t-paper)", color:"var(--t-ink1)" };
+  return (
+    <div>
+      <div style={{ display:"flex", gap:6, marginBottom:8 }}>
+        <button className={"t-btn t-btn-sm" + (mode==="existing" ? " t-btn-primary" : "")} onClick={()=>setMode("existing")}>Portal vendor</button>
+        <button className={"t-btn t-btn-sm" + (mode==="new" ? " t-btn-primary" : "")} onClick={()=>setMode("new")}>+ New vendor</button>
+      </div>
+      {mode === "existing" ? (
+        <select className="fi" defaultValue="" style={{ width:"100%", maxWidth:340 }}
+          onChange={e => { if (e.target.value) onAssignExisting(e.target.value); }}>
+          <option value="" disabled>Select a vendor…</option>
+          {active.map(s => <option key={s.id} value={s.id}>{s.name}{s.trade ? " — " + s.trade : ""}</option>)}
+        </select>
+      ) : (
+        <div style={{ display:"flex", gap:8, flexWrap:"wrap", alignItems:"center" }}>
+          <input style={{ ...inS, width:200 }} placeholder="New vendor name" value={name} onChange={e=>setName(e.target.value)} />
+          <input style={{ ...inS, width:150 }} placeholder="Trade (optional)" value={trade} onChange={e=>setTrade(e.target.value)} />
+          <button className="t-btn t-btn-primary t-btn-sm" disabled={!name.trim()}
+            onClick={()=>{ if (name.trim()) { onCreateNew(name.trim(), trade.trim()); setName(""); setTrade(""); setMode("existing"); } }}>Add &amp; assign</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── FmAssignVendor ─ collapsible single-vendor assignment (portal or not) ──
-function FmAssignVendor({ job, subcontractors, onAssign, onClear }) {
+function FmAssignVendor({ job, subcontractors, onAssign, onClear, onCreateNew }) {
   const [open, setOpen] = useState(false);
   const sub = subcontractors.find(s => s.id === job.subcontractorId);
   const active = subcontractors.filter(s => !s.archived);
@@ -4707,11 +4738,8 @@ function FmAssignVendor({ job, subcontractors, onAssign, onClear }) {
             </div>
           ) : (
             <>
-              <div style={{ fontSize:11, color:"var(--t-ink3)", marginBottom:6 }}>Assign one vendor directly. They'll see it in their portal if they have one.</div>
-              <select className="fi" defaultValue="" style={{ width:"100%", maxWidth:360 }} onChange={e=>{ if(e.target.value) onAssign(e.target.value); }}>
-                <option value="" disabled>Select a vendor…</option>
-                {active.map(s => <option key={s.id} value={s.id}>{s.name}{s.trade?" — "+s.trade:""}</option>)}
-              </select>
+              <div style={{ fontSize:11, color:"var(--t-ink3)", marginBottom:6 }}>Assign a portal vendor, or add a brand-new one. They'll see it in their portal if they have one.</div>
+              <VendorAssignControl subcontractors={subcontractors} onAssignExisting={onAssign} onCreateNew={onCreateNew} />
             </>
           )}
         </div>
@@ -19479,6 +19507,14 @@ window.addEventListener('message',function(e){
               setOfferRefresh(x => x + 1);
               update({ subcontractorId: "", vendorQuotePrice: "", startDate: "", stage: "buyout" });
             };
+            // Create a brand-new vendor (not yet in the portal) and assign it to this job
+            const createAndAssignVendor = (name, trade) => {
+              const id = "sub" + Date.now();
+              const ns = { id, name, trade: trade || "", archived: false, portalEnabled: false, msaStatus: "missing" };
+              setSubcontractors(prev => [...prev, ns]);
+              try { supa.from("subcontractors").insert(subToDB(ns)); } catch (e) {}
+              update({ subcontractorId: id });
+            };
             // Move to stage — if a vendor is assigned and we jump back before buyout, clear the award and all offers too
             const moveToStage = async (target) => {
               const preAward = ["estimating", "waiting_quote", "generate_proposal", "owner_approval"];
@@ -19702,7 +19738,8 @@ window.addEventListener('message',function(e){
                           />
                           <FmAssignVendor job={job} subcontractors={subcontractors}
                             onAssign={(subId) => update({ subcontractorId: subId })}
-                            onClear={() => update({ subcontractorId: "" })} />
+                            onClear={() => update({ subcontractorId: "" })}
+                            onCreateNew={createAndAssignVendor} />
                           <FmBidOut job={job} onSave={(rows) => update({ bidInvites: rows })} />
                         </div>
                       )}
@@ -19747,11 +19784,9 @@ window.addEventListener('message',function(e){
                           {!job.subcontractorId ? (
                             <div>
                               <div style={{ fontSize: 12, fontWeight: 700, color: "var(--t-buyout)", marginBottom: 6 }}>👤 Vendor assignment needed</div>
-                              <select className="fi" defaultValue="" style={{ width: "100%", maxWidth: 340 }}
-                                onChange={e => { if (e.target.value) update({ subcontractorId: e.target.value }); }}>
-                                <option value="" disabled>Assign a vendor directly…</option>
-                                {subcontractors.filter(s => !s.archived).map(s => <option key={s.id} value={s.id}>{s.name}{s.trade ? " — " + s.trade : ""}</option>)}
-                              </select>
+                              <VendorAssignControl subcontractors={subcontractors}
+                                onAssignExisting={(id) => update({ subcontractorId: id })}
+                                onCreateNew={createAndAssignVendor} />
                             </div>
                           ) : (
                             <div>
