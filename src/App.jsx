@@ -55,6 +55,14 @@ const supa = {
   })
 };
 
+// fm_jobs carries two heavy base64 blob columns (photos, invoice_attachment)
+// that bloat a `select *` to ~18MB across the whole board and make the browser
+// fetch fail. The job list/board/dashboard never need them, so we load every
+// other column up front and hydrate photos + invoice_attachment lazily when a
+// single job is opened (see the media-hydrate effect).
+const FM_HEAVY_COLS = ["photos", "invoice_attachment"];
+const FM_LIGHT_COLS = ["id","name","company_id","site_id","contract_value","gross_profit","nte","stage","start_date","end_date","pm","pct","bid_due_date","quote_due_date","proposal_date","follow_up_date","buyout_date","invoice_date","notes","store_code","project_no","owners_project_no","vendor_invoice_amount","vendor_invoice_number","subcontractor_id","vendor_next_step","vendor_quote_price","vendor_quote_scope","scope_of_work","coordinator","vendor_token","vendor_sent_at","vendor_portal_status","vendor_portal_price","vendor_portal_date","vendor_portal_time","vendor_portal_note","vendor_portal_responded_at","vendor_accepted_at","vendor_schedule_changed_at","vendor_schedule_change_reason","created_at","approver_contact_id","bid_invites","estimating_path","completion_photos","sent_to_ar","sent_to_ar_at","status","priority","hot","odds","prp_sent","account_manager","market_area","category","invoiced_at","trade","source_email_id","smartsheet_row_id","dead_at","dead_reason","estimate_data","materials_status","materials_po","materials_eta","unit_occupancy","stage_changed_at"].join(",");
+
 // ── DB row mappers (snake_case ↔ camelCase) ──────────────────
 const dbToCompany = r => ({ id: r.id, name: r.name, address: r.address||"", website: r.website||"", logo: r.logo||"", notes: r.notes||"" });
 const companyToDB = c => ({ id: c.id, name: c.name, address: c.address||"", website: c.website||"", logo: c.logo||"", notes: c.notes||"" });
@@ -164,6 +172,10 @@ const dbToFmJob = r => ({
   bidInvites: r.bid_invites||[], estimatingPath: r.estimating_path||"",
   completionPhotos: r.completion_photos||[], invoiceAttachment: r.invoice_attachment||null,
   photos: r.photos||[],
+  // true once the heavy photo/invoice blobs have actually been fetched for this
+  // job (full load or lazy hydrate). Light board loads omit them, so this stays
+  // false and fmJobToDB won't write empty blobs back over real data.
+  _mediaLoaded: (r.photos !== undefined || r.invoice_attachment !== undefined),
   sentToAR: !!r.sent_to_ar, sentToARAt: r.sent_to_ar_at||"", status: r.status||"",
   invoicedAt: r.invoiced_at||"",
   // NEW columns (matching the AR pipeline spreadsheet)
@@ -179,7 +191,14 @@ const dbToFmJob = r => ({
   unitOccupancy: r.unit_occupancy||"", createdAt: r.created_at||"", stageChangedAt: r.stage_changed_at||"",
   deadAt: r.dead_at||"", deadReason: r.dead_reason||"",
 });
-const fmJobToDB = j => ({
+// Only persist the heavy photo/invoice blobs when they've actually been loaded
+// for this job. A light-loaded job (board/list) has _mediaLoaded=false, so we
+// leave photos/invoice_attachment out of the PATCH entirely — PostgREST merge
+// keeps whatever is already stored, so an un-opened job never loses its photos.
+const withFmMedia = (j, o) => (j._mediaLoaded
+  ? { ...o, photos: j.photos||[], invoice_attachment: j.invoiceAttachment||null }
+  : o);
+const fmJobToDB = j => withFmMedia(j, {
   id: j.id, name: j.name||"", company_id: j.companyId||null, site_id: j.siteId||null,
   contract_value: j.contractValue||0, gross_profit: j.grossProfit||0, nte: j.nte||0,
   stage: j.stage||"estimating", start_date: j.startDate||null, end_date: j.endDate||null,
@@ -201,8 +220,7 @@ const fmJobToDB = j => ({
   vendor_accepted_at: j.vendorAcceptedAt||null, vendor_schedule_changed_at: j.vendorScheduleChangedAt||null,
   vendor_schedule_change_reason: j.vendorScheduleChangeReason||null,
   bid_invites: j.bidInvites||[], estimating_path: j.estimatingPath||null,
-  completion_photos: j.completionPhotos||[], invoice_attachment: j.invoiceAttachment||null,
-  photos: j.photos||[],
+  completion_photos: j.completionPhotos||[],
   sent_to_ar: !!j.sentToAR, sent_to_ar_at: j.sentToARAt||null, status: j.status||null,
   invoiced_at: j.invoicedAt||null,
   priority: j.priority||null, hot: !!j.hot, odds: j.odds||0,
@@ -5681,9 +5699,17 @@ export default function App() {
   const refreshFmJobs = useCallback(async () => {
     setFmJobsRefreshing(true);
     try {
-      const res = await supa.from("fm_jobs").select("*");
+      const res = await fetch(`${SUPA_URL}/rest/v1/fm_jobs?select=${FM_LIGHT_COLS}&limit=5000`, {
+        headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}` }
+      }).then(r => r.json()).then(data => ({ data, error: null })).catch(error => ({ data: null, error }));
       if (res.data && Array.isArray(res.data)) {
-        setFmJobs(res.data.map(dbToFmJob));
+        // Preserve any already-hydrated photo/invoice blobs so an open job keeps them
+        setFmJobs(prev => {
+          const media = {}; prev.forEach(j => { if (j._mediaLoaded) media[j.id] = j; });
+          return res.data.map(dbToFmJob).map(j => media[j.id]
+            ? { ...j, photos: media[j.id].photos, invoiceAttachment: media[j.id].invoiceAttachment, _mediaLoaded: true }
+            : j);
+        });
         setFmJobsRefreshedAt(new Date());
       }
     } catch (e) {
@@ -5988,8 +6014,9 @@ export default function App() {
     const openId = (fmFullScreenJob || selectedFmJob)?.id;
     if (!openId) return;
     const VF = ["startDate","stage","subcontractorId","materialsStatus","materialsPo","materialsEta","vendorPortalStatus","vendorQuotePrice","vendorNextStep","sentToAR","status"];
+    const VF_COLS = "start_date,stage,subcontractor_id,materials_status,materials_po,materials_eta,vendor_portal_status,vendor_quote_price,vendor_next_step,sent_to_ar,status";
     const tick = () => {
-      fetch(`${SUPA_URL}/rest/v1/fm_jobs?id=eq.${encodeURIComponent(openId)}&select=*`, { headers: { apikey: SUPA_KEY, Authorization: "Bearer " + SUPA_KEY } })
+      fetch(`${SUPA_URL}/rest/v1/fm_jobs?id=eq.${encodeURIComponent(openId)}&select=${VF_COLS}`, { headers: { apikey: SUPA_KEY, Authorization: "Bearer " + SUPA_KEY } })
         .then(r => r.json()).then(rows => {
           if (!Array.isArray(rows) || !rows[0]) return;
           const fresh = dbToFmJob(rows[0]);
@@ -6001,6 +6028,26 @@ export default function App() {
     };
     const t = setInterval(tick, 15000);
     return () => clearInterval(t);
+  }, [fmFullScreenJob?.id, selectedFmJob?.id]);
+
+  // Lazy-hydrate the heavy photo/invoice blobs for the open FM job. The board
+  // loads every job WITHOUT these columns (they bloat the payload to ~18MB), so
+  // we fetch them once, just for the job the user actually opened.
+  useEffect(() => {
+    const openId = (fmFullScreenJob || selectedFmJob)?.id;
+    if (!openId) return;
+    const already = (fmFullScreenJob || selectedFmJob)?._mediaLoaded;
+    if (already) return;
+    let cancelled = false;
+    fetch(`${SUPA_URL}/rest/v1/fm_jobs?id=eq.${encodeURIComponent(openId)}&select=photos,invoice_attachment`, { headers: { apikey: SUPA_KEY, Authorization: "Bearer " + SUPA_KEY } })
+      .then(r => r.json()).then(rows => {
+        if (cancelled || !Array.isArray(rows) || !rows[0]) return;
+        const media = { photos: rows[0].photos || [], invoiceAttachment: rows[0].invoice_attachment || null, _mediaLoaded: true };
+        setFmJobs(prev => prev.map(j => j.id === openId ? { ...j, ...media } : j));
+        setFmFullScreenJob(f => (f && f.id === openId) ? { ...f, ...media } : f);
+        setSelectedFmJob(s => (s && s.id === openId) ? { ...s, ...media } : s);
+      }).catch(()=>{});
+    return () => { cancelled = true; };
   }, [fmFullScreenJob?.id, selectedFmJob?.id]);
 
   // Punch list
@@ -6032,7 +6079,9 @@ export default function App() {
           fetch(`${SUPA_URL}/rest/v1/subcontractors?select=*&limit=2000`, {
             headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}` }
           }).then(r => r.json()).then(data => ({ data, error: null })).catch(error => ({ data: null, error })),
-          supa.from("fm_jobs").select("*"),
+          fetch(`${SUPA_URL}/rest/v1/fm_jobs?select=${FM_LIGHT_COLS}&limit=5000`, {
+            headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}` }
+          }).then(r => r.json()).then(data => ({ data, error: null })).catch(error => ({ data: null, error })),
           supa.from("fm_team").select("*"),
           supa.from("crm_contacts").select("*"),
           fetch(`${SUPA_URL}/rest/v1/contacts?select=id,company_id,first_name,last_name,title,email,phone&limit=1000`, {
