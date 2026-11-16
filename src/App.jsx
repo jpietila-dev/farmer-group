@@ -5064,7 +5064,11 @@ function CrmDashboard({ fmJobs, companies, sites, subcontractors }) {
 
   const coName  = (id) => (companies.find(c => c.id === id) || {}).name || "";
   const subName = (id) => (subcontractors.find(s => s.id === id) || {}).name || "";
-  const siteByJob = (j) => sites.find(s => s.id === j.siteId) || sites.find(s => norm(s.storeNumber) === norm(j.storeCode)) || null;
+  const storeDigits = (v) => String(v || "").replace(/\D/g, "");
+  const siteByJob = (j) => sites.find(s => s.id === j.siteId)
+    || sites.find(s => norm(s.storeNumber) === norm(j.storeCode))
+    || sites.find(s => storeDigits(s.storeNumber) && storeDigits(s.storeNumber) === storeDigits(j.storeCode))
+    || null;
   const scodeOf = (j) => String(j.storeCode || (siteByJob(j) || {}).storeNumber || "");
   const custOf  = (j) => coName(j.companyId) || coName((siteByJob(j) || {}).companyId);
   const dmOf    = (j) => (siteByJob(j) || {}).managerName || "";
@@ -6933,9 +6937,9 @@ Return ONLY valid JSON, no markdown, no extra text:
       name: j.name, storeCode: j.storeCode, scopeOfWork: j.scopeOfWork,
       bidDueDate: j.bidDueDate, companyId: j.companyId,
       companyName: (companies.find(c => c.id === j.companyId)?.name) || "",
-      address: (sites.find(s => s.id === j.siteId)?.address) || "",
+      address: (siteByJob(j)?.address) || "",
       storeId: j.siteId, ownersProjectNo: j.ownersProjectNo,
-      districtMgr: (sites.find(s => s.id === j.siteId)?.managerName) || "",
+      districtMgr: dmOf(j),
       authorizedAmount: j.contractValue, contactId: j.approverContactId, notes: j.notes,
     })),
     ...fmInbox,
