@@ -6914,6 +6914,15 @@ Return ONLY valid JSON, no markdown, no extra text:
     setSelectedFmJob(s => (s && s.id === jobId) ? { ...s, inboxNotes: flip(s.inboxNotes) } : s);
     if (persist) { try { supa.from("fm_jobs").update({ inbox_notes: persist }).eq("id", jobId); } catch (e) {} }
   };
+  // PM acknowledges all new notes on a job — they move to history (Actioned).
+  const acknowledgeJobNotes = (jobId) => {
+    const ack = (arr) => (arr || []).map(n => n.status === "New" ? { ...n, status: "Actioned" } : n);
+    let persist = null;
+    setFmJobs(prev => prev.map(j => { if (j.id !== jobId) return j; persist = ack(j.inboxNotes); return { ...j, inboxNotes: persist }; }));
+    setFmFullScreenJob(f => (f && f.id === jobId) ? { ...f, inboxNotes: ack(f.inboxNotes) } : f);
+    setSelectedFmJob(s => (s && s.id === jobId) ? { ...s, inboxNotes: ack(s.inboxNotes) } : s);
+    if (persist) { try { supa.from("fm_jobs").update({ inbox_notes: persist }).eq("id", jobId); } catch (e) {} }
+  };
 
   // Unified inbox = automatic leads from the inbound task (fm_jobs with stage="intake")
   // + any manually-added in-memory leads. The intake rows carry _jobRow so assign/delete
@@ -11194,16 +11203,11 @@ Example:
                     <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
                       <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#FCD34D", boxShadow: inboxLeads.length > 0 ? "0 0 8px #FCD34D" : "none" }} />
                       <span style={{ fontSize: 13, fontWeight: 700, color: "#991B1B", textTransform: "uppercase", letterSpacing: "0.07em" }}>Lead Inbox</span>
-                      {/* Leads / Notes toggle */}
-                      <div style={{ display: "inline-flex", border: "1px solid #CBD1E8", borderRadius: 7, overflow: "hidden" }}>
-                        <button onClick={() => setInboxView("leads")} style={{ fontSize: 11, fontWeight: 600, padding: "5px 12px", border: "none", cursor: "pointer", fontFamily: "inherit", background: inboxView === "leads" ? "#3B6FE8" : "#fff", color: inboxView === "leads" ? "#fff" : "#4A5278" }}>Leads {inboxLeads.length > 0 ? `(${inboxLeads.length})` : ""}</button>
-                        <button onClick={() => setInboxView("notes")} style={{ fontSize: 11, fontWeight: 600, padding: "5px 12px", border: "none", borderLeft: "1px solid #CBD1E8", cursor: "pointer", fontFamily: "inherit", background: inboxView === "notes" ? "#3B6FE8" : "#fff", color: inboxView === "notes" ? "#fff" : "#4A5278" }}>Notes{inboxNotesNewCount > 0 ? ` · ${inboxNotesNewCount} new` : ""}</button>
-                      </div>
+                      <span style={{ fontSize: 11, color: "#4A5278" }}>{inboxLeads.length} lead{inboxLeads.length !== 1 ? "s" : ""}{inboxNotesNewCount > 0 ? ` · ${inboxNotesNewCount} new note${inboxNotesNewCount !== 1 ? "s" : ""}` : ""}</span>
                     </div>
                     <button className="btn-ghost" style={{ fontSize: 11, borderColor: "#FCD34D40", color: "#FCD34D" }} onClick={() => { setInboxForm({ name: "", companyName: "", storeCode: "", address: "", scopeOfWork: "", ownersProjectNo: "", bidDueDate: "", notes: "", source: "manual" }); setInboxParseText(""); setShowInboxForm(true); }}>+ New Lead</button>
                   </div>
 
-                  {inboxView === "leads" && (<>
                   {inboxLeads.length === 0 && (
                     <div style={{ textAlign: "center", padding: "24px", color: "#3D4570", fontSize: 12, border: "1px dashed #CBD1E8", borderRadius: 8 }}>
                       No unassigned leads — add one manually or paste an email to parse
@@ -11301,14 +11305,16 @@ Example:
                       );
                     })}
                   </div>
-                  </>)}
 
-                  {/* Notes tied to existing work orders */}
-                  {inboxView === "notes" && (
+                  {/* Notes tied to existing work orders — stacked below the leads */}
+                  <div style={{ marginTop: 18, paddingTop: 16, borderTop: "1px solid #CBD1E8" }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: "#991B1B", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 10 }}>
+                      Notes{inboxNotesNewCount > 0 ? ` · ${inboxNotesNewCount} new` : ""}
+                    </div>
                     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                       {inboxNotesAll.length === 0 && (
                         <div style={{ textAlign: "center", padding: "24px", color: "#3D4570", fontSize: 12, border: "1px dashed #CBD1E8", borderRadius: 8 }}>
-                          No notes tied to work orders yet — from the Leads tab, use "Add as note" on a matched WO.
+                          No notes tied to work orders yet — use "Add as note" on a matched WO above.
                         </div>
                       )}
                       {inboxNotesAll.map(n => {
@@ -11337,7 +11343,7 @@ Example:
                         );
                       })}
                     </div>
-                  )}
+                  </div>
 
                   {/* Add lead modal */}
                   {showInboxForm && (
@@ -11627,6 +11633,13 @@ Example:
                       <span>
                         <span><span style={{ color: "var(--t-ink3)", fontFamily: "var(--t-mono)", fontSize: 11 }}>{j.projectNo || "—"}</span>{" "}{j.name || "(no name)"}</span>
                         {ns && <span style={{ display: "block", marginTop: 3 }}><span style={fmNextStepStyle(ns.tone)}>{ns.tone === "urgent" ? "⚠ " : ""}{ns.label}</span></span>}
+                        {(() => { const nn = (j.inboxNotes || []).filter(n => n.status === "New").length; return nn > 0 ? (
+                          <span onClick={e => { e.stopPropagation(); acknowledgeJobNotes(j.id); }}
+                            title="New note — click to acknowledge; it stays in the note history"
+                            style={{ display: "inline-block", marginTop: 4, fontSize: 10, fontWeight: 700, background: "#FEF3C7", color: "#92400E", border: "1px solid #FCD34D", borderRadius: 5, padding: "1px 7px", cursor: "pointer" }}>
+                            📝 {nn} new note{nn > 1 ? "s" : ""} — acknowledge
+                          </span>
+                        ) : null; })()}
                       </span>
                     );
                   }},
@@ -13864,7 +13877,15 @@ window.addEventListener('message',function(e){
             };
             const COLS = {
               primary: { label: "Primary", width: 240, className: "t-td-wrap", style: { fontWeight: 500 }, render: j => (
-                <span><span style={{ color: "var(--t-ink3)", fontFamily: "var(--t-mono)", fontSize: 11 }}>{j.projectNo || "—"}</span>{" "}{j.name || "(no name)"}</span>
+                <span><span style={{ color: "var(--t-ink3)", fontFamily: "var(--t-mono)", fontSize: 11 }}>{j.projectNo || "—"}</span>{" "}{j.name || "(no name)"}
+                {(() => { const nn = (j.inboxNotes || []).filter(n => n.status === "New").length; return nn > 0 ? (
+                  <span onClick={e => { e.stopPropagation(); acknowledgeJobNotes(j.id); }}
+                    title="New note — click to acknowledge; it stays in the note history"
+                    style={{ display: "inline-block", marginLeft: 8, fontSize: 10, fontWeight: 700, background: "#FEF3C7", color: "#92400E", border: "1px solid #FCD34D", borderRadius: 5, padding: "1px 7px", cursor: "pointer" }}>
+                    📝 {nn} new
+                  </span>
+                ) : null; })()}
+                </span>
               )},
               priority: { label: "Priority", width: 90, stopPropagation: true, render: j => {
                 const colors = { Red: { bg: "#FEE2E2", fg: "#B91C1C" }, Yellow: { bg: "#FEF3C7", fg: "#92400E" }, Green: { bg: "#D1FAE5", fg: "#065F46" } };
