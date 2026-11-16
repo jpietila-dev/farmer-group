@@ -5545,6 +5545,18 @@ export default function App() {
   const [activeBU,  setActiveBU]  = useState("facility"); // PILOT: default to FM
   const [activeNav, setActiveNav] = useState("dashboard");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  // Phone-width flag: drives the mobile shell (bottom nav, full-width panels).
+  const [isMobile, setIsMobile] = useState(() => {
+    try { return typeof window !== "undefined" && window.matchMedia("(max-width: 768px)").matches; } catch (e) { return false; }
+  });
+  useEffect(() => {
+    try {
+      const mq = window.matchMedia("(max-width: 768px)");
+      const h = e => setIsMobile(e.matches);
+      mq.addEventListener ? mq.addEventListener("change", h) : mq.addListener(h);
+      return () => { mq.removeEventListener ? mq.removeEventListener("change", h) : mq.removeListener(h); };
+    } catch (e) {}
+  }, []);
 
   // ── Column-order prefs (drag-to-reorder table columns) ────────────
   // Full set of columns matches the AR/PBR pipeline spreadsheet shape.
@@ -7371,6 +7383,50 @@ Return ONLY valid JSON, no markdown, no extra text:
     .t-th-drag.t-th-dragging { opacity:0.4; background:var(--t-paper); }
     .t-th-drag.t-th-drop-left { box-shadow:inset 3px 0 0 var(--t-ink); }
     .t-th-drag.t-th-drop-right { box-shadow:inset -3px 0 0 var(--t-ink); }
+
+    /* ═══════════════ MOBILE (phones ≤768px) ═══════════════
+       Sidebar becomes a bottom tab bar; panels/modals go full-width;
+       wide tables scroll inside their box so nothing breaks sideways. */
+    @media (max-width: 768px) {
+      html, body, #root { max-width:100vw; overflow-x:hidden; }
+      .t-app-shell { display:block; }
+      /* Sidebar -> fixed bottom tab bar */
+      .t-sidebar {
+        position:fixed !important; left:0; right:0; bottom:0; top:auto;
+        width:100% !important; height:auto; flex-direction:row;
+        border-right:none; border-top:1px solid rgba(255,255,255,0.14);
+        z-index:300; padding-bottom:env(safe-area-inset-bottom, 0px);
+      }
+      .t-sidebar-brand, .t-sidebar-footer { display:none !important; }
+      .t-nav { flex:1; display:flex; flex-direction:row; align-items:center; padding:5px 6px; gap:2px; overflow-x:auto; overflow-y:hidden; -webkit-overflow-scrolling:touch; }
+      .t-nav-item { flex:0 0 auto; width:auto; flex-direction:column; gap:3px; padding:6px 9px; min-width:58px; border-radius:9px; justify-content:center; text-align:center; }
+      .t-nav-item.active { background:#fff; color:var(--t-ink); }
+      .t-nav-icon { width:auto; font-size:17px; }
+      .t-nav-label { font-size:9px; letter-spacing:0; white-space:nowrap; }
+      /* Main column clears the fixed bottom bar */
+      .t-main-col { padding-bottom:70px; min-width:0; }
+      /* Topbar: single compact scrollable row; hide the big global search */
+      .t-topbar { padding:0 10px; height:50px; gap:8px; overflow-x:auto; overflow-y:hidden; }
+      .t-topbar > div:first-child { flex-shrink:0; }
+      .t-topbar-search { display:none !important; }
+      .t-bu-tab { padding:5px 9px; font-size:11px; }
+      /* Content padding + headers */
+      .t-shell { padding:14px 12px; }
+      .t-section-hdr { flex-direction:column; align-items:flex-start; gap:10px; }
+      .t-h1 { font-size:20px; }
+      /* Panels full-width */
+      .side-panel { width:100% !important; left:0; top:50px !important; padding:16px !important; z-index:60; }
+      .fm-fullscreen { left:0 !important; padding-left:14px !important; padding-right:14px !important; }
+      /* Modals near-fullscreen */
+      .modal { width:100% !important; max-width:100% !important; padding:20px !important; }
+      .modal-bg { padding:10px 8px; align-items:flex-start; }
+      /* Wide tables scroll inside their own box instead of breaking the page */
+      .t-table-wrap { overflow-x:auto; }
+      .g2 { grid-template-columns:1fr; }
+      /* Safety net: collapse wide 4/5-column inline grids (KPI/stat rows) to 2
+         columns so their content stops clipping on a phone. */
+      [style*="repeat(4"], [style*="repeat(5"] { grid-template-columns:repeat(2, minmax(0,1fr)) !important; }
+    }
   `;
 
   const panelOpen = selectedJob || selectedOpp || selectedCompany || selectedSite || selectedCapexJob || selectedFmJob;
@@ -7435,7 +7491,7 @@ Return ONLY valid JSON, no markdown, no extra text:
       </div>
 
       {/* -- Main -- */}
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
+      <div className="t-main-col" style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
         {/* Topbar */}
         <div className="t-topbar">
           <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
@@ -7446,7 +7502,7 @@ Return ONLY valid JSON, no markdown, no extra text:
             <button className={"t-bu-tab k-crm" + (crmMode ? " active" : "")} onClick={() => { setCrmMode(true); setAccountingMode(false); setActiveNav("dashboard"); closeAllPanels(); }}>CRM</button>
             <button className={"t-bu-tab k-acct" + (accountingMode ? " active" : "")} onClick={() => { setAccountingMode(true); setCrmMode(false); closeAllPanels(); }}>$ ACCT</button>
           </div>
-          <div style={{ position: "relative", flex: 1, maxWidth: 440, margin: "0 16px" }}>
+          <div className="t-topbar-search" style={{ position: "relative", flex: 1, maxWidth: 440, margin: "0 16px" }}>
             <input
               value={globalSearch}
               onChange={e => setGlobalSearch(e.target.value)}
@@ -8738,7 +8794,7 @@ Return ONLY valid JSON, no markdown, no extra text:
 
                     {/* -- KPI TILES ACROSS THE TOP -- */}
                     {fmDashReportsVisible.kpis && (<>
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14 }}>
+                    <div style={{ display: "grid", gridTemplateColumns: isMobile ? "repeat(2, minmax(0,1fr))" : "repeat(4, 1fr)", gap: 14 }}>
                       {[
                         { label: "Revenue",            value: "$" + Math.round(ytdRev).toLocaleString(),         sub: "Actual YTD",          accent: "var(--t-dowork)" },
                         { label: "Profit",             value: "$" + Math.round(ytdGP).toLocaleString(),          sub: "Actual YTD",          accent: "var(--t-approval)" },
@@ -19797,12 +19853,14 @@ window.addEventListener('message',function(e){
         const closePanel = () => { setSelectedFmJob(null); setFmFullScreenJob(null); };
         const wrapperClass = isFullScreen ? "fm-fullscreen fade-in t-page" : "side-panel slide-in";
         const wrapperStyle = isFullScreen
-          ? { position: "fixed", top: 56, right: 0, bottom: 0, left: sidebarCollapsed ? 64 : 220, background: "var(--t-paper)", zIndex: 50, overflowY: "auto", paddingTop: 28, paddingBottom: 28, paddingLeft: 36, paddingRight: fmChatOpen ? 396 : 36, transition: "left 0.2s, padding-right 0.2s" }
+          ? (isMobile
+              ? { position: "fixed", top: 50, right: 0, bottom: 58, left: 0, background: "var(--t-paper)", zIndex: 50, overflowY: "auto", paddingTop: 16, paddingBottom: 24, paddingLeft: 14, paddingRight: 14 }
+              : { position: "fixed", top: 56, right: 0, bottom: 0, left: sidebarCollapsed ? 64 : 220, background: "var(--t-paper)", zIndex: 50, overflowY: "auto", paddingTop: 28, paddingBottom: 28, paddingLeft: 36, paddingRight: fmChatOpen ? 396 : 36, transition: "left 0.2s, padding-right 0.2s" })
           : { overflowY: "auto" };
         return (
         <div className={wrapperClass} style={wrapperStyle}>
           {isFullScreen && fmChatOpen && (
-            <div style={{ position:"fixed", top:56, right:0, bottom:0, width:360, background:"var(--t-surface)", borderLeft:"1px solid var(--t-line)", zIndex:52, display:"flex", flexDirection:"column", boxShadow:"-6px 0 24px rgba(10,16,36,0.10)" }}>
+            <div style={{ position:"fixed", top: isMobile?50:56, right:0, bottom: isMobile?58:0, left: isMobile?0:"auto", width: isMobile?"auto":360, background:"var(--t-surface)", borderLeft:"1px solid var(--t-line)", zIndex:52, display:"flex", flexDirection:"column", boxShadow:"-6px 0 24px rgba(10,16,36,0.10)" }}>
               <FmJobChat jobId={job.id} people={Array.from(new Set([...FM_PMS, ...fmTeam.map(t => t.name).filter(Boolean)]))} />
             </div>
           )}
