@@ -61,7 +61,7 @@ const supa = {
 // other column up front and hydrate photos + invoice_attachment lazily when a
 // single job is opened (see the media-hydrate effect).
 const FM_HEAVY_COLS = ["photos", "invoice_attachment"];
-const FM_LIGHT_COLS = ["id","name","company_id","site_id","contract_value","gross_profit","nte","stage","start_date","end_date","pm","pct","bid_due_date","quote_due_date","proposal_date","follow_up_date","buyout_date","invoice_date","notes","store_code","project_no","owners_project_no","vendor_invoice_amount","vendor_invoice_number","subcontractor_id","vendor_next_step","vendor_quote_price","vendor_quote_scope","scope_of_work","coordinator","vendor_token","vendor_sent_at","vendor_portal_status","vendor_portal_price","vendor_portal_date","vendor_portal_time","vendor_portal_note","vendor_portal_responded_at","vendor_accepted_at","vendor_schedule_changed_at","vendor_schedule_change_reason","created_at","approver_contact_id","bid_invites","estimating_path","completion_photos","sent_to_ar","sent_to_ar_at","status","priority","hot","odds","prp_sent","account_manager","market_area","category","invoiced_at","trade","source_email_id","smartsheet_row_id","dead_at","dead_reason","estimate_data","materials_status","materials_po","materials_eta","unit_occupancy","stage_changed_at"].join(",");
+const FM_LIGHT_COLS = ["id","name","company_id","site_id","contract_value","gross_profit","nte","stage","start_date","end_date","pm","pct","bid_due_date","quote_due_date","proposal_date","follow_up_date","buyout_date","invoice_date","notes","store_code","project_no","owners_project_no","vendor_invoice_amount","vendor_invoice_number","subcontractor_id","vendor_next_step","vendor_quote_price","vendor_quote_scope","scope_of_work","coordinator","vendor_token","vendor_sent_at","vendor_portal_status","vendor_portal_price","vendor_portal_date","vendor_portal_time","vendor_portal_note","vendor_portal_responded_at","vendor_accepted_at","vendor_schedule_changed_at","vendor_schedule_change_reason","created_at","approver_contact_id","bid_invites","estimating_path","completion_photos","sent_to_ar","sent_to_ar_at","status","priority","hot","odds","prp_sent","account_manager","market_area","category","invoiced_at","trade","source_email_id","smartsheet_row_id","dead_at","dead_reason","estimate_data","materials_status","materials_po","materials_eta","unit_occupancy","stage_changed_at","inbox_notes"].join(",");
 
 // ── DB row mappers (snake_case ↔ camelCase) ──────────────────
 const dbToCompany = r => ({ id: r.id, name: r.name, address: r.address||"", website: r.website||"", logo: r.logo||"", notes: r.notes||"" });
@@ -190,6 +190,7 @@ const dbToFmJob = r => ({
   materialsStatus: r.materials_status||"", materialsPo: r.materials_po||"", materialsEta: r.materials_eta||"",
   unitOccupancy: r.unit_occupancy||"", createdAt: r.created_at||"", stageChangedAt: r.stage_changed_at||"",
   deadAt: r.dead_at||"", deadReason: r.dead_reason||"",
+  inboxNotes: r.inbox_notes||[],
 });
 // Only persist the heavy photo/invoice blobs when they've actually been loaded
 // for this job. A light-loaded job (board/list) has _mediaLoaded=false, so we
@@ -230,6 +231,7 @@ const fmJobToDB = j => withFmMedia(j, {
   materials_status: j.materialsStatus||null, materials_po: j.materialsPo||null, materials_eta: j.materialsEta||null,
   unit_occupancy: j.unitOccupancy||null, stage_changed_at: j.stageChangedAt||null,
   dead_at: j.deadAt||null, dead_reason: j.deadReason||null,
+  inbox_notes: j.inboxNotes||[],
 });
 
 // Active Jobs / pipeline search: match the term against every field a user might
@@ -245,6 +247,49 @@ function fmJobMatchesSearch(j, term) {
     j.vendorInvoiceNumber, j.poNumber,
     j.marketArea, j.category, j.notes,
   ].some(v => (v == null ? "" : String(v)).toLowerCase().includes(_q));
+}
+
+// ── Inbox → existing-WO matching ──────────────────────────────────────────────
+// The common case: someone logs an opportunity from a text ("price for X at store
+// Y"), then the formal work order arrives in the inbox later with no WO number.
+// We surface same-store jobs ranked by scope/name similarity so Zak can confirm
+// it's the same job instead of creating a duplicate. An exact owner-WO# match,
+// when present, is treated as certain.
+const fmStoreKey = (s) => String(s || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+const fmJobOpenForMatch = (j) => j && j.stage !== "intake"
+  && !["dead", "lost", "dismissed"].includes(String(j.status || "").toLowerCase());
+const FM_MATCH_STOP = new Set(["the","and","for","please","quote","pricing","price","need","needs","needed","work","service","repair","replace","replacement","install","get","can","per","our"]);
+function fmMatchTokens(s) {
+  return String(s || "").toLowerCase().replace(/[^a-z0-9 ]/g, " ").split(/\s+/)
+    .filter(w => w.length > 2 && !FM_MATCH_STOP.has(w));
+}
+function fmScopeSimilarity(a, b) {
+  const A = new Set(fmMatchTokens(a)), B = new Set(fmMatchTokens(b));
+  if (!A.size || !B.size) return 0;
+  let inter = 0; A.forEach(w => { if (B.has(w)) inter++; });
+  return inter / Math.sqrt(A.size * B.size); // cosine-style, 0..1
+}
+function fmFindMatches(lead, jobs) {
+  const storeKey = fmStoreKey(lead.storeCode);
+  if (!storeKey) return [];
+  const leadText = (lead.scopeOfWork || "") + " " + (lead.name || "");
+  const leadWO = fmStoreKey(lead.ownersProjectNo);
+  const cands = [];
+  for (const j of jobs) {
+    if (!fmJobOpenForMatch(j)) continue;
+    if (j.id === lead.id) continue;
+    if (fmStoreKey(j.storeCode) !== storeKey) continue; // same store is required
+    let score = fmScopeSimilarity(leadText, (j.scopeOfWork || "") + " " + (j.name || ""));
+    const jWO = fmStoreKey(j.ownersProjectNo);
+    const woMatch = !!(leadWO && jWO && leadWO === jWO);
+    if (woMatch) score = 1;
+    cands.push({ job: j, score, woMatch });
+  }
+  cands.sort((a, b) => b.score - a.score);
+  // Prefer candidates with real scope overlap or a WO match; if none overlap,
+  // still show same-store open jobs (the "ask around" case) so Zak can confirm.
+  const scored = cands.filter(m => m.score > 0 || m.woMatch);
+  return (scored.length ? scored : cands).slice(0, 3);
 }
 
 // PILOT: FM-only. Other business units (Major Projects, Capital Improvements,
@@ -5806,6 +5851,8 @@ export default function App() {
   const [mpDetailTab,      setMpDetailTab]       = useState("weekly");
   const [selectedCoord, setSelectedCoord] = useState(null); // coordinator report
   const [fmInbox,       setFmInbox]       = useState([]);   // unassigned leads
+  const [inboxView,     setInboxView]     = useState("leads"); // "leads" | "notes"
+  const [tieProposal,   setTieProposal]   = useState(null); // { leadId, jobId, value } inline proposal-approved input
   const [showInboxForm, setShowInboxForm] = useState(false);
   const [inboxParseText,setInboxParseText]= useState("");
   const [inboxParsing,  setInboxParsing]  = useState(false);
@@ -6820,6 +6867,54 @@ Return ONLY valid JSON, no markdown, no extra text:
     setFmInbox(prev => prev.filter(l => l.id !== id));
   };
 
+  // ── Tie an incoming inbox item to an EXISTING work order (no duplicate) ──
+  // Same job: pull the incoming WO# + scope (and site, if missing) onto the
+  // existing job. owners_project_no/scope are synced columns, so the PBR updates.
+  const tieLeadToWO = (lead, job) => {
+    const patch = {
+      owners_project_no: lead.ownersProjectNo || job.ownersProjectNo || "",
+      scope_of_work: lead.scopeOfWork || lead.name || job.scopeOfWork || "",
+    };
+    if (!job.siteId && lead.storeId) patch.site_id = lead.storeId;
+    setFmJobs(prev => prev.map(j => j.id === job.id ? { ...j,
+      ownersProjectNo: patch.owners_project_no, scopeOfWork: patch.scope_of_work,
+      siteId: patch.site_id || j.siteId } : j));
+    try { supa.from("fm_jobs").update(patch).eq("id", job.id); } catch (e) {}
+    deleteInboxLead(lead.id);
+  };
+  // Add the incoming item as a note on an existing WO (status starts "New").
+  const tieNoteToWO = (lead, job) => {
+    const note = { id: "n" + Date.now() + Math.floor(Math.random()*1000),
+      text: lead.scopeOfWork || lead.name || "(note)", source: lead.source || "inbox",
+      status: "New", createdAt: new Date().toISOString() };
+    const notes = [ ...(job.inboxNotes || []), note ];
+    setFmJobs(prev => prev.map(j => j.id === job.id ? { ...j, inboxNotes: notes } : j));
+    try { supa.from("fm_jobs").update({ inbox_notes: notes }).eq("id", job.id); } catch (e) {}
+    deleteInboxLead(lead.id);
+  };
+  // Proposal approved on an existing WO: set gross value and move to Buyout.
+  // contract_value/gross_profit/stage are synced columns, so the PBR updates.
+  const tieProposalApproved = (lead, job, grossValue) => {
+    const gv = Number(grossValue) || 0;
+    const gp = fmGrossProfit(gv);
+    setFmJobs(prev => prev.map(j => j.id === job.id ? { ...j, contractValue: gv, grossProfit: gp, stage: "buyout" } : j));
+    try { supa.from("fm_jobs").update({ contract_value: gv, gross_profit: gp, stage: "buyout" }).eq("id", job.id); } catch (e) {}
+    deleteInboxLead(lead.id);
+  };
+  // Mark a tied note New/Actioned.
+  const setInboxNoteStatus = (jobId, noteId, status) => {
+    const flip = (arr) => (arr || []).map(n => n.id === noteId ? { ...n, status } : n);
+    let persist = null;
+    setFmJobs(prev => prev.map(j => {
+      if (j.id !== jobId) return j;
+      persist = flip(j.inboxNotes);
+      return { ...j, inboxNotes: persist };
+    }));
+    setFmFullScreenJob(f => (f && f.id === jobId) ? { ...f, inboxNotes: flip(f.inboxNotes) } : f);
+    setSelectedFmJob(s => (s && s.id === jobId) ? { ...s, inboxNotes: flip(s.inboxNotes) } : s);
+    if (persist) { try { supa.from("fm_jobs").update({ inbox_notes: persist }).eq("id", jobId); } catch (e) {} }
+  };
+
   // Unified inbox = automatic leads from the inbound task (fm_jobs with stage="intake")
   // + any manually-added in-memory leads. The intake rows carry _jobRow so assign/delete
   // know to update the existing row instead of creating a new one.
@@ -6836,6 +6931,14 @@ Return ONLY valid JSON, no markdown, no extra text:
     })),
     ...fmInbox,
   ];
+
+  // Candidate pool for inbox→WO matching: the live job list minus intake leads.
+  const fmMatchPool = React.useMemo(() => fmJobs.filter(j => j.stage !== "intake"), [fmJobs]);
+  // All notes tied to WOs, newest first, for the inbox Notes view.
+  const inboxNotesAll = React.useMemo(() => fmJobs.flatMap(j =>
+    (j.inboxNotes || []).map(n => ({ ...n, jobId: j.id, job: j }))
+  ).sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || ""))), [fmJobs]);
+  const inboxNotesNewCount = inboxNotesAll.filter(n => n.status === "New").length;
 
   const newItem = () => ({ id: "i" + Date.now() + Math.random(), desc: "", unit: "EA", qty: 1, unitPrice: 0, labor: 0, material: 0, sub: 0, misc: 0 });
   const newSection = (name="") => ({ id: "s" + Date.now() + Math.random(), name, items: [newItem()] });
@@ -11087,15 +11190,20 @@ Example:
               {/* -- FM INBOX (unassigned leads) - FM only -- */}
               {activeNav === "inbox" && activeBU === "facility" && (
                 <div style={{ background: "#F8F9FD", border: "1px solid #FCD34D30", borderRadius: 12, padding: "18px 20px" }}>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16, gap: 10, flexWrap: "wrap" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
                       <div style={{ width: 8, height: 8, borderRadius: "50%", background: "#FCD34D", boxShadow: inboxLeads.length > 0 ? "0 0 8px #FCD34D" : "none" }} />
                       <span style={{ fontSize: 13, fontWeight: 700, color: "#991B1B", textTransform: "uppercase", letterSpacing: "0.07em" }}>Lead Inbox</span>
-                      <span style={{ fontSize: 11, color: "#4A5278" }}>{inboxLeads.length} unassigned</span>
+                      {/* Leads / Notes toggle */}
+                      <div style={{ display: "inline-flex", border: "1px solid #CBD1E8", borderRadius: 7, overflow: "hidden" }}>
+                        <button onClick={() => setInboxView("leads")} style={{ fontSize: 11, fontWeight: 600, padding: "5px 12px", border: "none", cursor: "pointer", fontFamily: "inherit", background: inboxView === "leads" ? "#3B6FE8" : "#fff", color: inboxView === "leads" ? "#fff" : "#4A5278" }}>Leads {inboxLeads.length > 0 ? `(${inboxLeads.length})` : ""}</button>
+                        <button onClick={() => setInboxView("notes")} style={{ fontSize: 11, fontWeight: 600, padding: "5px 12px", border: "none", borderLeft: "1px solid #CBD1E8", cursor: "pointer", fontFamily: "inherit", background: inboxView === "notes" ? "#3B6FE8" : "#fff", color: inboxView === "notes" ? "#fff" : "#4A5278" }}>Notes{inboxNotesNewCount > 0 ? ` · ${inboxNotesNewCount} new` : ""}</button>
+                      </div>
                     </div>
                     <button className="btn-ghost" style={{ fontSize: 11, borderColor: "#FCD34D40", color: "#FCD34D" }} onClick={() => { setInboxForm({ name: "", companyName: "", storeCode: "", address: "", scopeOfWork: "", ownersProjectNo: "", bidDueDate: "", notes: "", source: "manual" }); setInboxParseText(""); setShowInboxForm(true); }}>+ New Lead</button>
                   </div>
 
+                  {inboxView === "leads" && (<>
                   {inboxLeads.length === 0 && (
                     <div style={{ textAlign: "center", padding: "24px", color: "#3D4570", fontSize: 12, border: "1px dashed #CBD1E8", borderRadius: 8 }}>
                       No unassigned leads — add one manually or paste an email to parse
@@ -11103,7 +11211,9 @@ Example:
                   )}
 
                   <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                    {inboxLeads.map(lead => (
+                    {inboxLeads.map(lead => {
+                      const matches = fmFindMatches(lead, fmMatchPool);
+                      return (
                       <div key={lead.id} style={{ background: "#ECEEF8", border: "1px solid #FCD34D20", borderRadius: 8, padding: "14px 16px" }}>
                         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 10 }}>
                           <div style={{ flex: 1, minWidth: 0 }}>
@@ -11142,9 +11252,92 @@ Example:
                             <button className="btn-ghost" style={{ fontSize: 11, color: "#F87171", borderColor: "#F8717120", padding: "4px 8px" }} onClick={() => deleteInboxLead(lead.id)}>✕</button>
                           </div>
                         </div>
+
+                        {/* Possible matches in the PBR (same store, ranked by scope) */}
+                        {matches.length > 0 && (
+                          <div style={{ marginTop: 10, borderTop: "1px dashed #CBD1E8", paddingTop: 10 }}>
+                            <div style={{ fontSize: 10, fontWeight: 700, color: "#991B1B", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>
+                              Possible match{matches.length > 1 ? "es" : ""} in PBR — same store
+                            </div>
+                            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                              {matches.map(({ job, score, woMatch }) => {
+                                const st = FM_STAGES.find(s => s.id === job.stage);
+                                const tp = tieProposal && tieProposal.leadId === lead.id && tieProposal.jobId === job.id;
+                                return (
+                                  <div key={job.id} style={{ background: "#fff", border: "1px solid #CBD1E8", borderRadius: 7, padding: "8px 10px" }}>
+                                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
+                                      <div style={{ minWidth: 0, flex: 1 }}>
+                                        <div style={{ fontSize: 12, fontWeight: 600, color: "#1A2240" }}>
+                                          {job.name}
+                                          {woMatch && <span style={{ fontSize: 9, background: "#DCFCE7", color: "#166534", borderRadius: 4, padding: "1px 6px", marginLeft: 6 }}>WO# match</span>}
+                                          {!woMatch && score > 0 && <span style={{ fontSize: 9, color: "#6B7280", marginLeft: 6 }}>{Math.round(score * 100)}% scope</span>}
+                                        </div>
+                                        <div style={{ fontSize: 10, color: "#6B7280", marginTop: 1 }}>
+                                          {(st?.label || job.stage)} · {job.coordinator || "—"} · {job.projectNo ? "PBR# " + job.projectNo : "no PBR#"}{job.contractValue ? " · $" + Number(job.contractValue).toLocaleString() : ""}
+                                        </div>
+                                      </div>
+                                      <button className="btn-ghost" style={{ fontSize: 10, padding: "3px 8px" }} onClick={() => setFmFullScreenJob(job)}>View</button>
+                                    </div>
+                                    <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
+                                      <button className="btn-ghost" style={{ fontSize: 10, padding: "4px 9px", color: "#1565C0", borderColor: "#1565C040" }} onClick={() => tieLeadToWO(lead, job)}>Same job — update WO</button>
+                                      <button className="btn-ghost" style={{ fontSize: 10, padding: "4px 9px", color: "#6B21A8", borderColor: "#6B21A840" }} onClick={() => tieNoteToWO(lead, job)}>Add as note</button>
+                                      <button className="btn-ghost" style={{ fontSize: 10, padding: "4px 9px", color: "#2E7D32", borderColor: "#2E7D3240" }} onClick={() => setTieProposal({ leadId: lead.id, jobId: job.id, value: String(lead.authorizedAmount || job.contractValue || "") })}>Proposal approved</button>
+                                    </div>
+                                    {tp && (
+                                      <div style={{ display: "flex", gap: 6, marginTop: 8, alignItems: "center", background: "#F0FDF4", border: "1px solid #BBF7D0", borderRadius: 6, padding: "7px 9px", flexWrap: "wrap" }}>
+                                        <span style={{ fontSize: 11, color: "#166534", fontWeight: 600 }}>Gross value $</span>
+                                        <input autoFocus value={tieProposal.value} onChange={e => setTieProposal(t => ({ ...t, value: e.target.value.replace(/[^0-9.]/g, "") }))} style={{ width: 110, border: "1px solid #BBF7D0", borderRadius: 5, padding: "4px 8px", fontSize: 12, fontFamily: "inherit", outline: "none" }} placeholder="0" />
+                                        <button className="btn-primary" style={{ fontSize: 10, padding: "5px 12px", background: "#2E7D32" }} onClick={() => { tieProposalApproved(lead, job, tieProposal.value); setTieProposal(null); }}>Approve → Buyout</button>
+                                        <button className="btn-ghost" style={{ fontSize: 10, padding: "5px 9px" }} onClick={() => setTieProposal(null)}>Cancel</button>
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
                       </div>
-                    ))}
+                      );
+                    })}
                   </div>
+                  </>)}
+
+                  {/* Notes tied to existing work orders */}
+                  {inboxView === "notes" && (
+                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                      {inboxNotesAll.length === 0 && (
+                        <div style={{ textAlign: "center", padding: "24px", color: "#3D4570", fontSize: 12, border: "1px dashed #CBD1E8", borderRadius: 8 }}>
+                          No notes tied to work orders yet — from the Leads tab, use "Add as note" on a matched WO.
+                        </div>
+                      )}
+                      {inboxNotesAll.map(n => {
+                        const job = n.job;
+                        return (
+                          <div key={n.id} style={{ background: "#ECEEF8", border: "1px solid " + (n.status === "New" ? "#FCD34D60" : "#CBD1E8"), borderRadius: 8, padding: "12px 14px" }}>
+                            <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "flex-start", flexWrap: "wrap" }}>
+                              <div style={{ minWidth: 0, flex: 1 }}>
+                                <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 3 }}>
+                                  <span style={{ fontSize: 10, fontWeight: 700, borderRadius: 4, padding: "1px 7px", background: n.status === "New" ? "#FEF3C7" : "#DCFCE7", color: n.status === "New" ? "#92400E" : "#166534" }}>{n.status === "New" ? "NEW" : "ACTIONED"}</span>
+                                  <span style={{ fontSize: 12, fontWeight: 600, color: "#1A2240" }}>{job?.name || "—"}</span>
+                                  {job?.storeCode && <span style={{ fontSize: 11, color: "#4A5278" }}>🏬 {job.storeCode}</span>}
+                                  {job?.projectNo && <span style={{ fontSize: 10, color: "#6B7280" }}>PBR# {job.projectNo}</span>}
+                                </div>
+                                <div style={{ fontSize: 12, color: "#374151" }}>{n.text}</div>
+                                <div style={{ fontSize: 10, color: "#9AA3BF", marginTop: 3 }}>{n.createdAt ? new Date(n.createdAt).toLocaleString() : ""}</div>
+                              </div>
+                              <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+                                {job && <button className="btn-ghost" style={{ fontSize: 10, padding: "4px 9px" }} onClick={() => setFmFullScreenJob(job)}>Open WO</button>}
+                                {n.status === "New"
+                                  ? <button className="btn-ghost" style={{ fontSize: 10, padding: "4px 9px", color: "#2E7D32", borderColor: "#2E7D3240" }} onClick={() => setInboxNoteStatus(n.jobId, n.id, "Actioned")}>Mark actioned</button>
+                                  : <button className="btn-ghost" style={{ fontSize: 10, padding: "4px 9px" }} onClick={() => setInboxNoteStatus(n.jobId, n.id, "New")}>Reopen</button>}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
 
                   {/* Add lead modal */}
                   {showInboxForm && (
@@ -20001,6 +20194,32 @@ window.addEventListener('message',function(e){
                     <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
                       <button className="t-btn t-btn-ghost t-btn-sm" onClick={() => killFm(job)} title="Move to Dead / Lost">⊘</button>
                       <button className="t-btn t-btn-ghost t-btn-sm" onClick={closePanel}>✕</button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Inbox notes tied to this WO */}
+                {(job.inboxNotes && job.inboxNotes.length > 0) && (
+                  <div className="t-card" style={{ padding: "14px 16px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+                      <span className="t-eyebrow">Inbox Notes</span>
+                      <span style={{ fontSize: 11, color: "var(--t-ink3)" }}>{job.inboxNotes.filter(n => n.status === "New").length} new</span>
+                    </div>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                      {job.inboxNotes.slice().reverse().map(n => (
+                        <div key={n.id} style={{ display: "flex", gap: 10, alignItems: "flex-start", justifyContent: "space-between", background: "var(--t-paper)", border: "1px solid var(--t-line)", borderRadius: 8, padding: "9px 11px" }}>
+                          <div style={{ minWidth: 0, flex: 1 }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 2 }}>
+                              <span style={{ fontSize: 10, fontWeight: 700, borderRadius: 4, padding: "1px 7px", background: n.status === "New" ? "#FEF3C7" : "#DCFCE7", color: n.status === "New" ? "#92400E" : "#166534" }}>{n.status === "New" ? "NEW" : "ACTIONED"}</span>
+                              <span style={{ fontSize: 10, color: "var(--t-ink3)" }}>{n.createdAt ? new Date(n.createdAt).toLocaleDateString() : ""}</span>
+                            </div>
+                            <div style={{ fontSize: 13, color: "var(--t-ink)" }}>{n.text}</div>
+                          </div>
+                          {n.status === "New"
+                            ? <button className="t-btn t-btn-ghost t-btn-sm" onClick={() => setInboxNoteStatus(job.id, n.id, "Actioned")}>Mark actioned</button>
+                            : <button className="t-btn t-btn-ghost t-btn-sm" onClick={() => setInboxNoteStatus(job.id, n.id, "New")}>Reopen</button>}
+                        </div>
+                      ))}
                     </div>
                   </div>
                 )}
