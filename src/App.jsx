@@ -6927,6 +6927,26 @@ Return ONLY valid JSON, no markdown, no extra text:
     setSelectedFmJob(s => (s && s.id === jobId) ? { ...s, inboxNotes: ack(s.inboxNotes) } : s);
     if (persist) { try { supa.from("fm_jobs").update({ inbox_notes: persist }).eq("id", jobId); } catch (e) {} }
   };
+  // Pull the first dollar figure out of free text, e.g. "Proposal APPROVED $820" -> 820.
+  const extractDollar = (s) => {
+    const m = String(s || "").match(/\$\s?([0-9][0-9,]*(?:\.[0-9]{1,2})?)/);
+    if (m) return Number(m[1].replace(/,/g, "")) || 0;
+    const m2 = String(s || "").match(/(?:NTE|approved|price|amount)[^0-9]{0,12}([0-9][0-9,]{2,}(?:\.[0-9]{1,2})?)/i);
+    return m2 ? Number(m2[1].replace(/,/g, "")) || 0 : 0;
+  };
+  // Accept a proposal/NTE note on an existing WO: auto-apply the dollar amount in the
+  // note as the gross value (no typing), then clear the note so it disappears.
+  const acceptInboxNote = (n) => {
+    const amt = extractDollar(n.text);
+    if (amt > 0) {
+      const gp = fmGrossProfit(amt);
+      setFmJobs(prev => prev.map(j => j.id === n.jobId ? { ...j, contractValue: amt, grossProfit: gp } : j));
+      setFmFullScreenJob(f => (f && f.id === n.jobId) ? { ...f, contractValue: amt, grossProfit: gp } : f);
+      setSelectedFmJob(s => (s && s.id === n.jobId) ? { ...s, contractValue: amt, grossProfit: gp } : s);
+      try { supa.from("fm_jobs").update({ contract_value: amt, gross_profit: gp }).eq("id", n.jobId); } catch (e) {}
+    }
+    setInboxNoteStatus(n.jobId, n.id, "Actioned");
+  };
 
   // Resolve the CRM site for a job (by site_id, then exact store #, then digits-only
   // store # match) and its District Manager. Defined here in the main component scope
@@ -6947,7 +6967,8 @@ Return ONLY valid JSON, no markdown, no extra text:
       id: j.id, _jobRow: true, _job: j, source: "email",
       name: j.name, storeCode: j.storeCode, scopeOfWork: j.scopeOfWork,
       bidDueDate: j.bidDueDate, companyId: j.companyId,
-      companyName: (companies.find(c => c.id === j.companyId)?.name) || "",
+      companyName: (companies.find(c => c.id === j.companyId)?.name)
+        || (companies.find(c => c.id === (inboxSiteOfJob(j) || {}).companyId)?.name) || "",
       address: (inboxSiteOfJob(j)?.address) || "",
       storeId: j.siteId, ownersProjectNo: j.ownersProjectNo,
       districtMgr: inboxDmOf(j),
@@ -11300,7 +11321,7 @@ Example:
                                     <div style={{ display: "flex", gap: 6, marginTop: 8, flexWrap: "wrap" }}>
                                       <button className="btn-ghost" style={{ fontSize: 10, padding: "4px 9px", color: "#1565C0", borderColor: "#1565C040" }} onClick={() => tieLeadToWO(lead, job)}>Same job — update WO</button>
                                       <button className="btn-ghost" style={{ fontSize: 10, padding: "4px 9px", color: "#6B21A8", borderColor: "#6B21A840" }} onClick={() => tieNoteToWO(lead, job)}>Add as note</button>
-                                      <button className="btn-ghost" style={{ fontSize: 10, padding: "4px 9px", color: "#2E7D32", borderColor: "#2E7D3240" }} onClick={() => setTieProposal({ leadId: lead.id, jobId: job.id, value: String(lead.authorizedAmount || job.contractValue || "") })}>Proposal approved</button>
+                                      <button className="btn-ghost" style={{ fontSize: 10, padding: "4px 9px", color: "#2E7D32", borderColor: "#2E7D3240" }} onClick={() => setTieProposal({ leadId: lead.id, jobId: job.id, value: String(lead.authorizedAmount || extractDollar(lead.name) || extractDollar(lead.scopeOfWork) || job.contractValue || "") })}>Proposal approved</button>
                                     </div>
                                     {tp && (
                                       <div style={{ display: "flex", gap: 6, marginTop: 8, alignItems: "center", background: "#F0FDF4", border: "1px solid #BBF7D0", borderRadius: 6, padding: "7px 9px", flexWrap: "wrap" }}>
@@ -11327,31 +11348,33 @@ Example:
                       Notes{inboxNotesNewCount > 0 ? ` · ${inboxNotesNewCount} new` : ""}
                     </div>
                     <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                      {inboxNotesAll.length === 0 && (
+                      {inboxNotesAll.filter(n => n.status === "New").length === 0 && (
                         <div style={{ textAlign: "center", padding: "24px", color: "#3D4570", fontSize: 12, border: "1px dashed #CBD1E8", borderRadius: 8 }}>
-                          No notes tied to work orders yet — use "Add as note" on a matched WO above.
+                          No new notes — accepted notes move to the work order's history.
                         </div>
                       )}
-                      {inboxNotesAll.map(n => {
+                      {inboxNotesAll.filter(n => n.status === "New").map(n => {
                         const job = n.job;
+                        const amt = extractDollar(n.text);
                         return (
-                          <div key={n.id} style={{ background: "#ECEEF8", border: "1px solid " + (n.status === "New" ? "#FCD34D60" : "#CBD1E8"), borderRadius: 8, padding: "12px 14px" }}>
+                          <div key={n.id} style={{ background: "#ECEEF8", border: "1px solid #FCD34D60", borderRadius: 8, padding: "12px 14px" }}>
                             <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "flex-start", flexWrap: "wrap" }}>
                               <div style={{ minWidth: 0, flex: 1 }}>
                                 <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 3 }}>
-                                  <span style={{ fontSize: 10, fontWeight: 700, borderRadius: 4, padding: "1px 7px", background: n.status === "New" ? "#FEF3C7" : "#DCFCE7", color: n.status === "New" ? "#92400E" : "#166534" }}>{n.status === "New" ? "NEW" : "ACTIONED"}</span>
+                                  <span style={{ fontSize: 10, fontWeight: 700, borderRadius: 4, padding: "1px 7px", background: "#FEF3C7", color: "#92400E" }}>NEW</span>
                                   <span style={{ fontSize: 12, fontWeight: 600, color: "#1A2240" }}>{job?.name || "—"}</span>
                                   {job?.storeCode && <span style={{ fontSize: 11, color: "#4A5278" }}>🏬 {job.storeCode}</span>}
                                   {job?.projectNo && <span style={{ fontSize: 10, color: "#6B7280" }}>PBR# {job.projectNo}</span>}
+                                  {amt > 0 && <span style={{ fontSize: 10, fontWeight: 700, color: "#166534", background: "#DCFCE7", borderRadius: 4, padding: "1px 7px" }}>${amt.toLocaleString()}</span>}
                                 </div>
                                 <div style={{ fontSize: 12, color: "#374151" }}>{n.text}</div>
                                 <div style={{ fontSize: 10, color: "#9AA3BF", marginTop: 3 }}>{n.createdAt ? new Date(n.createdAt).toLocaleString() : ""}</div>
                               </div>
                               <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
                                 {job && <button className="btn-ghost" style={{ fontSize: 10, padding: "4px 9px" }} onClick={() => setFmFullScreenJob(job)}>Open WO</button>}
-                                {n.status === "New"
-                                  ? <button className="btn-ghost" style={{ fontSize: 10, padding: "4px 9px", color: "#2E7D32", borderColor: "#2E7D3240" }} onClick={() => setInboxNoteStatus(n.jobId, n.id, "Actioned")}>Mark actioned</button>
-                                  : <button className="btn-ghost" style={{ fontSize: 10, padding: "4px 9px" }} onClick={() => setInboxNoteStatus(n.jobId, n.id, "New")}>Reopen</button>}
+                                <button className="btn-ghost" style={{ fontSize: 10, padding: "4px 9px", color: "#2E7D32", borderColor: "#2E7D3240", fontWeight: 700 }} onClick={() => acceptInboxNote(n)}>
+                                  {amt > 0 ? `✓ Accept — set $${amt.toLocaleString()}` : "✓ Accept"}
+                                </button>
                               </div>
                             </div>
                           </div>
@@ -20083,8 +20106,8 @@ window.addEventListener('message',function(e){
         const wrapperClass = isFullScreen ? "fm-fullscreen fade-in t-page" : "side-panel slide-in";
         const wrapperStyle = isFullScreen
           ? (isMobile
-              ? { position: "fixed", top: 50, right: 0, bottom: 58, left: 0, background: "var(--t-paper)", zIndex: 50, overflowY: "auto", paddingTop: 16, paddingBottom: 24, paddingLeft: 14, paddingRight: 14 }
-              : { position: "fixed", top: 56, right: 0, bottom: 0, left: sidebarCollapsed ? 64 : 220, background: "var(--t-paper)", zIndex: 50, overflowY: "auto", paddingTop: 28, paddingBottom: 28, paddingLeft: 36, paddingRight: fmChatOpen ? 396 : 36, transition: "left 0.2s, padding-right 0.2s" })
+              ? { position: "fixed", top: 50, right: 0, bottom: 58, left: 0, background: "var(--t-paper)", zIndex: 50, overflowY: "auto", WebkitOverflowScrolling: "touch", overscrollBehavior: "contain", overflowAnchor: "none", paddingTop: 16, paddingBottom: 120, paddingLeft: 14, paddingRight: 14 }
+              : { position: "fixed", top: 56, right: 0, bottom: 0, left: sidebarCollapsed ? 64 : 220, background: "var(--t-paper)", zIndex: 50, overflowY: "auto", overscrollBehavior: "contain", overflowAnchor: "none", paddingTop: 28, paddingBottom: 120, paddingLeft: 36, paddingRight: fmChatOpen ? 396 : 36, transition: "left 0.2s, padding-right 0.2s" })
           : { overflowY: "auto" };
         return (
         <div className={wrapperClass} style={wrapperStyle}>
@@ -20252,7 +20275,7 @@ window.addEventListener('message',function(e){
                             <div style={{ fontSize: 13, color: "var(--t-ink)" }}>{n.text}</div>
                           </div>
                           {n.status === "New"
-                            ? <button className="t-btn t-btn-ghost t-btn-sm" onClick={() => setInboxNoteStatus(job.id, n.id, "Actioned")}>Mark actioned</button>
+                            ? <button className="t-btn t-btn-ghost t-btn-sm" onClick={() => acceptInboxNote({ ...n, jobId: job.id })}>{extractDollar(n.text) > 0 ? `✓ Accept $${extractDollar(n.text).toLocaleString()}` : "✓ Accept"}</button>
                             : <button className="t-btn t-btn-ghost t-btn-sm" onClick={() => setInboxNoteStatus(job.id, n.id, "New")}>Reopen</button>}
                         </div>
                       ))}
@@ -20501,7 +20524,8 @@ window.addEventListener('message',function(e){
                 {/* ── ALL JOB DETAILS ── Every field, always visible, inline-editable ── */}
                 {(() => {
                   // Define proper components so we can use hooks legally.
-                  const InlineRow = function InlineRow({ label, value, onSave, type = "text", options = null, placeholder = "—", mono, color }) {
+                  const InlineRow = function InlineRow({ label, value, onSave, type = "text", options = null, placeholder = "—", mono, color, copyable }) {
+                    const [copied, setCopied] = React.useState(false);
                     const [editing, setEditing] = React.useState(false);
                     const [local, setLocal] = React.useState(value == null ? "" : String(value));
                     React.useEffect(() => { setLocal(value == null ? "" : String(value)); }, [value]);
@@ -20534,8 +20558,21 @@ window.addEventListener('message',function(e){
                               style={{ width: "100%", padding: "5px 8px", border: "1px solid var(--t-ink3)", borderRadius: 4, fontFamily: "inherit", fontSize: 12, background: "var(--t-surface)" }} />
                           )
                         ) : (
-                          <div onClick={() => setEditing(true)} style={{ cursor: "pointer", padding: "2px 4px", borderRadius: 3, minHeight: 18 }}>
-                            {valueDisplay}
+                          <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                            <div onClick={() => setEditing(true)} style={{ cursor: "pointer", padding: "2px 4px", borderRadius: 3, minHeight: 18, flex: 1, minWidth: 0 }}>
+                              {valueDisplay}
+                            </div>
+                            {copyable && value && (
+                              <button title="Copy" onClick={(e) => {
+                                e.stopPropagation();
+                                const t = String(value);
+                                const done = () => { setCopied(true); setTimeout(() => setCopied(false), 1200); };
+                                try { navigator.clipboard.writeText(t).then(done, () => { try { const ta = document.createElement("textarea"); ta.value = t; document.body.appendChild(ta); ta.select(); document.execCommand("copy"); document.body.removeChild(ta); done(); } catch (_) {} }); }
+                                catch (_) { try { const ta = document.createElement("textarea"); ta.value = t; document.body.appendChild(ta); ta.select(); document.execCommand("copy"); document.body.removeChild(ta); done(); } catch (__) {} }
+                              }} style={{ flexShrink: 0, fontSize: 10, padding: "3px 8px", borderRadius: 5, border: "1px solid var(--t-line3)", background: copied ? "#DCFCE7" : "var(--t-paper)", color: copied ? "#166534" : "var(--t-ink2)", cursor: "pointer", fontFamily: "inherit", fontWeight: 600 }}>
+                                {copied ? "✓ Copied" : "📋 Copy"}
+                              </button>
+                            )}
                           </div>
                         )}
                       </div>
@@ -20628,8 +20665,9 @@ window.addEventListener('message',function(e){
                         {/* Identity */}
                         <InlineRow label="Project Name" value={job.name} onSave={v => update({ name: v })} placeholder="(no name)" />
                         <InlineRow label="Project #" value={job.projectNo} onSave={v => update({ projectNo: v })} mono />
-                        <InlineRow label="Owners Project #" value={job.ownersProjectNo} onSave={v => update({ ownersProjectNo: v })} mono />
+                        <InlineRow label="Work Order #" value={job.ownersProjectNo} onSave={v => update({ ownersProjectNo: v })} mono copyable />
                         <InlineRow label="Store Code" value={job.storeCode} onSave={v => update({ storeCode: v })} mono />
+                        {(() => { const rs = site || inboxSiteOfJob(job); const addr = (rs || {}).address || ""; return <ReadRow label="Store Address" value={addr} placeholder="(no address on file for this store)" />; })()}
                         <InlineRow label="Category" value={job.category || "FM"} onSave={v => update({ category: v })}
                           options={[{ v: "FM", l: "FM" }, { v: "CapEx", l: "CapEx" }, { v: "Lawn", l: "Lawn" }, { v: "Snow", l: "Snow" }]} />
                         <InlineRow label="Trade" value={job.trade} onSave={v => update({ trade: v })}
@@ -20659,6 +20697,7 @@ window.addEventListener('message',function(e){
                         <InlineRow label="Vendor Invoice #" value={job.vendorInvoiceNumber} onSave={v => update({ vendorInvoiceNumber: v })} mono />
 
                         {/* Vendor / Customer */}
+                        {(() => { const rs = site || inboxSiteOfJob(job); const cust = (companies.find(c => c.id === job.companyId) || companies.find(c => c.id === (rs || {}).companyId) || {}).name || ""; return <ReadRow label="Customer (operator)" value={cust} placeholder="(resolved from store #)" />; })()}
                         <ReadRow label="Vendor" value={sub ? sub.name : ""} placeholder="(none assigned — use the Estimating or Vendor card to assign)" />
                         <InlineRow label="Customer" value={job.approverContactId} onSave={v => update({ approverContactId: v })}
                           options={companyContacts.map(c => ({ v: c.id, l: [c.firstName, c.lastName].filter(Boolean).join(" ") || c.email || "Contact" }))} placeholder="(none assigned)" />
