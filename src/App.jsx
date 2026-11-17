@@ -269,26 +269,34 @@ function fmScopeSimilarity(a, b) {
   let inter = 0; A.forEach(w => { if (B.has(w)) inter++; });
   return inter / Math.sqrt(A.size * B.size); // cosine-style, 0..1
 }
+// Normalize an owner work-order number for exact comparison (keep the format, ignore
+// case/spacing) — NOT digits-only, because WO formats vary (WO-261113-01222, 1004522…).
+const fmWoKey = (s) => String(s || "").trim().toUpperCase().replace(/\s+/g, "");
 function fmFindMatches(lead, jobs) {
+  // 1) Exact work-order-number match ANYWHERE — the strongest signal. If this lead's WO
+  //    number already exists on another job, that's a certain duplicate; surface it first,
+  //    even if the store code is formatted differently.
+  const leadWOexact = fmWoKey(lead.ownersProjectNo);
+  if (leadWOexact) {
+    const woHits = jobs
+      .filter(j => j.id !== lead.id && fmJobOpenForMatch(j) && fmWoKey(j.ownersProjectNo) === leadWOexact)
+      .map(j => ({ job: j, score: 1, woMatch: true }));
+    if (woHits.length) return woHits.slice(0, 3);
+  }
+  // 2) Same-store scope similarity (the usual case: no WO number yet, match on store + scope).
   const storeKey = fmStoreKey(lead.storeCode);
   if (!storeKey) return [];
   const leadText = (lead.scopeOfWork || "") + " " + (lead.name || "");
-  const leadWO = fmStoreKey(lead.ownersProjectNo);
   const cands = [];
   for (const j of jobs) {
     if (!fmJobOpenForMatch(j)) continue;
     if (j.id === lead.id) continue;
     if (fmStoreKey(j.storeCode) !== storeKey) continue; // same store is required
-    let score = fmScopeSimilarity(leadText, (j.scopeOfWork || "") + " " + (j.name || ""));
-    const jWO = fmStoreKey(j.ownersProjectNo);
-    const woMatch = !!(leadWO && jWO && leadWO === jWO);
-    if (woMatch) score = 1;
-    cands.push({ job: j, score, woMatch });
+    const score = fmScopeSimilarity(leadText, (j.scopeOfWork || "") + " " + (j.name || ""));
+    cands.push({ job: j, score, woMatch: false });
   }
   cands.sort((a, b) => b.score - a.score);
-  // Prefer candidates with real scope overlap or a WO match; if none overlap,
-  // still show same-store open jobs (the "ask around" case) so Zak can confirm.
-  const scored = cands.filter(m => m.score > 0 || m.woMatch);
+  const scored = cands.filter(m => m.score > 0);
   return (scored.length ? scored : cands).slice(0, 3);
 }
 
@@ -11428,11 +11436,17 @@ Example:
                           </div>
                         </div>
 
-                        {/* Possible matches in the PBR (same store, ranked by scope) */}
-                        {matches.length > 0 && (
+                        {/* Possible matches in the PBR (exact WO# first, else same store by scope) */}
+                        {matches.length > 0 && (() => { const hasWo = matches.some(m => m.woMatch); return (
                           <div style={{ marginTop: 10, borderTop: "1px dashed #CBD1E8", paddingTop: 10 }}>
+                            {hasWo && (
+                              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap", background: "#FEF2F2", border: "1px solid #FCA5A5", borderRadius: 7, padding: "7px 10px", marginBottom: 8 }}>
+                                <span style={{ fontSize: 11, fontWeight: 700, color: "#991B1B" }}>⚠ There's already a work order with this number (WO# {lead.ownersProjectNo}).</span>
+                                <button className="btn-ghost" style={{ fontSize: 10, padding: "4px 9px", color: "#991B1B", borderColor: "#FCA5A5" }} onClick={() => deleteInboxLead(lead.id)}>This is a duplicate — remove it</button>
+                              </div>
+                            )}
                             <div style={{ fontSize: 10, fontWeight: 700, color: "#991B1B", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>
-                              Possible match{matches.length > 1 ? "es" : ""} in PBR — same store
+                              {hasWo ? "Existing work order — same WO#" : "Possible match" + (matches.length > 1 ? "es" : "") + " in PBR — same store"}
                             </div>
                             <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
                               {matches.map(({ job, score, woMatch }) => {
@@ -11471,7 +11485,7 @@ Example:
                               })}
                             </div>
                           </div>
-                        )}
+                        ); })()}
                       </div>
                       );
                     })}
