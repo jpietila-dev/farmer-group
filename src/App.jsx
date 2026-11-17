@@ -4827,6 +4827,71 @@ function VendorAssignControl({ subcontractors, onAssignExisting, onCreateNew }) 
   );
 }
 
+// ── ManualBidForm ─ record a called-in vendor quote (name + price + date) ──
+function ManualBidForm({ onAdd }) {
+  const today = new Date().toISOString().slice(0, 10);
+  const [name, setName] = useState("");
+  const [price, setPrice] = useState("");
+  const [date, setDate] = useState(today);
+  const add = () => { const nm = name.trim(); if (!nm) return; onAdd({ name: nm, price: price.replace(/[^0-9.]/g, ""), date: date || today }); setName(""); setPrice(""); setDate(today); };
+  return (
+    <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", background: "#fff", border: "1px dashed #CBD1E8", borderRadius: 6, padding: "8px 10px" }}>
+      <input className="fi" style={{ flex: "2 1 150px" }} placeholder="Vendor name" value={name} onChange={e => setName(e.target.value)} onKeyDown={e => { if (e.key === "Enter") add(); }} />
+      <input className="fi" style={{ flex: "1 1 90px" }} placeholder="Price $" value={price} onChange={e => setPrice(e.target.value)} onKeyDown={e => { if (e.key === "Enter") add(); }} />
+      <input className="fi" type="date" style={{ flex: "1 1 140px" }} value={date} onChange={e => setDate(e.target.value)} title="Date quoted (defaults to today)" />
+      <button className="btn-primary" style={{ fontSize: 11, padding: "7px 12px", whiteSpace: "nowrap" }} onClick={add} disabled={!name.trim()}>+ Add bid</button>
+    </div>
+  );
+}
+
+// ── Bid doc for a street vendor ─ opens a printable/shareable bid sheet ──
+function openBidDoc(job, site, custName) {
+  const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  const addr = (site && site.address) || "";
+  const store = job.storeCode || (site && site.storeNumber) || "";
+  const bidDue = job.bidDueDate || "";
+  const access = job.unitOccupancy || "";
+  const photos = (job.photos || []).filter(p => p && p.data);
+  const photoHtml = photos.length
+    ? `<div class="photos">${photos.map(p => `<img src="${esc(p.data)}" alt="${esc(p.name || "site photo")}"/>`).join("")}</div>`
+    : `<div class="muted">No photos attached to this work order.</div>`;
+  const html = `<!doctype html><html><head><meta charset="utf-8"/><title>Bid Request — ${esc(job.name || store)}</title>
+  <style>
+    *{box-sizing:border-box} body{font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#1A2240;margin:0;padding:32px;max-width:820px;margin:0 auto;}
+    h1{font-size:22px;margin:0 0 2px} .sub{color:#4A5278;font-size:13px;margin-bottom:18px}
+    .grid{display:grid;grid-template-columns:1fr 1fr;gap:10px 24px;margin-bottom:18px}
+    .f{border-bottom:1px solid #E1E6F2;padding:6px 0} .lbl{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#8A90AE;margin-bottom:2px} .val{font-size:14px;min-height:18px}
+    .scope{white-space:pre-wrap;border:1px solid #E1E6F2;border-radius:8px;padding:12px;font-size:13px;background:#F8F9FD;margin-bottom:18px}
+    .photos{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:18px} .photos img{width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:6px;border:1px solid #E1E6F2}
+    .fill{border:1px solid #CBD1E8;border-radius:8px;padding:14px;margin-bottom:12px} .fill .lbl{margin-bottom:6px}
+    .line{border-bottom:1px solid #1A2240;height:28px;margin-bottom:10px} .muted{color:#8A90AE;font-size:12px;margin-bottom:18px}
+    .hd{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px}
+    .brand{font-weight:800;color:#1A2240;font-size:14px;letter-spacing:.04em}
+    @media print{.noprint{display:none} body{padding:0}}
+    .noprint{margin-bottom:18px} .noprint button{font:inherit;font-size:13px;padding:8px 16px;border-radius:7px;border:1px solid #1A2240;background:#1A2240;color:#fff;cursor:pointer}
+  </style></head><body>
+  <div class="noprint"><button onclick="window.print()">🖨 Print / Save as PDF</button></div>
+  <div class="hd"><div><h1>Bid Request</h1><div class="sub">${esc(job.name || "Facility maintenance work")}</div></div><div class="brand">Farmer Development, Inc.</div></div>
+  <div class="grid">
+    <div class="f"><div class="lbl">Store #</div><div class="val">${esc(store) || "—"}</div></div>
+    <div class="f"><div class="lbl">Customer</div><div class="val">${esc(custName) || "—"}</div></div>
+    <div class="f" style="grid-column:1/3"><div class="lbl">Store Address</div><div class="val">${esc(addr) || "—"}</div></div>
+    <div class="f"><div class="lbl">Gate / Access code</div><div class="val">${esc(access) || "&nbsp;"}</div></div>
+    <div class="f"><div class="lbl">Site hours</div><div class="val">&nbsp;</div></div>
+    <div class="f"><div class="lbl">Bid due date</div><div class="val">${esc(bidDue) || "&nbsp;"}</div></div>
+    <div class="f"><div class="lbl">Work Order #</div><div class="val">${esc(job.ownersProjectNo) || "&nbsp;"}</div></div>
+  </div>
+  <div class="lbl">Scope of work</div>
+  <div class="scope">${esc(job.scopeOfWork || job.name || "") || "—"}</div>
+  <div class="lbl">Site photos</div>
+  ${photoHtml}
+  <div class="fill"><div class="lbl">Vendor scope / notes (fill in)</div><div class="line"></div><div class="line"></div><div class="line"></div></div>
+  <div class="fill"><div class="lbl">Your price (fill in)</div><div class="line"></div></div>
+  <div class="grid"><div class="f"><div class="lbl">Vendor name</div><div class="val">&nbsp;</div></div><div class="f"><div class="lbl">Date</div><div class="val">&nbsp;</div></div></div>
+  </body></html>`;
+  try { const w = window.open("", "_blank"); if (w) { w.document.open(); w.document.write(html); w.document.close(); } else { alert("Pop-up blocked — allow pop-ups to open the bid sheet."); } } catch (e) { alert("Could not open the bid sheet."); }
+}
+
 // ── FmAssignVendor ─ collapsible single-vendor assignment (portal or not) ──
 function FmAssignVendor({ job, subcontractors, onAssign, onClear, onCreateNew }) {
   const [open, setOpen] = useState(false);
@@ -4861,13 +4926,15 @@ function FmAssignVendor({ job, subcontractors, onAssign, onClear, onCreateNew })
 }
 
 // ── FmBidOut ─ collapsible manual bid-tracking list (vendor name + date sent) ──
-function FmBidOut({ job, onSave }) {
+function FmBidOut({ job, onSave, site, custName }) {
+  const today = new Date().toISOString().slice(0, 10);
   const [open, setOpen] = useState(false);
-  const [rows, setRows] = useState(() => { const s = Array.isArray(job.bidInvites) ? job.bidInvites : []; return s.length ? s : [{ vendor:"", dateSent:"" }]; });
-  useEffect(() => { const s = Array.isArray(job.bidInvites) ? job.bidInvites : []; setRows(s.length ? s : [{ vendor:"", dateSent:"" }]); }, [job.id]); // eslint-disable-line
-  const save = (next) => { setRows(next); onSave(next.filter(r => r.vendor || r.dateSent)); };
+  const blank = () => ({ vendor: "", price: "", dateSent: today });
+  const [rows, setRows] = useState(() => { const s = Array.isArray(job.bidInvites) ? job.bidInvites : []; return s.length ? s : [blank()]; });
+  useEffect(() => { const s = Array.isArray(job.bidInvites) ? job.bidInvites : []; setRows(s.length ? s : [blank()]); }, [job.id]); // eslint-disable-line
+  const save = (next) => { setRows(next); onSave(next.filter(r => r.vendor || r.price)); };
   const setRow = (i, k, v) => save(rows.map((r,idx)=> idx===i ? {...r,[k]:v} : r));
-  const addRow = () => setRows(r => [...r, { vendor:"", dateSent:"" }]);
+  const addRow = () => setRows(r => [...r, blank()]);
   const delRow = (i) => save(rows.filter((_,idx)=>idx!==i));
   const count = (Array.isArray(job.bidInvites) ? job.bidInvites : []).filter(r => r.vendor).length;
   const inS = { boxSizing:"border-box", border:"1px solid var(--t-line)", borderRadius:5, padding:"6px 8px", fontSize:12, fontFamily:"inherit", background:"var(--t-paper)", color:"var(--t-ink1)", width:"100%" };
@@ -4882,13 +4949,18 @@ function FmBidOut({ job, onSave }) {
       </div>
       {open && (
         <div style={{ padding:16, display:"flex", flexDirection:"column", gap:8 }}>
-          <div style={{ fontSize:11, color:"var(--t-ink3)" }}>Track who you sent this bid to and when. Add a line per vendor.</div>
-          <div style={{ display:"grid", gridTemplateColumns:"1fr 160px 28px", gap:8, fontSize:10, color:"var(--t-ink3)", textTransform:"uppercase", letterSpacing:"0.05em" }}>
-            <div>Vendor name</div><div>Date sent</div><div></div>
+          <div style={{ fontSize:11, color:"var(--t-ink3)" }}>Call vendors and record each name, price, and the date you sent it. The date defaults to today — change it if needed. You'll pick a vendor at Buyout.</div>
+          <button onClick={() => openBidDoc(job, site, custName)}
+            style={{ alignSelf:"flex-start", fontSize:11, padding:"7px 11px", borderRadius:6, border:"1px solid #3B6FE840", background:"#3B6FE810", color:"#3B6FE8", cursor:"pointer", fontFamily:"inherit", fontWeight:600 }}>
+            📄 Open bid sheet for a street vendor (address, access, photos, bid-due date)
+          </button>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 110px 150px 28px", gap:8, fontSize:10, color:"var(--t-ink3)", textTransform:"uppercase", letterSpacing:"0.05em" }}>
+            <div>Vendor name</div><div>Price</div><div>Date sent</div><div></div>
           </div>
           {rows.map((r,i) => (
-            <div key={i} style={{ display:"grid", gridTemplateColumns:"1fr 160px 28px", gap:8, alignItems:"center" }}>
+            <div key={i} style={{ display:"grid", gridTemplateColumns:"1fr 110px 150px 28px", gap:8, alignItems:"center" }}>
               <input style={inS} placeholder="Vendor name" value={r.vendor||""} onChange={e=>setRow(i,"vendor",e.target.value)} />
+              <input style={inS} placeholder="$" inputMode="decimal" value={r.price||""} onChange={e=>setRow(i,"price",e.target.value.replace(/[^0-9.]/g,""))} />
               <input type="date" style={inS} value={r.dateSent||""} onChange={e=>setRow(i,"dateSent",e.target.value)} />
               <button onClick={()=>delRow(i)} title="Remove" style={{ border:"none", background:"none", color:"var(--t-ink3)", cursor:"pointer", fontSize:15 }}>✕</button>
             </div>
@@ -20175,6 +20247,21 @@ window.addEventListener('message',function(e){
               try { supa.from("subcontractors").insert(subToDB(ns)); } catch (e) {}
               update({ subcontractorId: id });
             };
+            // Assign a vendor from a recorded bid at buyout, carrying its quoted price onto the job.
+            // Bid rows are { vendor, price, dateSent } (called-in) or { subId, price } (portal invite).
+            const assignBidVendor = (b) => {
+              const price = String(b.price || "");
+              if (b.subId) {
+                update({ subcontractorId: b.subId, vendorQuotePrice: price });
+              } else {
+                const nm = b.vendor || b.name || "Vendor";
+                const id = "sub" + Date.now();
+                const ns = { id, name: nm, trade: job.trade || "", archived: false, portalEnabled: false, msaStatus: "missing" };
+                setSubcontractors(prev => [...prev, ns]);
+                try { supa.from("subcontractors").insert(subToDB(ns)); } catch (e) {}
+                update({ subcontractorId: id, vendorQuotePrice: price });
+              }
+            };
             // Move to stage — if a vendor is assigned and we jump back before buyout, clear the award and all offers too
             const moveToStage = async (target) => {
               const preAward = ["estimating", "waiting_quote", "generate_proposal", "owner_approval"];
@@ -20437,7 +20524,14 @@ window.addEventListener('message',function(e){
                             onAssign={(subId) => update({ subcontractorId: subId })}
                             onClear={() => update({ subcontractorId: "" })}
                             onCreateNew={createAndAssignVendor} />
-                          <FmBidOut job={job} onSave={(rows) => update({ bidInvites: rows })} />
+                          <FmBidOut job={job}
+                            site={site || inboxSiteOfJob(job)}
+                            custName={(companies.find(c => c.id === job.companyId) || companies.find(c => c.id === ((site || inboxSiteOfJob(job)) || {}).companyId) || {}).name || ""}
+                            onSave={(rows) => {
+                              const patch = { bidInvites: rows };
+                              if (rows.some(r => r.vendor || r.price) && job.stage === "estimating") patch.stage = "waiting_quote";
+                              update(patch);
+                            }} />
                         </div>
                       )}
                       {/* Do Work — vendor awarded & scheduled; keep materials + a cancel path visible */}
@@ -20481,6 +20575,32 @@ window.addEventListener('message',function(e){
                           {!job.subcontractorId ? (
                             <div>
                               <div style={{ fontSize: 12, fontWeight: 700, color: "var(--t-buyout)", marginBottom: 6 }}>👤 Vendor assignment needed</div>
+                              {/* Vendors you got prices from during bidding — assign one here */}
+                              {(() => {
+                                const quotes = (job.bidInvites || []).filter(b => b.price);
+                                if (!quotes.length) return null;
+                                const sorted = quotes.slice().sort((a, b) => Number(a.price) - Number(b.price));
+                                return (
+                                  <div style={{ marginBottom: 12, background: "var(--t-paper)", border: "1px solid var(--t-line)", borderRadius: 8, padding: "10px 12px" }}>
+                                    <div style={{ fontSize: 11, fontWeight: 700, color: "var(--t-ink2)", marginBottom: 8 }}>Prices from bidding — assign a vendor</div>
+                                    <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                                      {sorted.map((b, i) => {
+                                        const nm = b.subId ? ((subcontractors.find(s => s.id === b.subId) || {}).name || "Vendor") : (b.vendor || b.name || "Vendor");
+                                        const dt = b.dateSent || b.date || "";
+                                        return (
+                                          <div key={b.id || b.subId || (nm + i)} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, flexWrap: "wrap" }}>
+                                            <div style={{ fontSize: 12, color: "var(--t-ink)" }}>
+                                              <b>{nm}</b> <span style={{ color: "var(--t-ink3)" }}>{fmt(Number(b.price))}{dt ? " · " + dt : ""}</span>
+                                              {i === 0 && <span style={{ marginLeft: 6, fontSize: 9, background: "#4ADE8020", color: "#16a34a", padding: "1px 6px", borderRadius: 3 }}>LOWEST</span>}
+                                            </div>
+                                            <button className="t-btn t-btn-sm t-btn-primary" onClick={() => assignBidVendor(b)}>Assign &amp; use {fmt(Number(b.price))}</button>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+                                );
+                              })()}
                               <VendorAssignControl subcontractors={subcontractors}
                                 onAssignExisting={(id) => update({ subcontractorId: id })}
                                 onCreateNew={createAndAssignVendor} />
@@ -21242,22 +21362,32 @@ window.addEventListener('message',function(e){
                           }]);
                           setShowProposal(true);
                         };
+                        const lowKey = lowestBid ? (lowestBid.id || lowestBid.subId) : null;
                         return (
                           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                            <div style={{ fontSize: 10, color: "#4A5278" }}>Add vendors to the bid list. The job auto-appears in each invited vendor's portal under "Need Estimates".</div>
+                            <div style={{ fontSize: 10, color: "#4A5278" }}>Call vendors and record each price below, or invite a portal vendor to quote themselves. You'll pick a vendor at Buyout.</div>
 
-                            {/* Invite list */}
+                            {/* Record a called-in vendor quote */}
+                            <ManualBidForm onAdd={({ name, price, date }) => {
+                              const entry = { id: "mb" + Date.now() + Math.floor(Math.random() * 1000), name, price, date, manual: true, invitedAt: new Date().toISOString(), respondedAt: new Date((date || new Date().toISOString().slice(0, 10)) + "T00:00:00").toISOString(), status: "quoted" };
+                              const newInvites = [...invites, entry];
+                              const stagePatch = (invites.length === 0 && job.stage === "estimating") ? { stage: "waiting_quote" } : {};
+                              update({ bidInvites: newInvites, ...stagePatch });
+                            }} />
+
+                            {/* Bid list */}
                             {invites.map((inv, idx) => {
-                              const s = subcontractors.find(x => x.id === inv.subId);
-                              const isLow = lowestBid && inv.subId === lowestBid.subId;
+                              const key = inv.id || inv.subId;
+                              const s = inv.manual ? null : subcontractors.find(x => x.id === inv.subId);
+                              const nm = inv.manual ? inv.name : (s?.name || "Unknown");
+                              const isLow = lowKey && key === lowKey;
                               return (
-                                <div key={inv.subId} style={{ background: isLow ? "#4ADE8010" : "#ECEEF8", border: "1px solid " + (isLow ? "#4ADE8040" : "#CBD1E8"), borderRadius: 6, padding: "10px 12px" }}>
+                                <div key={key} style={{ background: isLow ? "#4ADE8010" : "#ECEEF8", border: "1px solid " + (isLow ? "#4ADE8040" : "#CBD1E8"), borderRadius: 6, padding: "10px 12px" }}>
                                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                                     <div style={{ flex: 1 }}>
-                                      <div style={{ fontSize: 11, fontWeight: 700, color: "#1A2240" }}>{s?.name || "Unknown"}{isLow && <span style={{ marginLeft: 6, fontSize: 9, background: "#4ADE8020", color: "#4ADE80", padding: "1px 6px", borderRadius: 3 }}>LOWEST</span>}</div>
-                                      {/* Status line */}
+                                      <div style={{ fontSize: 11, fontWeight: 700, color: "#1A2240" }}>{nm}{inv.manual && <span style={{ marginLeft: 6, fontSize: 9, background: "#CBD1E850", color: "#4A5278", padding: "1px 6px", borderRadius: 3 }}>CALLED-IN</span>}{isLow && <span style={{ marginLeft: 6, fontSize: 9, background: "#4ADE8020", color: "#4ADE80", padding: "1px 6px", borderRadius: 3 }}>LOWEST</span>}</div>
                                       {inv.price ? (
-                                        <div style={{ fontSize: 10, color: "#4ADE80", marginTop: 2, fontWeight: 600 }}>✓ Quote submitted{inv.respondedAt ? " · " + new Date(inv.respondedAt).toLocaleDateString() : ""}</div>
+                                        <div style={{ fontSize: 10, color: "#4ADE80", marginTop: 2, fontWeight: 600 }}>✓ {inv.manual ? "Price recorded" : "Quote submitted"}{inv.date ? " · " + inv.date : (inv.respondedAt ? " · " + new Date(inv.respondedAt).toLocaleDateString() : "")}</div>
                                       ) : s?.portalEnabled ? (
                                         <div style={{ fontSize: 10, color: "#3B6FE8", marginTop: 2 }}>✓ In their portal · awaiting quote</div>
                                       ) : (
@@ -21272,18 +21402,13 @@ window.addEventListener('message',function(e){
                                     </div>
                                   </div>
                                   <div style={{ display: "flex", gap: 6, marginTop: 8 }}>
-                                    {inv.price ? (
-                                      isLow ? (
-                                        <button onClick={() => pickWinner(inv)}
-                                          style={{ flex: 1, padding: "6px", borderRadius: 5, border: "none", background: "#4ADE80", color: "#0A1F0A", fontSize: 10, fontWeight: 700, cursor: "pointer", fontFamily: "inherit" }}>
-                                          ✅ Select Winner
-                                        </button>
-                                      ) : (
-                                        <button onClick={() => pickWinner(inv)}
-                                          style={{ flex: 1, padding: "6px", borderRadius: 5, border: "1px solid #CBD1E8", background: "transparent", color: "#4A5278", fontSize: 10, cursor: "pointer", fontFamily: "inherit" }}>
-                                          Select
-                                        </button>
-                                      )
+                                    {inv.manual ? (
+                                      <div style={{ flex: 1, fontSize: 10, color: "#8a8a92", fontStyle: "italic", padding: "6px 0" }}>Assign at Buyout</div>
+                                    ) : inv.price ? (
+                                      <button onClick={() => pickWinner(inv)}
+                                        style={{ flex: 1, padding: "6px", borderRadius: 5, border: isLow ? "none" : "1px solid #CBD1E8", background: isLow ? "#4ADE80" : "transparent", color: isLow ? "#0A1F0A" : "#4A5278", fontSize: 10, fontWeight: isLow ? 700 : 400, cursor: "pointer", fontFamily: "inherit" }}>
+                                        {isLow ? "✅ Select Winner" : "Select"}
+                                      </button>
                                     ) : s?.portalEnabled ? (
                                       <button onClick={() => window.open(`/?vendor=preview&subId=${inv.subId}`, "_blank")}
                                         style={{ flex: 1, padding: "6px", borderRadius: 5, border: "1px solid #3B6FE830", background: "transparent", color: "#3B6FE8", fontSize: 10, cursor: "pointer", fontFamily: "inherit" }}>
@@ -21301,28 +21426,32 @@ window.addEventListener('message',function(e){
                               );
                             })}
 
-                            {/* Add vendor to bid */}
+                            {/* Bid doc for a street vendor */}
+                            <button onClick={() => openBidDoc(job, site, (companies.find(c => c.id === job.companyId) || companies.find(c => c.id === ((site || inboxSiteOfJob(job)) || {}).companyId) || {}).name || "")}
+                              style={{ fontSize: 11, padding: "8px 12px", borderRadius: 6, border: "1px solid #3B6FE840", background: "#3B6FE810", color: "#3B6FE8", cursor: "pointer", fontFamily: "inherit", fontWeight: 600 }}>
+                              📄 Open bid sheet to send a vendor (address, access, photos, bid-due date)
+                            </button>
+
+                            {/* Invite a portal vendor (optional) */}
                             {(() => {
-                              const alreadyAdded = new Set(invites.map(i => i.subId));
+                              const alreadyAdded = new Set(invites.map(i => i.subId).filter(Boolean));
                               const available = subcontractors.filter(s => !alreadyAdded.has(s.id) && !s.archived);
                               return available.length > 0 ? (
                                 <select className="fi" value="" onChange={e => {
                                   if (!e.target.value) return;
-                                  // Add invite — vendor immediately sees this job in their portal (bidInvites filter)
-                                  // Auto-advance to waiting_quote on first invite
                                   const newInvites = [...invites, { subId: e.target.value, invitedAt: new Date().toISOString(), price: null, notes: "", status: "invited" }];
                                   const stagePatch = (invites.length === 0 && job.stage === "estimating") ? { stage: "waiting_quote" } : {};
                                   update({ bidInvites: newInvites, ...stagePatch });
                                 }}>
-                                  <option value="">+ Add vendor to bid list…</option>
+                                  <option value="">+ Invite a portal vendor to quote…</option>
                                   {available.map(s => <option key={s.id} value={s.id}>{s.name}{s.trade ? " — " + s.trade : ""}{!s.portalEnabled ? " ⚠ no portal" : ""}</option>)}
                                 </select>
-                              ) : <div style={{ fontSize: 10, color: "#4A5278", fontStyle: "italic" }}>All vendors added</div>;
+                              ) : null;
                             })()}
 
                             {responded.length > 0 && (
                               <div style={{ background: "#FCD34D10", border: "1px solid #FCD34D30", borderRadius: 6, padding: "8px 12px", fontSize: 10, color: "#FCD34D" }}>
-                                {responded.length} of {invites.length} vendors responded · Lowest: {fmt(Number(lowestBid.price))}
+                                {responded.length} of {invites.length} with a price · Lowest: {fmt(Number(lowestBid.price))}
                               </div>
                             )}
                           </div>
