@@ -4107,8 +4107,14 @@ function VendorPortalAuthenticated({ sub, myJobs, fmJobs, setFmJobs, companies, 
             <div className="vp-btabs">
               <button className={"vp-btab" + (tab === "info" ? " act" : "")} onClick={() => setCardTab(p => ({ ...p, [job.id]: "info" }))}>Job Info</button>
               <button className={"vp-btab" + (tab === "photos" ? " act" : "")} onClick={() => setCardTab(p => ({ ...p, [job.id]: "photos" }))}>Photos</button>
+              <button className={"vp-btab" + (tab === "messages" ? " act" : "")} onClick={() => setCardTab(p => ({ ...p, [job.id]: "messages" }))}>💬 Messages</button>
               <button className={"vp-btab" + (tab === "update" ? " act" : "")} onClick={() => setCardTab(p => ({ ...p, [job.id]: "update" }))}>Update Job</button>
             </div>
+            {tab === "messages" && (
+              <div className="vp-bp">
+                <VendorJobChat jobId={job.id} author={sub?.name || "Vendor"} />
+              </div>
+            )}
             {tab === "info" && (
               <div className="vp-bp">
                 <div className="vp-igrid">
@@ -5552,9 +5558,10 @@ ${meta&&meta.address?`<div class=meta><div><b>Site</b><br>${esc(meta.address)}</
 }
 
 // ── FmJobChat ─ per-project team conversation with @mentions (shared via Supabase) ──
-function FmJobChat({ jobId, people }) {
+function FmJobChat({ jobId, people, vendorName }) {
   const [msgs, setMsgs]   = useState([]);
   const [text, setText]   = useState("");
+  const [channel, setChannel] = useState("internal"); // "internal" (team) | "vendor" (to the assigned vendor's portal)
   const [viewer, setViewer] = useState(() => { try { return localStorage.getItem("fdi_chat_viewer") || ""; } catch(e){ return ""; } });
   const [showMention, setShowMention] = useState(false);
   const [mentionQuery, setMentionQuery] = useState("");
@@ -5563,10 +5570,10 @@ function FmJobChat({ jobId, people }) {
 
   const load = React.useCallback(() => {
     if (!jobId) return;
-    fetch(`${SUPA_URL}/rest/v1/fm_job_messages?job_id=eq.${encodeURIComponent(jobId)}&order=created_at.asc`, {
+    fetch(`${SUPA_URL}/rest/v1/fm_job_messages?job_id=eq.${encodeURIComponent(jobId)}&channel=eq.${channel}&order=created_at.asc`, {
       headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}` }
     }).then(r => r.json()).then(d => { if (Array.isArray(d)) setMsgs(d); }).catch(()=>{});
-  }, [jobId]);
+  }, [jobId, channel]);
 
   useEffect(() => { load(); const t = setInterval(load, 8000); return () => clearInterval(t); }, [load]);
   useEffect(() => { if (endRef.current) endRef.current.scrollIntoView({ block: "end" }); }, [msgs.length]);
@@ -5576,19 +5583,20 @@ function FmJobChat({ jobId, people }) {
   const send = () => {
     const body = text.trim();
     if (!body || !viewer) return;
-    const mentions = (body.match(/@([A-Za-z][A-Za-z .'-]+)/g) || []).map(m => m.slice(1).trim());
-    const optimistic = { id: "tmp" + Date.now(), job_id: jobId, author: viewer, body, mentions, created_at: new Date().toISOString() };
+    const mentions = channel === "internal" ? (body.match(/@([A-Za-z][A-Za-z .'-]+)/g) || []).map(m => m.slice(1).trim()) : [];
+    const optimistic = { id: "tmp" + Date.now(), job_id: jobId, author: viewer, body, mentions, channel, created_at: new Date().toISOString() };
     setMsgs(m => [...m, optimistic]);
     setText(""); setShowMention(false);
     fetch(`${SUPA_URL}/rest/v1/fm_job_messages`, {
       method: "POST",
       headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}`, "Content-Type": "application/json", Prefer: "return=minimal" },
-      body: JSON.stringify({ job_id: jobId, author: viewer, body, mentions })
+      body: JSON.stringify({ job_id: jobId, author: viewer, body, mentions, channel })
     }).then(() => load()).catch(()=>{});
   };
 
   const onChange = (e) => {
     const v = e.target.value; setText(v);
+    if (channel !== "internal") { setShowMention(false); return; }
     const upto = v.slice(0, e.target.selectionStart);
     const m = upto.match(/@([A-Za-z .'-]*)$/);
     if (m) { setShowMention(true); setMentionQuery(m[1].toLowerCase()); } else setShowMention(false);
@@ -5619,9 +5627,16 @@ function FmJobChat({ jobId, people }) {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-      <div style={{ padding: "10px 14px", borderBottom: "1px solid var(--t-line)", display:"flex", alignItems:"center", justifyContent:"space-between", flexShrink:0 }}>
-        <div style={{ fontSize: 13, fontWeight: 700 }}>💬 Conversation</div>
-        <div style={{ fontSize: 11, color: "var(--t-ink3)" }}>{viewer} · <span style={{ cursor:"pointer", color:"#3B6FE8" }} onClick={() => setViewerName("")}>change</span></div>
+      <div style={{ padding: "10px 14px", borderBottom: "1px solid var(--t-line)", flexShrink:0 }}>
+        <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom: 8 }}>
+          <div style={{ fontSize: 13, fontWeight: 700 }}>💬 Conversation</div>
+          <div style={{ fontSize: 11, color: "var(--t-ink3)" }}>{viewer} · <span style={{ cursor:"pointer", color:"#3B6FE8" }} onClick={() => setViewerName("")}>change</span></div>
+        </div>
+        <div style={{ display:"inline-flex", border:"1px solid var(--t-line)", borderRadius:7, overflow:"hidden" }}>
+          <button onClick={() => setChannel("internal")} style={{ fontSize:11, fontWeight:600, padding:"5px 12px", border:"none", cursor:"pointer", fontFamily:"inherit", background: channel==="internal" ? "#3B6FE8" : "var(--t-paper)", color: channel==="internal" ? "#fff" : "var(--t-ink2)" }}>👥 Team</button>
+          <button onClick={() => setChannel("vendor")} style={{ fontSize:11, fontWeight:600, padding:"5px 12px", border:"none", borderLeft:"1px solid var(--t-line)", cursor:"pointer", fontFamily:"inherit", background: channel==="vendor" ? "#2E7D32" : "var(--t-paper)", color: channel==="vendor" ? "#fff" : "var(--t-ink2)" }}>🔧 Vendor</button>
+        </div>
+        {channel === "vendor" && <div style={{ fontSize:10, color:"var(--t-ink3)", marginTop:6 }}>Visible to {vendorName ? <b>{vendorName}</b> : "the assigned vendor"} in their portal.</div>}
       </div>
       <div style={{ flex: 1, overflowY: "auto", padding: 14, display:"flex", flexDirection:"column", gap:12 }}>
         {msgs.length === 0 && <div style={{ fontSize:12, color:"var(--t-ink3)", textAlign:"center", marginTop:24 }}>No messages yet. Start the conversation.</div>}
@@ -5644,7 +5659,7 @@ function FmJobChat({ jobId, people }) {
         )}
         <textarea ref={taRef} value={text} onChange={onChange}
           onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey && !showMention) { e.preventDefault(); send(); } }}
-          placeholder="Message the team…  type @ to mention"
+          placeholder={channel === "vendor" ? "Message the vendor…" : "Message the team…  type @ to mention"}
           rows={2} style={{ width:"100%", boxSizing:"border-box", resize:"none", border:"1px solid var(--t-line)", borderRadius:8, padding:"8px 10px", fontSize:13, fontFamily:"inherit", background:"var(--t-paper)", color:"var(--t-ink1)", outline:"none" }} />
         <div style={{ display:"flex", justifyContent:"flex-end", marginTop:6 }}>
           <button className="t-btn t-btn-primary t-btn-sm" onClick={send} disabled={!text.trim()}>Send</button>
@@ -5654,6 +5669,54 @@ function FmJobChat({ jobId, people }) {
   );
 }
 
+
+// ── VendorJobChat ─ vendor-side thread with the FDI team (channel="vendor") ──
+function VendorJobChat({ jobId, author }) {
+  const [msgs, setMsgs] = useState([]);
+  const [text, setText] = useState("");
+  const endRef = React.useRef(null);
+  const load = React.useCallback(() => {
+    if (!jobId) return;
+    fetch(`${SUPA_URL}/rest/v1/fm_job_messages?job_id=eq.${encodeURIComponent(jobId)}&channel=eq.vendor&order=created_at.asc`, {
+      headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}` }
+    }).then(r => r.json()).then(d => { if (Array.isArray(d)) setMsgs(d); }).catch(() => {});
+  }, [jobId]);
+  useEffect(() => { load(); const t = setInterval(load, 8000); return () => clearInterval(t); }, [load]);
+  useEffect(() => { if (endRef.current) endRef.current.scrollIntoView({ block: "end" }); }, [msgs.length]);
+  const send = () => {
+    const body = text.trim(); if (!body) return;
+    const who = author || "Vendor";
+    const optimistic = { id: "tmp" + Date.now(), job_id: jobId, author: who, body, channel: "vendor", created_at: new Date().toISOString() };
+    setMsgs(m => [...m, optimistic]); setText("");
+    fetch(`${SUPA_URL}/rest/v1/fm_job_messages`, {
+      method: "POST", headers: { apikey: SUPA_KEY, Authorization: `Bearer ${SUPA_KEY}`, "Content-Type": "application/json", Prefer: "return=minimal" },
+      body: JSON.stringify({ job_id: jobId, author: who, body, mentions: [], channel: "vendor" })
+    }).then(() => load()).catch(() => {});
+  };
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      <div style={{ fontSize: 12, color: "#8a8a92" }}>Messages with the FDI team about this job.</div>
+      <div style={{ maxHeight: 280, overflowY: "auto", display: "flex", flexDirection: "column", gap: 10, border: "1px solid rgba(24,24,26,0.1)", borderRadius: 10, padding: 12 }}>
+        {msgs.length === 0 && <div style={{ fontSize: 12, color: "#8a8a92", textAlign: "center", padding: "16px 0" }}>No messages yet.</div>}
+        {msgs.map(m => {
+          const mine = m.author === (author || "Vendor");
+          return (
+            <div key={m.id} style={{ alignSelf: mine ? "flex-end" : "flex-start", maxWidth: "85%" }}>
+              <div style={{ fontSize: 10, color: "#8a8a92", marginBottom: 2, textAlign: mine ? "right" : "left" }}>{m.author}{(() => { try { return " · " + new Date(m.created_at).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }); } catch (e) { return ""; } })()}</div>
+              <div style={{ fontSize: 13, lineHeight: 1.4, whiteSpace: "pre-wrap", background: mine ? "#1565C0" : "#F0F2F6", color: mine ? "#fff" : "#1A2240", borderRadius: 10, padding: "8px 11px" }}>{m.body}</div>
+            </div>
+          );
+        })}
+        <div ref={endRef} />
+      </div>
+      <div style={{ display: "flex", gap: 8 }}>
+        <textarea value={text} onChange={e => setText(e.target.value)} onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
+          placeholder="Message the FDI team…" rows={2} className="vp-ta" style={{ flex: 1 }} />
+        <button onClick={send} disabled={!text.trim()} style={{ alignSelf: "flex-end", padding: "9px 16px", borderRadius: 8, border: "none", background: text.trim() ? "#1565C0" : "#C8CDD8", color: "#fff", fontWeight: 600, cursor: text.trim() ? "pointer" : "default", fontFamily: "inherit", fontSize: 13 }}>Send</button>
+      </div>
+    </div>
+  );
+}
 
 export default function App() {
   // URL routing — sub-facing page
@@ -20185,8 +20248,20 @@ window.addEventListener('message',function(e){
         <div className={wrapperClass} style={wrapperStyle}>
           {isFullScreen && fmChatOpen && (
             <div style={{ position:"fixed", top: isMobile?50:56, right:0, bottom: isMobile?58:0, left: isMobile?0:"auto", width: isMobile?"auto":360, background:"var(--t-surface)", borderLeft:"1px solid var(--t-line)", zIndex:52, display:"flex", flexDirection:"column", boxShadow:"-6px 0 24px rgba(10,16,36,0.10)" }}>
-              <FmJobChat jobId={job.id} people={Array.from(new Set([...FM_PMS, ...fmTeam.map(t => t.name).filter(Boolean)]))} />
+              <div style={{ display:"flex", justifyContent:"flex-end", padding:"6px 8px 0" }}>
+                <button onClick={() => setFmChatOpen(false)} title="Hide chat" style={{ border:"none", background:"transparent", color:"var(--t-ink3)", cursor:"pointer", fontSize:16, lineHeight:1, padding:4 }}>✕</button>
+              </div>
+              <FmJobChat jobId={job.id}
+                vendorName={(subcontractors.find(s => s.id === job.subcontractorId) || {}).name || ""}
+                people={Array.from(new Set([...FM_PMS, ...fmTeam.map(t => t.name).filter(Boolean)]))} />
             </div>
+          )}
+          {/* Pinned floating chat toggle — always reachable without scrolling to the header */}
+          {isFullScreen && !fmChatOpen && (
+            <button onClick={() => setFmChatOpen(true)} title="Open conversation"
+              style={{ position:"fixed", top: isMobile?"auto":"50%", bottom: isMobile?70:"auto", right: isMobile?14:0, transform: isMobile?"none":"translateY(-50%)", zIndex:53, background:"#1A2240", color:"#fff", border:"none", borderRadius: isMobile?"50%":"10px 0 0 10px", width:isMobile?52:40, height:isMobile?52:120, cursor:"pointer", boxShadow:"-4px 0 16px rgba(10,16,36,0.18)", fontSize:18, display:"flex", alignItems:"center", justifyContent:"center", writingMode: isMobile?"horizontal-tb":"vertical-rl" }}>
+              💬{isMobile ? "" : <span style={{ fontSize:11, fontWeight:700, marginTop:6, letterSpacing:"0.04em" }}>CHAT</span>}
+            </button>
           )}
           {(() => {
             const st   = FM_STAGES.find(s => s.id === job.stage) || FM_STAGES[0];
