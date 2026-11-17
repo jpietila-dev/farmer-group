@@ -6928,6 +6928,17 @@ Return ONLY valid JSON, no markdown, no extra text:
     if (persist) { try { supa.from("fm_jobs").update({ inbox_notes: persist }).eq("id", jobId); } catch (e) {} }
   };
 
+  // Resolve the CRM site for a job (by site_id, then exact store #, then digits-only
+  // store # match) and its District Manager. Defined here in the main component scope
+  // because inboxLeads below runs for every intake lead on every render — the matching
+  // helpers inside CrmDashboard are out of scope here.
+  const inboxStoreDigits = (v) => String(v || "").replace(/\D/g, "");
+  const inboxSiteOfJob = (j) => sites.find(s => s.id === j.siteId)
+    || sites.find(s => String(s.storeNumber || "").trim().toLowerCase() === String(j.storeCode || "").trim().toLowerCase())
+    || sites.find(s => inboxStoreDigits(s.storeNumber) && inboxStoreDigits(s.storeNumber) === inboxStoreDigits(j.storeCode))
+    || null;
+  const inboxDmOf = (j) => (inboxSiteOfJob(j) || {}).managerName || "";
+
   // Unified inbox = automatic leads from the inbound task (fm_jobs with stage="intake")
   // + any manually-added in-memory leads. The intake rows carry _jobRow so assign/delete
   // know to update the existing row instead of creating a new one.
@@ -6937,9 +6948,9 @@ Return ONLY valid JSON, no markdown, no extra text:
       name: j.name, storeCode: j.storeCode, scopeOfWork: j.scopeOfWork,
       bidDueDate: j.bidDueDate, companyId: j.companyId,
       companyName: (companies.find(c => c.id === j.companyId)?.name) || "",
-      address: (siteByJob(j)?.address) || "",
+      address: (inboxSiteOfJob(j)?.address) || "",
       storeId: j.siteId, ownersProjectNo: j.ownersProjectNo,
-      districtMgr: dmOf(j),
+      districtMgr: inboxDmOf(j),
       authorizedAmount: j.contractValue, contactId: j.approverContactId, notes: j.notes,
     })),
     ...fmInbox,
