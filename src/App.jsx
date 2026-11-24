@@ -7101,6 +7101,13 @@ Return ONLY valid JSON, no markdown, no extra text:
     || sites.find(s => inboxStoreDigits(s.storeNumber) && inboxStoreDigits(s.storeNumber) === inboxStoreDigits(j.storeCode))
     || null;
   const inboxDmOf = (j) => (inboxSiteOfJob(j) || {}).managerName || "";
+  // Customer = the store's District Manager, formatted "<operator prefix> - <DM>" to match the PBR.
+  const fmOpPrefix = (name) => { const n = String(name || "").toLowerCase();
+    if (n.includes("cubesmart")) return "CS"; if (n.includes("public storage")) return "PS";
+    if (n.includes("devon")) return "DSS"; if (n.includes("extra space")) return "ESS"; return ""; };
+  const fmStoreDM = (j) => { const s = inboxSiteOfJob(j) || {}; const dm = String(s.managerName || "").trim();
+    if (!dm) return ""; const co = companies.find(c => c.id === (j.companyId || s.companyId)) || {};
+    const p = fmOpPrefix(co.name); return p ? p + " - " + dm : dm; };
 
   // Unified inbox = automatic leads from the inbound task (fm_jobs with stage="intake")
   // + any manually-added in-memory leads. The intake rows carry _jobRow so assign/delete
@@ -11912,11 +11919,13 @@ Example:
                   )},
                   pm: { label: "PM", width: 110, render: j => j.pm || <span style={{ color: "var(--t-ink3)" }}>—</span> },
                   customer: { label: "Customer", width: 140, className: "t-td-wrap", stopPropagation: true, render: j => {
+                    const dm = fmStoreDM(j);
                     const ct = contacts.find(c => c.id === j.approverContactId);
                     const ctName = ct ? `${ct.firstName||""} ${ct.lastName||""}`.trim() : "";
+                    const shown = dm || ctName;
                     return (
-                      <span onClick={e => openPanel(e, j.id, "customer")} style={{ cursor: "pointer", padding: "2px 4px", borderRadius: 3 }} title="Click to change customer">
-                        {ctName ? <>👤 {ctName}</> : <span style={{ color: "var(--t-ink3)", fontStyle: "italic" }}>+ Customer</span>}
+                      <span onClick={e => openPanel(e, j.id, "customer")} style={{ cursor: "pointer", padding: "2px 4px", borderRadius: 3 }} title="District manager for this store (click to set an approver contact)">
+                        {shown ? <>👤 {shown}</> : <span style={{ color: "var(--t-ink3)", fontStyle: "italic" }}>+ Customer</span>}
                       </span>
                     );
                   }},
@@ -14157,11 +14166,13 @@ window.addEventListener('message',function(e){
               )},
               pm: { label: "PM", width: 110, render: j => j.pm || <span style={{ color: "var(--t-ink3)" }}>—</span> },
               customer: { label: "Customer", width: 140, className: "t-td-wrap", stopPropagation: true, render: j => {
+                const dm = fmStoreDM(j);
                 const ct = contacts.find(c => c.id === j.approverContactId);
                 const ctName = ct ? `${ct.firstName||""} ${ct.lastName||""}`.trim() : "";
+                const shown = dm || ctName;
                 return (
-                  <span onClick={e => openPanel(e, j.id, "customer")} style={{ cursor: "pointer", padding: "2px 4px", borderRadius: 3 }} title="Click to change customer">
-                    {ctName ? <>👤 {ctName}</> : <span style={{ color: "var(--t-ink3)", fontStyle: "italic" }}>+ Customer</span>}
+                  <span onClick={e => openPanel(e, j.id, "customer")} style={{ cursor: "pointer", padding: "2px 4px", borderRadius: 3 }} title="District manager for this store (click to set an approver contact)">
+                    {shown ? <>👤 {shown}</> : <span style={{ color: "var(--t-ink3)", fontStyle: "italic" }}>+ Customer</span>}
                   </span>
                 );
               }},
@@ -20907,8 +20918,9 @@ window.addEventListener('message',function(e){
 
                         {/* Vendor / Customer */}
                         {(() => { const rs = site || inboxSiteOfJob(job); const cust = (companies.find(c => c.id === job.companyId) || companies.find(c => c.id === (rs || {}).companyId) || {}).name || ""; return <ReadRow label="Customer (operator)" value={cust} placeholder="(resolved from store #)" />; })()}
+                        {(() => { const dm = fmStoreDM(job); return <ReadRow label="Customer (DM)" value={dm} placeholder="(no district manager on file for this store)" />; })()}
                         <ReadRow label="Vendor" value={sub ? sub.name : ""} placeholder="(none assigned — use the Estimating or Vendor card to assign)" />
-                        <InlineRow label="Customer" value={job.approverContactId} onSave={v => update({ approverContactId: v })}
+                        <InlineRow label="Approver / Contact" value={job.approverContactId} onSave={v => update({ approverContactId: v })}
                           options={companyContacts.map(c => ({ v: c.id, l: [c.firstName, c.lastName].filter(Boolean).join(" ") || c.email || "Contact" }))} placeholder="(none assigned)" />
                         <ReadRow label="Vendor Next Step" value={VENDOR_NEXT_STEPS.find(v => v.id === job.vendorNextStep)?.label || job.vendorNextStep} />
 
